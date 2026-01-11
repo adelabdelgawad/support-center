@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Floating Icon</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: transparent !important;
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .icon-container {
+            width: 60px;
+            height: 60px;
+            background: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            border: 3px solid white;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .icon-container:hover {
+            transform: scale(1.1);
+            background: #45a049;
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.6);
+        }
+        
+        .icon-container:active {
+            transform: scale(0.95);
+        }
+        
+        .icon-container.dragging {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+        
+        .icon-text {
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        
+        .notification {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="icon-container" id="iconContainer">
+        <div class="notification" id="notification" style="display: none;"></div>
+        <div class="icon-text">IT</div>
+    </div>
+
+    <script>
+        const iconContainer = document.getElementById('iconContainer');
+        const notification = document.getElementById('notification');
+        let isDragging = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        // Handle click events
+        iconContainer.addEventListener('click', function(e) {
+            if (!isDragging) {
+                // Visual feedback
+                this.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+
+                // Send event to Rust
+                if (window.__TAURI__) {
+                    window.__TAURI__.emit('floating-icon-click');
+                }
+            }
+        });
+
+        // Handle drag events
+        iconContainer.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            this.classList.add('dragging');
+
+            const rect = this.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+
+            this.style.transition = 'none';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                const deltaX = e.movementX;
+                const deltaY = e.movementY;
+
+                if (window.__TAURI__) {
+                    window.__TAURI__.invoke('move_window', {
+                        deltaX: deltaX,
+                        deltaY: deltaY
+                    });
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                iconContainer.classList.remove('dragging');
+                iconContainer.style.transition = 'all 0.2s ease';
+            }
+        });
+
+        // Prevent context menu
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>

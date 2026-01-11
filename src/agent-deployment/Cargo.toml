@@ -1,0 +1,80 @@
+[package]
+name = "agent-deployment"
+version = "0.1.0"
+edition = "2021"
+description = "Windows Deployment Worker for IT Service Catalog"
+authors = ["IT Service Catalog Team"]
+
+[[bin]]
+name = "agent-deployment"
+path = "src/main.rs"
+
+[dependencies]
+# Async Runtime
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "signal", "fs"] }
+
+# HTTP Client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+
+# Error Handling
+thiserror = "1"
+anyhow = "1"
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Configuration
+config = "0.14"
+
+# Chrono for timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
+# Secure memory zeroing
+zeroize = { version = "1", features = ["derive"] }
+
+# Hostname detection
+hostname = "0.4"
+
+# Lazy static for mock implementations
+lazy_static = "1.5"
+
+# Windows Service (Windows only)
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.7"
+
+# Windows APIs for Credential Manager, SMB, Service Control
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Security_Credentials",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+    "Win32_NetworkManagement_NetManagement",
+    "Win32_Networking_WinSock",
+    "Win32_System_IO",
+] }
+
+[dev-dependencies]
+mockall = "0.12"
+wiremock = "0.6"
+tokio-test = "0.4"
+
+[features]
+default = []
+mock-mode = []
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

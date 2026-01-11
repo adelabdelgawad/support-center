@@ -1,0 +1,57 @@
+[package]
+name = "requester-desktop-solidjs"
+version = "1.0.3"
+edition = "2021"
+
+[lib]
+name = "requester_desktop_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "webview-data-url"] }
+tauri-plugin-http = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-store = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+xcap = "0.8"  # Updated from 0.0.14 for better performance
+base64 = "0.22"
+fast_image_resize = "5"  # SIMD-accelerated image resizing
+jpeg-encoder = { version = "0.6", features = ["simd"] }  # Fast pure-Rust JPEG with AVX2
+tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "fs", "io-util"] }
+image = "0.25"
+dotenvy = "0.15.7"
+# Phase 8: HTTP client for downloading updates
+reqwest = { version = "0.12", features = ["stream"] }
+# URL parsing for security validation
+url = "2"
+
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.5"
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_Registry",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3    # Speed optimization (was "s" for size)
+panic = "abort"
+strip = true

@@ -1,0 +1,113 @@
+# ============================================
+# Requester App .gitignore (Tauri v2 + SolidJS + Vite)
+# ============================================
+
+# ========== Node.js/npm ==========
+# Dependencies
+node_modules/
+.npm
+.pnp
+.pnp.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ========== Vite ==========
+# Build outputs
+dist/
+dist-ssr/
+*.local
+
+# Cache
+.cache/
+
+# ========== Tauri ==========
+# Rust build artifacts
+src/src-tauri/target/
+
+# Tauri installer tools
+src/src-tauri/WixTools/
+
+# Tauri generated files
+src/src-tauri/gen/
+
+# Cargo.lock (include for applications, exclude for libraries)
+# src/src-tauri/Cargo.lock
+
+# ========== Rust ==========
+# Compiled files
+*.rs.bk
+*.pdb
+
+# ========== TypeScript ==========
+*.tsbuildinfo
+
+# ========== Testing ==========
+coverage/
+.nyc_output
+
+# ========== Environment Variables ==========
+# Specific env files (allows .env.example to be committed)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Note: Do NOT ignore .env.example (should be committed)
+
+# ========== IDE & Editors ==========
+# VSCode
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*.sw?
+*~
+
+# Visual Studio
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+
+# ========== Cache & Temporary Files ==========
+.cache/
+.eslintcache
+*.tmp
+*.bak
+
+# ========== Application-Specific ==========
+# Add project-specific patterns here
+NOTIFICATION_ENHANCEMENTS.md

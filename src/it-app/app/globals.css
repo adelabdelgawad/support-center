@@ -1,0 +1,811 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /* Fluent UI Font Families - System fonts for cross-platform compatibility */
+  --font-sans: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, Monaco, "Courier New", monospace;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  /* Fluent UI Border Radius - Subtle rounded corners */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 8px;
+}
+
+/* Office 365 / Fluent UI Design System - Light Theme */
+:root {
+  /* Office 365 Border Radius */
+  --radius: 4px;
+
+  /* Office 365 Layout Dimensions */
+  --office-topbar-height: 48px;
+  --office-sidebar-collapsed: 48px;
+  --office-sidebar-expanded: 240px;
+  --office-commandbar-height: 44px;
+  --office-rightrail-width: 320px;
+
+  /* Office 365 Neutral Colors (Light) */
+  --background: #ffffff;
+  --foreground: #323130;
+  --card: #ffffff;
+  --card-foreground: #323130;
+  --popover: #ffffff;
+  --popover-foreground: #323130;
+
+  /* Office 365 Primary (Brand Blue) */
+  --primary: #0078d4;
+  --primary-foreground: #ffffff;
+
+  /* Office 365 Secondary/Subtle */
+  --secondary: #f3f2f1;
+  --secondary-foreground: #323130;
+
+  /* Office 365 Muted/Neutral Backgrounds */
+  --muted: #faf9f8;
+  --muted-foreground: #605e5c;
+
+  /* Office 365 Accent/Hover States */
+  --accent: #f3f2f1;
+  --accent-foreground: #323130;
+
+  /* Office 365 Navigation Surfaces (Acrylic) */
+  --nav-background: #f3f2f1;
+  --nav-hover: #e1dfdd;
+  --nav-active: #ffffff;
+  --nav-border: #e1dfdd;
+
+  /* Office 365 Semantic - Danger/Error */
+  --destructive: #d13438;
+
+  /* Fluent Borders */
+  --border: #e1dfdd;
+  --input: #e1dfdd;
+
+  /* Fluent Focus Ring */
+  --ring: #0078d4;
+
+  /* Fluent Chart Colors */
+  --chart-1: #0078d4;
+  --chart-2: #00bcf2;
+  --chart-3: #8764b8;
+  --chart-4: #00b294;
+  --chart-5: #ffb900;
+
+  /* Fluent Sidebar */
+  --sidebar: #f3f2f1;
+  --sidebar-foreground: #323130;
+  --sidebar-primary: #0078d4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e1dfdd;
+  --sidebar-accent-foreground: #323130;
+  --sidebar-border: #e1dfdd;
+  --sidebar-ring: #0078d4;
+
+  /* Fluent Elevation/Shadows */
+  --shadow-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.108), 0 1.6px 3.6px rgba(0, 0, 0, 0.132);
+  --shadow-4: 0 1.6px 3.6px rgba(0, 0, 0, 0.132), 0 0.3px 0.9px rgba(0, 0, 0, 0.108);
+  --shadow-8: 0 3.2px 7.2px rgba(0, 0, 0, 0.132), 0 0.6px 1.8px rgba(0, 0, 0, 0.108);
+  --shadow-16: 0 6.4px 14.4px rgba(0, 0, 0, 0.132), 0 1.2px 3.6px rgba(0, 0, 0, 0.108);
+  --shadow-64: 0 25.6px 57.6px rgba(0, 0, 0, 0.22), 0 4.8px 14.4px rgba(0, 0, 0, 0.18);
+}
+
+/* Office 365 / Fluent UI Design System - Dark Theme */
+.dark {
+  /* Office 365 Neutral Colors (Dark) */
+  --background: #1f1f1f;
+  --foreground: #ffffff;
+  --card: #292929;
+  --card-foreground: #ffffff;
+  --popover: #292929;
+  --popover-foreground: #ffffff;
+
+  /* Office 365 Primary (Brand Blue - Dark) */
+  --primary: #4a9efa;
+  --primary-foreground: #000000;
+
+  /* Office 365 Secondary/Subtle (Dark) */
+  --secondary: #3b3a39;
+  --secondary-foreground: #ffffff;
+
+  /* Office 365 Muted/Neutral Backgrounds (Dark) */
+  --muted: #323130;
+  --muted-foreground: #c8c6c4;
+
+  /* Office 365 Accent/Hover States (Dark) */
+  --accent: #3b3a39;
+  --accent-foreground: #ffffff;
+
+  /* Office 365 Navigation Surfaces (Acrylic - Dark) */
+  --nav-background: #292929;
+  --nav-hover: #3b3a39;
+  --nav-active: #323130;
+  --nav-border: #3b3a39;
+
+  /* Office 365 Semantic - Danger/Error (Dark) */
+  --destructive: #f1707b;
+
+  /* Fluent Borders (Dark) */
+  --border: #3b3a39;
+  --input: #3b3a39;
+
+  /* Fluent Focus Ring (Dark) */
+  --ring: #4a9efa;
+
+  /* Fluent Chart Colors (Dark) */
+  --chart-1: #4a9efa;
+  --chart-2: #00d4ff;
+  --chart-3: #b4a0ff;
+  --chart-4: #00e6cb;
+  --chart-5: #ffd800;
+
+  /* Fluent Sidebar (Dark) */
+  --sidebar: #292929;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #4a9efa;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #3b3a39;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #3b3a39;
+  --sidebar-ring: #4a9efa;
+
+  /* Fluent Elevation/Shadows (Dark) */
+  --shadow-2: 0 0.3px 0.9px rgba(0, 0, 0, 0.28), 0 1.6px 3.6px rgba(0, 0, 0, 0.42);
+  --shadow-4: 0 1.6px 3.6px rgba(0, 0, 0, 0.42), 0 0.3px 0.9px rgba(0, 0, 0, 0.28);
+  --shadow-8: 0 3.2px 7.2px rgba(0, 0, 0, 0.42), 0 0.6px 1.8px rgba(0, 0, 0, 0.28);
+  --shadow-16: 0 6.4px 14.4px rgba(0, 0, 0, 0.42), 0 1.2px 3.6px rgba(0, 0, 0, 0.28);
+  --shadow-64: 0 25.6px 57.6px rgba(0, 0, 0, 0.56), 0 4.8px 14.4px rgba(0, 0, 0, 0.48);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    /* Fluent Motion - Fast, natural transitions */
+    transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Fluent Typography - Optimized for readability */
+    font-feature-settings: "kern" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Fluent UI Motion System - Custom Utilities */
+/* Fluent Duration Tokens */
+.duration-ultra-fast {
+  transition-duration: 50ms;
+}
+.duration-faster {
+  transition-duration: 100ms;
+}
+.duration-fast {
+  transition-duration: 150ms;
+}
+.duration-normal {
+  transition-duration: 200ms;
+}
+.duration-slow {
+  transition-duration: 300ms;
+}
+.duration-slower {
+  transition-duration: 400ms;
+}
+.duration-ultra-slow {
+  transition-duration: 500ms;
+}
+
+/* Fluent Easing Curves */
+.ease-fluent-standard {
+  transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+}
+.ease-fluent-accelerate {
+  transition-timing-function: cubic-bezier(0.8, 0, 1, 1);
+}
+.ease-fluent-decelerate {
+  transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Fluent Elevation/Shadows */
+.shadow-fluent-2 {
+  box-shadow: var(--shadow-2);
+}
+.shadow-fluent-4 {
+  box-shadow: var(--shadow-4);
+}
+.shadow-fluent-8 {
+  box-shadow: var(--shadow-8);
+}
+.shadow-fluent-16 {
+  box-shadow: var(--shadow-16);
+}
+.shadow-fluent-64 {
+  box-shadow: var(--shadow-64);
+}
+
+/* Fluent Border Radius */
+.rounded-fluent {
+  border-radius: var(--radius);
+}
+.rounded-fluent-sm {
+  border-radius: var(--radius-sm);
+}
+.rounded-fluent-md {
+  border-radius: var(--radius-md);
+}
+.rounded-fluent-lg {
+  border-radius: var(--radius-lg);
+}
+.rounded-fluent-xl {
+  border-radius: var(--radius-xl);
+}
+
+/* Fluent Acrylic Material Effect (Subtle Blur) */
+.acrylic-light {
+  background: rgba(243, 242, 241, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.acrylic-dark {
+  background: rgba(41, 41, 41, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Office 365 Layout Utilities */
+.office-topbar {
+  height: var(--office-topbar-height);
+}
+.office-sidebar-collapsed {
+  width: var(--office-sidebar-collapsed);
+}
+.office-sidebar-expanded {
+  width: var(--office-sidebar-expanded);
+}
+.office-commandbar {
+  height: var(--office-commandbar-height);
+}
+.office-rightrail {
+  width: var(--office-rightrail-width);
+}
+
+/* Office 365 Navigation Surfaces */
+.office-nav-surface {
+  background-color: var(--nav-background);
+  border-color: var(--nav-border);
+}
+.office-nav-hover:hover {
+  background-color: var(--nav-hover);
+  transition-duration: 100ms;
+  transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+}
+.office-nav-active {
+  background-color: var(--nav-active);
+}
+
+/* Office 365 Grid System (8px base) */
+.grid-8 {
+  display: grid;
+  gap: 8px;
+}
+.grid-16 {
+  display: grid;
+  gap: 16px;
+}
+.grid-24 {
+  display: grid;
+  gap: 24px;
+}
+
+/* Office 365 List View Styling */
+.office-list-row {
+  cursor: pointer;
+  transition-duration: 100ms;
+  transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+}
+.office-list-row:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+.office-list-row:nth-child(even) {
+  background-color: hsl(var(--muted) / 0.2);
+}
+
+/* Office 365 Command Bar Item */
+.command-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition-duration: 100ms;
+  transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+}
+.command-bar-item:hover {
+  background-color: hsl(var(--muted));
+}
+.command-bar-item:active {
+  background-color: hsl(var(--accent));
+}
+
+/* Office 365 App Tile (Waffle Menu) */
+.app-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.33, 0, 0.67, 1);
+}
+.app-tile:hover {
+  background-color: hsl(var(--muted));
+}
+
+/* React Select Theme-Aware Styling */
+/* Control (main container) */
+.react-select__control {
+  background-color: var(--background) !important;
+  border-color: var(--input) !important;
+  border-radius: var(--radius) !important;
+  min-height: 40px !important;
+  box-shadow: none !important;
+  transition: all 150ms cubic-bezier(0.33, 0, 0.67, 1) !important;
+}
+
+.react-select__control:hover {
+  border-color: var(--ring) !important;
+}
+
+.react-select__control--is-focused {
+  border-color: var(--ring) !important;
+  box-shadow: 0 0 0 1px var(--ring) !important;
+}
+
+.react-select__control--is-disabled {
+  background-color: var(--muted) !important;
+  border-color: var(--border) !important;
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Value container */
+.react-select__value-container {
+  padding: 2px 8px !important;
+  color: var(--foreground) !important;
+}
+
+/* Single value */
+.react-select__single-value {
+  color: var(--foreground) !important;
+}
+
+/* Multi value (tags) */
+.react-select__multi-value {
+  background-color: var(--muted) !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  margin: 2px !important;
+  border: 1px solid var(--border) !important;
+}
+
+.react-select__multi-value__label {
+  color: var(--foreground) !important;
+  padding: 4px 8px !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.react-select__multi-value__remove {
+  color: var(--muted-foreground) !important;
+  cursor: pointer !important;
+  border-radius: 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 !important;
+  padding: 0 6px !important;
+  transition: background-color 100ms cubic-bezier(0.33, 0, 0.67, 1) !important;
+}
+
+.react-select__multi-value__remove:hover {
+  background-color: var(--destructive) !important;
+  color: #ffffff !important;
+}
+
+/* Input */
+.react-select__input-container {
+  color: var(--foreground) !important;
+}
+
+.react-select__input {
+  color: var(--foreground) !important;
+}
+
+/* Placeholder */
+.react-select__placeholder {
+  color: var(--muted-foreground) !important;
+}
+
+/* Indicators */
+.react-select__indicator-separator {
+  background-color: var(--border) !important;
+}
+
+.react-select__dropdown-indicator,
+.react-select__clear-indicator {
+  color: var(--muted-foreground) !important;
+  cursor: pointer !important;
+  transition: color 150ms cubic-bezier(0.33, 0, 0.67, 1) !important;
+}
+
+.react-select__dropdown-indicator:hover,
+.react-select__clear-indicator:hover {
+  color: var(--foreground) !important;
+}
+
+/* Loading indicator */
+.react-select__loading-indicator {
+  color: var(--primary) !important;
+}
+
+/* Menu (dropdown) */
+.react-select__menu {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3) !important;
+  margin-top: 4px !important;
+  z-index: 50 !important;
+}
+
+/* Portal menu (when menuPortalTarget is used) */
+.react-select__menu-portal {
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure menu receives all pointer events including wheel */
+.react-select__menu-portal .react-select__menu {
+  pointer-events: auto !important;
+}
+
+.react-select__menu-list {
+  padding: 4px !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background-color: var(--card) !important;
+  overscroll-behavior: contain !important;
+  /* Force scrollbar to always be visible */
+  scrollbar-width: thin !important;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--muted) / 0.3) !important;
+  scrollbar-gutter: stable !important;
+}
+
+.react-select__menu-list::-webkit-scrollbar {
+  width: 8px !important;
+  display: block !important;
+}
+
+.react-select__menu-list::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.3) !important;
+  border-radius: 4px !important;
+}
+
+.react-select__menu-list::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.4) !important;
+  border-radius: 4px !important;
+  min-height: 30px !important;
+}
+
+.react-select__menu-list::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.6) !important;
+}
+
+/* Menu options */
+.react-select__option {
+  background-color: transparent !important;
+  color: var(--foreground) !important;
+  cursor: pointer !important;
+  padding: 8px 12px !important;
+  border-radius: calc(var(--radius) - 2px) !important;
+  transition: all 100ms cubic-bezier(0.33, 0, 0.67, 1) !important;
+  font-size: 0.875rem !important;
+}
+
+.react-select__option:hover {
+  background-color: var(--accent) !important;
+}
+
+.react-select__option--is-focused {
+  background-color: var(--accent) !important;
+}
+
+.react-select__option--is-selected {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.react-select__option--is-disabled {
+  color: var(--muted-foreground) !important;
+  cursor: not-allowed !important;
+  opacity: 0.5 !important;
+}
+
+/* Menu notice (no options, loading) */
+.react-select__menu-notice {
+  color: var(--muted-foreground) !important;
+  padding: 8px 12px !important;
+  text-align: center !important;
+  font-size: 0.875rem !important;
+}
+
+/* Group */
+.react-select__group {
+  padding-bottom: 8px !important;
+}
+
+.react-select__group-heading {
+  color: var(--muted-foreground) !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  padding: 8px 12px 4px !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* Fluent UI Custom Scrollbar */
+.scrollbar-fluent {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
+.scrollbar-fluent::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-fluent::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.scrollbar-fluent::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 150ms cubic-bezier(0.33, 0, 0.67, 1);
+}
+
+.scrollbar-fluent::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.5);
+}
+
+.scrollbar-fluent::-webkit-scrollbar-thumb:active {
+  background-color: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* Always visible scrollbar variant (for tables) */
+.scrollbar-fluent-always {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--muted) / 0.5);
+  scrollbar-gutter: stable; /* Reserve space for scrollbar */
+}
+
+.scrollbar-fluent-always::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.scrollbar-fluent-always::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 5px;
+}
+
+.scrollbar-fluent-always::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 5px;
+  border: 2px solid hsl(var(--muted) / 0.5);
+  min-height: 40px;
+  min-width: 40px;
+  transition: background-color 150ms cubic-bezier(0.33, 0, 0.67, 1);
+}
+
+.scrollbar-fluent-always::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.6);
+}
+
+.scrollbar-fluent-always::-webkit-scrollbar-thumb:active {
+  background-color: hsl(var(--muted-foreground) / 0.8);
+}
+
+/* Ensure scrollbar corner is styled when both scrollbars are present */
+.scrollbar-fluent-always::-webkit-scrollbar-corner {
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 5px;
+}
+
+/* Hide scrollbar but keep scrolling (for sidebars) */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thin scrollbar for horizontal scrollers */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted)) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted));
+  border-radius: 3px;
+  transition: background-color 150ms cubic-bezier(0.33, 0, 0.67, 1);
+}
+
+.scrollbar-thin.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin.scrollbar-thumb-muted::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted));
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb,
+.scrollbar-thin.hover\:scrollbar-thumb-muted-foreground\/20:hover::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+}
+
+/* Mobile Safe Area Utilities (for iOS notch, home indicator, etc.) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-area-all {
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* Mobile Touch Target Utilities */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.touch-target-lg {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Reduced Motion Support - Disable animations when user prefers */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Dynamic Viewport Height for Mobile */
+.h-dvh {
+  height: 100dvh;
+}
+
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+.max-h-dvh {
+  max-height: 100dvh;
+}
+
+/* Mobile-specific viewport units */
+@supports (height: 100dvh) {
+  .mobile-viewport {
+    height: 100dvh;
+  }
+}
+
+@supports not (height: 100dvh) {
+  .mobile-viewport {
+    height: 100vh;
+  }
+}
+
+/* Smooth scroll with reduced motion respect */
+.scroll-smooth {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-smooth {
+    scroll-behavior: auto;
+  }
+}
+
+/* Touch action utilities for gesture control */
+.touch-pan-x {
+  touch-action: pan-x;
+}
+
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+.touch-pan-xy {
+  touch-action: pan-x pan-y;
+}
+
+.touch-pinch-zoom {
+  touch-action: pinch-zoom;
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+.touch-none {
+  touch-action: none;
+}

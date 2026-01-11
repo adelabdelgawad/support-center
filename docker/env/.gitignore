@@ -1,0 +1,4 @@
+.env.redis
+.env.postgres
+.env.frontend
+.env.backend

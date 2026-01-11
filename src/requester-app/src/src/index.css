@@ -1,0 +1,544 @@
+/* ============================================================================
+   CRITICAL: Tauri HMR Fix - Prevent viewport growth on hot reload
+   ============================================================================
+
+   Without these styles, Vite HMR in Tauri causes:
+   - Scrollbar to appear on hot reload
+   - New content to render BELOW existing content
+   - Window height to grow instead of updating in-place
+
+   Fix: Lock viewport to 100vh with overflow:hidden and position:fixed
+   ============================================================================ */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden; /* CRITICAL: Prevents scrollbar on HMR */
+  position: fixed; /* CRITICAL: Locks viewport size in Tauri webview */
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden; /* Root never scrolls */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Ensure all child routes/pages fill the root */
+#root > * {
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* Pages manage their own scroll */
+}
+
+/* Reset box-sizing for consistent layout */
+* {
+  box-sizing: border-box;
+}
+
+/* ============================================================================
+   End Tauri HMR Fix
+   ============================================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Andalusia Health Brand Color System
+ * ====================================
+ *
+ * Primary Brand: #8B6F47 (Warm Earthy Brown)
+ * - Used for: headers, navigation, primary buttons, highlights
+ *
+ * Accent: #C9A055 (Sophisticated Gold)
+ * - Used for: send buttons, active states, call-to-action elements
+ *
+ * Background Philosophy: Warm, Minimal White
+ * - Light mode: Cream/beige tones (#F5F0E8) instead of pure white
+ * - Dark mode: Warm dark browns (#1C1814) instead of cool grays
+ * - Cards: Soft cream surfaces for hierarchy
+ *
+ * Chat Colors:
+ * - Own messages: Light gold/cream (#F0E8D8)
+ * - Other messages: Soft beige (#FAF7F2)
+ *
+ * WCAG AA Accessibility:
+ * - All text combinations validated for 4.5:1+ contrast
+ * - Large text validated for 3:1+ contrast
+ *
+ * HSL Values derived from hex colors for Tailwind compatibility
+ */
+
+@layer base {
+  :root {
+    /* ========================================
+     * LIGHT MODE (fallback) - Andalusia Health
+     * Warm golden/beige palette
+     * ======================================== */
+    /* Background: Warm golden beige #E5D5BA */
+    --background: 38 45% 82%;
+    --foreground: 33 35% 12%;
+
+    /* Card: Lighter golden #EBE3D6 */
+    --card: 38 40% 88%;
+    --card-foreground: 33 35% 12%;
+
+    --popover: 38 40% 88%;
+    --popover-foreground: 33 35% 12%;
+
+    /* Primary: Andalusia Brown #8B6F47 (HSL: 33° 33% 41%) */
+    --primary: 33 33% 41%;
+    --primary-foreground: 33 30% 98%;
+
+    /* Secondary: Golden beige for inputs */
+    --secondary: 38 35% 78%;
+    --secondary-foreground: 33 35% 20%;
+
+    /* Muted: Medium golden beige */
+    --muted: 38 35% 80%;
+    --muted-foreground: 33 25% 35%;
+
+    /* Accent: Gold #C9A055 (HSL: 42° 55% 56%) */
+    --accent: 42 55% 56%;
+    --accent-foreground: 33 35% 12%;
+
+    /* Destructive: Warm red */
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success: Earthy green */
+    --success: 142 45% 42%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning: Warm amber */
+    --warning: 38 85% 52%;
+    --warning-foreground: 33 35% 12%;
+
+    /* Border & Input: Warm golden tones */
+    --border: 38 30% 70%;
+    --input: 38 35% 78%;
+    --ring: 42 55% 56%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* ========================================
+     * DARK MODE - Andalusia Health
+     * Native dark with warm golden accents
+     * ======================================== */
+
+    /* Background Scale (Deep dark with subtle warmth)
+     * Main: #0A0806 - Very dark native background
+     * Cards: #1A1410 - Elevated dark surface
+     * Inputs: #252018 - Interactive elements
+     */
+    --background: 33 30% 4%;           /* #0A0806 - Very dark native */
+    --foreground: 38 25% 92%;          /* #F0EBE3 - Warm light text */
+
+    /* Card: Elevated dark surface */
+    --card: 33 25% 8%;                 /* #1A1410 */
+    --card-foreground: 38 25% 92%;     /* #F0EBE3 */
+
+    /* Popover: Same as card */
+    --popover: 33 25% 8%;              /* #1A1410 */
+    --popover-foreground: 38 25% 92%;  /* #F0EBE3 */
+
+    /* Primary: Lighter Andalusia Brown for dark mode
+     * Used for: headers, primary buttons, highlights
+     */
+    --primary: 38 40% 50%;             /* #B8956B - Lighter golden brown */
+    --primary-foreground: 33 30% 8%;   /* Dark text on light brown */
+
+    /* Secondary: Dark surface for inputs, cards */
+    --secondary: 33 20% 15%;           /* #282017 */
+    --secondary-foreground: 38 25% 88%; /* Light text */
+
+    /* Muted: Subdued elements */
+    --muted: 33 20% 15%;               /* #282017 */
+    --muted-foreground: 38 15% 65%;    /* Muted warm text */
+
+    /* Accent: Bright Gold for dark mode visibility
+     * For send buttons, active states, call-to-action
+     */
+    --accent: 42 70% 58%;              /* #E0B55F - Brighter gold */
+    --accent-foreground: 0 0% 100%;    /* Pure white text on gold */
+
+    /* Destructive: Brighter red for visibility */
+    --destructive: 0 70% 60%;          /* Readable on dark */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success: Brighter green */
+    --success: 142 50% 50%;            /* Brighter green */
+    --success-foreground: 0 0% 100%;
+
+    /* Warning: Bright amber */
+    --warning: 38 90% 58%;             /* Bright amber */
+    --warning-foreground: 0 0% 100%;   /* Pure white text on amber */
+
+    /* Border: Visible warm borders */
+    --border: 38 25% 25%;              /* More visible warm border */
+    --input: 33 20% 15%;               /* #282017 */
+    --ring: 42 65% 60%;                /* Bright gold focus ring */
+  }
+
+  /* ========================================
+   * LIGHT MODE - Andalusia Health
+   * Warm golden/beige palette
+   * ======================================== */
+  .light {
+    /* Background Scale (Warm golden palette)
+     * Main: #E5D5BA - Warm golden beige background
+     * Cards: #EBE3D6 - Lighter golden cards
+     * Inputs: #D4C4A9 - Golden beige inputs
+     */
+    --background: 38 45% 82%;          /* #E5D5BA - Warm golden beige */
+    --foreground: 33 35% 12%;          /* #291F14 - Darker text for contrast */
+
+    /* Card: Lighter golden #EBE3D6 */
+    --card: 38 40% 88%;                /* #EBE3D6 */
+    --card-foreground: 33 35% 12%;     /* #291F14 */
+
+    /* Popover: Same as card */
+    --popover: 38 40% 88%;             /* #EBE3D6 */
+    --popover-foreground: 33 35% 12%;  /* #291F14 */
+
+    /* Primary: Andalusia Brown #8B6F47 */
+    --primary: 33 33% 41%;             /* #8B6F47 */
+    --primary-foreground: 33 30% 98%;  /* Cream text on brown */
+
+    /* Secondary: Golden beige for inputs */
+    --secondary: 38 35% 78%;           /* Golden beige */
+    --secondary-foreground: 33 35% 20%; /* Dark text */
+
+    /* Muted: Medium golden beige */
+    --muted: 38 35% 80%;               /* Medium golden beige */
+    --muted-foreground: 33 25% 35%;    /* Muted text */
+
+    /* Accent: Gold #C9A055 */
+    --accent: 42 55% 56%;              /* #C9A055 */
+    --accent-foreground: 33 35% 12%;   /* Dark text on gold */
+
+    /* Destructive: Warm red */
+    --destructive: 0 65% 50%;          /* Warm red */
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success: Earthy green */
+    --success: 142 45% 42%;            /* Earthy green */
+    --success-foreground: 0 0% 100%;
+
+    /* Warning: Warm amber */
+    --warning: 38 85% 52%;             /* Warm amber */
+    --warning-foreground: 33 35% 12%;  /* Dark text */
+
+    /* Border: Warm golden dividers */
+    --border: 38 30% 70%;              /* Warm golden border */
+    --input: 38 35% 78%;               /* Golden input */
+    --ring: 42 55% 56%;                /* Gold focus ring */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* ========================================
+ * CUSTOM UTILITY CLASSES
+ * WhatsApp-inspired design system utilities
+ * ======================================== */
+
+@layer utilities {
+  /* Andalusia Health Chat Colors - Theme-aware */
+  .bg-chat-own-message {
+    /* Light gold/cream for user's messages #F0E8D8 */
+    @apply bg-amber-50 dark:bg-amber-950/30;
+  }
+  .bg-chat-other-message {
+    /* Soft beige for support messages */
+    @apply bg-card;
+  }
+  .bg-chat-own-message-hover {
+    @apply bg-amber-100 dark:bg-amber-900/30;
+  }
+  .bg-chat-other-message-hover {
+    @apply bg-secondary;
+  }
+  .bg-chat-sidebar {
+    @apply bg-card;
+  }
+  .bg-chat-header {
+    /* Andalusia brown header */
+    @apply bg-primary;
+  }
+  .bg-chat-background {
+    @apply bg-background;
+  }
+
+  /* Primary color scale (Andalusia brown #8B6F47) */
+  .bg-primary-50 { background-color: #F9F6F0; }
+  .bg-primary-100 { background-color: #F0E8D8; }
+  .bg-primary-200 { background-color: #E5D5BA; }
+  .bg-primary-300 { background-color: #D4B896; }
+  .bg-primary-400 { background-color: #B89566; }
+  .bg-primary-500 { background-color: #8B6F47; }
+  .bg-primary-600 { background-color: #75593A; }
+  .bg-primary-700 { background-color: #5F472F; }
+  .bg-primary-800 { background-color: #4A3724; }
+  .bg-primary-900 { background-color: #33261A; }
+
+  .text-primary-50 { color: #F9F6F0; }
+  .text-primary-100 { color: #F0E8D8; }
+  .text-primary-200 { color: #E5D5BA; }
+  .text-primary-300 { color: #D4B896; }
+  .text-primary-400 { color: #B89566; }
+  .text-primary-500 { color: #8B6F47; }
+  .text-primary-600 { color: #75593A; }
+  .text-primary-700 { color: #5F472F; }
+  .text-primary-800 { color: #4A3724; }
+  .text-primary-900 { color: #33261A; }
+
+  /* Accent scale (Andalusia gold #C9A055) */
+  .bg-accent-400 { background-color: #DAB066; }
+  .bg-accent-500 { background-color: #C9A055; }
+  .bg-accent-600 { background-color: #B08943; }
+  .bg-accent-700 { background-color: #8F6E35; }
+  .bg-accent-800 { background-color: #6E5428; }
+
+  .text-accent-400 { color: #DAB066; }
+  .text-accent-500 { color: #C9A055; }
+  .text-accent-600 { color: #B08943; }
+  .text-accent-700 { color: #8F6E35; }
+  .text-accent-800 { color: #6E5428; }
+
+  /* Border utilities with warm brown tint */
+  .border-primary-subtle {
+    border-color: rgba(139, 111, 71, 0.1);
+  }
+  .border-primary-medium {
+    border-color: rgba(139, 111, 71, 0.25);
+  }
+  .border-primary-strong {
+    border-color: rgba(139, 111, 71, 0.5);
+  }
+
+  /* Hover state utilities */
+  .hover\:bg-primary-hover:hover {
+    background-color: #75593A;
+  }
+  .hover\:border-primary-hover:hover {
+    border-color: rgba(117, 89, 58, 0.5);
+  }
+}
+
+/* ========================================
+ * SCROLLBAR STYLES
+ * Theme-aware scrollbar styling
+ * ======================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--foreground) / 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--foreground) / 0.3);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--foreground) / 0.2) transparent;
+}
+
+/* ========================================
+ * FOCUS STATES
+ * Golden ring for accessibility
+ * ======================================== */
+
+@layer base {
+  /* Default focus-visible ring using primary gold */
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus for elements that have custom styling */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring));
+  }
+}
+
+/* ========================================
+ * COMPONENT OVERRIDES
+ * Ensure consistent styling across shadcn components
+ * ======================================== */
+
+@layer components {
+  /* Theme-aware avatar colors for user identification */
+  .avatar-red {
+    @apply bg-red-500 dark:bg-red-700;
+  }
+  .avatar-blue {
+    @apply bg-blue-500 dark:bg-blue-700;
+  }
+  .avatar-green {
+    @apply bg-green-500 dark:bg-green-700;
+  }
+  .avatar-yellow {
+    @apply bg-yellow-500 dark:bg-yellow-700;
+  }
+  .avatar-purple {
+    @apply bg-purple-500 dark:bg-purple-700;
+  }
+  .avatar-pink {
+    @apply bg-pink-500 dark:bg-pink-700;
+  }
+  .avatar-indigo {
+    @apply bg-indigo-500 dark:bg-indigo-700;
+  }
+  .avatar-teal {
+    @apply bg-teal-500 dark:bg-teal-700;
+  }
+
+  /* Button primary state refinements (Andalusia Health style) */
+  .btn-primary {
+    @apply bg-primary text-primary-foreground;
+    transition: background-color 150ms ease, transform 50ms ease;
+  }
+  .btn-primary:hover {
+    background-color: #75593A; /* Darker brown */
+  }
+  .btn-primary:active {
+    background-color: #5F472F; /* Even darker brown */
+    transform: scale(0.98);
+  }
+
+  /* Send button with Andalusia gold */
+  .btn-send {
+    @apply bg-accent-400 text-accent-foreground;
+    transition: background-color 150ms ease, transform 50ms ease;
+  }
+  .btn-send:hover {
+    background-color: #B08943; /* Darker gold */
+  }
+  .btn-send:active {
+    background-color: #8F6E35; /* Even darker gold */
+    transform: scale(0.98);
+  }
+
+  /* Card with Andalusia-style border */
+  .card-elevated {
+    @apply bg-card border border-border rounded-lg;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+  }
+  .card-elevated:hover {
+    border-color: rgba(139, 111, 71, 0.3); /* Brown tint */
+    box-shadow: 0 4px 12px rgba(139, 111, 71, 0.15);
+  }
+
+  /* Badge for unread counts (WhatsApp style) */
+  .badge-unread {
+    @apply bg-accent-400 text-accent-foreground text-xs font-bold px-2.5 py-0.5 rounded-full;
+  }
+
+  /* Input with Andalusia focus */
+  .input-golden {
+    @apply bg-secondary border border-border rounded-md px-3 py-2 text-foreground;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .input-golden:focus {
+    border-color: hsl(var(--accent));
+    box-shadow: 0 0 0 3px rgba(201, 160, 85, 0.2); /* Gold glow */
+  }
+
+  /* Status badges */
+  .status-success {
+    @apply bg-success/10 text-success border border-success/20 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .status-warning {
+    @apply bg-warning/10 text-warning border border-warning/20 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .status-destructive {
+    @apply bg-destructive/10 text-destructive border border-destructive/20 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+  .status-info {
+    @apply bg-accent/10 text-accent border border-accent/20 rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+}
+
+/* ========================================
+ * ANIMATION UTILITIES
+ * Smooth transitions for interactive elements
+ * ======================================== */
+
+@layer utilities {
+  .transition-colors-fast {
+    transition: color 100ms ease, background-color 100ms ease, border-color 100ms ease;
+  }
+  .transition-all-fast {
+    transition: all 150ms ease;
+  }
+}
+
+/* ========================================
+ * SEARCH DEEP LINK HIGHLIGHT
+ * Highlights a message when navigating from search
+ * ======================================== */
+
+@layer components {
+  /* Message highlight for deep link from search */
+  .message-highlighted {
+    animation: highlight-pulse 0.5s ease-in-out;
+    background-color: rgba(255, 249, 196, 0.5);
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 2px rgba(255, 160, 0, 0.3);
+    transition: background-color 0.5s ease-out, box-shadow 0.5s ease-out;
+  }
+
+  /* Dark mode highlight */
+  .dark .message-highlighted {
+    background-color: rgba(255, 193, 7, 0.2);
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.4);
+  }
+
+  /* Fade out animation */
+  .message-highlight-fade {
+    transition: background-color 0.5s ease-out, box-shadow 0.5s ease-out;
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  @keyframes highlight-pulse {
+    0%, 100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.01);
+    }
+  }
+}

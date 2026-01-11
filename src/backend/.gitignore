@@ -1,0 +1,151 @@
+# ============================================
+# Backend .gitignore (FastAPI + SQLModel + uv)
+# ============================================
+
+# ========== Python ==========
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.spec
+MANIFEST
+
+# Virtual environment lib directories (specific to backend)
+.venv/lib/
+.venv/lib64/
+venv/lib/
+venv/lib64/
+env/lib/
+env/lib64/
+Lib/
+
+# ========== Virtual Environments ==========
+# Project uses .venv/
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Legacy venv artifacts (in venv directories)
+Include/
+Scripts/
+pyvenv.cfg
+bin/
+
+# ========== Package Managers ==========
+# uv package manager
+uv.lock
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ========== Testing / Coverage ==========
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# ========== Type Checking / Linting ==========
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# ruff
+.ruff_cache/
+
+# pytype
+.pytype/
+
+# pyright
+pyrightconfig.json
+
+# ========== Database & Migrations ==========
+# SQLite databases (if using for testing)
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic temporary files (keep migration files)
+*.pyc
+
+# ========== Logging ==========
+logs/
+*.log
+*.pot
+
+# ========== Environment Variables ==========
+.env
+.env.local
+.env.*.local
+
+# ========== IDE & Editors ==========
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# ========== Application-Specific ==========
+# Temporary file uploads (before storage)
+temp_uploads/
+uploads/
+temp/
+
+# Cache
+.cache/
+
+# ========== Documentation ==========
+# Sphinx documentation
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# ========== Temporary & Backup Files ==========
+*.tmp
+*.bak
+*~

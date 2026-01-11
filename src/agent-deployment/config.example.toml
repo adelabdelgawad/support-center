@@ -1,0 +1,68 @@
+# Deployment Worker Configuration
+# Copy this file to the appropriate location:
+# - Windows: C:\ProgramData\DeploymentWorker\config.toml
+# - Linux: /etc/deployment-worker/config.toml
+
+# Enable mock mode for testing without a real backend
+mock_mode = false
+
+[api]
+# Backend API base URL
+base_url = "https://your-backend.example.com"
+
+# Endpoint for polling deployment jobs (relative to base_url)
+poll_endpoint = "/internal/deployment-jobs/next"
+
+# Endpoint for reporting results (relative to base_url)
+# {id} will be replaced with the job ID
+report_endpoint = "/internal/deployment-jobs/{id}/result"
+
+# HTTP request timeout in seconds
+timeout_seconds = 30
+
+# Windows Credential Manager target name for API authentication token
+# Store the token using: cmdkey /generic:DeploymentWorker:API /user:api-user /pass:your-token
+credential_target = "DeploymentWorker:API"
+
+[worker]
+# Unique worker identifier (auto-generated from hostname if not set)
+# worker_id = "worker-001"
+
+# How often to poll for new jobs (seconds)
+poll_interval_seconds = 30
+
+# Maximum backoff when no jobs are available (seconds)
+max_backoff_seconds = 300
+
+# Maximum concurrent jobs (recommended: 1 for safety)
+max_concurrent_jobs = 1
+
+# Timeout for cleanup operations (seconds)
+cleanup_timeout_seconds = 60
+
+# Timeout for SMB file copy operations (seconds)
+smb_copy_timeout_seconds = 300
+
+# Timeout for MSI execution via remote service (seconds)
+service_execution_timeout_seconds = 600
+
+# Timeout for reachability checks (seconds)
+reachability_timeout_seconds = 5
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Log file directory (logs are rotated daily)
+# Windows default: C:\ProgramData\DeploymentWorker\logs
+# Linux default: /var/log/deployment-worker
+file_path = "C:\\ProgramData\\DeploymentWorker\\logs"
+
+# Maximum log file size in MB before rotation
+max_size_mb = 10
+
+# Maximum number of rotated log files to keep
+max_files = 5
+
+# Use JSON format for file logs (recommended for log aggregation)
+json_format = true

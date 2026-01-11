@@ -1,0 +1,99 @@
+# Recording Rules - Pre-compute expensive queries
+# These rules create new time series that are computed regularly
+
+groups:
+  - name: http_performance
+    interval: 30s
+    rules:
+      # Pre-compute request rate per endpoint
+      - record: job:http_requests:rate5m
+        expr: |
+          sum by (job, handler, method) (
+            rate(http_requests_total[5m])
+          )
+
+      # Pre-compute error rate
+      - record: job:http_errors:rate5m
+        expr: |
+          sum by (job) (
+            rate(http_requests_total{status=~"5.."}[5m])
+          )
+
+      # Pre-compute total request rate
+      - record: job:http_requests_total:rate5m
+        expr: |
+          sum by (job) (
+            rate(http_requests_total[5m])
+          )
+
+      # Pre-compute error percentage
+      - record: job:http_error_rate:ratio
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+
+      # Pre-compute p50 latency
+      - record: job:http_latency:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (job, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # Pre-compute p95 latency
+      - record: job:http_latency:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (job, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+      # Pre-compute p99 latency
+      - record: job:http_latency:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (job, le) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          )
+
+  - name: websocket_performance
+    interval: 30s
+    rules:
+      # WebSocket message rate
+      - record: job:websocket_messages:rate5m
+        expr: |
+          sum by (endpoint, message_type) (
+            rate(websocket_messages_sent_total[5m])
+          )
+
+      # WebSocket connection rate
+      - record: job:websocket_connections:rate5m
+        expr: |
+          sum by (endpoint) (
+            rate(websocket_connections_total[5m])
+          )
+
+  - name: business_metrics
+    interval: 60s
+    rules:
+      # Ticket creation rate (per hour)
+      - record: business:tickets_created:rate1h
+        expr: |
+          sum by (category, priority) (
+            rate(ticket_created_total[1h])
+          ) * 3600
+
+      # Average ticket resolution time
+      - record: business:ticket_resolution:avg_seconds
+        expr: |
+          sum by (category) (
+            rate(ticket_resolution_time_seconds_sum[1h])
+          )
+          /
+          sum by (category) (
+            rate(ticket_resolution_time_seconds_count[1h])
+          )

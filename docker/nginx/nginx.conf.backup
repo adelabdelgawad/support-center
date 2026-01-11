@@ -1,0 +1,322 @@
+user nginx;
+worker_processes auto;
+worker_rlimit_nofile 65535;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 10000;
+    use epoll;
+    multi_accept on;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for" '
+                    'origin: "$http_origin" '
+                    'upstream: $upstream_addr rt=$request_time';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 100M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml text/javascript
+               application/json application/javascript application/xml+rss
+               application/rss+xml font/truetype font/opentype
+               application/vnd.ms-fontobject image/svg+xml;
+
+    # Connection limits per IP
+    limit_conn_zone $binary_remote_addr zone=conn_limit_per_ip:10m;
+    limit_conn conn_limit_per_ip 100;
+
+    # Backend API cluster
+    # NOTE: For multi-instance production, uncomment the additional servers
+    upstream backend_api {
+        least_conn;
+
+        server 10.25.10.50:8000 weight=1 max_fails=3 fail_timeout=30s;
+        # server 10.25.10.50:8001 weight=1 max_fails=3 fail_timeout=30s;
+        # server 10.25.10.50:8002 weight=1 max_fails=3 fail_timeout=30s;
+
+        keepalive 32;
+    }
+
+    # SignalR service upstream
+    upstream signalr_service {
+        server 10.25.10.50:5000 max_fails=3 fail_timeout=30s;
+        keepalive 32;
+    }
+
+    # WebSocket upgrade map
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    # HTTP Server - ACME challenges + redirect to HTTPS (public domain)
+    server {
+        listen 80;
+        server_name arc-webapp-01.andalusiagroup.net supportcenter.andalusiagroup.net;
+
+        # Let's Encrypt ACME challenge
+        location /.well-known/acme-challenge/ {
+            root /var/www/acme-challenge;
+        }
+
+        # API routes - forward to backend WITHOUT redirect (for CORS preflight)
+        # This allows Tauri desktop app to use HTTP without CORS preflight redirect issues
+        location /api/v1/ {
+            proxy_pass http://backend_api;
+            proxy_http_version 1.1;
+
+            # Standard proxy headers
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Forward authentication and custom headers
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Client-Private-IP $http_x_client_private_ip;
+            proxy_set_header Referer $http_referer;
+            proxy_set_header User-Agent $http_user_agent;
+
+            # Forward CORS headers (critical for preflight OPTIONS)
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Access-Control-Request-Method $http_access_control_request_method;
+            proxy_set_header Access-Control-Request-Headers $http_access_control_request_headers;
+
+            # API timeouts
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+            proxy_buffering off;
+        }
+
+        # Redirect everything else to HTTPS
+        location / {
+            return 301 https://$host$request_uri;
+        }
+    }
+
+    # HTTP Server for internal hostnames (no HTTPS redirect)
+    server {
+        listen 80 default_server;
+        server_name arc-webapp-01 arc-webapp-01.andalusia.loc 10.25.10.50 localhost;
+
+        # Security headers
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; font-src 'self' data:; frame-ancestors 'self';" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # SignalR endpoint for real-time communication
+        location /signalr/ {
+            proxy_pass http://signalr_service/;
+            proxy_http_version 1.1;
+
+            # WebSocket upgrade headers (SignalR uses WebSockets by default)
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Long timeouts for SignalR connections
+            proxy_connect_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_read_timeout 86400s;
+
+            proxy_cache_bypass $http_upgrade;
+            proxy_buffering off;
+        }
+
+        # Proxy backend API requests
+        location /api/v1/ {
+            proxy_pass http://backend_api;
+            proxy_http_version 1.1;
+
+            # Standard proxy headers
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Forward authentication and custom headers
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Client-Private-IP $http_x_client_private_ip;
+            proxy_set_header Referer $http_referer;
+            proxy_set_header User-Agent $http_user_agent;
+
+            # Forward CORS headers
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Access-Control-Request-Method $http_access_control_request_method;
+            proxy_set_header Access-Control-Request-Headers $http_access_control_request_headers;
+
+            # API timeouts
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+            proxy_buffering off;
+        }
+
+        # Proxy to Next.js frontend
+        location / {
+            proxy_pass http://10.25.10.50:3010;
+            proxy_http_version 1.1;
+
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $http_host;
+            proxy_set_header X-Forwarded-Port 80;
+
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+            proxy_cache_bypass $http_upgrade;
+            proxy_buffering off;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+
+    # HTTPS Server
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name arc-webapp-01.andalusiagroup.net supportcenter.andalusiagroup.net;
+
+        # SSL Configuration
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+        ssl_prefer_server_ciphers off;
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:SSL:50m;
+        ssl_stapling off;
+        ssl_stapling_verify off;
+
+        # Security headers
+        add_header Strict-Transport-Security "max-age=63072000" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' wss: https:; font-src 'self' data:; frame-ancestors 'self';" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # SignalR endpoint for real-time communication
+        location /signalr/ {
+            proxy_pass http://signalr_service/;
+            proxy_http_version 1.1;
+
+            # WebSocket upgrade headers (SignalR uses WebSockets by default)
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+
+            # Standard proxy headers
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Long timeouts for SignalR connections (24 hours for long-polling fallback)
+            proxy_connect_timeout 86400s;
+            proxy_send_timeout 86400s;
+            proxy_read_timeout 86400s;
+
+            proxy_cache_bypass $http_upgrade;
+            proxy_buffering off;
+        }
+
+        # Proxy backend API requests to backend cluster (least connections)
+        # NOTE: Next.js API routes (/api/*) are handled by location / below
+        # This only proxies /api/v1/* (backend API) to avoid conflicts
+        location /api/v1/ {
+            proxy_pass http://backend_api;
+            proxy_http_version 1.1;
+
+            # Standard proxy headers
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Forward authentication and custom headers
+            proxy_set_header Authorization $http_authorization;
+            proxy_set_header X-Client-Private-IP $http_x_client_private_ip;
+            proxy_set_header Referer $http_referer;
+            proxy_set_header User-Agent $http_user_agent;
+
+            # Forward CORS headers
+            proxy_set_header Origin $http_origin;
+            proxy_set_header Access-Control-Request-Method $http_access_control_request_method;
+            proxy_set_header Access-Control-Request-Headers $http_access_control_request_headers;
+
+            # API timeouts
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+
+            proxy_buffering off;
+        }
+
+        # Proxy to Next.js frontend (running on host)
+        location / {
+            proxy_pass http://10.25.10.50:3010;
+            proxy_http_version 1.1;
+
+            # WebSocket support (for Next.js HMR)
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+
+            # Standard proxy headers
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Host $http_host;
+            proxy_set_header X-Forwarded-Port 443;
+
+            # Proxy timeouts (increased for Next.js dev mode)
+            proxy_connect_timeout 300s;
+            proxy_send_timeout 300s;
+            proxy_read_timeout 300s;
+
+            proxy_cache_bypass $http_upgrade;
+            proxy_buffering off;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
+}

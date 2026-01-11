@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; user-select: none; }
+        body {
+            width: 48px;
+            height: 48px;
+            background: transparent;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body:active { cursor: grabbing; }
+        #icon {
+            width: 32px;
+            height: 32px;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <img id="icon" src="icon.png" draggable="false" alt="App Icon">
+
+    <script>
+        // Wait for DOM and Tauri to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const icon = document.getElementById('icon');
+
+            // Wait for Tauri API
+            function initTauri() {
+                if (!window.__TAURI__) {
+                    setTimeout(initTauri, 50);
+                    return;
+                }
+
+                const { window: tauriWindow, core } = window.__TAURI__;
+                const appWindow = tauriWindow.getCurrentWindow();
+                let clickTimeout;
+
+                // Drag functionality
+                icon.addEventListener('mousedown', async (e) => {
+                    e.preventDefault();
+                    try {
+                        await appWindow.startDragging();
+                    } catch (err) {
+                        // Drag failed silently
+                    }
+                });
+
+                // Click to toggle main window
+                icon.addEventListener('click', () => {
+                    clearTimeout(clickTimeout);
+                    clickTimeout = setTimeout(async () => {
+                        try {
+                            await core.invoke('toggle_window');
+                        } catch (err) {
+                            // Toggle failed silently
+                        }
+                    }, 200);
+                });
+            }
+
+            initTauri();
+        });
+    </script>
+</body>
+</html>

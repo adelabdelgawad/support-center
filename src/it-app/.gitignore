@@ -1,0 +1,87 @@
+# ============================================
+# it-app .gitignore (Next.js 15 + TypeScript + shadcn/ui)
+# ============================================
+# See https://help.github.com/articles/ignoring-files/
+
+# ========== Dependencies ==========
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ========== Next.js ==========
+# Build outputs
+/.next/
+/out/
+
+# Production
+/build
+
+# Next.js cache
+.next/
+.turbo/
+
+# ========== TypeScript ==========
+*.tsbuildinfo
+next-env.d.ts
+
+# ========== Testing ==========
+/coverage
+.nyc_output
+
+# ========== Environment Variables ==========
+# Specific env files (allows .env.example to be committed)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Note: Do NOT ignore .env.example (should be committed)
+
+# ========== Logs ==========
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# ========== IDE & Editors ==========
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+*.pem
+
+# Windows
+Thumbs.db
+
+# ========== Deployment ==========
+# Vercel
+.vercel
+
+# ========== Cache & Temporary Files ==========
+.cache/
+.eslintcache
+*.tmp
+*.bak
+
+# ========== SWR/Data Cache ==========
+# If using persistent cache (uncomment if needed)
+# .swr-cache/

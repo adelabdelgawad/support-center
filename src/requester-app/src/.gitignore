@@ -1,0 +1,17 @@
+# ============================================
+# Requester App /src .gitignore
+# ============================================
+# Note: Main .gitignore is at ../gitignore (repository root)
+# This file contains src-specific patterns only
+
+# Vite build outputs (src-specific)
+dist/
+dist-ssr/
+
+# Tauri build artifacts (relative to src/)
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+
+# Local env overrides
+*.local

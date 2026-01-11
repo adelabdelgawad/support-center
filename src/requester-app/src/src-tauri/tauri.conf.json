@@ -1,0 +1,84 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "IT Support Center",
+  "version": "1.0.3",
+  "identifier": "supportcenter.requester",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "IT Support Center",
+        "width": 500,
+        "height": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": false,
+        "minWidth": 350,
+        "minHeight": 500,
+        "visible": true,
+        "alwaysOnTop": true,
+        "decorations": true,
+        "skipTaskbar": false,
+        "transparent": false,
+        "shadow": true,
+        "focus": true
+      },
+      {
+        "label": "floating-icon",
+        "title": "IT Support Center",
+        "width": 48,
+        "height": 48,
+        "minWidth": 48,
+        "minHeight": 48,
+        "maxWidth": 48,
+        "maxHeight": 48,
+        "resizable": false,
+        "fullscreen": false,
+        "center": false,
+        "visible": true,
+        "alwaysOnTop": true,
+        "decorations": false,
+        "skipTaskbar": true,
+        "transparent": true,
+        "shadow": false,
+        "focus": false,
+        "url": "/icon.html"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://supportcenter.andalusiagroup.net https://supportcenter.andalusiagroup.net; connect-src 'self' http://supportcenter.andalusiagroup.net https://supportcenter.andalusiagroup.net wss://supportcenter.andalusiagroup.net http://localhost:* ws://localhost:*; font-src 'self' data:; media-src 'self' blob:; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/chat-icon.png"
+    ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "nsis": {
+        "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": null,
+        "sidebarImage": null
+      },
+      "allowDowngrades": true
+    }
+  },
+  "plugins": {}
+}

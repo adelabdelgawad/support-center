@@ -1,0 +1,28 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth/server-auth";
+import { validateAgentAccess } from "@/lib/actions/validate-agent-access.actions";
+import { getDeploymentJobs } from "@/lib/actions/deployment-jobs.actions";
+import { JobsTab } from "../_components/jobs/jobs-tab";
+
+export const metadata = {
+  title: 'Jobs - Deployments',
+  description: 'Manage deployment jobs',
+};
+
+/**
+ * Deployment Jobs Page
+ * Admin page for viewing deployment job status and history.
+ * Location: /management/deployments/jobs
+ */
+export default async function DeploymentsJobsPage() {
+  await validateAgentAccess();
+
+  const session = await auth();
+  if (!session?.accessToken) {
+    redirect("/login");
+  }
+
+  const jobsData = await getDeploymentJobs();
+
+  return <JobsTab initialData={jobsData} />;
+}

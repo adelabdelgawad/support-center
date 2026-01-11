@@ -1,0 +1,89 @@
+# Python cache and build files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+tests/
+test_*.py
+
+# Documentation and temporary files
+*.md
+docs/
+*.log
+*.tmp
+
+# Environment files (will be injected at runtime)
+.env
+.env.*
+*.env
+
+# Alembic compiled files (migrations are needed)
+# Keep: alembic/ and alembic.ini
+
+# Logs
+logs/
+*.log
+
+# Database files (use external database)
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads (use volume or object storage)
+uploads/
+temp/
+tmp/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+*.yml
+docker-compose*.yml
+Dockerfile*
+
+# Backup files
+*.bak
+*.backup
+*~

@@ -1,0 +1,198 @@
+# ============================================
+# Root .gitignore for IT Support Center
+# Monorepo: FastAPI backend + Next.js agent portal + Tauri requester app
+# ============================================
+
+# ========== Python/Backend ==========
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+.Python
+
+# Note: env/ pattern removed - conflicts with docker/env/
+# Python venv env/ should use .venv/ or venv/ instead
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Note: lib/ removed - too broad for monorepo
+# Python venv lib/ handled in backend/.gitignore
+
+# uv (Python package manager)
+uv.lock
+
+# Testing / Coverage
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.pytest_cache/
+.hypothesis/
+
+# Type checking / Linting
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+pyrightconfig.json
+
+# Alembic (database migrations)
+# Note: Keep migration files, ignore temp/cache
+*.pyc
+
+# ========== Node.js/TypeScript ==========
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Build outputs
+dist/
+out/
+.next/
+.turbo/
+
+# Cache
+.cache/
+.eslintcache
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Testing
+coverage/
+
+# ========== Tauri/Rust ==========
+# Rust build artifacts
+**/src-tauri/target/
+**/src-tauri/WixTools/
+Cargo.lock
+
+# ========== Environment & Secrets ==========
+# Environment files (exclude .env.example which should be committed)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+.env.*.local
+
+# Docker environment files (centralized in docker/env/)
+docker/env/.env.*
+!docker/env/.env.example.*
+
+# ========== IDE & Editors ==========
+# VSCode
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+
+# ========== Database ==========
+*.db
+*.sqlite
+*.sqlite3
+
+# ========== Application-Specific ==========
+# File uploads
+uploads/
+temp/
+temp_uploads/
+
+# Logs
+logs/
+
+# Build artifacts
+*.exe
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+*.msi
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+# Windows reserved device names
+**/NUL
+**/nul
+
+# ========== CI/CD ==========
+.vercel/
+
+# ========== Documentation (auto-generated) ==========
+# Committed docs stay, exclude build artifacts
+docs/_build/
+
+# ========== Custom/Temporary ==========
+# Add project-specific ignores here
+OPTIMIZATION_CHANGES.txt
+PERFORMANCE_OPTIMIZATION_REPORT.md

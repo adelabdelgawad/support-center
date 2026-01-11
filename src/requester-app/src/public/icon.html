@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: transparent;
+        }
+        body {
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body:active { cursor: grabbing; }
+
+        #icon-container {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #icon {
+            width: 48px;
+            height: 48px;
+            pointer-events: auto;
+            border-radius: 0px;
+            transition: background-color 0.3s ease;
+            display: block;
+            object-fit: contain;
+        }
+
+        #icon.flash-red {
+            background-color: rgba(239, 68, 68, 0.6);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+        }
+
+        #badge {
+            position: fixed;
+            top: 0;
+            right: 0;
+            min-width: 16px;
+            height: 16px;
+            background: #ef4444;
+            color: white;
+            border-radius: 8px;
+            border: 2px solid white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 0 3px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #badge.show {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <div id="icon-container">
+        <img id="icon" src="icon.png" draggable="false" alt="App Icon">
+        <div id="badge">0</div>
+    </div>
+
+    <script>
+        // Wait for DOM and Tauri to be ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const icon = document.getElementById('icon');
+            const badge = document.getElementById('badge');
+            const iconContainer = document.getElementById('icon-container');
+
+            let redFlashTimer = null;
+            let currentUnreadCount = 0;
+
+            // Update badge count
+            function updateBadgeCount(count) {
+                currentUnreadCount = count;
+                if (count > 0) {
+                    const displayCount = count > 99 ? '99+' : count.toString();
+                    badge.textContent = displayCount;
+                    badge.classList.add('show');
+                } else {
+                    badge.classList.remove('show');
+                }
+            }
+
+            // Trigger red flash for 5 seconds
+            function triggerRedFlash() {
+                if (redFlashTimer) {
+                    clearTimeout(redFlashTimer);
+                }
+                icon.classList.add('flash-red');
+                redFlashTimer = setTimeout(() => {
+                    icon.classList.remove('flash-red');
+                    redFlashTimer = null;
+                }, 5000);
+            }
+
+            // Wait for Tauri API
+            function initTauri() {
+                if (!window.__TAURI__) {
+                    setTimeout(initTauri, 50);
+                    return;
+                }
+
+                const { window: tauriWindow, core, event } = window.__TAURI__;
+                const appWindow = tauriWindow.getCurrentWindow();
+                let clickCount = 0;
+                let clickTimeout;
+                let isDragging = false;
+                let mouseDownTime = 0;
+
+                // Listen for unread count updates from main app
+                event.listen('update-unread-count', (e) => {
+                    const count = e.payload?.count || 0;
+                    updateBadgeCount(count);
+                });
+
+                // Listen for new message flash
+                event.listen('new-message-flash', (e) => {
+                    triggerRedFlash();
+                    if (e.payload?.count !== undefined) {
+                        updateBadgeCount(e.payload.count);
+                    }
+                });
+
+                // Drag functionality on container
+                iconContainer.addEventListener('mousedown', async (e) => {
+                    mouseDownTime = Date.now();
+                    isDragging = false;
+
+                    setTimeout(async () => {
+                        const timeSinceDown = Date.now() - mouseDownTime;
+                        if (timeSinceDown > 150 && clickCount < 2) {
+                            e.preventDefault();
+                            isDragging = true;
+                            try {
+                                await appWindow.startDragging();
+                            } catch (err) {
+                                // Drag failed silently
+                            }
+                        }
+                    }, 150);
+                });
+
+                // Track mouse up to detect if it was a drag
+                iconContainer.addEventListener('mouseup', () => {
+                    const clickDuration = Date.now() - mouseDownTime;
+                    if (clickDuration > 150) {
+                        isDragging = true;
+                    }
+                });
+
+                // Double-click to toggle main window
+                iconContainer.addEventListener('click', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        clickCount = 0;
+                        clearTimeout(clickTimeout);
+                        return;
+                    }
+
+                    clickCount++;
+                    clearTimeout(clickTimeout);
+
+                    if (clickCount === 2) {
+                        clickCount = 0;
+                        (async () => {
+                            try {
+                                await core.invoke('toggle_window');
+                            } catch (err) {
+                                // Toggle failed silently
+                            }
+                        })();
+                    } else {
+                        clickTimeout = setTimeout(() => {
+                            clickCount = 0;
+                        }, 300);
+                    }
+                });
+            }
+
+            initTauri();
+        });
+    </script>
+</body>
+</html>
