@@ -992,7 +992,7 @@ class RequestService:
 
     @staticmethod
     @safe_database_query("get_technician_view_requests", default_return=([], 0))
-    @log_database_operation("technician view requests retrieval", level="info")
+    @log_database_operation("technician view requests retrieval", level="debug")
     async def get_technician_view_requests(
         db: AsyncSession,
         user: User,

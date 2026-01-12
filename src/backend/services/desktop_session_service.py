@@ -320,7 +320,7 @@ class DesktopSessionService:
         await db.refresh(session)
 
         duration = (session.last_heartbeat - old_heartbeat).total_seconds() / 60
-        logger.info(
+        logger.debug(
             f"Desktop heartbeat updated for session {session_id} | "
             f"User: {session.user_id} | Duration since last: {duration:.1f} min"
         )

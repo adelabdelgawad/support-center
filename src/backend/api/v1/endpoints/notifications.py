@@ -91,7 +91,7 @@ async def get_pending_notifications(
 
     Returns notifications in chronological order (oldest first).
     """
-    logger.info(f"[NOTIFICATIONS] Fetching pending for user {current_user.id}")
+    logger.debug(f"[NOTIFICATIONS] Fetching pending for user {current_user.id}")
 
     notifications = await NotificationService.get_pending_notifications(
         db=db,
@@ -110,7 +110,7 @@ async def get_pending_notifications(
         for n in notifications
     ]
 
-    logger.info(f"[NOTIFICATIONS] Returning {len(notification_payloads)} pending notifications for user {current_user.id}")
+    logger.debug(f"[NOTIFICATIONS] Returning {len(notification_payloads)} pending notifications for user {current_user.id}")
 
     return PendingNotificationsResponse(
         notifications=notification_payloads,
@@ -133,7 +133,7 @@ async def acknowledge_notifications(
 
     Optionally filter by before_timestamp to only acknowledge older notifications.
     """
-    logger.info(f"[NOTIFICATIONS] Acknowledging for user {current_user.id}, specific_ids={bool(request.notification_ids)}")
+    logger.debug(f"[NOTIFICATIONS] Acknowledging for user {current_user.id}, specific_ids={bool(request.notification_ids)}")
 
     if request.notification_ids:
         # Acknowledge specific notifications
@@ -149,7 +149,7 @@ async def acknowledge_notifications(
             before_timestamp=request.before_timestamp,
         )
 
-    logger.info(f"[NOTIFICATIONS] Acknowledged {count} notifications for user {current_user.id}")
+    logger.debug(f"[NOTIFICATIONS] Acknowledged {count} notifications for user {current_user.id}")
 
     return AcknowledgeResponse(acknowledged_count=count)
 

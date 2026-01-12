@@ -836,8 +836,8 @@ class ChatService:
             List of ChatRequestListItem with request and message details
         """
         # DEBUG: Log search parameters
-        logger.info(f"[SEARCH_SERVICE] Starting search for user_id={user_id}")
-        logger.info(f"[SEARCH_SERVICE] Params: search_query={search_query!r}, status_filter={status_filter}, read_filter={read_filter!r}")
+        logger.debug(f"[SEARCH_SERVICE] Starting search for user_id={user_id}")
+        logger.debug(f"[SEARCH_SERVICE] Params: search_query={search_query!r}, status_filter={status_filter}, read_filter={read_filter!r}")
 
         # Use repository to get requests with chat messages loaded
         requests = await ChatMessageRepository.get_requests_with_last_message(
@@ -847,7 +847,7 @@ class ChatService:
         )
 
         # DEBUG: Log number of requests fetched from DB
-        logger.info(f"[SEARCH_SERVICE] Fetched {len(requests)} requests from database for user")
+        logger.debug(f"[SEARCH_SERVICE] Fetched {len(requests)} requests from database for user")
 
         # Build chat messages list with search filtering
         chat_messages = []
@@ -937,11 +937,11 @@ class ChatService:
             )
 
         # DEBUG: Log filtering summary
-        logger.info(f"[SEARCH_SERVICE] Filtering summary:")
-        logger.info(f"[SEARCH_SERVICE]   - Total from DB: {len(requests)}")
-        logger.info(f"[SEARCH_SERVICE]   - Skipped by search query: {skipped_by_search}")
-        logger.info(f"[SEARCH_SERVICE]   - Skipped by read filter: {skipped_by_read_filter}")
-        logger.info(f"[SEARCH_SERVICE]   - After filtering: {len(chat_messages)}")
+        logger.debug(f"[SEARCH_SERVICE] Filtering summary:")
+        logger.debug(f"[SEARCH_SERVICE]   - Total from DB: {len(requests)}")
+        logger.debug(f"[SEARCH_SERVICE]   - Skipped by search query: {skipped_by_search}")
+        logger.debug(f"[SEARCH_SERVICE]   - Skipped by read filter: {skipped_by_read_filter}")
+        logger.debug(f"[SEARCH_SERVICE]   - After filtering: {len(chat_messages)}")
 
         # Sort by request creation time (newest first)
         chat_messages.sort(
@@ -955,7 +955,7 @@ class ChatService:
         paginated_results = chat_messages[start_idx:end_idx]
 
         # DEBUG: Log pagination info
-        logger.info(f"[SEARCH_SERVICE] Pagination: showing items {start_idx+1}-{min(end_idx, len(chat_messages))} of {len(chat_messages)}")
-        logger.info(f"[SEARCH_SERVICE] Returning {len(paginated_results)} results")
+        logger.debug(f"[SEARCH_SERVICE] Pagination: showing items {start_idx+1}-{min(end_idx, len(chat_messages))} of {len(chat_messages)}")
+        logger.debug(f"[SEARCH_SERVICE] Returning {len(paginated_results)} results")
 
         return paginated_results

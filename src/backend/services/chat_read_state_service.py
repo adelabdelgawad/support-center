@@ -69,7 +69,7 @@ class ChatReadStateService:
         db.add(monitor)
         await db.flush()  # Add to session but don't commit yet
 
-        logger.info(
+        logger.debug(
             f"Created chat read monitor: request_id={request_id}, user_id={user_id}"
         )
         return monitor
@@ -464,7 +464,7 @@ class ChatReadStateService:
 
         if new_monitors:
             db.add_all(new_monitors)
-            logger.info(
+            logger.debug(
                 f"Created {len(new_monitors)} monitors for request {request_id}"
             )
 
