@@ -96,7 +96,7 @@ fn generate_archive_filename() -> String {
     format!("session-{}.log", now.replace([':', '.', ' '], "-"))
 }
 
-/// Get current timestamp in ISO 8601 format (without external crate)
+/// Get current timestamp in Cairo timezone (Africa/Cairo, UTC+2)
 fn chrono_lite_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -104,10 +104,12 @@ fn chrono_lite_timestamp() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
 
-    let secs = now.as_secs();
+    // Add 2 hours for Cairo timezone (UTC+2)
+    let cairo_offset_secs = 2 * 3600;
+    let secs = now.as_secs() + cairo_offset_secs;
     let millis = now.subsec_millis();
 
-    // Convert to datetime components (simplified UTC)
+    // Convert to datetime components
     let days_since_epoch = secs / 86400;
     let time_of_day = secs % 86400;
 
@@ -119,7 +121,7 @@ fn chrono_lite_timestamp() -> String {
     let (year, month, day) = days_to_ymd(days_since_epoch as i64);
 
     format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}+02:00",
         year, month, day, hours, minutes, seconds, millis
     )
 }

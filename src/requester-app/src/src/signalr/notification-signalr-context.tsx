@@ -57,6 +57,7 @@ interface NotificationSignalRContextValue {
   isConnected: Accessor<boolean>;
   error: Accessor<string | null>;
   retryInfo: Accessor<RetryInfo>;
+  activeChat: Accessor<string | null>; // Current active chat request ID
 
   // Actions
   connect: () => Promise<void>;
@@ -628,6 +629,7 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
     isConnected: () => state() === SignalRState.CONNECTED,
     error,
     retryInfo,
+    activeChat,
     connect,
     disconnect,
     forceReconnect,

@@ -16,6 +16,7 @@
  */
 
 import apiClient, { getErrorMessage, isAPIError } from "./client";
+import { logger } from "@/logging";
 import type {
   ADLoginRequest,
   SSOLoginRequest,
@@ -152,10 +153,17 @@ export async function loginWithAD(
       data: response.data,
     };
   } catch (error) {
+    // Log the error for debugging
+    logger.error('auth', 'AD login failed', {
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      isAPIError: isAPIError(error),
+    });
+
     // Check for version enforcement (HTTP 426)
     const enforcementData = extractEnforcementFromError(error);
     if (enforcementData) {
-      console.log("[auth] Version enforcement detected:", enforcementData);
+      logger.warn('auth', 'Version enforcement detected during AD login', enforcementData);
       return {
         success: false,
         error: enforcementData.message,
@@ -227,10 +235,18 @@ export async function loginWithSSO(username: string): Promise<ExtendedAuthResult
       data: response.data,
     };
   } catch (error) {
+    // Log the error for debugging
+    logger.error('auth', 'SSO login failed', {
+      username,
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      isAPIError: isAPIError(error),
+    });
+
     // Check for version enforcement (HTTP 426)
     const enforcementData = extractEnforcementFromError(error);
     if (enforcementData) {
-      console.log("[auth] Version enforcement detected:", enforcementData);
+      logger.warn('auth', 'Version enforcement detected during SSO login', enforcementData);
       return {
         success: false,
         error: enforcementData.message,
@@ -385,7 +401,11 @@ export async function performAutoSSO(): Promise<ExtendedAuthResult> {
     const result = await loginWithSSO(username);
     return result;
   } catch (error) {
-    console.error("SSO error:", error);
+    logger.error('auth', 'performAutoSSO failed', {
+      errorType: typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
+    });
     return {
       success: false,
       error:

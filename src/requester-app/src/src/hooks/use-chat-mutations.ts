@@ -18,6 +18,8 @@ import { createSignal, createMemo } from 'solid-js';
 import { authStore } from '@/stores/auth-store';
 import { RuntimeConfig } from '@/lib/runtime-config';
 import type { ChatMessage } from '@/types';
+import { logger } from '@/logging';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 /**
  * Failed message info for retry support
@@ -150,7 +152,17 @@ export function useChatMutations(options: UseChatMutationsOptions) {
       const apiUrl = RuntimeConfig.getServerAddress();
       const token = authStore.state.token;
 
-      const response = await fetch(`${apiUrl}/chat/messages`, {
+      // Log message send attempt
+      logger.info('chat', 'Sending message', {
+        requestId,
+        messageLength: content.trim().length,
+        tempId: tempId || 'none',
+        hasToken: !!token,
+        apiUrl,
+      });
+
+      // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+      const response = await tauriFetch(`${apiUrl}/chat/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -170,6 +182,13 @@ export function useChatMutations(options: UseChatMutationsOptions) {
 
       const serverMessage = await response.json();
       console.log(`[useChatMutations] Message sent successfully (id: ${serverMessage.id})`);
+
+      // Log successful send
+      logger.info('chat', 'Message sent successfully', {
+        requestId,
+        tempId: tempId || 'none',
+        serverId: serverMessage.id,
+      });
 
       // CRITICAL: Update message status to 'sent' after HTTP success
       if (tempId && updateMessageStatus) {
@@ -192,6 +211,14 @@ export function useChatMutations(options: UseChatMutationsOptions) {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       console.error(`[useChatMutations] Send failed:`, error.message);
+
+      // Log failure with error details
+      logger.error('chat', 'Message send failed', {
+        requestId,
+        tempId: tempId || 'none',
+        error: error.message,
+        errorType: error.constructor.name,
+      });
 
       // Mark message as failed in local state
       if (tempId) {
@@ -245,6 +272,12 @@ export function useChatMutations(options: UseChatMutationsOptions) {
     }
 
     console.log(`[useChatMutations] Retrying message (tempId: ${tempId})`);
+
+    // Log retry attempt
+    logger.info('chat', 'Retrying failed message', {
+      tempId,
+      originalError: failed.errorMessage,
+    });
 
     // CRITICAL: Update status to 'pending' IMMEDIATELY before async work
     // This ensures the UI updates right away when retry is clicked

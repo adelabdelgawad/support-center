@@ -136,6 +136,26 @@ function FloatingIconSyncInner() {
       return;
     }
 
+    // Check if user is currently viewing this chat
+    // If viewing, the chat page will mark messages as read immediately
+    // So we should NOT increment unread count to avoid race condition
+    const currentActiveChat = notificationSignalR.activeChat();
+    const isViewingThisChat = currentActiveChat === requestId;
+
+    if (isViewingThisChat) {
+      // User is viewing this chat - only update last message, don't increment unread
+      try {
+        updateTicketInCache(requestId, {
+          lastMessage: message.content || '',
+          lastMessageAt: message.createdAt,
+          // DO NOT increment unread - chat page marks as read
+        });
+      } catch (error) {
+        console.error('[FloatingIconSync] Failed to update cache (active chat):', error);
+      }
+      return;
+    }
+
     // CRITICAL: Update ticket in cache with incrementUnread
     // This is the ONLY place that reliably increments unread count because
     // this component is ALWAYS MOUNTED (unlike tickets.tsx which unmounts on navigation)

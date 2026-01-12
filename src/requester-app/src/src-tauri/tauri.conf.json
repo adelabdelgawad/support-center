@@ -28,7 +28,8 @@
         "skipTaskbar": false,
         "transparent": false,
         "shadow": true,
-        "focus": true
+        "focus": true,
+        "devtools": true
       },
       {
         "label": "floating-icon",

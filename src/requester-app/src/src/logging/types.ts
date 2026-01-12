@@ -15,7 +15,9 @@ export type LogSubsystem =
   | 'network' // Network status changes
   | 'auth' // Authentication events
   | 'storage' // Storage operations
-  | 'ui'; // Critical UI events
+  | 'ui' // Critical UI events
+  | 'chat' // Chat message operations
+  | 'image'; // Image loading operations
 
 /** A structured log entry */
 export interface LogEntry {

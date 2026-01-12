@@ -22,6 +22,7 @@ import { AuthStorage } from '@/lib/storage';
 import { RuntimeConfig } from '@/lib/runtime-config';
 import { invoke } from '@tauri-apps/api/core';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { logger } from '@/logging';
 
 // ============================================================================
 // Local IP caching for accurate client identification
@@ -270,14 +271,15 @@ async function request<T = any>(
     });
     console.log('[fetch-client] Response received:', { status: response.status, ok: response.ok });
   } catch (fetchError) {
-    console.error('[fetch-client] Request failed:', {
+    // Log to file for production debugging
+    logger.error('network', 'API request failed', {
       url,
       method,
-      error: fetchError,
       errorType: typeof fetchError,
-      errorConstructor: fetchError?.constructor?.name,
-      errorKeys: fetchError && typeof fetchError === 'object' ? Object.keys(fetchError) : 'N/A',
-      errorString: String(fetchError),
+      errorConstructor: (fetchError as any)?.constructor?.name ?? 'unknown',
+      errorMessage: fetchError instanceof Error ? fetchError.message : String(fetchError),
+      errorStack: fetchError instanceof Error ? fetchError.stack : undefined,
+      errorKeys: fetchError && typeof fetchError === 'object' ? Object.keys(fetchError) : [],
       errorJSON: JSON.stringify(fetchError, Object.getOwnPropertyNames(fetchError || {})),
     });
     throw fetchError;
@@ -407,14 +409,15 @@ export function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  // Debug: Log the actual error type and structure for non-standard errors
-  console.error('[getErrorMessage] Non-standard error received:', {
+  // Log non-standard errors to file for debugging (critical for production)
+  const errorContext = {
     type: typeof error,
-    constructor: error?.constructor?.name,
-    keys: error && typeof error === 'object' ? Object.keys(error) : 'N/A',
+    constructor: (error as any)?.constructor?.name ?? 'unknown',
+    keys: error && typeof error === 'object' ? Object.keys(error) : [],
     stringified: JSON.stringify(error, null, 2),
-    rawError: error,
-  });
+  };
+
+  logger.error('network', 'Non-standard error received in getErrorMessage', errorContext);
 
   // Try to extract message from object-like errors (Tauri HTTP plugin errors)
   if (error && typeof error === 'object') {

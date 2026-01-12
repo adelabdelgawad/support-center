@@ -21,6 +21,8 @@ import {
 } from "solid-js";
 import { authStore } from "@/stores";
 import { RuntimeConfig } from "@/lib/runtime-config";
+import { logger } from "@/logging";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 interface ImageCacheContextValue {
   /**
@@ -89,7 +91,14 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
       const apiUrl = RuntimeConfig.getServerAddress();
       const url = `${apiUrl}/screenshots/by-filename/${filename}`;
 
-      const response = await fetch(url, {
+      // Log image fetch attempt
+      logger.info('image', 'Fetching screenshot', {
+        filename,
+        hasToken: !!token,
+      });
+
+      // Use Tauri HTTP plugin to bypass CORS
+      const response = await tauriFetch(url, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -98,6 +107,12 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
       // Handle 410 Gone (screenshot deleted/expired) gracefully
       if (response.status === 410) {
         console.warn(`[ImageCache] ⚠️ Screenshot expired or deleted: ${filename}`);
+
+        // Log screenshot expiration
+        logger.warn('image', 'Screenshot expired or deleted', {
+          filename,
+          statusCode: 410,
+        });
         // Return a data URL placeholder for expired screenshots
         const PLACEHOLDER_SVG = 'data:image/svg+xml,' + encodeURIComponent(`
           <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
@@ -122,9 +137,22 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
       // Cache the blob URL (NEVER revoke it - let it persist)
       imageCache.set(filename, blobUrl);
 
+      // Log successful image load
+      logger.info('image', 'Screenshot loaded successfully', {
+        filename,
+        size: blob.size,
+      });
+
       return blobUrl;
     } catch (error) {
       console.error(`[ImageCache] ❌ Fetch failed: ${filename}`, error);
+
+      // Log image fetch failure
+      logger.error('image', 'Screenshot fetch failed', {
+        filename,
+        error: String(error),
+        errorType: error?.constructor?.name,
+      });
       // Provide fallback placeholder for any fetch error
       const ERROR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">

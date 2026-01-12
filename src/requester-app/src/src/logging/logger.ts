@@ -189,6 +189,27 @@ class SessionLogger {
   // ==========================================================================
 
   /**
+   * Generate timestamp in Cairo timezone (Africa/Cairo, UTC+2)
+   */
+  private getCairoTimestamp(): string {
+    const date = new Date();
+
+    // Add 2 hours (7200000 ms) to get Cairo time
+    const cairoTime = new Date(date.getTime() + 2 * 60 * 60 * 1000);
+
+    // Format: YYYY-MM-DDTHH:mm:ss.sss+02:00
+    const year = cairoTime.getUTCFullYear();
+    const month = String(cairoTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(cairoTime.getUTCDate()).padStart(2, '0');
+    const hours = String(cairoTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(cairoTime.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(cairoTime.getUTCSeconds()).padStart(2, '0');
+    const milliseconds = String(cairoTime.getUTCMilliseconds()).padStart(3, '0');
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}+02:00`;
+  }
+
+  /**
    * Core logging method
    */
   private log(
@@ -201,7 +222,7 @@ class SessionLogger {
     const safeContext = context ? this.sanitizeContext(context) : undefined;
 
     const entry: LogEntry = {
-      ts: new Date().toISOString(),
+      ts: this.getCairoTimestamp(),
       level,
       subsystem,
       message,
