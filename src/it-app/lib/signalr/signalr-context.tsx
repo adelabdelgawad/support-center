@@ -486,7 +486,7 @@ export function useSignalRChatRoom(
         console.log('%c[SignalRChatRoom] 📡 Calling subscribeToChat', 'color: #0099ff; font-weight: bold', { requestId });
         const subId = await signalR.subscribeToChat(requestId, handlersRef.current);
         subscriptionIdRef.current = subId;
-        lastSubscribedRequestIdRef.current = requestId;
+        // Note: lastSubscribedRequestIdRef already set before this function is called
 
         console.log('%c[SignalRChatRoom] ✅ Subscription successful', 'color: #00ff00; font-weight: bold', {
           requestId,
@@ -498,9 +498,11 @@ export function useSignalRChatRoom(
           console.log('%c[SignalRChatRoom] 🚫 Subscription cancelled, unsubscribing', 'color: #ff6600', { requestId, subId });
           signalR.unsubscribeFromChat(requestId, subId);
           subscriptionIdRef.current = null;
+          lastSubscribedRequestIdRef.current = null; // Reset since we're cancelling
         }
       } catch (error) {
         console.error('%c[SignalRChatRoom] ❌ Subscription failed', 'color: #ff0000; font-weight: bold', { requestId, error });
+        lastSubscribedRequestIdRef.current = null; // Reset on error so it can retry
         // Handled by context
       }
     };
@@ -541,12 +543,25 @@ export function useSignalRChatRoom(
 
     // Only subscribe if this is a new requestId
     if (shouldSubscribe) {
+      // CRITICAL FIX: Set lastSubscribedRequestIdRef BEFORE subscribing
+      // This prevents multiple concurrent subscriptions when component re-renders
+      lastSubscribedRequestIdRef.current = requestId;
+      console.log('%c[SignalRChatRoom] 🔒 Locked subscription for requestId', 'color: #ff00ff', { requestId });
       subscribe();
     }
 
     return () => {
+      console.log('%c[SignalRChatRoom] 🧹 Cleanup function running', 'color: #ff6600', {
+        requestId,
+        subscriptionId: subscriptionIdRef.current,
+        willCancel: !subscriptionIdRef.current,
+      });
       isCancelled = true;
       if (subscriptionIdRef.current) {
+        console.log('%c[SignalRChatRoom] 🚪 Unsubscribing from room', 'color: #ff6600', {
+          requestId,
+          subscriptionId: subscriptionIdRef.current,
+        });
         signalR.unsubscribeFromChat(requestId, subscriptionIdRef.current);
         subscriptionIdRef.current = null;
         lastSubscribedRequestIdRef.current = null;
