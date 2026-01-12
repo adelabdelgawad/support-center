@@ -122,6 +122,9 @@ function createOptimisticMessage(
  * @param options - Configuration options
  * @returns Mutation functions and state
  */
+// Maximum number of failed messages to keep in memory (FIFO eviction)
+const MAX_FAILED_MESSAGES = 100;
+
 export function useChatMutations(options: UseChatMutationsOptions) {
   const {
     requestId,
@@ -284,6 +287,14 @@ export function useChatMutations(options: UseChatMutationsOptions) {
           // Track failed message for retry
           setState((prev) => {
             const newFailed = new Map(prev.failedMessages);
+
+            // Evict oldest entry if at capacity (FIFO)
+            if (newFailed.size >= MAX_FAILED_MESSAGES) {
+              const oldestKey = newFailed.keys().next().value;
+              newFailed.delete(oldestKey);
+              console.log(`[useChatMutations] Evicted oldest failed message (limit: ${MAX_FAILED_MESSAGES})`);
+            }
+
             newFailed.set(tempId!, {
               tempId: tempId!,
               content: content.trim(),
