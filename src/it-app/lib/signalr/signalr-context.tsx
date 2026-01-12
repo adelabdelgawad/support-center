@@ -338,6 +338,8 @@ export function useSignalRChatRoom(
   const lastSubscribedRequestIdRef = useRef<string | null>(null);
   // Track if initial messages have been applied to prevent re-applying on reference changes
   const initialMessagesAppliedRef = useRef<boolean>(false);
+  // Track cancellation state - must be ref so async function sees current value
+  const isCancelledRef = useRef<boolean>(false);
 
   // Update handlers ref
   useEffect(() => {
@@ -477,28 +479,34 @@ export function useSignalRChatRoom(
       shouldSubscribe,
       lastSubscribedRequestId: lastSubscribedRequestIdRef.current,
       currentRequestId: requestId,
+      currentlyCancelled: isCancelledRef.current,
     });
 
-    let isCancelled = false;
+    // Reset cancellation flag for this effect
+    isCancelledRef.current = false;
 
     const subscribe = async () => {
       try {
         console.log('%c[SignalRChatRoom] 📡 Calling subscribeToChat', 'color: #0099ff; font-weight: bold', { requestId });
         const subId = await signalR.subscribeToChat(requestId, handlersRef.current);
-        subscriptionIdRef.current = subId;
-        // Note: lastSubscribedRequestIdRef already set before this function is called
+
+        // CRITICAL: Check CURRENT cancellation state, not captured closure
+        const currentlyCancelled = isCancelledRef.current;
 
         console.log('%c[SignalRChatRoom] ✅ Subscription successful', 'color: #00ff00; font-weight: bold', {
           requestId,
           subscriptionId: subId,
-          isCancelled,
+          isCancelled: currentlyCancelled,
         });
 
-        if (isCancelled && subId) {
+        if (currentlyCancelled && subId) {
           console.log('%c[SignalRChatRoom] 🚫 Subscription cancelled, unsubscribing', 'color: #ff6600', { requestId, subId });
           signalR.unsubscribeFromChat(requestId, subId);
           subscriptionIdRef.current = null;
           lastSubscribedRequestIdRef.current = null; // Reset since we're cancelling
+        } else if (subId) {
+          // Success! Keep the subscription
+          subscriptionIdRef.current = subId;
         }
       } catch (error) {
         console.error('%c[SignalRChatRoom] ❌ Subscription failed', 'color: #ff0000; font-weight: bold', { requestId, error });
@@ -556,7 +564,9 @@ export function useSignalRChatRoom(
         subscriptionId: subscriptionIdRef.current,
         willCancel: !subscriptionIdRef.current,
       });
-      isCancelled = true;
+      // Set cancellation flag so async subscribe() function can check it
+      isCancelledRef.current = true;
+
       if (subscriptionIdRef.current) {
         console.log('%c[SignalRChatRoom] 🚪 Unsubscribing from room', 'color: #ff6600', {
           requestId,
