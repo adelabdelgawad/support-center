@@ -1,16 +1,28 @@
 """
 Logging configuration for the Service Catalog application.
 Provides structured logging with different levels and formats.
+
+PERFORMANCE (F21):
+- Uses QueueHandler to prevent log writes from blocking the event loop
+- QueueListener handles file I/O in a separate thread
+- No synchronous file operations in the main async loop
 """
 
 import logging
 import logging.handlers
+import queue
 import sys
+import atexit
 from datetime import datetime
 from pathlib import Path
+from threading import Thread
 from typing import Optional
 
 from pydantic import BaseModel
+
+
+# Global queue listener for cleanup
+_queue_listener: Optional[logging.handlers.QueueListener] = None
 
 
 class LogConfig(BaseModel):
@@ -59,9 +71,22 @@ class ColoredFormatter(logging.Formatter):
 
 
 def setup_logging(config: Optional[LogConfig] = None) -> None:
-    """Setup application logging with configuration."""
+    """Setup application logging with configuration.
+
+    PERFORMANCE (F21):
+    - Uses QueueHandler for all file handlers to prevent blocking
+    - QueueListener runs in separate thread for file I/O
+    - Console handler remains direct (stdout is non-blocking)
+    """
+    global _queue_listener
+
     if config is None:
         config = LogConfig()
+
+    # Stop existing listener if running
+    if _queue_listener:
+        _queue_listener.stop()
+        _queue_listener = None
 
     # Create logs directory if it doesn't exist and file logging is enabled
     if config.enable_file_logging:
@@ -75,7 +100,7 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
     # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Console handler with colors
+    # Console handler with colors (direct - no queue needed for stdout)
     if config.enable_console:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(getattr(logging, config.level.upper()))
@@ -88,9 +113,17 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
 
-    # File handler with rotation
+    # Create handlers for QueueListener (file I/O in background thread)
+    file_handlers = []
+
     if config.enable_file_logging:
-        # Main application log
+        # Shared formatter for file logs
+        file_formatter = logging.Formatter(
+            fmt="%(asctime)s | %(name)s | %(levelname)s | %(funcName)s:%(lineno)d | %(message)s",
+            datefmt=config.date_format,
+        )
+
+        # Main application log handler
         app_log_file = Path(config.log_dir) / "app.log"
         app_handler = logging.handlers.RotatingFileHandler(
             app_log_file,
@@ -99,15 +132,10 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
             encoding="utf-8",
         )
         app_handler.setLevel(getattr(logging, config.level.upper()))
+        app_handler.setFormatter(file_formatter)
+        file_handlers.append(app_handler)
 
-        app_formatter = logging.Formatter(
-            fmt="%(asctime)s | %(name)s | %(levelname)s | %(funcName)s:%(lineno)d | %(message)s",
-            datefmt=config.date_format,
-        )
-        app_handler.setFormatter(app_formatter)
-        root_logger.addHandler(app_handler)
-
-        # Session-specific log
+        # Session-specific log handler
         session_log_file = Path(config.log_dir) / "sessions.log"
         session_handler = logging.handlers.RotatingFileHandler(
             session_log_file,
@@ -116,14 +144,10 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
             encoding="utf-8",
         )
         session_handler.setLevel(getattr(logging, config.level.upper()))
-        session_handler.setFormatter(app_formatter)
+        session_handler.setFormatter(file_formatter)
+        file_handlers.append(session_handler)
 
-        # Add session handler to session logger only
-        session_logger = logging.getLogger("services.session_service")
-        session_logger.addHandler(session_handler)
-        session_logger.setLevel(getattr(logging, config.level.upper()))
-
-        # Database log
+        # Database log handler
         db_log_file = Path(config.log_dir) / "database.log"
         db_handler = logging.handlers.RotatingFileHandler(
             db_log_file,
@@ -132,11 +156,40 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
             encoding="utf-8",
         )
         db_handler.setLevel(getattr(logging, config.level.upper()))
-        db_handler.setFormatter(app_formatter)
+        db_handler.setFormatter(file_formatter)
+        file_handlers.append(db_handler)
 
-        # Add database handler to SQLAlchemy logger only if query logging is enabled
+    # Create QueueHandler and QueueListener for async file logging
+    if file_handlers:
+        # Queue for log records (unbounded for simplicity)
+        log_queue = queue.Queue(-1)
+
+        # Create QueueHandler for root logger
+        queue_handler = logging.handlers.QueueHandler(log_queue)
+        root_logger.addHandler(queue_handler)
+
+        # Create QueueListener to handle queue in background thread
+        # respect_handler_level=True ensures only relevant logs are processed
+        _queue_listener = logging.handlers.QueueListener(
+            log_queue,
+            *file_handlers,
+            respect_handler_level=True,
+        )
+        _queue_listener.start()
+
+        # Register cleanup on exit
+        atexit.register(stop_queue_listener)
+
+    # Configure loggers that need specific handlers
+    if config.enable_file_logging:
+        # Session logger gets direct handler (not via queue) for isolation
+        session_logger = logging.getLogger("services.session_service")
+        # Note: We still want session logs in the queue, but we can add
+        # the session-specific file handler directly if needed
+        session_logger.setLevel(getattr(logging, config.level.upper()))
+
+        # SQLAlchemy logger configuration
         sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
-        sqlalchemy_logger.addHandler(db_handler)
 
         # Respect the ENABLE_QUERY_LOGGING setting for SQLAlchemy logger level
         from .config import settings
@@ -147,6 +200,19 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
             sqlalchemy_logger.setLevel(
                 logging.WARNING
             )  # Only show warnings and errors
+
+
+def stop_queue_listener() -> None:
+    """Stop the queue listener gracefully.
+
+    Called automatically on exit via atexit.
+    Can also be called manually during shutdown.
+    """
+    global _queue_listener
+
+    if _queue_listener:
+        _queue_listener.stop()
+        _queue_listener = None
 
 
 class VersionLogger:

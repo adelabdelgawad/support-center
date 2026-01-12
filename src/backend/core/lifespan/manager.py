@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from core.cache import cache
 from core.config import settings
 from core.database import get_session
-from core.logging_config import LogConfig
+from core.logging_config import LogConfig, stop_queue_listener
 from . import tasks
 
 
@@ -52,6 +52,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("🛑 Shutting down Service Catalog API...")
     logger.info("🛑 Shutting down Service Catalog API...")
+
+    # Stop logging queue listener (F21: async logging cleanup)
+    stop_queue_listener()
+    logger.info("Logging queue listener stopped")
 
     # Shutdown background scheduler
     await tasks.shutdown_scheduler_task()
