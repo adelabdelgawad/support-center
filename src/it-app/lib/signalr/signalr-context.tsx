@@ -137,6 +137,14 @@ export function SignalRProvider({ children }: SignalRProviderProps) {
     return () => {
       console.log('[SignalR-Context] Cleaning up event handlers');
       mountedRef.current = false;
+
+      // Clear global handlers to prevent duplicate state updates if provider remounts
+      signalRManager.chat.setGlobalHandlers({
+        onConnect: () => {},
+        onDisconnect: () => {},
+        onReconnecting: () => {},
+        onError: () => {},
+      });
     };
   }, [updateSubscriptionCount]);
 
