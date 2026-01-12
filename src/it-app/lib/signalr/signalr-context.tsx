@@ -455,7 +455,19 @@ export function useSignalRChatRoom(
     };
   }, [onInitialState, onNewMessage, onTypingIndicator, onReadStatusUpdate, onTicketUpdate, onTaskStatusChanged]);
 
+  // Store initialMessages in ref to avoid triggering effect on every reference change
+  const initialMessagesRef = useRef(initialMessages);
+
+  // Update ref when initialMessages changes (for hot reload / development)
+  // But don't use it as a useEffect dependency to prevent subscription loops
+  useEffect(() => {
+    initialMessagesRef.current = initialMessages;
+  }, [initialMessages]);
+
   // Subscribe/unsubscribe effect
+  // CRITICAL FIX: Removed initialMessages and signalR from dependencies
+  // - initialMessages: Array reference changes on every render, causing infinite loops
+  // - signalR: Context value is stable, no need to re-subscribe when it changes
   useEffect(() => {
     console.log('%c[SignalRChatRoom] 🎣 useEffect triggered', 'color: #ff00cc; font-weight: bold', {
       enabled,
@@ -518,8 +530,11 @@ export function useSignalRChatRoom(
     // Only apply initial messages if not already applied for this requestId
     // This prevents infinite loops when initialMessages reference changes
     if (!initialMessagesAppliedRef.current || shouldSubscribe) {
+      // Use ref to get current initialMessages without triggering re-subscription
+      const currentInitialMessages = initialMessagesRef.current;
+
       // Reset state - but preserve any pending optimistic messages
-      if (initialMessages.length === 0) {
+      if (currentInitialMessages.length === 0) {
         setIsLoading(true);
       } else {
         setIsLoading(false);
@@ -530,7 +545,7 @@ export function useSignalRChatRoom(
           (m) => m.status === 'pending' && m.tempId
         );
 
-        const baseMessages = initialMessages.length === 0 ? [] : initialMessages;
+        const baseMessages = currentInitialMessages.length === 0 ? [] : currentInitialMessages;
 
         if (pendingOptimistic.length === 0) {
           return baseMessages;
@@ -578,7 +593,10 @@ export function useSignalRChatRoom(
         initialMessagesAppliedRef.current = false;
       }
     };
-  }, [enabled, requestId, signalR, initialMessages]);
+    // CRITICAL FIX: Removed 'signalR' and 'initialMessages' from dependencies
+    // - signalR: Context value is stable (from SignalRProvider), re-subscribing on context changes is unnecessary
+    // - initialMessages: Array reference changes on every render, causing infinite subscription loops
+  }, [enabled, requestId]);
 
   // Send message with optimistic update
   const sendMessage = useCallback((
