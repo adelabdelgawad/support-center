@@ -76,6 +76,7 @@ import { ArrowLeft, Send, Wifi, WifiOff, Camera, X, Image, Clock, ArrowDown, Fil
 import type { ChatMessage } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
 import { RuntimeConfig } from "@/lib/runtime-config";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 // ============================================================================
 // Date Separator Component
@@ -1621,7 +1622,8 @@ function TicketChatPageInner() {
     const token = authStore.state.token;
     const apiUrl = RuntimeConfig.getServerAddress();
     // request_id as query parameter, not form data
-    const response = await fetch(`${apiUrl}/screenshots/upload?request_id=${ticketId()}`, {
+    // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+    const response = await tauriFetch(`${apiUrl}/screenshots/upload?request_id=${ticketId()}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

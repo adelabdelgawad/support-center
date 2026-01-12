@@ -33,6 +33,7 @@ import type { ChatMessage } from '@/types';
 import { logger } from '@/logging';
 import { RuntimeConfig } from '@/lib/runtime-config';
 import { sessionPresence } from '@/services/session-presence';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 // Notification data type
 interface NotificationData {
@@ -128,7 +129,8 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
 
       console.log('[NotificationSignalR] Fetching pending notifications...');
 
-      const response = await fetch(`${apiUrl}/notifications/pending`, {
+      // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+      const response = await tauriFetch(`${apiUrl}/notifications/pending`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -161,7 +163,8 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
       // Acknowledge all recovered notifications
       if (notifications.length > 0) {
         const notificationIds = notifications.map((n: any) => n.id);
-        await fetch(`${apiUrl}/notifications/acknowledge`, {
+        // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+        await tauriFetch(`${apiUrl}/notifications/acknowledge`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

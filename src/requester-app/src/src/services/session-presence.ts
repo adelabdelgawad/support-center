@@ -15,6 +15,7 @@
 
 import { RuntimeConfig } from '@/lib/runtime-config';
 import { authStore } from '@/stores/auth-store';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 // Heartbeat interval: 30 seconds (responsive presence without excessive load)
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -149,7 +150,8 @@ class SessionPresenceService {
 
     try {
       const apiUrl = RuntimeConfig.getServerAddress();
-      const response = await fetch(`${apiUrl}/sessions/desktop/${sessionId}/heartbeat`, {
+      // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+      const response = await tauriFetch(`${apiUrl}/sessions/desktop/${sessionId}/heartbeat`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -195,9 +197,9 @@ class SessionPresenceService {
 
       if (this.isShuttingDown && navigator.sendBeacon) {
         // sendBeacon is more reliable during page unload
-        // But it doesn't support custom headers, so we use fetch for authenticated requests
-        // Instead, we'll use fetch with keepalive
-        await fetch(url, {
+        // But it doesn't support custom headers, so we use tauriFetch for authenticated requests
+        // Use Tauri HTTP plugin with keepalive
+        await tauriFetch(url, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -206,7 +208,8 @@ class SessionPresenceService {
           keepalive: true, // Allows request to outlive the page
         });
       } else {
-        await fetch(url, {
+        // Use Tauri HTTP plugin to bypass CORS and ACL restrictions
+        await tauriFetch(url, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
