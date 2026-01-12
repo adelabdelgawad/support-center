@@ -16,6 +16,8 @@ export class ServerApiError extends Error {
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
 
+type ResponseType = 'json' | 'arraybuffer' | 'blob' | 'text';
+
 async function getAccessToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
   return cookieStore.get("access_token")?.value;
@@ -68,6 +70,7 @@ export async function serverFetch<T>(
     tags?: string[];
     timeout?: number;
     cache?: RequestCache;
+    responseType?: ResponseType;
   }
 ): Promise<T> {
   const fullUrl = `${API_URL}${API_BASE_PATH}${endpoint}`;
@@ -77,10 +80,15 @@ export async function serverFetch<T>(
   const forwardedHeaders = await getForwardingHeaders();
 
   const requestHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...forwardedHeaders,
     ...options?.headers,
   };
+
+  // Only set Content-Type for JSON requests (default behavior)
+  // Binary downloads should not send Content-Type or let the browser handle it
+  if (!options?.responseType || options.responseType === 'json') {
+    requestHeaders['Content-Type'] = 'application/json';
+  }
 
   if (accessToken) {
     requestHeaders['Authorization'] = `Bearer ${accessToken}`;
@@ -121,7 +129,21 @@ export async function serverFetch<T>(
   }
 
   if (response.status === 204) return undefined as T;
-  return response.json();
+
+  // Handle response based on responseType
+  const responseType = options?.responseType || 'json';
+
+  switch (responseType) {
+    case 'arraybuffer':
+      return (await response.arrayBuffer()) as T;
+    case 'blob':
+      return (await response.blob()) as T;
+    case 'text':
+      return (await response.text()) as T;
+    case 'json':
+    default:
+      return response.json();
+  }
 }
 
 // Public request (no auth required)
@@ -194,6 +216,7 @@ export async function makeAuthenticatedRequest<T>(
     method,
     body: data,
     headers: config?.headers,
+    responseType: config?.responseType === 'stream' ? 'arraybuffer' : config?.responseType,
   });
 }
 
