@@ -22,6 +22,7 @@ from PIL import Image
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.async_utils import run_blocking
 from core.config import settings
 from core.decorators import (
     critical_database_operation,
@@ -42,7 +43,7 @@ class FileService:
 
     @staticmethod
     @log_database_operation("image compression", level="debug")
-    def _compress_image(
+    async def _compress_image(
         image_bytes: bytes, quality: int = 85
     ) -> tuple[bytes, int]:
         """
@@ -56,24 +57,29 @@ class FileService:
             Tuple of (compressed bytes, compressed size)
         """
         try:
-            with Image.open(io.BytesIO(image_bytes)) as img:
+            # Open image (blocking PIL operation)
+            img = await run_blocking(Image.open, io.BytesIO(image_bytes))
+
+            try:
                 # Convert RGBA to RGB if necessary
                 if img.mode in ("RGBA", "LA", "P"):
                     background = Image.new("RGB", img.size, (255, 255, 255))
                     if img.mode == "P":
-                        img = img.convert("RGBA")
+                        img = await run_blocking(img.convert, "RGBA")
                     background.paste(
                         img,
                         mask=img.split()[-1] if img.mode == "RGBA" else None,
                     )
                     img = background
 
-                # Save to buffer with compression
+                # Save to buffer with compression (blocking)
                 buffer = io.BytesIO()
-                img.save(buffer, format="JPEG", quality=quality, optimize=True)
+                await run_blocking(img.save, buffer, format="JPEG", quality=quality, optimize=True)
 
                 compressed_bytes = buffer.getvalue()
                 return compressed_bytes, len(compressed_bytes)
+            finally:
+                await run_blocking(img.close)
         except Exception as e:
             logger.warning(f"Image compression failed: {e}, using original")
             # If compression fails, return original
@@ -81,7 +87,7 @@ class FileService:
 
     @staticmethod
     @log_database_operation("thumbnail creation", level="debug")
-    def _create_thumbnail(
+    async def _create_thumbnail(
         image_bytes: bytes, size: tuple = (200, 200)
     ) -> Optional[bytes]:
         """
@@ -95,14 +101,18 @@ class FileService:
             Thumbnail bytes or None if failed
         """
         try:
-            with Image.open(io.BytesIO(image_bytes)) as img:
-                img.thumbnail(size, Image.Resampling.LANCZOS)
+            # Open image (blocking PIL operation)
+            img = await run_blocking(Image.open, io.BytesIO(image_bytes))
+
+            try:
+                # Create thumbnail (blocking)
+                await run_blocking(img.thumbnail, size, Image.Resampling.LANCZOS)
 
                 # Convert RGBA to RGB if necessary
                 if img.mode in ("RGBA", "LA", "P"):
                     background = Image.new("RGB", img.size, (255, 255, 255))
                     if img.mode == "P":
-                        img = img.convert("RGBA")
+                        img = await run_blocking(img.convert, "RGBA")
                     background.paste(
                         img,
                         mask=img.split()[-1] if img.mode == "RGBA" else None,
@@ -110,8 +120,10 @@ class FileService:
                     img = background
 
                 buffer = io.BytesIO()
-                img.save(buffer, format="JPEG", quality=85, optimize=True)
+                await run_blocking(img.save, buffer, format="JPEG", quality=85, optimize=True)
                 return buffer.getvalue()
+            finally:
+                await run_blocking(img.close)
         except Exception as e:
             logger.warning(f"Thumbnail creation failed: {e}")
             return None
@@ -188,11 +200,11 @@ class FileService:
         temp_main_path = temp_dir / f"main_{unique_filename}"
         temp_thumb_path = temp_dir / f"thumb_{unique_filename}" if mime_type.startswith("image/") else None
 
-        # Compress images and create thumbnail
+        # Compress images and create thumbnail (now async)
         if mime_type.startswith("image/"):
             # Compress image
             compressed_bytes, compressed_size_val = (
-                FileService._compress_image(content, quality=85)
+                await FileService._compress_image(content, quality=85)
             )
 
             # Only use compressed version if it's smaller
@@ -203,16 +215,21 @@ class FileService:
                     f"Image compressed from {original_size} to {compressed_size_val} bytes"
                 )
 
-            # Create thumbnail and save locally
-            thumbnail_bytes = FileService._create_thumbnail(final_content)
+            # Create thumbnail and save locally (now async)
+            thumbnail_bytes = await FileService._create_thumbnail(final_content)
             if thumbnail_bytes and temp_thumb_path:
-                with open(temp_thumb_path, "wb") as f:
-                    f.write(thumbnail_bytes)
+                # Wrap blocking file write
+                def _write_thumb():
+                    with open(temp_thumb_path, "wb") as f:
+                        f.write(thumbnail_bytes)
+                await run_blocking(_write_thumb)
                 logger.info(f"Thumbnail saved locally: {temp_thumb_path}")
 
-        # Save main file to temporary local storage
-        with open(temp_main_path, "wb") as f:
-            f.write(final_content)
+        # Save main file to temporary local storage (wrap blocking I/O)
+        def _write_main():
+            with open(temp_main_path, "wb") as f:
+                f.write(final_content)
+        await run_blocking(_write_main)
         logger.info(f"File saved to temporary storage: {temp_main_path}")
 
         # Create attachment record with pending status
@@ -526,9 +543,9 @@ class FileService:
         # Generate unique filename
         unique_filename = f"{uuid.uuid4()}.{ext}"
 
-        # Compress screenshot
+        # Compress screenshot (now async)
         final_content = content
-        compressed_bytes, compressed_size = FileService._compress_image(
+        compressed_bytes, compressed_size = await FileService._compress_image(
             content, quality=85
         )
 
@@ -543,11 +560,13 @@ class FileService:
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
 
-        # Save to temporary local storage
+        # Save to temporary local storage (wrap blocking I/O)
         temp_screenshot_path = temp_dir / f"screenshot_{unique_filename}"
 
-        with open(temp_screenshot_path, "wb") as f:
-            f.write(final_content)
+        def _write_screenshot():
+            with open(temp_screenshot_path, "wb") as f:
+                f.write(final_content)
+        await run_blocking(_write_screenshot)
         logger.info(f"Screenshot saved to temporary storage: {temp_screenshot_path}")
 
         # Build expected MinIO object key
@@ -666,9 +685,9 @@ class FileService:
         # Generate unique filename
         unique_filename = f"{uuid.uuid4()}.{ext}"
 
-        # Process images (compression)
+        # Process images (compression) - now async
         if mime_type.startswith("image/"):
-            compressed_bytes, compressed_size = FileService._compress_image(content, quality=85)
+            compressed_bytes, compressed_size = await FileService._compress_image(content, quality=85)
             if compressed_size < file_size:
                 final_content = compressed_bytes
                 final_size = compressed_size
@@ -680,11 +699,13 @@ class FileService:
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
 
-        # Save to temporary local storage
+        # Save to temporary local storage (wrap blocking I/O)
         temp_chat_path = temp_dir / f"chat_{unique_filename}"
 
-        with open(temp_chat_path, "wb") as f:
-            f.write(final_content)
+        def _write_chat():
+            with open(temp_chat_path, "wb") as f:
+                f.write(final_content)
+        await run_blocking(_write_chat)
         logger.info(f"Chat attachment saved to temporary storage: {temp_chat_path}")
 
         # Create attachment record (NO chat_message_id yet - will be linked later)

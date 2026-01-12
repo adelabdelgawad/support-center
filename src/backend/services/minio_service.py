@@ -18,6 +18,7 @@ from minio import Minio
 from minio.error import S3Error
 from urllib3.exceptions import MaxRetryError
 
+from core.async_utils import run_blocking
 from core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -62,10 +63,15 @@ class MinIOStorageService:
         bucket_name = settings.minio.bucket_name
 
         try:
-            # Check if bucket exists
-            if not client.bucket_exists(bucket_name):
-                # Create bucket
-                client.make_bucket(bucket_name, location=settings.minio.region)
+            # Check if bucket exists (blocking call - wrapped)
+            bucket_exists = await run_blocking(client.bucket_exists, bucket_name)
+            if not bucket_exists:
+                # Create bucket (blocking call - wrapped)
+                await run_blocking(
+                    client.make_bucket,
+                    bucket_name,
+                    location=settings.minio.region
+                )
                 logger.info(f"Created MinIO bucket: {bucket_name}")
             else:
                 logger.info(f"MinIO bucket already exists: {bucket_name}")
@@ -217,7 +223,9 @@ class MinIOStorageService:
         # Retry logic
         for attempt in range(settings.minio.max_retries):
             try:
-                client.put_object(
+                # Wrap blocking put_object call
+                await run_blocking(
+                    client.put_object,
                     bucket_name=bucket_name,
                     object_name=object_key,
                     data=data,
@@ -319,10 +327,13 @@ class MinIOStorageService:
         # Retry logic
         for attempt in range(settings.minio.max_retries):
             try:
-                response = client.get_object(bucket_name, object_key)
-                content = response.read()
-                response.close()
-                response.release_conn()
+                # Wrap blocking get_object call
+                response = await run_blocking(client.get_object, bucket_name, object_key)
+
+                # Read response (also blocking)
+                content = await run_blocking(response.read)
+                await run_blocking(response.close)
+                await run_blocking(response.release_conn)
 
                 logger.info(
                     f"Downloaded file from MinIO: {bucket_name}/{object_key} "
@@ -366,7 +377,8 @@ class MinIOStorageService:
         bucket_name = settings.minio.bucket_name
 
         try:
-            client.remove_object(bucket_name, object_key)
+            # Wrap blocking remove_object call
+            await run_blocking(client.remove_object, bucket_name, object_key)
             logger.info(f"Deleted file from MinIO: {bucket_name}/{object_key}")
             return True
 
@@ -430,7 +442,8 @@ class MinIOStorageService:
         bucket_name = settings.minio.bucket_name
 
         try:
-            client.stat_object(bucket_name, object_key)
+            # Wrap blocking stat_object call
+            await run_blocking(client.stat_object, bucket_name, object_key)
             return True
         except S3Error as e:
             if e.code == "NoSuchKey":
@@ -449,8 +462,8 @@ class MinIOStorageService:
             await cls.ensure_bucket_exists()
             client = cls.get_client()
 
-            # Test bucket access
-            client.bucket_exists(settings.minio.bucket_name)
+            # Test bucket access (blocking - wrap it)
+            await run_blocking(client.bucket_exists, settings.minio.bucket_name)
 
             logger.info("MinIO health check passed")
             return True

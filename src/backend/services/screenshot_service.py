@@ -17,6 +17,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.async_utils import run_blocking
 from core.config import settings
 from core.decorators import (
     log_database_operation,
@@ -37,7 +38,7 @@ class ScreenshotService:
 
     @staticmethod
     @log_database_operation("screenshot compression", level="debug")
-    def _compress_screenshot(
+    async def _compress_screenshot(
         image_bytes: bytes, quality: int = 85, max_size: tuple = (1920, 1080)
     ) -> tuple[bytes, int]:
         """
@@ -52,10 +53,13 @@ class ScreenshotService:
             Tuple of (compressed bytes, compressed size)
         """
         try:
-            with Image.open(io.BytesIO(image_bytes)) as img:
+            # Open image (blocking PIL operation)
+            img = await run_blocking(Image.open, io.BytesIO(image_bytes))
+
+            try:
                 # Resize if larger than max_size
                 if img.width > max_size[0] or img.height > max_size[1]:
-                    img.thumbnail(max_size, Image.Resampling.LANCZOS)
+                    await run_blocking(img.thumbnail, max_size, Image.Resampling.LANCZOS)
                     logger.info(
                         f"Screenshot resized from original to {img.width}x{img.height}"
                     )
@@ -64,19 +68,21 @@ class ScreenshotService:
                 if img.mode in ("RGBA", "LA", "P"):
                     background = Image.new("RGB", img.size, (255, 255, 255))
                     if img.mode == "P":
-                        img = img.convert("RGBA")
+                        img = await run_blocking(img.convert, "RGBA")
                     background.paste(
                         img,
                         mask=img.split()[-1] if img.mode == "RGBA" else None,
                     )
                     img = background
 
-                # Save with compression
+                # Save with compression (blocking)
                 buffer = io.BytesIO()
-                img.save(buffer, format="JPEG", quality=quality, optimize=True)
+                await run_blocking(img.save, buffer, format="JPEG", quality=quality, optimize=True)
 
                 compressed_bytes = buffer.getvalue()
                 return compressed_bytes, len(compressed_bytes)
+            finally:
+                await run_blocking(img.close)
         except Exception as e:
             logger.warning(
                 f"Screenshot compression failed: {e}, using original"
@@ -148,9 +154,9 @@ class ScreenshotService:
         if not mime_type.startswith("image/"):
             raise ValueError("Uploaded file is not a valid image")
 
-        # Compress and resize screenshot
+        # Compress and resize screenshot (now async)
         compressed_bytes, compressed_size = (
-            ScreenshotService._compress_screenshot(
+            await ScreenshotService._compress_screenshot(
                 content, quality=85, max_size=(1920, 1080)
             )
         )
@@ -173,11 +179,16 @@ class ScreenshotService:
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
 
-        # Save to temporary local storage
+        # Save to temporary local storage (wrap blocking file I/O)
         temp_screenshot_path = temp_dir / f"screenshot_{unique_filename}"
 
-        with open(temp_screenshot_path, "wb") as f:
-            f.write(final_content)
+        # Use aiofiles for async file write, or wrap blocking call
+        # For simplicity, wrap the blocking file write
+        def _write_file():
+            with open(temp_screenshot_path, "wb") as f:
+                f.write(final_content)
+
+        await run_blocking(_write_file)
         logger.info(
             f"Screenshot saved to temporary storage: {temp_screenshot_path}"
         )
@@ -304,8 +315,12 @@ class ScreenshotService:
                 temp_path = Path(attachment.temp_local_path)
                 if temp_path.exists():
                     try:
-                        with open(temp_path, "rb") as f:
-                            content = f.read()
+                        # Wrap blocking file read
+                        def _read_file():
+                            with open(temp_path, "rb") as f:
+                                return f.read()
+
+                        content = await run_blocking(_read_file)
                         logger.info(
                             f"Read screenshot from temp storage: {temp_path}"
                         )

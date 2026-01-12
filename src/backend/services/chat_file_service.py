@@ -14,6 +14,7 @@ import magic
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.async_utils import run_blocking
 from core.config import settings
 from core.decorators import (
     log_database_operation,
@@ -118,11 +119,13 @@ class ChatFileService:
         temp_dir = Path("temp_uploads")
         temp_dir.mkdir(exist_ok=True)
 
-        # Save to temporary local storage
+        # Save to temporary local storage (wrap blocking I/O)
         temp_file_path = temp_dir / f"chatfile_{stored_filename}"
 
-        with open(temp_file_path, "wb") as f:
-            f.write(content)
+        def _write_chat_file():
+            with open(temp_file_path, "wb") as f:
+                f.write(content)
+        await run_blocking(_write_chat_file)
         logger.info(f"Chat file saved to temporary storage: {temp_file_path}")
 
         # Create ChatFile record with pending status
@@ -255,8 +258,12 @@ class ChatFileService:
                 temp_path = Path(chat_file.temp_local_path)
                 if temp_path.exists():
                     try:
-                        with open(temp_path, "rb") as f:
-                            content = f.read()
+                        # Wrap blocking file read
+                        def _read_chat_file():
+                            with open(temp_path, "rb") as f:
+                                return f.read()
+
+                        content = await run_blocking(_read_chat_file)
                         logger.info(
                             f"Read chat file from temp storage: {temp_path}"
                         )
