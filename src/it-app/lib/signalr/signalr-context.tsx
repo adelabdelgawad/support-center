@@ -341,7 +341,27 @@ export function useSignalRChatRoom(
   // Track cancellation state - must be ref so async function sees current value
   const isCancelledRef = useRef<boolean>(false);
 
-  // Update handlers ref
+  // Store callback props in refs to prevent handler recreation
+  // This keeps handlersRef stable even when parent callbacks change
+  const onInitialStateRef = useRef(onInitialState);
+  const onNewMessageRef = useRef(onNewMessage);
+  const onTypingIndicatorRef = useRef(onTypingIndicator);
+  const onReadStatusUpdateRef = useRef(onReadStatusUpdate);
+  const onTicketUpdateRef = useRef(onTicketUpdate);
+  const onTaskStatusChangedRef = useRef(onTaskStatusChanged);
+
+  // Update refs when callbacks change (doesn't trigger handler recreation)
+  useEffect(() => {
+    onInitialStateRef.current = onInitialState;
+    onNewMessageRef.current = onNewMessage;
+    onTypingIndicatorRef.current = onTypingIndicator;
+    onReadStatusUpdateRef.current = onReadStatusUpdate;
+    onTicketUpdateRef.current = onTicketUpdate;
+    onTaskStatusChangedRef.current = onTaskStatusChanged;
+  }, [onInitialState, onNewMessage, onTypingIndicator, onReadStatusUpdate, onTicketUpdate, onTaskStatusChanged]);
+
+  // Initialize handlers once - they call refs which always have latest callbacks
+  // This prevents handler recreation from triggering subscription changes
   useEffect(() => {
     handlersRef.current = {
       onInitialState: (data: InitialStateData) => {
@@ -372,7 +392,8 @@ export function useSignalRChatRoom(
         setLatestSequence(data.latestSequence);
         setRequestInfo(data.requestInfo);
         setIsLoading(false);
-        onInitialState?.(data);
+        // Call latest callback via ref
+        onInitialStateRef.current?.(data);
       },
 
       onNewMessage: (message: ChatMessage) => {
@@ -423,11 +444,13 @@ export function useSignalRChatRoom(
           setLatestSequence(message.sequenceNumber);
         }
 
-        onNewMessage?.(message);
+        // Call latest callback via ref
+        onNewMessageRef.current?.(message);
       },
 
       onTypingIndicator: (data: TypingIndicator) => {
-        onTypingIndicator?.(data);
+        // Call latest callback via ref
+        onTypingIndicatorRef.current?.(data);
       },
 
       onReadStatusUpdate: (data: ReadStatusUpdate) => {
@@ -441,19 +464,22 @@ export function useSignalRChatRoom(
             )
           );
         }
-        // Call external callback if provided
-        onReadStatusUpdate?.(data);
+        // Call latest callback via ref
+        onReadStatusUpdateRef.current?.(data);
       },
 
       onTicketUpdate: (data: TicketUpdateEvent) => {
-        onTicketUpdate?.(data);
+        // Call latest callback via ref
+        onTicketUpdateRef.current?.(data);
       },
 
       onTaskStatusChanged: (data: TaskStatusChangedEvent) => {
-        onTaskStatusChanged?.(data);
+        // Call latest callback via ref
+        onTaskStatusChangedRef.current?.(data);
       },
     };
-  }, [onInitialState, onNewMessage, onTypingIndicator, onReadStatusUpdate, onTicketUpdate, onTaskStatusChanged]);
+    // Empty deps - handlers initialized once, use refs for latest callbacks
+  }, []);
 
   // Store initialMessages in ref to avoid triggering effect on every reference change
   const initialMessagesRef = useRef(initialMessages);
