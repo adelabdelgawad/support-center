@@ -291,8 +291,10 @@ export function useChatMutations(options: UseChatMutationsOptions) {
             // Evict oldest entry if at capacity (FIFO)
             if (newFailed.size >= MAX_FAILED_MESSAGES) {
               const oldestKey = newFailed.keys().next().value;
-              newFailed.delete(oldestKey);
-              console.log(`[useChatMutations] Evicted oldest failed message (limit: ${MAX_FAILED_MESSAGES})`);
+              if (oldestKey) {
+                newFailed.delete(oldestKey);
+                console.log(`[useChatMutations] Evicted oldest failed message (limit: ${MAX_FAILED_MESSAGES})`);
+              }
             }
 
             newFailed.set(tempId!, {

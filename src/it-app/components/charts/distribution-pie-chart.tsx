@@ -127,7 +127,7 @@ export function DistributionPieChart({
           itemStyle={{
             color: 'hsl(var(--muted-foreground))',
           }}
-          formatter={(value: number | undefined, name: string | undefined, props: any) => [
+          formatter={(value: any, name: any, props: any) => [
             `${value ?? 0} (${props.payload.percentage.toFixed(1)}%)`,
             name ?? '',
           ]}

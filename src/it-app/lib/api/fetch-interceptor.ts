@@ -163,8 +163,8 @@ export function setupFetchInterceptor(): void {
   // Mark as patched
   (patchedFetch as any).__patched = true;
 
-  // Replace window.fetch
-  window.fetch = patchedFetch;
+  // Replace window.fetch - cast to satisfy TypeScript
+  window.fetch = patchedFetch as typeof fetch;
 }
 
 /**
