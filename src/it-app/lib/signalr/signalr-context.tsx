@@ -374,9 +374,22 @@ export function useSignalRChatRoom(
       },
 
       onNewMessage: (message: ChatMessage) => {
+        console.log('%c[SignalR-Context] 🔔 onNewMessage triggered', 'color: #00ff00; font-weight: bold', {
+          messageId: message.id,
+          senderId: message.senderId,
+          senderUsername: message.sender?.username,
+          content: message.content?.substring(0, 50),
+          clientTempId: message.clientTempId,
+          sequenceNumber: message.sequenceNumber,
+          timestamp: new Date().toISOString(),
+        });
+
         setMessages((prev) => {
           const exists = prev.some((m) => m.id === message.id);
-          if (exists) return prev;
+          if (exists) {
+            console.log('%c[SignalR-Context] ⚠️ Message already exists, skipping', 'color: #ff9900', { messageId: message.id });
+            return prev;
+          }
 
           // Check for optimistic message replacement
           if (message.clientTempId) {
@@ -384,11 +397,22 @@ export function useSignalRChatRoom(
               (m) => m.tempId === message.clientTempId || m.id === message.clientTempId
             );
             if (optimisticIndex !== -1) {
+              console.log('%c[SignalR-Context] 🔄 Replacing optimistic message', 'color: #00ccff', {
+                tempId: message.clientTempId,
+                realId: message.id,
+                index: optimisticIndex,
+              });
               const updated = [...prev];
               updated[optimisticIndex] = { ...message, status: 'sent' };
               return updated;
             }
           }
+
+          console.log('%c[SignalR-Context] ✅ Adding new message to state', 'color: #00ff00', {
+            messageId: message.id,
+            currentMessageCount: prev.length,
+            newMessageCount: prev.length + 1,
+          });
 
           return [...prev, { ...message, status: 'sent' }];
         });
@@ -431,25 +455,52 @@ export function useSignalRChatRoom(
 
   // Subscribe/unsubscribe effect
   useEffect(() => {
-    if (!enabled || !requestId) return;
+    console.log('%c[SignalRChatRoom] 🎣 useEffect triggered', 'color: #ff00cc; font-weight: bold', {
+      enabled,
+      requestId,
+      lastSubscribedRequestId: lastSubscribedRequestIdRef.current,
+    });
+
+    if (!enabled || !requestId) {
+      console.log('%c[SignalRChatRoom] ⚠️ Skipping subscription (disabled or no requestId)', 'color: #ff9900', {
+        enabled,
+        requestId,
+      });
+      return;
+    }
 
     // CRITICAL: Only re-subscribe if requestId actually changed
     // This prevents infinite loops when initialMessages reference changes
     const shouldSubscribe = lastSubscribedRequestIdRef.current !== requestId;
 
+    console.log('%c[SignalRChatRoom] 🔍 Checking if should subscribe', 'color: #cc00ff', {
+      shouldSubscribe,
+      lastSubscribedRequestId: lastSubscribedRequestIdRef.current,
+      currentRequestId: requestId,
+    });
+
     let isCancelled = false;
 
     const subscribe = async () => {
       try {
+        console.log('%c[SignalRChatRoom] 📡 Calling subscribeToChat', 'color: #0099ff; font-weight: bold', { requestId });
         const subId = await signalR.subscribeToChat(requestId, handlersRef.current);
         subscriptionIdRef.current = subId;
         lastSubscribedRequestIdRef.current = requestId;
 
+        console.log('%c[SignalRChatRoom] ✅ Subscription successful', 'color: #00ff00; font-weight: bold', {
+          requestId,
+          subscriptionId: subId,
+          isCancelled,
+        });
+
         if (isCancelled && subId) {
+          console.log('%c[SignalRChatRoom] 🚫 Subscription cancelled, unsubscribing', 'color: #ff6600', { requestId, subId });
           signalR.unsubscribeFromChat(requestId, subId);
           subscriptionIdRef.current = null;
         }
-      } catch {
+      } catch (error) {
+        console.error('%c[SignalRChatRoom] ❌ Subscription failed', 'color: #ff0000; font-weight: bold', { requestId, error });
         // Handled by context
       }
     };

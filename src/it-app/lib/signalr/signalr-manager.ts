@@ -316,7 +316,15 @@ class SignalRHubManager {
     });
 
     this.connection.on('ReceiveMessage', (message: ChatMessage) => {
-      console.log(`[SignalR:${this.hubType}] ReceiveMessage for ${message.requestId?.substring(0, 8)}...`);
+      console.log('%c[SignalR:Manager] 📨 ReceiveMessage from WebSocket', 'color: #ff00ff; font-weight: bold', {
+        requestId: message.requestId,
+        messageId: message.id,
+        senderId: message.senderId,
+        senderUsername: message.sender?.username,
+        content: message.content?.substring(0, 50),
+        sequenceNumber: message.sequenceNumber,
+        timestamp: new Date().toISOString(),
+      });
       this.routeToHandlers(message.requestId, 'onNewMessage', message);
     });
 
@@ -367,16 +375,40 @@ class SignalRHubManager {
     data: Parameters<NonNullable<ChatRoomHandlers[K]>>[0]
   ): void {
     const handlers = this.subscriptions.get(roomId);
-    if (!handlers) return;
 
-    handlers.forEach((handler) => {
+    console.log('%c[SignalR:Manager] 🔀 routeToHandlers', 'color: #cc00ff', {
+      roomId,
+      handlerName,
+      hasHandlers: !!handlers,
+      handlerCount: handlers?.size || 0,
+      allSubscribedRooms: Array.from(this.subscriptions.keys()),
+    });
+
+    if (!handlers) {
+      console.warn('%c[SignalR:Manager] ⚠️ No handlers found for room', 'color: #ff6600; font-weight: bold', {
+        roomId,
+        handlerName,
+        availableRooms: Array.from(this.subscriptions.keys()),
+      });
+      return;
+    }
+
+    handlers.forEach((handler, index) => {
       const fn = handler[handlerName];
+      console.log(`%c[SignalR:Manager] 🎯 Calling handler ${index + 1}/${handlers.size}`, 'color: #9900ff', {
+        handlerName,
+        hasFunction: !!fn,
+      });
+
       if (fn) {
         try {
           (fn as (data: unknown) => void)(data);
+          console.log(`%c[SignalR:Manager] ✅ Handler ${index + 1} executed successfully`, 'color: #00cc00');
         } catch (error) {
           console.error(`[SignalR:${this.hubType}] Handler error (${handlerName}):`, error);
         }
+      } else {
+        console.warn(`%c[SignalR:Manager] ⚠️ Handler ${index + 1} missing ${handlerName}`, 'color: #ff9900');
       }
     });
   }
@@ -400,8 +432,16 @@ class SignalRHubManager {
    * Returns a subscription ID for later unsubscription
    */
   async subscribeToRoom(roomId: string, handlers: ChatRoomHandlers): Promise<string> {
+    console.log('%c[SignalR:Manager] 🚪 subscribeToRoom requested', 'color: #0099ff; font-weight: bold', {
+      roomId,
+      currentlyConnected: this.isConnected(),
+      connectionState: this.connection?.state,
+      handlerKeys: Object.keys(handlers).filter(k => handlers[k as keyof ChatRoomHandlers]),
+    });
+
     // Connect if not already connected
     if (!this.isConnected()) {
+      console.log('%c[SignalR:Manager] 🔌 Not connected, initiating connection...', 'color: #ff9900');
       await this.connect();
     }
 
@@ -414,17 +454,28 @@ class SignalRHubManager {
     }
     this.subscriptions.get(roomId)!.set(subscriptionId, handlers);
 
+    console.log('%c[SignalR:Manager] 📝 Handlers registered locally', 'color: #00cc00', {
+      roomId,
+      subscriptionId,
+      totalSubscriptionsForRoom: this.subscriptions.get(roomId)!.size,
+      allSubscribedRooms: Array.from(this.subscriptions.keys()),
+    });
+
     // Join room on server - verify connection state before invoking
     if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
       try {
+        console.log('%c[SignalR:Manager] 🔄 Invoking JoinRoom on server...', 'color: #00ccff', { roomId });
         await this.connection.invoke('JoinRoom', roomId);
-        console.log(`[SignalR:${this.hubType}] Joined room ${roomId.substring(0, 8)}...`);
+        console.log('%c[SignalR:Manager] ✅ Successfully joined room on server', 'color: #00ff00; font-weight: bold', { roomId, subscriptionId });
       } catch (error) {
-        console.error(`[SignalR:${this.hubType}] Failed to join room:`, error);
+        console.error(`%c[SignalR:${this.hubType}] ❌ Failed to join room:`, 'color: #ff0000; font-weight: bold', error);
         // Don't throw - handlers are registered, room will be joined on reconnect
       }
     } else {
-      console.log(`[SignalR:${this.hubType}] Connection not ready, room ${roomId.substring(0, 8)}... will be joined on connect`);
+      console.warn(`%c[SignalR:${this.hubType}] ⚠️ Connection not ready, room will be joined on connect`, 'color: #ff9900', {
+        roomId,
+        connectionState: this.connection?.state,
+      });
     }
 
     return subscriptionId;
