@@ -96,6 +96,7 @@ services:
     container_name: servicecatalog_backend_1
     environment:
       - INSTANCE_ID=backend-1
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-false}  # Set to "true" for fresh deployments with migrations
     env_file:
       - docker/env/.env.backend
     volumes:
@@ -136,6 +137,7 @@ services:
     container_name: servicecatalog_backend_2
     environment:
       - INSTANCE_ID=backend-2
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-false}  # Set to "true" for fresh deployments with migrations
     env_file:
       - docker/env/.env.backend
     volumes:
@@ -176,6 +178,7 @@ services:
     container_name: servicecatalog_backend_3
     environment:
       - INSTANCE_ID=backend-3
+      - RUN_MIGRATIONS=${RUN_MIGRATIONS:-false}  # Set to "true" for fresh deployments with migrations
     env_file:
       - docker/env/.env.backend
     volumes:

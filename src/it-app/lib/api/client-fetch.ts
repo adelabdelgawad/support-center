@@ -13,6 +13,11 @@
  * - Use getErrorMessage() for error handling
  */
 
+// Performance optimization: Request timeout and retry constants
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000; // 1 second
+
 /**
  * Custom error class for client-side fetch errors
  */
@@ -94,6 +99,73 @@ function extractErrorMessage(errorData: Record<string, unknown>, status: number)
 }
 
 /**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number = DEFAULT_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      // Create a timeout error that will be handled by handleErrorResponse
+      const timeoutError: ClientFetchError = new ClientFetchError(
+        'Request timed out - please try again',
+        408,
+        'Request timeout'
+      );
+      throw timeoutError;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch with retry logic for transient failures
+ */
+async function fetchWithRetry(
+  fetchFn: () => Promise<Response>,
+  attempt: number = 1
+): Promise<Response> {
+  try {
+    const response = await fetchFn();
+
+    // Check for retryable status codes (429, 503)
+    if ((response.status === 429 || response.status === 503) && attempt < MAX_RETRIES) {
+      // Exponential backoff: 1s, 2s
+      const delay = RETRY_DELAY * attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(fetchFn, attempt + 1);
+    }
+
+    return response;
+  } catch (error) {
+    // Only retry on network errors, not on ClientFetchError (which includes timeout)
+    if (error instanceof ClientFetchError) {
+      throw error;
+    }
+    // For network errors, retry if we haven't exceeded max retries
+    if (attempt < MAX_RETRIES) {
+      const delay = RETRY_DELAY * attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(fetchFn, attempt + 1);
+    }
+    throw error;
+  }
+}
+
+/**
  * Handle error responses consistently
  * Redirects to login on 401, handles blocked users on 403
  */
@@ -132,10 +204,10 @@ function handleErrorResponse(response: Response, errorData: Record<string, unkno
  */
 export const apiClient = {
   async get<T>(url: string): Promise<T> {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(() => fetchWithTimeout(url, {
       method: 'GET',
       credentials: 'include',
-    });
+    }));
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       handleErrorResponse(response, errorData);
@@ -144,12 +216,12 @@ export const apiClient = {
   },
 
   async post<T>(url: string, data?: unknown): Promise<T> {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(() => fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }));
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       handleErrorResponse(response, errorData);
@@ -158,12 +230,12 @@ export const apiClient = {
   },
 
   async put<T>(url: string, data?: unknown): Promise<T> {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(() => fetchWithTimeout(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }));
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       handleErrorResponse(response, errorData);
@@ -172,12 +244,12 @@ export const apiClient = {
   },
 
   async patch<T>(url: string, data?: unknown): Promise<T> {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(() => fetchWithTimeout(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }));
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       handleErrorResponse(response, errorData);
@@ -186,12 +258,12 @@ export const apiClient = {
   },
 
   async delete<T>(url: string, data?: unknown): Promise<T> {
-    const response = await fetch(url, {
+    const response = await fetchWithRetry(() => fetchWithTimeout(url, {
       method: 'DELETE',
       headers: data ? { 'Content-Type': 'application/json' } : undefined,
       credentials: 'include',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }));
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       handleErrorResponse(response, errorData);

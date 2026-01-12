@@ -36,7 +36,7 @@ class DatabaseSettings(BaseSettings):
 
     url: PostgresDsn
     pool_size: int = 10  # Reduced from 20 for horizontal scaling (10 per instance)
-    max_overflow: int = 5  # Reduced from 10 for horizontal scaling
+    max_overflow: int = 20  # Increased from 5 to handle traffic spikes (30 total connections: 10 base + 20 overflow)
     pool_timeout: int = 30
     pool_recycle: int = 1800  # 30 minutes (reduced from 1 hour for better connection cycling)
     echo: bool = False

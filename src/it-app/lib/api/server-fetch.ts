@@ -16,6 +16,11 @@ export class ServerApiError extends Error {
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
 
+// Performance optimization: Request timeout and retry constants
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 2;
+const RETRY_DELAY = 1000; // 1 second
+
 async function getAccessToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
   return cookieStore.get("access_token")?.value;
@@ -46,6 +51,62 @@ function extractErrorMessage(data: unknown): string {
 }
 
 /**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number = DEFAULT_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ServerApiError(
+        'Request timeout',
+        408,
+        'Request timed out - please try again',
+        url,
+        options.method as string
+      );
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch with retry logic for transient failures
+ */
+async function fetchWithRetry<T>(
+  fetchFn: () => Promise<Response>,
+  attempt: number = 1
+): Promise<Response> {
+  try {
+    return await fetchFn();
+  } catch (error) {
+    // Only retry on ServerApiError with specific status codes
+    if (error instanceof ServerApiError && (error.status === 429 || error.status === 503)) {
+      if (attempt < MAX_RETRIES) {
+        // Exponential backoff: 1s, 2s
+        const delay = RETRY_DELAY * attempt;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return fetchWithRetry(fetchFn, attempt + 1);
+      }
+    }
+    throw error;
+  }
+}
+
+/**
  * Unified server-side fetch
  *
  * @example
@@ -72,6 +133,7 @@ export async function serverFetch<T>(
 ): Promise<T> {
   const fullUrl = `${API_URL}${API_BASE_PATH}${endpoint}`;
   const method = options?.method || 'GET';
+  const timeout = options?.timeout || DEFAULT_TIMEOUT;
 
   const accessToken = await getAccessToken();
   const forwardedHeaders = await getForwardingHeaders();
@@ -104,7 +166,8 @@ export async function serverFetch<T>(
     };
   }
 
-  const response = await fetch(fullUrl, fetchOptions);
+  // Fetch with timeout and retry logic
+  const response = await fetchWithRetry<Response>(() => fetchWithTimeout(fullUrl, fetchOptions, timeout));
 
   if (!response.ok) {
     let errorData: unknown = {};
@@ -138,8 +201,9 @@ export async function makePublicRequest<T>(
 ): Promise<T> {
   const fullUrl = `${API_URL}${API_BASE_PATH}${endpoint}`;
   const forwardedHeaders = await getForwardingHeaders();
+  const timeout = config?.timeout || DEFAULT_TIMEOUT;
 
-  const response = await fetch(fullUrl, {
+  const fetchOptions: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -147,7 +211,10 @@ export async function makePublicRequest<T>(
       ...config?.headers,
     },
     body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
+  };
+
+  // Fetch with timeout and retry logic
+  const response = await fetchWithRetry<Response>(() => fetchWithTimeout(fullUrl, fetchOptions, timeout));
 
   if (!response.ok) {
     let errorData: unknown = {};

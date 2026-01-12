@@ -814,6 +814,10 @@ Cache keys centralized in `lib/swr/cache-keys.ts`.
 ## Active Technologies
 - Python 3.12+ (Backend), TypeScript 5.x (Frontend) + FastAPI, SQLModel, Next.js 15, React 19, SWR (001-fix-assignees-update)
 - PostgreSQL with asyncpg (001-fix-assignees-update)
+- Python 3.13 (Backend), TypeScript 5.9 (Frontend) + FastAPI 0.121, Next.js 16.1, SQLAlchemy 2.0, SWR 2.3 (002-performance-optimization)
+- PostgreSQL with asyncpg, Redis for caching (002-performance-optimization)
+- TypeScript 5.4+, Rust (Tauri backend) + Tauri v2, SolidJS 1.8, @tauri-apps/plugin-store, @microsoft/signalr 10.0 (003-image-cache)
+- Tauri Plugin Store (persistent key-value), File System (`%APPDATA%\supportcenter.requester\images\`) (003-image-cache)
 
 ## Recent Changes
 - 001-fix-assignees-update: Added Python 3.12+ (Backend), TypeScript 5.x (Frontend) + FastAPI, SQLModel, Next.js 15, React 19, SWR

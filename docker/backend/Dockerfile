@@ -67,6 +67,10 @@ COPY --from=builder /app/.venv /app/.venv
 # Copy application code
 COPY --from=builder /app /app
 
+# Copy startup script
+COPY docker/backend/start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/temp_uploads /app/logs
 
@@ -77,5 +81,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Start command: Initialize DB, stamp alembic, then start server
-CMD python init_db.py && alembic stamp head && uvicorn main:app --host 0.0.0.0 --port 8000
+# Environment variable for conditional migration execution
+# Set to "true" for fresh deployments, "false" (default) for normal restarts
+ENV RUN_MIGRATIONS=false
+
+# Start command: Use startup script for conditional migration execution
+CMD ["/usr/local/bin/start.sh"]

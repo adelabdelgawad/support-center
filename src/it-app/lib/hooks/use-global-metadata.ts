@@ -25,14 +25,15 @@ async function fetcher<T>(url: string): Promise<T> {
  * SWR configuration for global metadata
  * Uses longer cache times and disabled revalidation since this data changes infrequently
  *
- * IMPORTANT: revalidateOnMount is enabled to ensure we always have fresh data,
- * but we use localStorage cache for instant rendering during the fetch.
+ * IMPORTANT: revalidateOnMount is disabled to prevent redundant API calls.
+ * When fallbackData is provided from SSR, we don't need to refetch on mount.
+ * revalidateIfStale: true ensures data is refreshed when it becomes stale.
  */
 const METADATA_SWR_CONFIG = {
   revalidateOnFocus: false,
   revalidateOnReconnect: false,
-  revalidateOnMount: true, // Revalidate to ensure fresh data
-  revalidateIfStale: true,
+  revalidateOnMount: false, // Disabled to prevent redundant API calls when data from SSR
+  revalidateIfStale: true, // Still refreshes data when stale
   dedupingInterval: 300000, // 5 minutes - avoid refetching when navigating between tickets
   focusThrottleInterval: 300000, // 5 minutes
 };

@@ -28,7 +28,7 @@ engine = create_async_engine(
         settings.performance.enable_query_logging
     ),  # Ensure proper boolean conversion
     future=True,
-    pool_pre_ping=False,  # Disable pre-ping for faster startup (connections are validated on use)
+    pool_pre_ping=True,  # Enable pre-ping to validate connections before use (catches stale connections)
     pool_size=settings.database.pool_size,
     max_overflow=settings.database.max_overflow,
     pool_timeout=settings.database.pool_timeout,
