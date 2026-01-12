@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiClient, getClientErrorMessage as getErrorMessage } from '@/lib/fetch/client';
 import type { ChatMessage, SenderInfo } from '@/lib/signalr/types';
 import type { PermissionResult } from '@/lib/utils/messaging-permissions';
@@ -222,6 +222,9 @@ export function useChatMutations(options: UseChatMutationsOptions) {
 
         console.log(`[useChatMutations] Sending message (tempId: ${tempId || 'none'})`);
 
+        // Create abort controller for this request (for cleanup on unmount)
+        abortControllerRef.current = new AbortController();
+
         // ALWAYS send HTTP POST to persist the message
         // SignalR only creates optimistic local state - actual persistence is via HTTP
         const response = await fetch('/api/chat/messages', {
@@ -230,6 +233,7 @@ export function useChatMutations(options: UseChatMutationsOptions) {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
+          signal: abortControllerRef.current.signal,
           body: JSON.stringify({
             request_id: requestId,
             sender_id: currentUser?.id,
@@ -266,6 +270,12 @@ export function useChatMutations(options: UseChatMutationsOptions) {
           onMessageSent(serverMessage);
         }
       } catch (err) {
+        // Handle abort (component unmounted)
+        if (err instanceof Error && err.name === 'AbortError') {
+          console.log('[useChatMutations] Send message aborted');
+          return;
+        }
+
         const error = err instanceof Error ? err : new Error(getErrorMessage(err));
         console.error(`[useChatMutations] Send failed:`, error.message);
 
@@ -298,6 +308,7 @@ export function useChatMutations(options: UseChatMutationsOptions) {
         throw error;
       } finally {
         setState((prev) => ({ ...prev, isSending: false }));
+        abortControllerRef.current = null;
       }
     },
     [
@@ -528,6 +539,16 @@ export function useChatMutations(options: UseChatMutationsOptions) {
    */
   const clearError = useCallback(() => {
     setState((prev) => ({ ...prev, lastError: null }));
+  }, []);
+
+  // Cleanup: abort any ongoing requests when component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, []);
 
   return {
