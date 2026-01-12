@@ -12,7 +12,14 @@
  * - Event handlers for different message types
  */
 
-import * as signalR from '@microsoft/signalr';
+// Use named imports instead of namespace import to enable tree-shaking
+import {
+  HubConnection,
+  HubConnectionBuilder,
+  HubConnectionState,
+  LogLevel,
+  IHttpConnectionOptions,
+} from '@microsoft/signalr';
 import { getUnifiedAccessToken, getUnifiedSessionAsync } from '@/lib/utils/auth-storage';
 import type {
   ChatMessage,
@@ -76,7 +83,7 @@ export interface SignalREventHandlers {
  * Manages a single hub connection with room subscriptions.
  */
 class SignalRHubManager {
-  private connection: signalR.HubConnection | null = null;
+  private connection: HubConnection | null = null;
   private hubType: HubType;
   private state: SignalRState = SignalRState.DISCONNECTED;
   private userId: string | null = null;
@@ -110,7 +117,7 @@ class SignalRHubManager {
    */
   isConnected(): boolean {
     return this.state === SignalRState.CONNECTED &&
-      this.connection?.state === signalR.HubConnectionState.Connected;
+      this.connection?.state === HubConnectionState.Connected;
   }
 
   /**
@@ -235,7 +242,7 @@ class SignalRHubManager {
         // SECURITY (Finding #16): Token is passed in query string (visible in network tab)
         // ARCHITECTURAL CHANGE REQUIRED — DO NOT REFACTOR INLINE
         // Future: Use httpOnly cookie-based auth or SignalR's negotiate endpoint
-        this.connection = new signalR.HubConnectionBuilder()
+        this.connection = new HubConnectionBuilder()
           .withUrl(hubUrl, {
             accessTokenFactory: () => token,
           })
@@ -249,7 +256,7 @@ class SignalRHubManager {
               return delay;
             },
           })
-          .configureLogging(signalR.LogLevel.Information)
+          .configureLogging(LogLevel.Information)
           .build();
 
         // Set up event handlers
@@ -415,7 +422,7 @@ class SignalRHubManager {
     this.subscriptions.get(roomId)!.set(subscriptionId, handlers);
 
     // Join room on server - verify connection state before invoking
-    if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
+    if (this.connection && this.connection.state === HubConnectionState.Connected) {
       try {
         await this.connection.invoke('JoinRoom', roomId);
         console.log(`[SignalR:${this.hubType}] Joined room ${roomId.substring(0, 8)}...`);
