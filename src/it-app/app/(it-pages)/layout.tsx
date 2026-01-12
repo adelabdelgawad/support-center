@@ -27,7 +27,7 @@ import {
 } from "@/lib/cache/navigation-cache";
 import { serverFetch } from "@/lib/api/server-fetch";
 
-import { cookies, headers } from "next/headers";
+import { type ReadonlyRequestCookies, cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ReactNode } from "react";
@@ -106,9 +106,9 @@ function buildServerNavigation(pages: Page[]): NavItem[] {
 }
 
 // Server-side function to get current user from cookie (FAST - no network call)
-async function getCurrentUser() {
+// PERFORMANCE: Accepts cookieStore to avoid multiple cookies() calls (F17)
+function getCurrentUser(cookieStore: ReadonlyRequestCookies) {
   try {
-    const cookieStore = await cookies();
     const userDataCookie = cookieStore.get('user_data');
 
     if (!userDataCookie || !userDataCookie.value) {
@@ -125,9 +125,9 @@ async function getCurrentUser() {
 
 // Server-side function to get navigation
 // First tries cookie cache (fast), falls back to API fetch on first visit
-async function getCachedNavigation(userId: string): Promise<Page[]> {
+// PERFORMANCE: Accepts cookieStore to avoid multiple cookies() calls (F17)
+async function getCachedNavigation(userId: string, cookieStore: ReadonlyRequestCookies): Promise<Page[]> {
   try {
-    const cookieStore = await cookies();
     const navCookie = cookieStore.get(getNavigationCookieName());
 
     // If we have a cached cookie, use it (fast path)
@@ -157,12 +157,16 @@ async function getCachedNavigation(userId: string): Promise<Page[]> {
 }
 
 export default async function SupportCenterLayout({ children }: SupportCenterLayoutProps) {
+  // PERFORMANCE: Call cookies() ONCE and pass to helper functions (F17)
+  // This avoids multiple async cookies() calls that add overhead
+  const cookieStore = await cookies();
+
   // Get current pathname from headers (synchronous after await)
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") || "/support-center";
 
   // Get current user from cookies (FAST - no network call)
-  const user = await getCurrentUser();
+  const user = getCurrentUser(cookieStore);
 
   // Redirect to login if not authenticated (session cookie missing)
   // This is a fast check - no network validation here
@@ -185,7 +189,7 @@ export default async function SupportCenterLayout({ children }: SupportCenterLay
   // PERFORMANCE: Get cached navigation from cookie (instant, no API call)
   // This enables server-side rendering of navigation
   // Fresh data is fetched in background via SWR
-  const cachedPages = await getCachedNavigation(user.id);
+  const cachedPages = await getCachedNavigation(user.id, cookieStore);
 
   // Pre-build navigation structure on server for instant render
   const serverNavigation = buildServerNavigation(cachedPages);
