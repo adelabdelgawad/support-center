@@ -121,8 +121,6 @@
 
                 const { window: tauriWindow, core, event } = window.__TAURI__;
                 const appWindow = tauriWindow.getCurrentWindow();
-                let clickCount = 0;
-                let clickTimeout;
                 let isDragging = false;
                 let mouseDownTime = 0;
 
@@ -140,14 +138,14 @@
                     }
                 });
 
-                // Drag functionality on container
+                // Drag functionality on container (hold > 150ms to drag)
                 iconContainer.addEventListener('mousedown', async (e) => {
                     mouseDownTime = Date.now();
                     isDragging = false;
 
                     setTimeout(async () => {
                         const timeSinceDown = Date.now() - mouseDownTime;
-                        if (timeSinceDown > 150 && clickCount < 2) {
+                        if (timeSinceDown > 150) {
                             e.preventDefault();
                             isDragging = true;
                             try {
@@ -167,32 +165,20 @@
                     }
                 });
 
-                // Double-click to toggle main window
+                // Single-click to toggle main window
                 iconContainer.addEventListener('click', () => {
                     if (isDragging) {
                         isDragging = false;
-                        clickCount = 0;
-                        clearTimeout(clickTimeout);
                         return;
                     }
 
-                    clickCount++;
-                    clearTimeout(clickTimeout);
-
-                    if (clickCount === 2) {
-                        clickCount = 0;
-                        (async () => {
-                            try {
-                                await core.invoke('toggle_window');
-                            } catch (err) {
-                                // Toggle failed silently
-                            }
-                        })();
-                    } else {
-                        clickTimeout = setTimeout(() => {
-                            clickCount = 0;
-                        }, 300);
-                    }
+                    (async () => {
+                        try {
+                            await core.invoke('toggle_window');
+                        } catch (err) {
+                            // Toggle failed silently
+                        }
+                    })();
                 });
             }
 
