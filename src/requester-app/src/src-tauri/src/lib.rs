@@ -1683,11 +1683,24 @@ pub fn run() {
             logging::log_clear_all,
             logging::log_init
         ])
-        // Handle close events - hide instead of closing
+        // Handle window events - hide instead of close/minimize
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::Resized(_) => {
+                    // On Windows, minimize triggers a resize event
+                    // Check if window was minimized and convert to hide
+                    if window.label() == "main" {
+                        if let Ok(true) = window.is_minimized() {
+                            let _ = window.unminimize();
+                            let _ = window.hide();
+                        }
+                    }
+                }
+                _ => {}
             }
         })
         // Setup floating icon functionality
