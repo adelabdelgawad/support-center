@@ -196,3 +196,4 @@ docs/_build/
 # Add project-specific ignores here
 OPTIMIZATION_CHANGES.txt
 PERFORMANCE_OPTIMIZATION_REPORT.md
+tmpclaude-*-cwd

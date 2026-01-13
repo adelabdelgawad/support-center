@@ -163,21 +163,35 @@ fn hide_window(app: tauri::AppHandle) {
 /// Toggle the main application window visibility
 #[tauri::command]
 fn toggle_window(app: tauri::AppHandle) {
+    println!("[toggle_window] Called");
     if let Some(window) = app.get_webview_window("main") {
         let is_visible = window.is_visible().unwrap_or(false);
+        let is_minimized = window.is_minimized().unwrap_or(false);
+        println!("[toggle_window] is_visible={}, is_minimized={}", is_visible, is_minimized);
+
         if is_visible {
+            println!("[toggle_window] Hiding window...");
             let _ = window.hide();
+            println!("[toggle_window] Window hidden");
         } else {
-            if window.is_minimized().unwrap_or(false) {
+            println!("[toggle_window] Showing window...");
+            if is_minimized {
+                println!("[toggle_window] Unminimizing first...");
                 let _ = window.unminimize();
             }
             if let Some(floating_icon) = app.get_webview_window("floating-icon") {
+                println!("[toggle_window] Positioning near floating icon...");
                 position_window_near_icon(&window, &floating_icon);
             }
             let _ = window.show();
+            println!("[toggle_window] show() called");
             let _ = window.set_always_on_top(true);
+            println!("[toggle_window] set_always_on_top(true) called");
             let _ = window.set_focus();
+            println!("[toggle_window] set_focus() called - done");
         }
+    } else {
+        println!("[toggle_window] ERROR: Could not get main window");
     }
 }
 
@@ -1687,16 +1701,23 @@ pub fn run() {
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
+                    println!("[on_window_event] CloseRequested on '{}'", window.label());
                     api.prevent_close();
                     let _ = window.hide();
+                    println!("[on_window_event] Window hidden (close prevented)");
                 }
-                tauri::WindowEvent::Resized(_) => {
+                tauri::WindowEvent::Resized(size) => {
                     // On Windows, minimize triggers a resize event
                     // Check if window was minimized and convert to hide
                     if window.label() == "main" {
-                        if let Ok(true) = window.is_minimized() {
+                        let is_minimized = window.is_minimized().unwrap_or(false);
+                        println!("[on_window_event] Resized on 'main': {}x{}, is_minimized={}",
+                            size.width, size.height, is_minimized);
+                        if is_minimized {
+                            println!("[on_window_event] Detected minimize - converting to hide");
                             let _ = window.unminimize();
                             let _ = window.hide();
+                            println!("[on_window_event] Minimize-to-hide complete");
                         }
                     }
                 }

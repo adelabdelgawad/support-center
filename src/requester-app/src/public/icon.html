@@ -121,11 +121,10 @@
 
                 const { window: tauriWindow, core, event } = window.__TAURI__;
                 const appWindow = tauriWindow.getCurrentWindow();
+                let clickCount = 0;
+                let clickTimeout;
                 let isDragging = false;
-                let isMouseDown = false;
-                let startX = 0;
-                let startY = 0;
-                const DRAG_THRESHOLD = 5; // pixels
+                let mouseDownTime = 0;
 
                 // Listen for unread count updates from main app
                 event.listen('update-unread-count', (e) => {
@@ -141,51 +140,59 @@
                     }
                 });
 
-                // Track mouse down position for drag detection
-                iconContainer.addEventListener('mousedown', (e) => {
-                    isMouseDown = true;
+                // Drag functionality on container
+                iconContainer.addEventListener('mousedown', async (e) => {
+                    mouseDownTime = Date.now();
                     isDragging = false;
-                    startX = e.screenX;
-                    startY = e.screenY;
+
+                    setTimeout(async () => {
+                        const timeSinceDown = Date.now() - mouseDownTime;
+                        if (timeSinceDown > 150 && clickCount < 2) {
+                            e.preventDefault();
+                            isDragging = true;
+                            try {
+                                await appWindow.startDragging();
+                            } catch (err) {
+                                // Drag failed silently
+                            }
+                        }
+                    }, 150);
                 });
 
-                // Detect actual mouse movement to trigger drag
-                iconContainer.addEventListener('mousemove', async (e) => {
-                    if (!isMouseDown || isDragging) return;
-
-                    const dx = e.screenX - startX;
-                    const dy = e.screenY - startY;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-
-                    if (distance > DRAG_THRESHOLD) {
+                // Track mouse up to detect if it was a drag
+                iconContainer.addEventListener('mouseup', () => {
+                    const clickDuration = Date.now() - mouseDownTime;
+                    if (clickDuration > 150) {
                         isDragging = true;
-                        try {
-                            await appWindow.startDragging();
-                        } catch (err) {
-                            // Drag failed silently
-                        }
                     }
                 });
 
-                // Reset mouse state on release
-                iconContainer.addEventListener('mouseup', () => {
-                    isMouseDown = false;
-                });
-
-                // Single-click to toggle main window (only if not dragging)
+                // Double-click to toggle main window
                 iconContainer.addEventListener('click', () => {
                     if (isDragging) {
                         isDragging = false;
+                        clickCount = 0;
+                        clearTimeout(clickTimeout);
                         return;
                     }
 
-                    (async () => {
-                        try {
-                            await core.invoke('toggle_window');
-                        } catch (err) {
-                            // Toggle failed silently
-                        }
-                    })();
+                    clickCount++;
+                    clearTimeout(clickTimeout);
+
+                    if (clickCount === 2) {
+                        clickCount = 0;
+                        (async () => {
+                            try {
+                                await core.invoke('toggle_window');
+                            } catch (err) {
+                                // Toggle failed silently
+                            }
+                        })();
+                    } else {
+                        clickTimeout = setTimeout(() => {
+                            clickCount = 0;
+                        }, 300);
+                    }
                 });
             }
 
