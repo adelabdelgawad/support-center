@@ -81,7 +81,10 @@ export default defineConfig({
       minify: 'esbuild',
       // Additional esbuild options for better optimization
       esbuild: {
-        drop: ['console', 'debugger'], // Remove console.logs and debuggers in production
+        // Only remove console.log and console.debug in production
+        // Keep console.error and console.warn for production debugging
+        pure: ['console.log', 'console.debug'],
+        drop: ['debugger'], // Remove debugger statements
         legalComments: 'none', // Remove comment headers to reduce size
       },
     }),

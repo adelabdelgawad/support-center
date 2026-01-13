@@ -6,6 +6,7 @@
  */
 
 import { apiClient } from './client';
+import { logger } from '@/logging/logger';
 
 export interface ICEServer {
   urls: string | string[];
@@ -22,9 +23,10 @@ export interface TURNCredentials {
  * Fetch TURN credentials from backend
  *
  * Returns ICE servers configuration including STUN and TURN servers.
- * Falls back to STUN-only if TURN credentials cannot be fetched.
+ * Throws an error if TURN credentials cannot be fetched (fail-fast approach).
  *
  * @returns Promise resolving to array of ICE servers
+ * @throws Error if TURN credentials cannot be fetched
  *
  * @example
  * const iceServers = await fetchTURNCredentials();
@@ -32,9 +34,9 @@ export interface TURNCredentials {
  */
 export async function fetchTURNCredentials(): Promise<ICEServer[]> {
   try {
+    logger.info('remote-support', 'Fetching TURN credentials from backend');
     const response = await apiClient.get<TURNCredentials>('/turn/credentials');
     const credentials = response.data;
-    console.log('[TURN] Fetched credentials:', credentials.iceServers.length, 'servers');
 
     // Log TURN servers for debugging (without credentials)
     const turnServers = credentials.iceServers.filter(server => {
@@ -42,21 +44,31 @@ export async function fetchTURNCredentials(): Promise<ICEServer[]> {
       return urls.some(url => url.startsWith('turn:'));
     });
 
-    if (turnServers.length > 0) {
-      console.log('[TURN] TURN servers available:', turnServers.length);
-    } else {
+    logger.info('remote-support', 'TURN credentials fetched successfully', {
+      totalServers: credentials.iceServers.length,
+      turnServers: turnServers.length,
+      ttl: credentials.ttl,
+    });
+
+    // Also keep console.log for dev mode visibility
+    console.log('[TURN] Fetched credentials:', credentials.iceServers.length, 'servers');
+
+    if (turnServers.length === 0) {
+      logger.warn('remote-support', 'No TURN servers in response, only STUN available');
       console.warn('[TURN] No TURN servers in response, using STUN only');
     }
 
     return credentials.iceServers;
   } catch (error) {
-    console.error('[TURN] Failed to fetch credentials:', error);
-    console.warn('[TURN] Falling back to STUN-only mode');
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Fallback to public STUN servers
-    return [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ];
+    logger.error('remote-support', 'TURN credentials fetch failed', {
+      error: errorMessage,
+    });
+    console.error('[TURN] Failed to fetch credentials:', error);
+
+    // Fail fast: throw error instead of silent fallback to STUN
+    // This is critical because iceTransportPolicy='relay' requires TURN servers
+    throw new Error(`Remote access unavailable: Failed to fetch TURN credentials. ${errorMessage}`);
   }
 }

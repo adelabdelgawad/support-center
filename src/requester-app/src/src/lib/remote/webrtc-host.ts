@@ -18,6 +18,7 @@ import { createTauriScreenStream, ResolutionProfile, RESOLUTION_PROFILES } from 
 import { signalRRemoteAccess } from '@/signalr';
 import type { HubConnection } from '@microsoft/signalr';
 import * as signalR from '@microsoft/signalr';
+import { logger } from '@/logging/logger';
 
 interface SignalingMessage {
   type: string;
@@ -92,6 +93,10 @@ export class WebRTCHost {
    */
   async start(token: string): Promise<void> {
     try {
+      logger.info('remote-support', 'Starting remote access session', {
+        sessionId: this.sessionId,
+        resolutionProfile: this.resolutionProfile,
+      });
       console.log("[WebRTCHost] Starting remote access session:", this.sessionId);
 
       // Step 1: Start screen capture FIRST (user must select screen before we connect)
@@ -104,8 +109,16 @@ export class WebRTCHost {
       // Step 3: Start UAC detection
       await this.startUACDetection();
 
+      logger.info('remote-support', 'Session started successfully', {
+        sessionId: this.sessionId,
+      });
       console.log("[WebRTCHost] Session started successfully");
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('remote-support', 'Error starting session', {
+        sessionId: this.sessionId,
+        error: errorMessage,
+      });
       console.error("[WebRTCHost] Error starting session:", error);
       this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
       throw error;
@@ -561,6 +574,7 @@ export class WebRTCHost {
    */
   private async createPeerConnection(): Promise<void> {
     // Fetch TURN credentials from backend
+    logger.info('remote-support', 'Creating peer connection', { sessionId: this.sessionId });
     const iceServers = await fetchTURNCredentials();
 
     const configuration: RTCConfiguration = {
@@ -574,13 +588,24 @@ export class WebRTCHost {
 
     // Enhanced ICE logging for debugging NAT traversal
     pc.onicegatheringstatechange = () => {
+      logger.info('remote-support', 'ICE gathering state changed', {
+        sessionId: this.sessionId,
+        gatheringState: pc.iceGatheringState,
+      });
       console.log("[WebRTCHost] ICE gathering state:", pc.iceGatheringState);
     };
 
     pc.oniceconnectionstatechange = () => {
+      logger.info('remote-support', 'ICE connection state changed', {
+        sessionId: this.sessionId,
+        iceConnectionState: pc.iceConnectionState,
+      });
       console.log("[WebRTCHost] ICE connection state:", pc.iceConnectionState);
 
       if (pc.iceConnectionState === 'failed') {
+        logger.error('remote-support', 'ICE connection failed - NAT traversal issue', {
+          sessionId: this.sessionId,
+        });
         console.error("[WebRTCHost] ICE connection failed - NAT traversal issue");
       }
     };
@@ -602,6 +627,10 @@ export class WebRTCHost {
 
         // Log TURN success when relay candidate is found
         if (event.candidate.type === 'relay' || candidateStr.includes('typ relay')) {
+          logger.info('remote-support', 'TURN server working - relay candidate found', {
+            sessionId: this.sessionId,
+            protocol: event.candidate.protocol,
+          });
           console.log("✅ [WebRTCHost] TURN server is working! Relay candidate found.");
         }
 
@@ -618,6 +647,10 @@ export class WebRTCHost {
 
     // Handle connection state changes with faster disconnect detection
     pc.onconnectionstatechange = () => {
+      logger.info('remote-support', 'WebRTC connection state changed', {
+        sessionId: this.sessionId,
+        connectionState: pc.connectionState,
+      });
       console.log("[WebRTCHost] Connection state:", pc.connectionState);
       this.callbacks.onConnectionStateChange?.(pc.connectionState);
 
@@ -629,14 +662,24 @@ export class WebRTCHost {
 
       switch (pc.connectionState) {
         case "connected":
+          logger.info('remote-support', 'WebRTC peer connected successfully', {
+            sessionId: this.sessionId,
+          });
           console.log("[WebRTCHost] ✅ WebRTC peer connected");
           break;
 
         case "disconnected":
           // Start a timeout - if we don't recover in 5 seconds, stop the session
           // This is faster than waiting for 'failed' state (which can take 25-30s)
+          logger.warn('remote-support', 'WebRTC peer disconnected - starting recovery timeout', {
+            sessionId: this.sessionId,
+            timeoutMs: WebRTCHost.DISCONNECTED_TIMEOUT_MS,
+          });
           console.log("[WebRTCHost] ⚠️ WebRTC peer disconnected - starting 5s recovery timeout");
           this.disconnectedTimeoutId = setTimeout(() => {
+            logger.error('remote-support', 'WebRTC peer did not recover - stopping session', {
+              sessionId: this.sessionId,
+            });
             console.log("[WebRTCHost] ❌ WebRTC peer did not recover after 5s - stopping session");
             this.stop();
           }, WebRTCHost.DISCONNECTED_TIMEOUT_MS);
@@ -644,6 +687,10 @@ export class WebRTCHost {
 
         case "failed":
         case "closed":
+          logger.error('remote-support', 'WebRTC connection ended', {
+            sessionId: this.sessionId,
+            connectionState: pc.connectionState,
+          });
           console.log("[WebRTCHost] ❌ WebRTC connection", pc.connectionState, "- stopping session");
           this.stop();
           break;
@@ -994,6 +1041,9 @@ export class WebRTCHost {
    * IDEMPOTENT: Safe to call multiple times
    */
   async stop(): Promise<void> {
+    logger.info('remote-support', 'Stopping remote access session', {
+      sessionId: this.sessionId,
+    });
     console.log("[WebRTCHost] 🛑 Stopping session:", this.sessionId);
 
     // Clear any pending disconnect timeout (prevent duplicate stops)

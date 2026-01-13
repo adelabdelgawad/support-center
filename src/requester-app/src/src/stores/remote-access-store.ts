@@ -17,6 +17,7 @@ import { authStore } from "./auth-store";
 import type { SelectedSource } from "@/components/remote-access/screen-share-picker";
 import type { ResolutionProfile } from "@/lib/remote/tauri-screen-stream";
 import { invoke } from "@tauri-apps/api/core";
+import { logger } from "@/logging/logger";
 
 // Monitor info from Tauri
 interface MonitorInfo {
@@ -99,6 +100,13 @@ function createRemoteAccessStore() {
    * @param source - Optional source selection (if undefined, will use browser picker)
    */
   async function startWebRTCSession(sessionId: string, source?: SelectedSource): Promise<void> {
+    logger.info('remote-support', 'startWebRTCSession called', {
+      sessionId,
+      hasSource: !!source,
+      sourceType: source?.type,
+      sourceName: source?.name,
+      resolutionProfile: state.resolutionProfile,
+    });
     console.log("[RemoteAccess] ========================================");
     console.log("[RemoteAccess] 📞 startWebRTCSession called");
     console.log("[RemoteAccess] ========================================");
@@ -174,6 +182,10 @@ function createRemoteAccessStore() {
       console.log("[RemoteAccess] Calling webrtcHost.start()...");
       await webrtcHost.start(token);
 
+      logger.info('remote-support', 'WebRTC session started successfully', {
+        sessionId,
+        resolutionProfile,
+      });
       console.log("[RemoteAccess] ✅✅✅ WebRTC session started successfully");
       setState({
         activeSession: {
@@ -182,6 +194,12 @@ function createRemoteAccessStore() {
         },
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('remote-support', 'Failed to start WebRTC session', {
+        sessionId,
+        error: errorMessage,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
       console.error("[RemoteAccess] ❌❌❌ Failed to start WebRTC:");
       console.error("[RemoteAccess] Error type:", error instanceof Error ? error.constructor.name : typeof error);
       console.error("[RemoteAccess] Error message:", error instanceof Error ? error.message : String(error));
@@ -202,6 +220,7 @@ function createRemoteAccessStore() {
    */
   async function stopSession(): Promise<void> {
     if (webrtcHost) {
+      logger.info('remote-support', 'Stopping WebRTC session from store');
       console.log("[RemoteAccess] Stopping WebRTC session");
       await webrtcHost.stop();
       webrtcHost = null;
@@ -243,6 +262,11 @@ function createRemoteAccessStore() {
    * - Agent can switch to CONTROL mode instantly (no approval needed)
    */
   async function handleRemoteSessionAutoStart(data: RemoteAccessRequestData): Promise<void> {
+    logger.info('remote-support', 'Remote session auto-start received', {
+      sessionId: data.sessionId,
+      agentName: data.agentName,
+      requestTitle: data.requestTitle,
+    });
     console.log("[RemoteAccess] ========================================");
     console.log("[RemoteAccess] 🚀🚀🚀 SILENT REMOTE SESSION AUTO-START!");
     console.log("[RemoteAccess] ========================================");
@@ -288,8 +312,17 @@ function createRemoteAccessStore() {
       // Start WebRTC session immediately with primary monitor (completely silent)
       await startWebRTCSession(data.sessionId, primaryMonitor);
 
+      logger.info('remote-support', 'Silent auto-start complete - screen sharing active', {
+        sessionId: data.sessionId,
+      });
       console.log("[RemoteAccess] ✅✅✅ Silent auto-start complete - screen sharing active");
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('remote-support', 'Error in handleRemoteSessionAutoStart', {
+        sessionId: data.sessionId,
+        error: errorMessage,
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
       console.error("[RemoteAccess] ❌❌❌ Error in handleRemoteSessionAutoStart:");
       console.error("[RemoteAccess] Error type:", error instanceof Error ? error.constructor.name : typeof error);
       console.error("[RemoteAccess] Error message:", error instanceof Error ? error.message : String(error));
