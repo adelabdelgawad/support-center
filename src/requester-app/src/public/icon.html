@@ -122,7 +122,10 @@
                 const { window: tauriWindow, core, event } = window.__TAURI__;
                 const appWindow = tauriWindow.getCurrentWindow();
                 let isDragging = false;
-                let mouseDownTime = 0;
+                let isMouseDown = false;
+                let startX = 0;
+                let startY = 0;
+                const DRAG_THRESHOLD = 5; // pixels
 
                 // Listen for unread count updates from main app
                 event.listen('update-unread-count', (e) => {
@@ -138,34 +141,38 @@
                     }
                 });
 
-                // Drag functionality on container (hold > 150ms to drag)
-                iconContainer.addEventListener('mousedown', async (e) => {
-                    mouseDownTime = Date.now();
+                // Track mouse down position for drag detection
+                iconContainer.addEventListener('mousedown', (e) => {
+                    isMouseDown = true;
                     isDragging = false;
-
-                    setTimeout(async () => {
-                        const timeSinceDown = Date.now() - mouseDownTime;
-                        if (timeSinceDown > 150) {
-                            e.preventDefault();
-                            isDragging = true;
-                            try {
-                                await appWindow.startDragging();
-                            } catch (err) {
-                                // Drag failed silently
-                            }
-                        }
-                    }, 150);
+                    startX = e.screenX;
+                    startY = e.screenY;
                 });
 
-                // Track mouse up to detect if it was a drag
-                iconContainer.addEventListener('mouseup', () => {
-                    const clickDuration = Date.now() - mouseDownTime;
-                    if (clickDuration > 150) {
+                // Detect actual mouse movement to trigger drag
+                iconContainer.addEventListener('mousemove', async (e) => {
+                    if (!isMouseDown || isDragging) return;
+
+                    const dx = e.screenX - startX;
+                    const dy = e.screenY - startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > DRAG_THRESHOLD) {
                         isDragging = true;
+                        try {
+                            await appWindow.startDragging();
+                        } catch (err) {
+                            // Drag failed silently
+                        }
                     }
                 });
 
-                // Single-click to toggle main window
+                // Reset mouse state on release
+                iconContainer.addEventListener('mouseup', () => {
+                    isMouseDown = false;
+                });
+
+                // Single-click to toggle main window (only if not dragging)
                 iconContainer.addEventListener('click', () => {
                     if (isDragging) {
                         isDragging = false;
