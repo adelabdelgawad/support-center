@@ -56,16 +56,6 @@ export interface DeviceInfo {
 }
 
 /**
- * AD Login request (username + password)
- */
-export interface ADLoginRequest {
-  username: string;
-  password: string;
-  device_info?: DeviceInfo;
-  ip_address?: string;
-}
-
-/**
  * SSO Login request (username only, for domain users)
  */
 export interface SSOLoginRequest {

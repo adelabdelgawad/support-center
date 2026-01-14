@@ -20,7 +20,6 @@ import App from "./App";
 import "./index.css";
 
 // Lazy load pages for code splitting
-const LoginPage = lazy(() => import("@/routes/login"));
 const SSOPage = lazy(() => import("@/routes/sso"));
 const TicketsPage = lazy(() => import("@/routes/tickets"));
 const TicketChatPage = lazy(() => import("@/routes/ticket-chat"));
@@ -64,7 +63,6 @@ const dispose = render(
               <RealTimeProvider>
                 <Router root={App}>
                   <Route path="/" component={() => <Navigate href="/tickets" />} />
-                  <Route path="/login" component={LoginPage} />
                   <Route path="/sso" component={SSOPage} />
                   <Route path="/tickets" component={TicketsPage} />
                   <Route path="/tickets/:ticketId/chat" component={TicketChatPage} />

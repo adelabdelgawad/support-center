@@ -167,58 +167,6 @@ function createAuthStore() {
   };
 
   /**
-   * Login with AD credentials (username + password)
-   */
-  const loginWithAD = async (
-    username: string,
-    password: string
-  ): Promise<boolean> => {
-    setState({ isLoading: true, error: null, updateRequired: false, enforcementData: null });
-
-    try {
-      const api = await getAuthApi();
-      const result = await api.loginWithAD(username, password);
-
-      if (result.success && result.data) {
-        handleLoginSuccess(result.data); // Now sync
-        return true;
-      } else {
-        // Check for version enforcement (Phase 8)
-        if (result.versionEnforced && result.enforcementData) {
-          console.log("[auth-store] Version enforcement triggered");
-          setState({
-            token: null,
-            user: null,
-            sessionId: null,
-            isAuthenticated: false,
-            isLoading: false,
-            error: result.error || "Update required",
-            updateRequired: true,
-            enforcementData: result.enforcementData,
-          });
-          return false;
-        }
-
-        setState({
-          token: null,
-          user: null,
-          sessionId: null,
-          isAuthenticated: false,
-          isLoading: false,
-          error: result.error || "Login failed",
-        });
-        return false;
-      }
-    } catch (e) {
-      setState({
-        isLoading: false,
-        error: e instanceof Error ? e.message : "Login failed",
-      });
-      return false;
-    }
-  };
-
-  /**
    * Login with SSO (uses Windows session username)
    * @param isAutoLogin - Whether this is an automatic login attempt (affects state tracking)
    */
@@ -326,38 +274,6 @@ function createAuthStore() {
 
     console.log("Attempting automatic SSO login...");
     return loginSSO(true);
-  };
-
-  /**
-   * Logout and clear session
-   * Uses sync cache clear for immediate UI update
-   */
-  const logout = async (): Promise<void> => {
-    setState("isLoading", true);
-
-    try {
-      const api = await getAuthApi();
-      await api.logout();
-    } catch {
-      // Even if API call fails, clear local state
-    }
-
-    // Clear sync cache immediately (also persists async)
-    AuthStorageSync.clearAll();
-
-    setState({
-      token: null,
-      user: null,
-      sessionId: null,
-      isAuthenticated: false,
-      isLoading: false,
-      error: null,
-      // Mark that user explicitly logged out - prevents auto-login
-      // User must click manual login button to sign in again
-      explicitLogout: true,
-      autoLoginAttempted: true, // Treat as attempted to prevent auto-login
-      autoLoginInProgress: false,
-    });
   };
 
   /**
@@ -551,9 +467,7 @@ function createAuthStore() {
     state,
 
     // Actions
-    loginWithAD,
     loginSSO,
-    logout,
     initialize,
     refreshFromStorage, // New: non-blocking background refresh
     detectTauriEnvironment,

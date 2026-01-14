@@ -10,7 +10,6 @@ import { authStore, useUser } from "@/stores";
 import { useLanguage } from "@/context/language-context";
 import { SettingsDialog } from "@/components/settings-dialog";
 import {
-  LogOut,
   ChevronDown,
   Settings,
 } from "lucide-solid";
@@ -28,16 +27,6 @@ function ProfileMenu() {
   const [isSettingsOpen, setIsSettingsOpen] = createSignal(false);
   const user = useUser();
   const { t, direction } = useLanguage();
-
-  const handleSignOut = async () => {
-    try {
-      await authStore.logout();
-      // Redirect will be handled by App.tsx auth guard
-    } catch (error) {
-      console.error("Sign out failed:", error);
-    }
-    setIsOpen(false);
-  };
 
   const getUserInitials = () => {
     const currentUser = user();
@@ -143,20 +132,6 @@ function ProfileMenu() {
               >
                 <Settings class="h-4 w-4 text-muted-foreground" />
                 <span class="text-start">{t("layout.settings")}</span>
-              </button>
-            </div>
-
-            {/* Divider */}
-            <div class="h-px bg-gradient-to-r from-transparent via-border to-transparent mx-4" />
-
-            {/* Sign Out */}
-            <div class="p-3">
-              <button
-                onClick={handleSignOut}
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200 hover:shadow-sm group ltr:justify-start rtl:justify-end rtl:flex-row-reverse"
-              >
-                <LogOut class="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
-                <span class="text-start">{t("layout.signOut")}</span>
               </button>
             </div>
           </div>

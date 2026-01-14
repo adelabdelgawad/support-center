@@ -173,8 +173,8 @@ async function handleUnauthorized(): Promise<never> {
     console.error('[fetch-client] Failed to clear auth data:', error);
   }
 
-  // Redirect to login page with force reload to ensure clean state
-  window.location.href = '/login';
+  // Redirect to SSO page with force reload to ensure clean state
+  window.location.href = '/sso';
 
   // Force reload after a brief delay to ensure the href change takes effect
   setTimeout(() => {

@@ -3,7 +3,7 @@
  * PHASE 3 OPTIMIZATION: Centralized Icon Imports
  * ============================================================================
  *
- * This file imports ONLY the 30 icons actually used in the app.
+ * This file imports ONLY the 29 icons actually used in the app.
  *
  * Benefits:
  * - Better tree-shaking (only imports what's needed)
@@ -16,7 +16,7 @@
  * Use: import { Send } from '@/components/icons'
  */
 
-// Import only the icons we actually use (30 total)
+// Import only the icons we actually use (29 total)
 export {
   AlertCircle,
   ArrowLeft,
@@ -30,7 +30,6 @@ export {
   Inbox,
   Languages,
   Loader2,
-  LogOut,
   MessageCircle,
   Monitor,
   Moon,
@@ -51,7 +50,7 @@ export {
  * Icon inventory (for reference):
  *
  * Total icons in lucide-solid: 1000+
- * Icons actually used: 30
+ * Icons actually used: 29
  * Optimization potential: ~97% of icons not needed
  *
  * If tree-shaking doesn't work well, consider:

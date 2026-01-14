@@ -14,10 +14,8 @@ export { apiClient, getErrorMessage } from "./client";
 
 // Authentication
 export {
-  loginWithAD,
   loginWithSSO,
   performAutoSSO,
-  logout,
   validateToken,
   getCurrentUser,
   getDeviceInfo,

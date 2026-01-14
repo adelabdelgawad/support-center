@@ -90,7 +90,6 @@ const translations: Record<Language, Record<string, string>> = {
     // Chat Layout
     "layout.itSupport": "IT Support",
     "layout.settings": "Settings",
-    "layout.signOut": "Sign out",
     "layout.supportChat": "Support Chat",
     "layout.searchPlaceholder": "Search conversations...",
 
@@ -203,7 +202,6 @@ const translations: Record<Language, Record<string, string>> = {
     // Chat Layout
     "layout.itSupport": "الدعم الفني",
     "layout.settings": "الإعدادات",
-    "layout.signOut": "تسجيل الخروج",
     "layout.supportChat": "محادثة الدعم",
     "layout.searchPlaceholder": "البحث في المحادثات...",
 

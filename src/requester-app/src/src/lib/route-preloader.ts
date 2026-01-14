@@ -12,7 +12,7 @@ const preloadedRoutes = new Set<string>();
  * Preload a route chunk by its name.
  * Safe to call multiple times - only loads once.
  */
-export function preloadRoute(route: 'tickets' | 'ticket-chat' | 'settings' | 'login' | 'sso'): void {
+export function preloadRoute(route: 'tickets' | 'ticket-chat' | 'settings' | 'sso'): void {
   if (preloadedRoutes.has(route)) {
     return; // Already preloaded
   }
@@ -34,11 +34,6 @@ export function preloadRoute(route: 'tickets' | 'ticket-chat' | 'settings' | 'lo
       break;
     case 'settings':
       import('@/routes/settings').catch(() => {
-        preloadedRoutes.delete(route);
-      });
-      break;
-    case 'login':
-      import('@/routes/login').catch(() => {
         preloadedRoutes.delete(route);
       });
       break;

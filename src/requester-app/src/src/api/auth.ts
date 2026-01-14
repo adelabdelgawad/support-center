@@ -1,12 +1,10 @@
 /**
- * Authentication API - Login, logout, and token validation
+ * Authentication API - Login and token validation
  *
  * This module handles all authentication-related API calls.
  *
  * Endpoints used:
- * - POST /auth/ad-login - Active Directory login (username + password)
  * - POST /auth/sso-login - SSO login (username only, for domain users)
- * - POST /auth/logout - Logout and invalidate session
  * - POST /auth/validate - Validate current token
  * - GET /auth/me - Get current user info
  *
@@ -18,7 +16,6 @@
 import apiClient, { getErrorMessage, isAPIError } from "./client";
 import { logger } from "@/logging";
 import type {
-  ADLoginRequest,
   SSOLoginRequest,
   LoginResponse,
   User,
@@ -92,91 +89,6 @@ function extractEnforcementFromError(error: unknown): VersionEnforcementError | 
     installerUrl: data.installer_url || data.installerUrl || undefined,
     silentInstallArgs: data.silent_install_args || data.silentInstallArgs || "/qn /norestart",
   };
-}
-
-/**
- * Login with Active Directory credentials
- * @param username - AD username
- * @param password - AD password
- * @returns Auth result with login response or error (includes version enforcement info)
- */
-export async function loginWithAD(
-  username: string,
-  password: string
-): Promise<ExtendedAuthResult> {
-  try {
-    // Get app version, local IP, and computer name from Tauri if available
-    let appVersion = "1.0.0"; // Fallback version
-    let localIp: string | undefined;
-    let computerName: string | undefined;
-
-    try {
-      if (isTauri()) {
-        const { getVersion } = await import("@tauri-apps/api/app");
-        const { invoke } = await import("@tauri-apps/api/core");
-
-        appVersion = await getVersion();
-
-        // Get local IP address
-        try {
-          localIp = await invoke<string>("get_local_ip");
-        } catch (err) {
-          console.warn("Failed to get local IP:", err);
-        }
-
-        // Get computer name
-        try {
-          computerName = await invoke<string>("get_computer_name");
-        } catch (err) {
-          console.warn("Failed to get computer name:", err);
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to get app version:", err);
-    }
-
-    const deviceInfo = getDeviceInfo(appVersion, localIp, computerName);
-
-    const loginData: ADLoginRequest = {
-      username,
-      password,
-      device_info: deviceInfo,
-    };
-
-    const response = await apiClient.post<LoginResponse>(
-      "/auth/ad-login",
-      loginData
-    );
-
-    return {
-      success: true,
-      data: response.data,
-    };
-  } catch (error) {
-    // Log the error for debugging
-    logger.error('auth', 'AD login failed', {
-      errorType: typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error),
-      isAPIError: isAPIError(error),
-    });
-
-    // Check for version enforcement (HTTP 426)
-    const enforcementData = extractEnforcementFromError(error);
-    if (enforcementData) {
-      logger.warn('auth', 'Version enforcement detected during AD login', enforcementData);
-      return {
-        success: false,
-        error: enforcementData.message,
-        versionEnforced: true,
-        enforcementData,
-      };
-    }
-
-    return {
-      success: false,
-      error: getErrorMessage(error),
-    };
-  }
 }
 
 /**
@@ -259,23 +171,6 @@ export async function loginWithSSO(username: string): Promise<ExtendedAuthResult
       success: false,
       error: getErrorMessage(error),
     };
-  }
-}
-
-/**
- * Logout and invalidate current session
- */
-export async function logout(): Promise<void> {
-  try {
-    await apiClient.post("/auth/logout");
-  } catch (error) {
-    // Even if logout fails on server, clear local state
-    console.error("Logout error:", getErrorMessage(error));
-  } finally {
-    // Always clear local storage
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("session_id");
   }
 }
 

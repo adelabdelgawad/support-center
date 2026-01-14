@@ -140,7 +140,7 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
   createEffect(() => {
     const currentPath = location.pathname;
     const currentSearch = location.search;
-    const isAuthPage = currentPath === "/login" || currentPath === "/sso";
+    const isAuthPage = currentPath === "/sso";
     // Access store properties directly for reactivity tracking
     const isAuth = authStore.state.isAuthenticated;
     const rehydrating = authStore.state.isRehydrating;

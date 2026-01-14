@@ -179,17 +179,10 @@ export default function SSOPage() {
               </CardHeader>
               <CardContent class="text-center pb-8">
                 <p class="text-sm text-muted-foreground">
-                  Please use the desktop app for automatic sign-in, or use the
-                  manual login option below.
+                  Please use the desktop app for automatic sign-in.
+                  Contact IT support if you need assistance.
                 </p>
               </CardContent>
-              <CardFooter class="justify-center pb-8">
-                <A href="/login">
-                  <Button class="bg-primary hover:bg-primary/90">
-                    Go to Manual Login
-                  </Button>
-                </A>
-              </CardFooter>
             </Card>
           </div>
         </div>
@@ -316,7 +309,7 @@ export default function SSOPage() {
                       </p>
                     }>
                       <p class="text-sm text-muted-foreground">
-                        Click the button above to try signing in again, or use manual login below.
+                        Click the button above to try signing in again.
                       </p>
                     </Show>
                   }>
@@ -328,21 +321,9 @@ export default function SSOPage() {
               </CardContent>
 
               <CardFooter class="flex-col gap-6 border-t border-border px-8 py-6 -mb-6 rounded-b-lg">
-                {/* Manual login link */}
-                <div class="text-center">
-                  <span class="text-muted-foreground">Having trouble? </span>
-                  <A
-                    href="/login"
-                    class="font-semibold text-primary hover:underline"
-                  >
-                    Sign in manually
-                  </A>
-                </div>
-
-                {/* Help text */}
+                {/* Help text only - no manual login link */}
                 <p class="text-center text-xs text-muted-foreground max-w-sm mx-auto">
-                  If SSO doesn't work, use manual login with your Active Directory
-                  credentials.
+                  Contact IT support if you're having trouble signing in.
                 </p>
               </CardFooter>
             </Card>
