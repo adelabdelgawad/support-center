@@ -27,7 +27,7 @@ export function RemoteSessionBanner() {
         top: '0',
         left: '0',
         right: '0',
-        'z-index': 9999,
+        'z-index': 9998,
         'pointer-events': 'none'
       }}>
         <For each={remoteAccessStore.state.bannerSessions}>
@@ -35,46 +35,49 @@ export function RemoteSessionBanner() {
             <div
               style={{
                 position: 'relative',
-                'background': 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                background: 'linear-gradient(90deg, rgba(220, 38, 38, 0.95) 0%, rgba(185, 28, 28, 0.95) 100%)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
                 display: 'flex',
                 'align-items': 'center',
                 'justify-content': 'space-between',
-                padding: '12px 24px',
-                'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.3)',
+                padding: '16px 28px',
+                'box-shadow': '0 8px 32px rgba(220, 38, 38, 0.25), 0 1px 3px rgba(0, 0, 0, 0.1)',
                 'pointer-events': 'auto',
-                'border-bottom': '2px solid rgba(255, 255, 255, 0.2)'
+                'border-bottom': '1px solid rgba(255, 255, 255, 0.15)'
               }}
             >
               <div style={{
                 display: 'flex',
                 'align-items': 'center',
-                gap: '12px',
+                gap: '16px',
                 color: 'white',
                 flex: 1
               }}>
                 <div style={{
-                  width: '24px',
-                  height: '24px',
+                  width: '40px',
+                  height: '40px',
                   background: 'rgba(255, 255, 255, 0.2)',
-                  'border-radius': '50%',
+                  'border-radius': '12px',
                   display: 'flex',
                   'align-items': 'center',
                   'justify-content': 'center',
-                  'flex-shrink': 0
+                  'flex-shrink': 0,
+                  'box-shadow': '0 2px 8px rgba(0, 0, 0, 0.1)'
                 }}>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="2.5"
+                    stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    style={{ width: '14px', height: '14px' }}
+                    style={{ width: '20px', height: '20px' }}
                   >
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
                   </svg>
                 </div>
                 <div style={{
@@ -84,17 +87,19 @@ export function RemoteSessionBanner() {
                 }}>
                   <div style={{
                     'font-size': '13px',
-                    'font-weight': 700,
-                    'letter-spacing': '0.5px',
-                    'text-transform': 'uppercase'
-                  }}>
-                    A REMOTE ACCESS SESSION IS RUNNING
-                  </div>
-                  <div style={{
-                    'font-size': '11px',
+                    'font-weight': 600,
+                    'letter-spacing': '0.3px',
+                    'text-transform': 'uppercase',
                     opacity: 0.95
                   }}>
-                    Accessed by: {session.agentName}
+                    Remote Access Session Active
+                  </div>
+                  <div style={{
+                    'font-size': '13px',
+                    'font-weight': 500,
+                    opacity: 1
+                  }}>
+                    Accessed by: <strong>{session.agentName}</strong>
                   </div>
                 </div>
               </div>
@@ -104,41 +109,44 @@ export function RemoteSessionBanner() {
                   background: 'white',
                   color: '#dc2626',
                   border: 'none',
-                  padding: '8px 16px',
-                  'border-radius': '6px',
-                  'font-size': '12px',
+                  padding: '11px 24px',
+                  'border-radius': '10px',
+                  'font-size': '13px',
                   'font-weight': 600,
                   cursor: 'pointer',
-                  'transition': 'all 0.2s ease',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                   'text-transform': 'uppercase',
-                  'letter-spacing': '0.5px',
+                  'letter-spacing': '0.3px',
+                  'box-shadow': '0 2px 8px rgba(0, 0, 0, 0.1)',
                   'flex-shrink': 0
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f8f8f8';
-                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.background = '#fef2f2';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'white';
-                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
                 }}
               >
-                Terminate Session
+                End Session
               </button>
             </div>
           )}
         </For>
       </div>
       {/* Spacer to push content down when banner is visible */}
-      {/* Stacking: Add 64px for incoming banner if pending */}
+      {/* Stacking: Add 72px for incoming banner if pending */}
       <div style={{
-        height: `${remoteAccessStore.state.bannerSessions.length * 56}px`,
+        height: `${remoteAccessStore.state.bannerSessions.length * 64}px`,
         'pointer-events': 'none'
       }} />
       {/* Additional spacer for incoming banner (shown above this one) */}
       <Show when={remoteAccessStore.state.pendingSession}>
         <div style={{
-          height: '64px',
+          height: '72px',
           'pointer-events': 'none'
         }} />
       </Show>

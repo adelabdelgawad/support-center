@@ -118,133 +118,183 @@ export function IncomingRequestBanner() {
             <div
               style={{
                 position: 'relative',
-                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                display: 'flex',
-                'align-items': 'center',
-                'justify-content': 'space-between',
-                padding: '14px 24px',
-                'box-shadow': '0 4px 20px rgba(0, 0, 0, 0.3)',
+                width: '100%',
+                background: 'white',
+                'border-radius': '0 0 12px 12px',
+                padding: '12px 24px',
+                'box-shadow': '0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08)',
                 'pointer-events': 'auto',
-                'border-bottom': '2px solid rgba(255, 255, 255, 0.3)'
+                'max-width': '100%',
+                'box-sizing': 'border-box'
               }}
             >
+              {/* Badge - Top Left */}
+              <div style={{
+                display: 'inline-flex',
+                'align-items': 'center',
+                gap: '4px',
+                background: '#fef3c7',
+                padding: '2px 8px',
+                'border-radius': '8px',
+                'font-size': '9px',
+                'font-weight': 600,
+                color: '#b45309',
+                'text-transform': 'uppercase',
+                'letter-spacing': '0.3px',
+                'margin-bottom': '6px'
+              }}>
+                <span
+                  style={{
+                    width: '5px',
+                    height: '5px',
+                    background: '#f59e0b',
+                    'border-radius': '50%',
+                    animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    display: 'inline-block'
+                  }}
+                />
+                Incoming Request
+              </div>
+
+              {/* Icon + Text Row - Horizontal */}
               <div style={{
                 display: 'flex',
                 'align-items': 'center',
-                gap: '14px',
-                color: 'white',
-                flex: 1
+                gap: '12px'
               }}>
+                {/* Icon Container */}
                 <div style={{
-                  width: '32px',
-                  height: '32px',
-                  background: 'rgba(255, 255, 255, 0.25)',
-                  'border-radius': '50%',
+                  width: '36px',
+                  height: '36px',
+                  background: '#eff6ff',
+                  border: '1px solid #dbeafe',
+                  'border-radius': '10px',
                   display: 'flex',
                   'align-items': 'center',
                   'justify-content': 'center',
-                  'flex-shrink': 0,
-                  'font-size': '16px',
-                  'font-weight': 700
+                  'flex-shrink': 0
                 }}>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="2.5"
+                    stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    style={{ width: '14px', height: '14px' }}
+                    style={{ width: '17px', height: '17px', color: '#3b82f6' }}
                   >
-                    <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-                    <polyline points="12 6 12 12 16 14" />
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
                   </svg>
                 </div>
+
+                {/* Text Content */}
                 <div style={{
                   display: 'flex',
                   'flex-direction': 'column',
-                  gap: '3px'
+                  gap: '1px',
+                  flex: 1,
+                  'min-width': 0
                 }}>
+                  {/* Title */}
                   <div style={{
-                    'font-size': '14px',
-                    'font-weight': 700,
-                    'letter-spacing': '0.5px',
-                    'text-transform': 'uppercase'
+                    'font-size': '13px',
+                    'font-weight': 600,
+                    color: '#1e293b',
+                    'white-space': 'nowrap',
+                    overflow: 'hidden',
+                    'text-overflow': 'ellipsis'
                   }}>
-                    INCOMING REMOTE SUPPORT REQUEST
+                    {pending().requestTitle || 'Remote Support Session'}
                   </div>
+                  {/* Subtitle */}
                   <div style={{
                     'font-size': '12px',
-                    opacity: 0.95
+                    color: '#64748b'
                   }}>
-                    From: {pending().agentName}
+                    From:{' '}
+                    <span style={{
+                      color: '#334155',
+                      'font-weight': 500
+                    }}>
+                      {pending().agentName}
+                    </span>
                   </div>
                 </div>
-              </div>
-              <div style={{
-                display: 'flex',
-                gap: '10px',
-                'flex-shrink': 0
-              }}>
-                <button
-                  onClick={handleAccept}
-                  style={{
-                    background: 'white',
-                    color: '#16a34a',
-                    border: 'none',
-                    padding: '10px 20px',
-                    'border-radius': '6px',
-                    'font-size': '13px',
-                    'font-weight': 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    'text-transform': 'uppercase',
-                    'letter-spacing': '0.5px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#f0fdf4';
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'white';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  Accept
-                </button>
-                <button
-                  onClick={handleReject}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    color: 'white',
-                    border: '2px solid white',
-                    padding: '10px 20px',
-                    'border-radius': '6px',
-                    'font-size': '13px',
-                    'font-weight': 600,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    'text-transform': 'uppercase',
-                    'letter-spacing': '0.5px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  Reject
-                </button>
+
+                {/* Buttons - Side by Side */}
+                <div style={{
+                  display: 'flex',
+                  gap: '8px',
+                  'flex-shrink': 0
+                }}>
+                  <button
+                    onClick={handleAccept}
+                    style={{
+                      background: '#22c55e',
+                      color: 'white',
+                      border: 'none',
+                      padding: '7px 16px',
+                      'border-radius': '8px',
+                      'font-size': '12px',
+                      'font-weight': 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#16a34a';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#22c55e';
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={handleReject}
+                    style={{
+                      background: '#ef4444',
+                      color: 'white',
+                      border: 'none',
+                      padding: '7px 16px',
+                      'border-radius': '8px',
+                      'font-size': '12px',
+                      'font-weight': 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#dc2626';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#ef4444';
+                    }}
+                  >
+                    Reject
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Pulse animation keyframes */}
+            <style>{`
+              @keyframes pulse {
+                0%, 100% {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+                50% {
+                  opacity: 0.7;
+                  transform: scale(1.1);
+                }
+              }
+            `}</style>
           </div>
           {/* Spacer to push content down when banner is visible */}
           <div style={{
-            height: '64px',
+            height: '72px',
             'pointer-events': 'none'
           }} />
         </>

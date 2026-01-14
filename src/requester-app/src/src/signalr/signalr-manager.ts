@@ -549,6 +549,26 @@ class SignalRHubManager {
       // Register both PascalCase and lowercase versions
       this.connection.on('RemoteSessionEnded', handleRemoteSessionEnded);
       this.connection.on('remotesessionended', handleRemoteSessionEnded);
+
+      // Session left handler (when agent leaves the session)
+      const handleSessionLeft = (data: unknown) => {
+        console.log(`[SignalR:${this.hubType}] SessionLeft received:`, data);
+        const session = data as {
+          sessionId: string;
+        };
+        if (session?.sessionId) {
+          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
+            console.log(`[SignalR:${this.hubType}] Agent left session, clearing banner`);
+            remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
+          }).catch((err) => {
+            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
+          });
+        }
+      };
+
+      // Register both PascalCase and lowercase versions
+      this.connection.on('SessionLeft', handleSessionLeft);
+      this.connection.on('sessionleft', handleSessionLeft);
     }
   }
 
