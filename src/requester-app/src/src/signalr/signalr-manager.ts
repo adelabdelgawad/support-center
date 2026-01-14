@@ -522,6 +522,33 @@ class SignalRHubManager {
       // Register both PascalCase and lowercase versions
       this.connection.on('RemoteSessionReconnect', handleRemoteSessionReconnect);
       this.connection.on('remotesessionreconnect', handleRemoteSessionReconnect);
+
+      // Remote session ended handler (FR-007, FR-017, FR-018)
+      // Clears the user awareness banner when session terminates
+      const handleRemoteSessionEnded = (data: unknown) => {
+        console.log(`[SignalR:${this.hubType}] RemoteSessionEnded received:`, data);
+
+        const session = data as {
+          sessionId: string;
+          reason?: string;
+        };
+
+        if (session?.sessionId) {
+          // Import and call the remote access store handler
+          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
+            console.log(`[SignalR:${this.hubType}] Handling remote session ended`);
+            remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
+          }).catch((err) => {
+            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
+          });
+        } else {
+          console.warn(`[SignalR:${this.hubType}] RemoteSessionEnded received invalid data:`, data);
+        }
+      };
+
+      // Register both PascalCase and lowercase versions
+      this.connection.on('RemoteSessionEnded', handleRemoteSessionEnded);
+      this.connection.on('remotesessionended', handleRemoteSessionEnded);
     }
   }
 

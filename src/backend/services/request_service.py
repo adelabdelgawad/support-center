@@ -231,8 +231,8 @@ class RequestService:
 
         # Refresh the request to get all updated attributes including updated_at
         # This is critical to avoid MissingGreenlet error when serializing response
-        # Also refresh status relationship to get count_as_solved for trigger check
-        await db.refresh(request, ["status"])
+        # Refresh ALL attributes to ensure they're loaded before session closes
+        await db.refresh(request)
 
         logger.info(f"Updated service request {request_id} with validations")
         return request

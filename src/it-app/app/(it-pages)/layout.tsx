@@ -24,7 +24,7 @@ import { NavigationProgressProvider } from "@/lib/context/navigation-progress-co
 import {
   getNavigationCookieName,
   parseNavigationCookie,
-} from "@/lib/cache/navigation-cache";
+} from "@/lib/utils/navigation-cookies";
 import { serverFetch } from "@/lib/api/server-fetch";
 
 import { cookies, headers } from "next/headers";

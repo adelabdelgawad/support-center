@@ -1,18 +1,9 @@
 'use client';
 
-import useSWR from 'swr';
 import { useState, useCallback } from 'react';
 import { apiClient, getClientErrorMessage as getErrorMessage } from '@/lib/fetch/client';
-import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Priority, RequestStatus } from '@/types/metadata';
-
-/**
- * Fetcher function for SWR using apiClient
- */
-async function fetcher<T>(url: string): Promise<T> {
-  return apiClient.get<T>(url);
-}
 
 /**
  * Options for the useRequestTicket hook
@@ -28,19 +19,12 @@ export interface UseRequestTicketOptions {
 }
 
 /**
- * Mutation state for tracking loading states
- */
-interface MutationState {
-  isUpdatingStatus: boolean;
-  isUpdatingPriority: boolean;
-}
-
-/**
- * Hook to manage request/ticket status and priority updates with SWR
+ * Hook to manage request/ticket status and priority updates
+ * SIMPLIFIED: No SWR - uses simple state with backend response
  *
  * Features:
  * - Optimistic updates with automatic rollback on error
- * - Uses server response to update cache (no extra fetches)
+ * - Uses server response to update state (no extra fetches)
  * - Tracks individual loading states for status and priority
  * - Error handling with callbacks
  *
@@ -58,27 +42,12 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
     onError,
   } = options;
 
-  const [mutationState, setMutationState] = useState<MutationState>({
-    isUpdatingStatus: false,
-    isUpdatingPriority: false,
-  });
-
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.id !== undefined;
-
-  const { data, error, isLoading, mutate } = useSWR<ServiceRequestDetail>(
-    requestId ? cacheKeys.requestDetails(requestId) : null,
-    fetcher,
-    {
-      fallbackData: initialData,
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: true,
-    }
-  );
-
-  const ticket = data ?? initialData;
+  // Simple state for ticket data
+  const [ticket, setTicket] = useState<ServiceRequestDetail | undefined>(initialData);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isUpdatingPriority, setIsUpdatingPriority] = useState(false);
 
   /**
    * Update ticket status with optimistic update
@@ -88,12 +57,12 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
    */
   const updateStatus = useCallback(
     async (statusId: number, resolution?: string) => {
-      if (!ticket || mutationState.isUpdatingStatus) return;
+      if (!ticket || isUpdatingStatus) return;
 
       const previousData = ticket;
 
       // Start loading
-      setMutationState((prev) => ({ ...prev, isUpdatingStatus: true }));
+      setIsUpdatingStatus(true);
 
       // Optimistic update - use statuses array if available to get full status object
       const newStatus = statuses.find((s) => s.id === statusId);
@@ -112,7 +81,7 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
         }),
       };
 
-      await mutate(optimisticTicket, { revalidate: false });
+      setTicket(optimisticTicket);
 
       try {
         // Call API and get updated ticket
@@ -129,43 +98,39 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
 
         // Merge partial response with existing full ticket to preserve all fields
         // This prevents losing nested data like 'requester' when API returns only partial data
-        const updatedTicket = await mutate(prevTicket => {
-          if (!prevTicket) return prevTicket;
-          
-          // Merge the partial update with the existing ticket
-          const mergedTicket: ServiceRequestDetail = {
-            ...prevTicket,
-            ...partialUpdate,
-            // Preserve the requester from existing ticket if not in partial response
-            requester: partialUpdate.requester ?? prevTicket.requester,
-            // Preserve other nested objects that might be missing from partial response
-            status: partialUpdate.status ?? prevTicket.status,
-            priority: partialUpdate.priority ?? prevTicket.priority,
-          };
+        const mergedTicket: ServiceRequestDetail = {
+          ...ticket,
+          ...partialUpdate,
+          // Preserve the requester from existing ticket if not in partial response
+          requester: partialUpdate.requester ?? ticket.requester,
+          // Preserve other nested objects that might be missing from partial response
+          status: partialUpdate.status ?? ticket.status,
+          priority: partialUpdate.priority ?? ticket.priority,
+        };
 
-          return mergedTicket;
-        }, { revalidate: false });
+        setTicket(mergedTicket);
 
         // Notify callback
-        if (onStatusUpdate && updatedTicket) {
-          onStatusUpdate(updatedTicket);
+        if (onStatusUpdate) {
+          onStatusUpdate(mergedTicket);
         }
 
-        return updatedTicket;
+        return mergedTicket;
       } catch (err) {
         // Rollback on error
-        await mutate(previousData, { revalidate: false });
+        setTicket(previousData);
 
         const error = err instanceof Error ? err : new Error(getErrorMessage(err));
+        setError(error);
         if (onError) {
           onError(error);
         }
         throw error;
       } finally {
-        setMutationState((prev) => ({ ...prev, isUpdatingStatus: false }));
+        setIsUpdatingStatus(false);
       }
     },
-    [ticket, requestId, statuses, mutate, mutationState.isUpdatingStatus, onStatusUpdate, onError]
+    [ticket, requestId, statuses, isUpdatingStatus, onStatusUpdate, onError]
   );
 
   /**
@@ -175,12 +140,12 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
    */
   const updatePriority = useCallback(
     async (priorityId: number) => {
-      if (!ticket || mutationState.isUpdatingPriority) return;
+      if (!ticket || isUpdatingPriority) return;
 
       const previousData = ticket;
 
       // Start loading
-      setMutationState((prev) => ({ ...prev, isUpdatingPriority: true }));
+      setIsUpdatingPriority(true);
 
       // Optimistic update - use priorities array if available to get full priority object
       const newPriority = priorities.find((p) => p.id === priorityId);
@@ -197,7 +162,7 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
         }),
       };
 
-      await mutate(optimisticTicket, { revalidate: false });
+      setTicket(optimisticTicket);
 
       try {
         // Call API and get partial update response
@@ -208,51 +173,78 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
 
         // Merge partial response with existing full ticket to preserve all fields
         // This prevents losing nested data like 'requester' when API returns only partial data
-        const updatedTicket = await mutate(prevTicket => {
-          if (!prevTicket) return prevTicket;
-          
-          // Merge the partial update with the existing ticket
-          const mergedTicket: ServiceRequestDetail = {
-            ...prevTicket,
-            ...partialUpdate,
-            // Preserve the requester from existing ticket if not in partial response
-            requester: partialUpdate.requester ?? prevTicket.requester,
-            // Preserve other nested objects that might be missing from partial response
-            status: partialUpdate.status ?? prevTicket.status,
-            priority: partialUpdate.priority ?? prevTicket.priority,
-          };
+        const mergedTicket: ServiceRequestDetail = {
+          ...ticket,
+          ...partialUpdate,
+          // Preserve the requester from existing ticket if not in partial response
+          requester: partialUpdate.requester ?? ticket.requester,
+          // Preserve other nested objects that might be missing from partial response
+          status: partialUpdate.status ?? ticket.status,
+          priority: partialUpdate.priority ?? ticket.priority,
+        };
 
-          return mergedTicket;
-        }, { revalidate: false });
+        setTicket(mergedTicket);
 
         // Notify callback
-        if (onPriorityUpdate && updatedTicket) {
-          onPriorityUpdate(updatedTicket);
+        if (onPriorityUpdate) {
+          onPriorityUpdate(mergedTicket);
         }
 
-        return updatedTicket;
+        return mergedTicket;
       } catch (err) {
         // Rollback on error
-        await mutate(previousData, { revalidate: false });
+        setTicket(previousData);
 
         const error = err instanceof Error ? err : new Error(getErrorMessage(err));
+        setError(error);
         if (onError) {
           onError(error);
         }
         throw error;
       } finally {
-        setMutationState((prev) => ({ ...prev, isUpdatingPriority: false }));
+        setIsUpdatingPriority(false);
       }
     },
-    [ticket, requestId, priorities, mutate, mutationState.isUpdatingPriority, onPriorityUpdate, onError]
+    [ticket, requestId, priorities, isUpdatingPriority, onPriorityUpdate, onError]
   );
 
   /**
    * Force refresh the ticket data from server
    */
   const refresh = useCallback(async () => {
-    await mutate();
-  }, [mutate]);
+    try {
+      setIsLoading(true);
+      const data = await apiClient.get<ServiceRequestDetail>(
+        `/api/requests-details/${requestId}`
+      );
+      setTicket(data);
+      setError(undefined);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(getErrorMessage(err));
+      setError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [requestId]);
+
+  /**
+   * Update ticket state directly (for WebSocket updates)
+   * Accepts a callback function that receives current ticket and returns updated ticket
+   */
+  const mutate = useCallback(
+    async (
+      updater?: ServiceRequestDetail | ((prev: ServiceRequestDetail | undefined) => ServiceRequestDetail | undefined),
+      _options?: { revalidate?: boolean }
+    ) => {
+      if (typeof updater === 'function') {
+        setTicket((prev) => updater(prev));
+      } else if (updater) {
+        setTicket(updater);
+      }
+      return ticket;
+    },
+    [ticket]
+  );
 
   return {
     // Data
@@ -261,9 +253,9 @@ export function useRequestTicket(options: UseRequestTicketOptions) {
     error,
 
     // Mutation states
-    isUpdatingStatus: mutationState.isUpdatingStatus,
-    isUpdatingPriority: mutationState.isUpdatingPriority,
-    isUpdating: mutationState.isUpdatingStatus || mutationState.isUpdatingPriority,
+    isUpdatingStatus,
+    isUpdatingPriority,
+    isUpdating: isUpdatingStatus || isUpdatingPriority,
 
     // Actions
     updateStatus,

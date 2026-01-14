@@ -1,88 +1,61 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import useSWR from 'swr';
+import { useEffect, useState, useCallback } from 'react';
 import { apiClient } from '@/lib/fetch/client';
 import type { Priority, RequestStatus } from '@/types/metadata';
 import type { Technician } from '@/types/metadata';
-import {
-  getCachedPriorities,
-  setCachedPriorities,
-  getCachedStatuses,
-  setCachedStatuses,
-  getCachedTechnicians,
-  setCachedTechnicians,
-} from '@/lib/cache/metadata-cache';
-
-/**
- * Fetcher function for SWR using apiClient
- */
-async function fetcher<T>(url: string): Promise<T> {
-  return apiClient.get<T>(url);
-}
-
-/**
- * SWR configuration for global metadata
- * Uses longer cache times and disabled revalidation since this data changes infrequently
- *
- * IMPORTANT: revalidateOnMount is enabled to ensure we always have fresh data,
- * but we use localStorage cache for instant rendering during the fetch.
- */
-const METADATA_SWR_CONFIG = {
-  revalidateOnFocus: false,
-  revalidateOnReconnect: false,
-  revalidateOnMount: true, // Revalidate to ensure fresh data
-  revalidateIfStale: true,
-  dedupingInterval: 300000, // 5 minutes - avoid refetching when navigating between tickets
-  focusThrottleInterval: 300000, // 5 minutes
-};
 
 /**
  * Hook to fetch and cache priorities globally
- * Uses localStorage for instant rendering + SWR for background revalidation
  *
- * HYDRATION SAFETY:
- * - Server and client initial render use initialData or empty array
- * - After hydration, reads from localStorage cache
- * - SWR fetches fresh data in background
+ * SIMPLIFIED: No localStorage - uses simple state with backend response
  *
  * @param initialData - Initial priorities data from server (for SSR)
- * @returns SWR response with priorities data
+ * @returns Priorities data and loading state
  */
 export function useGlobalPriorities(initialData?: Priority[]) {
-  // Track hydration state
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [cachedData, setCachedData] = useState<Priority[] | null>(null);
+  const [priorities, setPriorities] = useState<Priority[]>(initialData || []);
+  const [isLoading, setIsLoading] = useState(!initialData?.length);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  // After hydration, read from localStorage
+  // Fetch fresh data on mount (only if no initialData)
   useEffect(() => {
-    setIsHydrated(true);
-    const cached = getCachedPriorities();
-    if (cached) setCachedData(cached);
+    // Skip fetch if we have fresh SSR data
+    if (initialData?.length) {
+      return;
+    }
+
+    const fetchPriorities = async () => {
+      try {
+        const data = await apiClient.get<Priority[]>('/api/priorities');
+        setPriorities(data);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch priorities'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPriorities();
+  }, [initialData]);
+
+  const mutate = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiClient.get<Priority[]>('/api/priorities');
+      setPriorities(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch priorities'));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Determine fallback (prefer initialData, then cache, then empty)
-  const fallbackData = initialData?.length ? initialData : (isHydrated && cachedData ? cachedData : undefined);
-
-  const { data, error, isLoading, mutate } = useSWR<Priority[]>(
-    '/api/priorities',
-    fetcher,
-    {
-      ...METADATA_SWR_CONFIG,
-      fallbackData,
-      onSuccess: (freshData) => {
-        // Update localStorage cache
-        if (freshData) {
-          setCachedPriorities(freshData);
-          setCachedData(freshData);
-        }
-      },
-    }
-  );
-
   return {
-    priorities: data ?? cachedData ?? initialData ?? [],
-    isLoading: isLoading && !data && !cachedData,
+    priorities,
+    isLoading,
     error,
     mutate,
   };
@@ -90,45 +63,53 @@ export function useGlobalPriorities(initialData?: Priority[]) {
 
 /**
  * Hook to fetch and cache request statuses globally
- * Uses localStorage for instant rendering + SWR for background revalidation
+ *
+ * SIMPLIFIED: No localStorage - uses simple state with backend response
  *
  * @param initialData - Initial statuses data from server (for SSR)
- * @returns SWR response with statuses data
+ * @returns Statuses data and loading state
  */
 export function useGlobalStatuses(initialData?: RequestStatus[]) {
-  // Track hydration state
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [cachedData, setCachedData] = useState<RequestStatus[] | null>(null);
+  const [statuses, setStatuses] = useState<RequestStatus[]>(initialData || []);
+  const [isLoading, setIsLoading] = useState(!initialData?.length);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  // After hydration, read from localStorage
   useEffect(() => {
-    setIsHydrated(true);
-    const cached = getCachedStatuses();
-    if (cached) setCachedData(cached);
+    if (initialData?.length) {
+      return;
+    }
+
+    const fetchStatuses = async () => {
+      try {
+        const data = await apiClient.get<RequestStatus[]>('/api/metadata/statuses');
+        setStatuses(data);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch statuses'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStatuses();
+  }, [initialData]);
+
+  const mutate = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiClient.get<RequestStatus[]>('/api/metadata/statuses');
+      setStatuses(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch statuses'));
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Determine fallback (prefer initialData, then cache, then empty)
-  const fallbackData = initialData?.length ? initialData : (isHydrated && cachedData ? cachedData : undefined);
-
-  const { data, error, isLoading, mutate } = useSWR<RequestStatus[]>(
-    '/api/metadata/statuses',
-    fetcher,
-    {
-      ...METADATA_SWR_CONFIG,
-      fallbackData,
-      onSuccess: (freshData) => {
-        // Update localStorage cache
-        if (freshData) {
-          setCachedStatuses(freshData);
-          setCachedData(freshData);
-        }
-      },
-    }
-  );
-
   return {
-    statuses: data ?? cachedData ?? initialData ?? [],
-    isLoading: isLoading && !data && !cachedData,
+    statuses,
+    isLoading,
     error,
     mutate,
   };
@@ -136,87 +117,91 @@ export function useGlobalStatuses(initialData?: RequestStatus[]) {
 
 /**
  * Hook to fetch and cache technicians globally
- * Uses localStorage for instant rendering + SWR for background revalidation
+ *
+ * SIMPLIFIED: No localStorage - uses simple state with backend response
  *
  * @param initialData - Initial technicians data from server (for SSR)
- * @returns SWR response with technicians data and helper functions
+ * @returns Technicians data with helper functions
  */
 export function useGlobalTechnicians(initialData?: Technician[]) {
-  // Track hydration state
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [cachedData, setCachedData] = useState<Technician[] | null>(null);
+  const [technicians, setTechnicians] = useState<Technician[]>(initialData || []);
+  const [isLoading, setIsLoading] = useState(!initialData?.length);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  // After hydration, read from localStorage
   useEffect(() => {
-    setIsHydrated(true);
-    const cached = getCachedTechnicians();
-    if (cached) setCachedData(cached);
-  }, []);
-
-  // Determine fallback (prefer initialData, then cache, then empty)
-  const fallbackData = initialData?.length ? initialData : (isHydrated && cachedData ? cachedData : undefined);
-
-  const { data, error, isLoading, mutate } = useSWR<Technician[]>(
-    '/api/technicians',
-    fetcher,
-    {
-      ...METADATA_SWR_CONFIG,
-      fallbackData,
-      onSuccess: (freshData) => {
-        // Update localStorage cache
-        if (freshData) {
-          setCachedTechnicians(freshData);
-          setCachedData(freshData);
-        }
-      },
+    if (initialData?.length) {
+      return;
     }
-  );
 
-  const technicians = data ?? cachedData ?? initialData ?? [];
+    const fetchTechnicians = async () => {
+      try {
+        const data = await apiClient.get<Technician[]>('/api/technicians');
+        setTechnicians(data);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTechnicians();
+  }, [initialData]);
 
   /**
    * Get a technician by their user ID (UUID string)
    */
-  const getTechnicianById = (userId: string): Technician | undefined => {
+  const getTechnicianById = useCallback((userId: string): Technician | undefined => {
     return technicians.find((t) => String(t.id) === String(userId));
-  };
+  }, [technicians]);
 
   /**
    * Get multiple technicians by their IDs (UUID strings)
    */
-  const getTechniciansByIds = (userIds: string[]): Technician[] => {
+  const getTechniciansByIds = useCallback((userIds: string[]): Technician[] => {
     return technicians.filter((t) => userIds.includes(String(t.id)));
-  };
+  }, [technicians]);
 
   /**
    * Check if a user ID belongs to a technician (UUID string)
    */
-  const isTechnician = (userId: string): boolean => {
+  const isTechnician = useCallback((userId: string): boolean => {
     return technicians.some((t) => String(t.id) === String(userId));
-  };
+  }, [technicians]);
 
   /**
    * Search technicians by name or username
    */
-  const searchTechnicians = (query: string): Technician[] => {
+  const searchTechnicians = useCallback((query: string): Technician[] => {
     const lowerQuery = query.toLowerCase();
     return technicians.filter(
       (t) =>
         t.username.toLowerCase().includes(lowerQuery) ||
         t.fullName?.toLowerCase().includes(lowerQuery)
     );
-  };
+  }, [technicians]);
 
   /**
-   * Force refresh the technicians cache
+   * Force refresh the technicians data
    */
-  const refresh = async () => {
-    await mutate();
-  };
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiClient.get<Technician[]>('/api/technicians');
+      setTechnicians(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const mutate = refresh;
 
   return {
     technicians,
-    isLoading: isLoading && !data && !cachedData,
+    isLoading,
     error,
     getTechnicianById,
     getTechniciansByIds,
@@ -232,7 +217,6 @@ export function useGlobalTechnicians(initialData?: Technician[]) {
  * Useful for admin panels or when metadata is updated
  */
 export function useRefreshGlobalMetadata() {
-  // These would be mutable refs from the hooks above
   const refresh = async (mutateCallbacks?: {
     priorities?: () => Promise<any>;
     statuses?: () => Promise<any>;

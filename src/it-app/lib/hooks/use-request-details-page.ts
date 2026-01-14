@@ -2,12 +2,13 @@
 
 /**
  * Request Details Page Hook
+ * SIMPLIFIED: No SWR - uses simple state
  *
- * Fetches full request details page data using SWR.
+ * Fetches full request details page data.
  * Enables instant rendering with loading state + background data fetching.
  */
 
-import useSWR from 'swr';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchRequestDetailsPageData,
   type RequestDetailsPageData,
@@ -35,24 +36,72 @@ export function useRequestDetailsPage(
 ): UseRequestDetailsPageResult {
   const { currentUserId, currentUserIsTechnician = false } = options;
 
-  const { data, error, isLoading, isValidating, mutate } = useSWR<RequestDetailsPageData | null>(
-    requestId ? `/api/requests-details/${requestId}/page-data` : null,
-    () => fetchRequestDetailsPageData(requestId!, currentUserId, currentUserIsTechnician),
-    {
-      revalidateOnMount: true,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: true,
-      dedupingInterval: 5000,
-      errorRetryCount: 2,
-    }
-  );
+  const [data, setData] = useState<RequestDetailsPageData | null>(null);
+  const [isLoading, setIsLoading] = useState(!!requestId);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  const refresh = async () => {
-    await mutate();
-  };
+  // Track if component is mounted
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Fetch data when requestId changes
+  useEffect(() => {
+    if (!requestId) {
+      setData(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const doFetch = async () => {
+      if (!isMountedRef.current) return;
+
+      setIsLoading(true);
+      setIsValidating(true);
+      try {
+        const result = await fetchRequestDetailsPageData(requestId, currentUserId, currentUserIsTechnician);
+        if (isMountedRef.current) {
+          setData(result);
+          setError(undefined);
+        }
+      } catch (err) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err : new Error('Failed to fetch request details'));
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsValidating(false);
+        }
+      }
+    };
+
+    doFetch();
+  }, [requestId, currentUserId, currentUserIsTechnician]);
+
+  const refresh = useCallback(async () => {
+    if (!requestId) return;
+
+    setIsValidating(true);
+    try {
+      const result = await fetchRequestDetailsPageData(requestId, currentUserId, currentUserIsTechnician);
+      setData(result);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch request details'));
+    } finally {
+      setIsValidating(false);
+    }
+  }, [requestId, currentUserId, currentUserIsTechnician]);
 
   return {
-    data: data ?? null,
+    data,
     isLoading,
     isValidating,
     error,

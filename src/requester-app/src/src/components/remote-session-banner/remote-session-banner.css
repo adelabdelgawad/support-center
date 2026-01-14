@@ -1,0 +1,131 @@
+/**
+ * Remote Session Banner Styles
+ *
+ * Requirements:
+ * - FR-002: Fixed top banner, full-width, non-dismissable
+ * - FR-005: Remain visible during all navigation
+ * - FR-013: position:fixed to stay visible during scroll
+ * - FR-016: pointer-events handling for non-interactive areas
+ * - FR-027: Responsive for small windows
+ */
+
+.remote-session-banner {
+  /* Fixed positioning at top of viewport */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999; /* Above everything including modals */
+
+  /* Visual styling - warning/alert appearance */
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  padding: 8px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Ensure banner takes full width */
+  width: 100%;
+  box-sizing: border-box;
+
+  /* Prevent user from dismissing or interacting */
+  user-select: none;
+
+  /* Smooth appearance */
+  animation: banner-slide-in 0.3s ease-out;
+}
+
+@keyframes banner-slide-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.remote-session-banner__content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.remote-session-banner__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.remote-session-banner__text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.remote-session-banner__title {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.remote-session-banner__separator {
+  opacity: 0.7;
+}
+
+.remote-session-banner__agent {
+  opacity: 0.95;
+  font-weight: 400;
+}
+
+/* Responsive adjustments for small windows */
+@media (max-width: 480px) {
+  .remote-session-banner {
+    padding: 6px 12px;
+  }
+
+  .remote-session-banner__text {
+    font-size: 12px;
+    gap: 4px;
+  }
+
+  .remote-session-banner__separator {
+    display: none;
+  }
+
+  .remote-session-banner__content {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .remote-session-banner__icon svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Very small screens - stack vertically */
+@media (max-width: 320px) {
+  .remote-session-banner__text {
+    flex-direction: column;
+    text-align: center;
+  }
+}

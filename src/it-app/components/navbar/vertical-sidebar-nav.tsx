@@ -41,9 +41,6 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { DynamicIcon } from "@/components/ui/dynamic-icon";
-import { clearAllNavigationCaches } from "@/lib/cache/navigation-cache";
-import { clearCustomViewCache } from "@/lib/cache/custom-views-cache";
-import { clearAllMetadataCaches } from "@/lib/cache/metadata-cache";
 
 // LocalStorage key for persisting expanded nav items
 const NAV_EXPANDED_KEY = 'nav-expanded-items';
@@ -214,9 +211,6 @@ export function VerticalSidebarNav({
   const handleLogout = async () => {
     try {
       // Clear all caches before logout
-      clearAllNavigationCaches();
-      clearCustomViewCache();
-      clearAllMetadataCaches();
       // Clear expanded nav items
       if (typeof window !== 'undefined') {
         localStorage.removeItem(NAV_EXPANDED_KEY);

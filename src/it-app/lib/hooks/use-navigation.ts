@@ -2,31 +2,18 @@
 
 /**
  * Navigation Hook
+ * SIMPLIFIED: No localStorage caching - uses simple state with backend response
  *
- * SWR-based hook for fetching and caching user navigation pages.
- * Provides instant rendering with cached data + background revalidation.
+ * Fetches navigation pages with background revalidation.
  *
  * Features:
- * - Renders immediately with localStorage cache (after hydration)
- * - Fetches fresh data in background
- * - Updates cache on successful fetch
+ * - Fetches fresh data from API
  * - Handles auth errors gracefully
- *
- * HYDRATION SAFETY:
- * - Server and client initial render use empty/initialPages data
- * - After hydration, reads from localStorage cache
- * - This prevents hydration mismatch errors
  */
 
-import { useEffect, useState } from 'react';
-import useSWR from 'swr';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Page } from '@/types/pages';
 import { fetchUserPages } from '@/lib/api/navigation';
-import {
-  getCachedNavigation,
-  setCachedNavigation,
-} from '@/lib/cache/navigation-cache';
-import { cacheKeys } from '@/lib/swr/cache-keys';
 
 interface UseNavigationOptions {
   /**
@@ -74,80 +61,73 @@ export function useNavigation(
 ): UseNavigationResult {
   const { initialPages } = options;
 
-  // Track hydration state to avoid reading localStorage during SSR
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [cachedPages, setCachedPages] = useState<Page[]>([]);
+  const [pages, setPages] = useState<Page[]>(initialPages ?? []);
+  const [isLoading, setIsLoading] = useState(!initialPages?.length);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-  // After hydration, read from localStorage cache
+  // Track if component is mounted
+  const isMountedRef = useRef(true);
+
   useEffect(() => {
-    setIsHydrated(true);
-    if (userId) {
-      const cached = getCachedNavigation(userId);
-      if (cached && cached.length > 0) {
-        setCachedPages(cached);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Fetch fresh data
+  useEffect(() => {
+    if (!userId) return;
+
+    const doFetch = async () => {
+      if (!isMountedRef.current) return;
+
+      setIsValidating(true);
+      try {
+        const freshData = await fetchUserPages(userId);
+        if (isMountedRef.current) {
+          setPages(freshData);
+          setError(null);
+        }
+      } catch (err) {
+        if (isMountedRef.current) {
+          console.warn('[useNavigation] Fetch error:', err);
+          setError(err instanceof Error ? err : new Error('Failed to fetch navigation'));
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsValidating(false);
+        }
       }
+    };
+
+    doFetch();
+  }, [userId]);
+
+  // Refresh function
+  const refresh = useCallback(async () => {
+    if (!userId) return;
+
+    setIsValidating(true);
+    try {
+      const freshData = await fetchUserPages(userId);
+      setPages(freshData);
+      setError(null);
+    } catch (err) {
+      console.warn('[useNavigation] Refresh error:', err);
+      setError(err instanceof Error ? err : new Error('Failed to fetch navigation'));
+    } finally {
+      setIsValidating(false);
     }
   }, [userId]);
 
-  // Determine fallback data - only use cache after hydration
-  // During SSR and initial hydration, use initialPages or empty
-  const fallbackData = isHydrated && cachedPages.length > 0
-    ? cachedPages
-    : (initialPages?.length ? initialPages : undefined);
-
-  // SWR for background fetching with cache-first strategy
-  const {
-    data,
-    error,
-    isLoading,
-    isValidating,
-    mutate,
-  } = useSWR<Page[]>(
-    userId ? cacheKeys.userPages(userId) : null,
-    () => fetchUserPages(userId!),
-    {
-      fallbackData,
-      revalidateOnMount: true, // Always check for fresh data
-      revalidateIfStale: true,
-      revalidateOnFocus: false, // Don't refetch on tab focus
-      revalidateOnReconnect: true,
-      dedupingInterval: 5000, // Dedupe requests within 5 seconds
-      errorRetryCount: 2,
-      errorRetryInterval: 3000,
-      onSuccess: (freshData) => {
-        // Update localStorage cache with fresh data
-        if (userId && freshData) {
-          setCachedNavigation(userId, freshData);
-          setCachedPages(freshData);
-        }
-      },
-      onError: (err) => {
-        console.warn('[useNavigation] Fetch error:', err);
-        // On auth error, don't clear cache - let the app handle redirect
-      },
-    }
-  );
-
-  // Compute final pages (prefer SWR data, then cached with data, then initialPages)
-  // Note: must check length because empty array is truthy
-  const pages = data
-    ?? (cachedPages.length > 0 ? cachedPages : null)
-    ?? initialPages
-    ?? [];
-
-  // Compute loading state - only true if no data at all
-  const loading = isLoading && pages.length === 0;
-
-  // Refresh function
-  const refresh = async () => {
-    await mutate();
-  };
-
   return {
     pages,
-    isLoading: loading,
+    isLoading,
     isValidating,
-    error: error ?? null,
+    error,
     refresh,
   };
 }

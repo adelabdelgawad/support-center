@@ -7,12 +7,12 @@
  * Features:
  * - **Auto-revalidation**: Data refreshes every 30 seconds automatically via refreshInterval
  * - **Server-Side Rendering**: Initial data fetched on page load (NO client refetch on mount/focus/reconnect)
- * - Uses SWR for data management with optimistic updates
+ * - Uses SWR for requests list, simple state hooks for counts and business units
  * - Real-time view counts and request data
  * - Background revalidation without blocking UI
  * - **URL-driven state**: Reads current view/page from URL for client-side navigation
  *
- * Architecture: SSR (initial load, no spinner) → SWR (background refresh every 30s)
+ * Architecture: SSR (initial load, no spinner) → SWR/State hooks (background refresh every 30s)
  */
 
 import { createContext, useContext, useMemo, useCallback, useEffect, useRef, useState } from 'react';
@@ -137,7 +137,7 @@ export function RequestsListProvider({
   const [isViewChanging, setIsViewChanging] = useState(false);
   const lastLoadedViewRef = useRef<ViewType>(initialView);
 
-  // Use SWR hook with auto-revalidation every 10 seconds for tickets
+  // Use SWR hook with auto-revalidation every 30 seconds for tickets
   // Pass URL-derived values so data updates on client-side navigation
   const {
     tickets,
@@ -156,7 +156,7 @@ export function RequestsListProvider({
     urlBusinessUnitIds
   );
 
-  // Use dedicated SWR hook for view counts with optimistic updates
+  // Use dedicated state hook for view counts with optimistic updates (auto-refresh every 30s)
   const {
     counts,
     isCountsReady,
@@ -166,7 +166,7 @@ export function RequestsListProvider({
     incrementCount,
   } = useViewCounts(initialData.counts);
 
-  // Use SWR hook for business units with server-side data as fallback
+  // Use state hook for business units with server-side data as fallback (auto-refresh every 30s)
   // Pass current view (from URL) to filter counts by the active view
   const {
     allBusinessUnits,

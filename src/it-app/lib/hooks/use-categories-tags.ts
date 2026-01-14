@@ -1,9 +1,10 @@
 'use client';
 
-import useSWR from 'swr';
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Hook for fetching categories with subcategories
+ * SIMPLIFIED: No SWR - uses simple state with initial data support
  * Used in the request details sidebar for category/subcategory selection
  */
 
@@ -51,24 +52,51 @@ async function fetchCategories(): Promise<Category[]> {
  * Hook to fetch all categories with subcategories
  *
  * @param initialData - Initial categories data from server (for SSR)
- * @returns SWR response with categories data
+ * @returns Categories data and loading state
  */
 export function useCategories(initialData?: Category[]) {
-  const { data, error, isLoading, mutate } = useSWR<Category[]>(
-    '/api/categories?include_subcategories=true',  // Cache key matches the actual request URL
-    fetchCategories,
-    {
-      revalidateOnFocus: false,
-      revalidateOnMount: true,
-      revalidateIfStale: false,
-      dedupingInterval: 300000, // 5 minutes - cache longer since categories rarely change
-      fallbackData: initialData, // SSR data prevents loading state
+  const [categories, setCategories] = useState<Category[]>(initialData ?? []);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [error, setError] = useState<Error | undefined>(undefined);
+
+  useEffect(() => {
+    // Skip fetch if we have initial data
+    if (initialData?.length) {
+      setIsLoading(false);
+      return;
     }
-  );
+
+    const doFetch = async () => {
+      try {
+        const data = await fetchCategories();
+        setCategories(data);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch categories'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    doFetch();
+  }, [initialData]);
+
+  const mutate = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await fetchCategories();
+      setCategories(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch categories'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   return {
-    categories: data ?? initialData ?? [],
-    isLoading: initialData ? false : isLoading, // No loading if we have SSR data
+    categories,
+    isLoading,
     error,
     mutate,
   };

@@ -1,18 +1,12 @@
 'use client';
 
-import useSWR from 'swr';
-import { cacheKeys } from '@/lib/swr/cache-keys';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ViewCounts } from '@/types/requests-list';
 
 /**
  * Dedicated hook for view counts in the sidebar
- * Uses a separate cache key to ensure counts are always fresh
- * and can be updated optimistically when actions occur
+ * SIMPLIFIED: No SWR - uses simple state with auto-refresh interval
  */
-
-interface ViewCountsResponse {
-  counts: ViewCounts;
-}
 
 async function fetchViewCounts(): Promise<ViewCounts> {
   // Fetch counts using the default view (unassigned) - counts are the same for all views
@@ -31,36 +25,63 @@ async function fetchViewCounts(): Promise<ViewCounts> {
 }
 
 export function useViewCounts(initialCounts?: ViewCounts) {
-  // Check if initial counts are empty (all zeros) - if so, we need to fetch on mount
-  const hasRealInitialData = initialCounts && Object.values(initialCounts).some(count => count > 0);
+  // Simple state for counts
+  const [counts, setCounts] = useState<ViewCounts | undefined>(initialCounts);
+  const [isLoading, setIsLoading] = useState(!initialCounts);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  const { data, error, isLoading, isValidating, mutate } = useSWR<ViewCounts>(
-    cacheKeys.viewCounts,
-    fetchViewCounts,
-    {
-      fallbackData: initialCounts,
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateIfStale: false, // Don't refetch on stale - use refreshInterval instead
-      revalidateOnFocus: false, // Don't refetch on focus - prevents initial load spinner
-      revalidateOnReconnect: false, // Don't refetch on reconnect - prevents initial load spinner
-      refreshInterval: 30000, // Auto-revalidate every 30 seconds
-      dedupingInterval: 2000, // Dedupe requests within 2 seconds
-      keepPreviousData: true,
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    // Skip initial fetch if we have initial data
+    if (initialCounts) {
+      setIsLoading(false);
     }
-  );
 
-  // HYDRATION SAFETY: Always prefer initialCounts on first render to match SSR
-  // Use data if available (from SWR cache), otherwise fallback to initialCounts
-  // This ensures server and client render the same values on hydration
-  const counts = data ?? initialCounts;
+    const doFetch = async () => {
+      if (!isMountedRef.current) return;
 
-  /**
-   * Enhanced loading state that considers SSR data
-   * We have data if EITHER data exists OR initialCounts was provided
-   */
-  const hasData = data !== undefined || initialCounts !== undefined;
-  const loading = !hasData && isLoading;
+      setIsValidating(true);
+      try {
+        const data = await fetchViewCounts();
+        if (isMountedRef.current) {
+          setCounts(data);
+          setError(undefined);
+        }
+      } catch (err) {
+        if (isMountedRef.current) {
+          setError(err instanceof Error ? err : new Error('Failed to fetch view counts'));
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsValidating(false);
+        }
+      }
+    };
+
+    // Only fetch on mount if no initial data
+    if (!initialCounts) {
+      doFetch();
+    }
+
+    // Set up interval for auto-refresh
+    const intervalId = setInterval(doFetch, 30000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [initialCounts]);
 
   // Explicit flag for whether counts are ready (not undefined)
   const isCountsReady = counts !== undefined;
@@ -69,59 +90,62 @@ export function useViewCounts(initialCounts?: ViewCounts) {
    * Optimistically update counts when a ticket changes
    * @param updates - Partial updates to apply to counts
    */
-  const updateCountsOptimistically = async (updates: Partial<ViewCounts>) => {
-    await mutate(
-      (currentCounts) => {
-        if (!currentCounts) return currentCounts;
-        return { ...currentCounts, ...updates };
-      },
-      { revalidate: false }
-    );
-  };
+  const updateCountsOptimistically = useCallback(async (updates: Partial<ViewCounts>) => {
+    setCounts((currentCounts) => {
+      if (!currentCounts) return currentCounts;
+      return { ...currentCounts, ...updates };
+    });
+  }, []);
 
   /**
    * Decrement a specific view count (e.g., when a ticket moves to another view)
    */
-  const decrementCount = async (view: keyof ViewCounts, amount: number = 1) => {
-    await mutate(
-      (currentCounts) => {
-        if (!currentCounts) return currentCounts;
-        return {
-          ...currentCounts,
-          [view]: Math.max(0, currentCounts[view] - amount),
-        };
-      },
-      { revalidate: false }
-    );
-  };
+  const decrementCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
+    setCounts((currentCounts) => {
+      if (!currentCounts) return currentCounts;
+      return {
+        ...currentCounts,
+        [view]: Math.max(0, currentCounts[view] - amount),
+      };
+    });
+  }, []);
 
   /**
    * Increment a specific view count
    */
-  const incrementCount = async (view: keyof ViewCounts, amount: number = 1) => {
-    await mutate(
-      (currentCounts) => {
-        if (!currentCounts) return currentCounts;
-        return {
-          ...currentCounts,
-          [view]: currentCounts[view] + amount,
-        };
-      },
-      { revalidate: false }
-    );
-  };
+  const incrementCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
+    setCounts((currentCounts) => {
+      if (!currentCounts) return currentCounts;
+      return {
+        ...currentCounts,
+        [view]: currentCounts[view] + amount,
+      };
+    });
+  }, []);
 
   /**
    * Force refresh counts from server
    */
-  const refreshCounts = async () => {
-    await mutate();
-  };
+  const refreshCounts = useCallback(async () => {
+    setIsValidating(true);
+    try {
+      const data = await fetchViewCounts();
+      setCounts(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch view counts'));
+    } finally {
+      setIsValidating(false);
+    }
+  }, []);
+
+  // For compatibility with SWR-like API
+  const mutate = refreshCounts;
 
   return {
     counts,
     isCountsReady,
-    isLoading: loading,
+    isLoading,
     isValidating,
     error,
     mutate,

@@ -24,9 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ChevronRight, ChevronDown, LogOut, Menu } from "lucide-react";
 import { DynamicIcon } from "@/components/ui/dynamic-icon";
-import { clearAllNavigationCaches } from "@/lib/cache/navigation-cache";
-import { clearCustomViewCache } from "@/lib/cache/custom-views-cache";
-import { clearAllMetadataCaches } from "@/lib/cache/metadata-cache";
 import {
   getNavigationSection,
   getSortedSections,
@@ -193,9 +190,6 @@ export function MobileNavDrawer({
 
   const handleLogout = async () => {
     try {
-      clearAllNavigationCaches();
-      clearCustomViewCache();
-      clearAllMetadataCaches();
       await fetch("/api/auth/logout", { method: "POST" });
       navigate("/login");
     } catch (error) {

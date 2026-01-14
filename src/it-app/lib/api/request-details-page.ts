@@ -94,62 +94,35 @@ export async function fetchFullRequestDetails(requestId: string): Promise<FullDe
 }
 
 /**
- * Fetch priorities
+ * Consolidated metadata response
  */
-export async function fetchPriorities(): Promise<Priority[]> {
-  const response = await fetch('/api/priorities', {
+interface RequestDetailsMetadata {
+  priorities: Priority[];
+  statuses: RequestStatus[];
+  technicians: Technician[];
+  categories: Category[];
+}
+
+/**
+ * Fetch all metadata for request details page in one call
+ */
+export async function fetchRequestDetailsMetadata(): Promise<RequestDetailsMetadata> {
+  const response = await fetch('/api/request-details-metadata', {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
   });
 
-  if (!response.ok) return [];
+  if (!response.ok) {
+    return {
+      priorities: [],
+      statuses: [],
+      technicians: [],
+      categories: [],
+    };
+  }
+
   return response.json();
-}
-
-/**
- * Fetch statuses
- */
-export async function fetchStatuses(): Promise<RequestStatus[]> {
-  const response = await fetch('/api/metadata/statuses', {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-
-  if (!response.ok) return [];
-  const data = await response.json();
-  return data.statuses || [];
-}
-
-/**
- * Fetch technicians
- */
-export async function fetchTechnicians(): Promise<Technician[]> {
-  const response = await fetch('/api/technicians', {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-
-  if (!response.ok) return [];
-  return response.json();
-}
-
-/**
- * Fetch categories
- */
-export async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch('/api/categories?active_only=true&include_subcategories=true', {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-  });
-
-  if (!response.ok) return [];
-  const data = await response.json();
-  // API returns { categories: [...], total: N } - extract the array
-  return data.categories || [];
 }
 
 /**
@@ -161,13 +134,10 @@ export async function fetchRequestDetailsPageData(
   currentUserIsTechnician: boolean = false
 ): Promise<RequestDetailsPageData | null> {
   try {
-    // Fetch all data in parallel
-    const [fullDetails, priorities, statuses, technicians, categories] = await Promise.all([
+    // Fetch all data in parallel - now only 2 API calls instead of 5!
+    const [fullDetails, metadata] = await Promise.all([
       fetchFullRequestDetails(requestId),
-      fetchPriorities(),
-      fetchStatuses(),
-      fetchTechnicians(),
-      fetchCategories(),
+      fetchRequestDetailsMetadata(),
     ]);
 
     if (!fullDetails || !fullDetails.ticket) {
@@ -188,10 +158,10 @@ export async function fetchRequestDetailsPageData(
 
     return {
       ticket: fullDetails.ticket,
-      technicians,
-      priorities,
-      statuses,
-      categories,
+      technicians: metadata.technicians,
+      priorities: metadata.priorities,
+      statuses: metadata.statuses,
+      categories: metadata.categories,
       notes: fullDetails.notes || [],
       assignees: transformedAssignees,
       initialMessages: fullDetails.initialMessages || [],

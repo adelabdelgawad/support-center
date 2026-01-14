@@ -28,6 +28,13 @@ interface MonitorInfo {
   isPrimary: boolean;
 }
 
+/** Banner session info for UI display */
+interface BannerSession {
+  sessionId: string;
+  agentName: string;
+  startedAt: string;
+}
+
 interface RemoteAccessState {
   /** Whether an action is in progress */
   isProcessing: boolean;
@@ -46,6 +53,8 @@ interface RemoteAccessState {
   pendingSessionId: string | null;
   /** Resolution profile for streaming (default: extreme for local network) */
   resolutionProfile: ResolutionProfile;
+  /** Banner visibility state for user awareness (FR-002) */
+  bannerSessions: BannerSession[];
 }
 
 // Store WebRTCHost instance outside of state (not serializable)
@@ -65,6 +74,8 @@ function createRemoteAccessStore() {
     // Default to standard resolution for better performance (960x540)
     // Use "extreme" (1920x1080) only on high-performance systems
     resolutionProfile: "standard",
+    // Banner sessions for user awareness indicator (FR-002)
+    bannerSessions: [],
   });
 
   /**
@@ -290,6 +301,33 @@ function createRemoteAccessStore() {
     // Mark this session as being started
     sessionStartInProgress = data.sessionId;
 
+    // Add to banner sessions immediately for user awareness (FR-002, FR-003, FR-004)
+    const newBannerSession: BannerSession = {
+      sessionId: data.sessionId,
+      agentName: data.agentName || "IT Support", // Fallback if agentName is empty (FR-012)
+      startedAt: new Date().toISOString(),
+    };
+
+    // Check if this session is already in the banner (e.g., reconnection)
+    const existingIndex = state.bannerSessions.findIndex(
+      (s) => s.sessionId === data.sessionId
+    );
+    if (existingIndex === -1) {
+      // New session - add to banner
+      setState("bannerSessions", [...state.bannerSessions, newBannerSession]);
+      logger.info('remote-support', 'Banner session added for user awareness', {
+        sessionId: data.sessionId,
+        agentName: newBannerSession.agentName,
+      });
+    } else {
+      // Existing session (reconnection) - update agent name if changed
+      setState("bannerSessions", existingIndex, "agentName", newBannerSession.agentName);
+      logger.info('remote-support', 'Banner session updated (reconnection)', {
+        sessionId: data.sessionId,
+        agentName: newBannerSession.agentName,
+      });
+    }
+
     try {
       // SILENT MODE: No notification, no window foreground, no picker
       // Auto-select primary monitor and start immediately
@@ -417,10 +455,61 @@ function createRemoteAccessStore() {
     setState({ controlEnabled: false });
   }
 
+  /**
+   * Handle remote session ended (FR-007, FR-017, FR-018)
+   * Clears the banner when session terminates
+   */
+  function handleRemoteSessionEnded(sessionId: string): void {
+    logger.info('remote-support', 'Remote session ended - clearing banner', {
+      sessionId,
+    });
+    console.log("[RemoteAccess] Session ended, removing from banner:", sessionId);
+
+    // Remove session from banner (FR-007: removed within 2 seconds)
+    const updatedSessions = state.bannerSessions.filter(
+      (s) => s.sessionId !== sessionId
+    );
+    setState("bannerSessions", updatedSessions);
+
+    logger.info('remote-support', 'Banner session removed', {
+      sessionId,
+      remainingSessions: updatedSessions.length,
+    });
+  }
+
+  /**
+   * Clear all banner sessions (for disconnect/cleanup scenarios)
+   * Called when connection is definitively lost (FR-019)
+   */
+  function clearAllBannerSessions(): void {
+    logger.info('remote-support', 'Clearing all banner sessions (disconnect)');
+    console.log("[RemoteAccess] Clearing all banner sessions");
+    setState("bannerSessions", []);
+  }
+
+  /**
+   * Get banner sessions for UI rendering
+   * Used by RemoteSessionBanner component
+   */
+  function getBannerSessions(): BannerSession[] {
+    return state.bannerSessions;
+  }
+
+  /**
+   * Check if any remote session is active (for banner visibility)
+   */
+  function isBannerVisible(): boolean {
+    return state.bannerSessions.length > 0;
+  }
+
   return {
     state,
     handleRemoteAccessRequest,
     handleRemoteSessionAutoStart,
+    handleRemoteSessionEnded,
+    clearAllBannerSessions,
+    getBannerSessions,
+    isBannerVisible,
     stopSession,
     revokeControl,
     handlePickerShare,

@@ -25,6 +25,8 @@ import { NotificationContainer } from "@/components/ui/notification";
 import { ConnectionErrorBanner } from "@/components/connection-error-banner";
 import { FloatingIconSync } from "@/components/floating-icon-sync";
 import { AppShellSkeleton } from "@/components/app-shell-skeleton";
+import { RemoteSessionBanner } from "@/components/remote-session-banner";
+import { remoteAccessStore } from "@/stores/remote-access-store";
 import { listen } from "@tauri-apps/api/event";
 import { RuntimeConfig } from "@/lib/runtime-config";
 import UpdateRequired from "@/components/UpdateRequired";
@@ -254,6 +256,10 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
       <Show when={!isRuntimeConfigReady()} fallback={
         /* Normal app content - only shown when not in update required state */
         <Show when={!updateRequired()}>
+          {/* Remote Session Banner - User awareness indicator (FR-002, FR-003, FR-004) */}
+          {/* Shows when remote support session is active, displays IT agent username */}
+          <RemoteSessionBanner sessions={remoteAccessStore.state.bannerSessions} />
+
           {/* Notification Container - Always visible */}
           <NotificationContainer />
 
@@ -262,8 +268,6 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
 
           {/* Floating Icon Sync - Only when authenticated */}
           {isAuthenticated() && <FloatingIconSync />}
-
-          {/* Remote access is now completely silent - no picker UI needed */}
 
           {/* Suspense boundary for lazy-loaded routes - shows skeleton instead of blank spinner */}
           <Suspense fallback={<AppShellSkeleton />}>

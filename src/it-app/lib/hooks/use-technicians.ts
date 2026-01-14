@@ -1,51 +1,50 @@
 'use client';
 
-import useSWR from 'swr';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/fetch/client';
-import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { Technician } from '@/types/metadata';
 
 /**
- * Fetcher function for SWR using apiClient
- */
-async function fetcher<T>(url: string): Promise<T> {
-  return apiClient.get<T>(url);
-}
-
-/**
- * SWR configuration for technicians - shared across the app
- * Uses longer cache time since technicians don't change frequently
- */
-const SWR_CONFIG = {
-  revalidateOnFocus: false,
-  revalidateOnReconnect: true,
-  dedupingInterval: 60000, // 1 minute deduping
-  revalidateIfStale: false,
-};
-
-/**
- * Hook to fetch and cache technicians data using SWR
+ * Hook to fetch and cache technicians data
+ * SIMPLIFIED: No SWR - uses simple state with initial data support
  *
  * This hook provides:
  * - Shared cache across all components using technicians
  * - Helper to get technician by ID from cache
- * - No redundant fetches (SWR deduplication)
+ * - No redundant fetches (deduplication via initialData)
  *
  * @param initialData - Initial technicians data from server (for SSR)
  * @param enabled - Whether to fetch data (default: true)
- * @returns SWR response with technicians data and helpers
+ * @returns Technicians data and helpers
  */
 export function useTechnicians(initialData?: Technician[], enabled: boolean = true) {
-  const { data, error, isLoading, mutate } = useSWR<Technician[]>(
-    enabled ? cacheKeys.technicians : null,
-    fetcher,
-    {
-      ...SWR_CONFIG,
-      fallbackData: initialData,
-    }
-  );
+  const [technicians, setTechnicians] = useState<Technician[]>(initialData ?? []);
+  const [isLoading, setIsLoading] = useState(!initialData && enabled);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  const technicians = data ?? initialData ?? [];
+  // Track if we've fetched already
+  const hasFetchedRef = useRef(!!initialData);
+
+  // Fetch only if enabled and no initial data
+  useEffect(() => {
+    if (!enabled || hasFetchedRef.current) return;
+
+    const doFetch = async () => {
+      setIsLoading(true);
+      try {
+        const data = await apiClient.get<Technician[]>('/api/technicians');
+        setTechnicians(data);
+        setError(undefined);
+        hasFetchedRef.current = true;
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    doFetch();
+  }, [enabled]);
 
   /**
    * Get a technician by their user ID
@@ -54,9 +53,9 @@ export function useTechnicians(initialData?: Technician[], enabled: boolean = tr
    * @param userId - The user ID (UUID string) to look up
    * @returns The technician if found, undefined otherwise
    */
-  const getTechnicianById = (userId: string): Technician | undefined => {
+  const getTechnicianById = useCallback((userId: string): Technician | undefined => {
     return technicians.find((t) => String(t.id) === String(userId));
-  };
+  }, [technicians]);
 
   /**
    * Get multiple technicians by their IDs
@@ -64,9 +63,9 @@ export function useTechnicians(initialData?: Technician[], enabled: boolean = tr
    * @param userIds - Array of user IDs (UUID strings) to look up
    * @returns Array of found technicians
    */
-  const getTechniciansByIds = (userIds: string[]): Technician[] => {
+  const getTechniciansByIds = useCallback((userIds: string[]): Technician[] => {
     return technicians.filter((t) => userIds.includes(String(t.id)));
-  };
+  }, [technicians]);
 
   /**
    * Check if a user ID belongs to a technician
@@ -74,9 +73,9 @@ export function useTechnicians(initialData?: Technician[], enabled: boolean = tr
    * @param userId - The user ID (UUID string) to check
    * @returns True if the user is a technician
    */
-  const isTechnician = (userId: string): boolean => {
+  const isTechnician = useCallback((userId: string): boolean => {
     return technicians.some((t) => String(t.id) === String(userId));
-  };
+  }, [technicians]);
 
   /**
    * Search technicians by name or username
@@ -84,21 +83,33 @@ export function useTechnicians(initialData?: Technician[], enabled: boolean = tr
    * @param query - Search query (case-insensitive)
    * @returns Array of matching technicians
    */
-  const searchTechnicians = (query: string): Technician[] => {
+  const searchTechnicians = useCallback((query: string): Technician[] => {
     const lowerQuery = query.toLowerCase();
     return technicians.filter(
       (t) =>
         t.username.toLowerCase().includes(lowerQuery) ||
         t.fullName?.toLowerCase().includes(lowerQuery)
     );
-  };
+  }, [technicians]);
 
   /**
    * Force refresh the technicians cache
    */
-  const refresh = async () => {
-    await mutate();
-  };
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await apiClient.get<Technician[]>('/api/technicians');
+      setTechnicians(data);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // For compatibility with SWR-like API
+  const mutate = refresh;
 
   return {
     technicians,

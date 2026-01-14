@@ -814,6 +814,8 @@ Cache keys centralized in `lib/swr/cache-keys.ts`.
 ## Active Technologies
 - Python 3.12+ (Backend), TypeScript 5.x (Frontend) + FastAPI, SQLModel, Next.js 15, React 19, SWR (001-fix-assignees-update)
 - PostgreSQL with asyncpg (001-fix-assignees-update)
+- Python 3.12+ (Backend), TypeScript 5.x (Requester App) + FastAPI, SQLModel, Tauri v2, SolidJS, SignalR (004-remote-support-auto-start)
+- PostgreSQL (session records already exist) (004-remote-support-auto-start)
 
 ## Recent Changes
 - 001-fix-assignees-update: Added Python 3.12+ (Backend), TypeScript 5.x (Frontend) + FastAPI, SQLModel, Next.js 15, React 19, SWR

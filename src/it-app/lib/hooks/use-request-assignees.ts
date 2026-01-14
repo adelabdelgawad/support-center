@@ -1,9 +1,7 @@
 "use client";
 
 import { apiClient, getClientErrorMessage as getErrorMessage } from "@/lib/fetch/client";
-import { cacheKeys } from "@/lib/swr/cache-keys";
-import { useMemo, useCallback } from "react";
-import useSWR from "swr";
+import { useMemo, useCallback, useState } from "react";
 
 /**
  * Assignee information from the backend
@@ -30,15 +28,6 @@ export interface AssigneesResponse {
 }
 
 /**
- * Response from assign/take endpoints
- */
-interface AssignActionResponse {
-  success: boolean;
-  message: string;
-  data?: unknown;
-}
-
-/**
  * Technician info from shared cache (optional integration)
  */
 export interface TechnicianInfo {
@@ -46,13 +35,6 @@ export interface TechnicianInfo {
   username: string;
   fullName: string | null;
   title: string | null;
-}
-
-/**
- * Fetcher function for SWR
- */
-async function fetcher<T>(url: string): Promise<T> {
-  return apiClient.get<T>(url);
 }
 
 /**
@@ -79,18 +61,17 @@ export interface UseRequestAssigneesOptions {
 }
 
 /**
- * Hook to fetch and manage request assignees using SWR
- * Updates cache directly from action responses (no extra network requests)
+ * Hook to fetch and manage request assignees
+ * SIMPLIFIED: No SWR - uses simple state with backend response updates
  *
  * Features:
- * - Optimistic updates with rollback on error
- * - Integration with shared technicians cache
+ * - Uses backend response to update state (no extra network requests)
  * - Proper error handling with callbacks
  *
  * @param requestId - The request/ticket ID (for backward compatibility)
  * @param initialData - Initial assignees data from server (for SSR)
  * @param options - Additional options for enhanced functionality
- * @returns SWR response with assignees data and helpers
+ * @returns Assignees data and helpers
  */
 export function useRequestAssignees(
   requestId: string,
@@ -101,37 +82,22 @@ export function useRequestAssignees(
 ) {
   const { onAssigneeAdded, onAssigneeRemoved, onError } = options || {};
 
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.length > 0;
-
-  const { data, error, isLoading, mutate } = useSWR<AssigneesResponse>(
-    requestId ? cacheKeys.requestAssignees(requestId) : null,
-    fetcher,
-    {
-      fallbackData: initialData
-        ? {
-            requestId,
-            assignees: initialData,
-            total: initialData.length,
-          }
-        : undefined,
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: true,
-    }
-  );
+  // Simple state for assignees
+  const [assignees, setAssignees] = useState<Assignee[]>(initialData ?? []);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
   /**
    * Add an assignee - simple direct approach
-   * Calls API and replaces cache with returned full assignees list
+   * Calls API and updates state with returned full assignees list
    */
-  const addAssignee = async (
+  const addAssignee = useCallback(async (
     technicianId: string,
     _technicianName: string,
     _technicianTitle?: string
   ): Promise<void> => {
     try {
+      setIsLoading(true);
       // Send request to server - returns full updated assignees list
       const response = await apiClient.post<{
         success: boolean;
@@ -142,14 +108,8 @@ export function useRequestAssignees(
       }>(`/api/requests-details/${requestId}/assignees`, { technicianId });
 
       if (response.success) {
-        const newCacheData = {
-          requestId: response.requestId,
-          assignees: response.assignees,
-          total: response.total,
-        };
-
-        // Replace cache with server data directly
-        await mutate(newCacheData, { revalidate: false });
+        // Update state with server data directly
+        setAssignees(response.assignees);
 
         // Find the added assignee for callback
         const addedAssignee = response.assignees.find(
@@ -160,6 +120,7 @@ export function useRequestAssignees(
         }
       } else {
         const error = new Error(response.message || "Failed to add assignee");
+        setError(error);
         if (onError) {
           onError(error);
         }
@@ -175,19 +136,23 @@ export function useRequestAssignees(
           "Only supervisors can assign technicians to this request";
       }
 
+      setError(error);
       if (onError) {
         onError(error);
       }
       throw error;
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [requestId, onAssigneeAdded, onError]);
 
   /**
    * Remove an assignee - simple direct approach
-   * Calls API and replaces cache with returned full assignees list
+   * Calls API and updates state with returned full assignees list
    */
-  const removeAssignee = async (technicianId: string): Promise<void> => {
+  const removeAssignee = useCallback(async (technicianId: string): Promise<void> => {
     try {
+      setIsLoading(true);
       // Send request to server - returns full updated assignees list
       const response = await apiClient.delete<{
         success: boolean;
@@ -198,14 +163,8 @@ export function useRequestAssignees(
       }>(`/api/requests-details/${requestId}/assignees`, { technicianId });
 
       if (response.success) {
-        const newCacheData = {
-          requestId: response.requestId,
-          assignees: response.assignees,
-          total: response.total,
-        };
-
-        // Replace cache with server data directly
-        await mutate(newCacheData, { revalidate: false });
+        // Update state with server data directly
+        setAssignees(response.assignees);
 
         // Notify callback
         if (onAssigneeRemoved) {
@@ -213,6 +172,7 @@ export function useRequestAssignees(
         }
       } else {
         const error = new Error(response.message || "Failed to remove assignee");
+        setError(error);
         if (onError) {
           onError(error);
         }
@@ -238,31 +198,34 @@ export function useRequestAssignees(
         }
       }
 
+      setError(error);
       if (onError) {
         onError(error);
       }
       throw error;
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [requestId, onAssigneeRemoved, onError]);
 
   /**
-   * Take (self-assign) the request - updates cache directly with rollback on error
+   * Take (self-assign) the request - updates state directly with optimistic update
    */
-  const takeRequest = async (currentUser: {
+  const takeRequest = useCallback(async (currentUser: {
     id: string;
     username: string;
     fullName?: string | null;
     title?: string | null;
   }): Promise<void> => {
     // Check if already assigned (compare as strings since IDs can be UUID or number)
-    if (data?.assignees.some((a) => String(a.userId) === String(currentUser.id))) {
+    if (assignees.some((a) => String(a.userId) === String(currentUser.id))) {
       throw new Error("You are already assigned to this request");
     }
 
     // Store previous data for rollback
-    const previousData = data;
+    const previousAssignees = [...assignees];
 
-    // Create assignee for current user
+    // Create assignee for current user (optimistic)
     const newAssignee: Assignee = {
       id: Date.now(),
       userId: currentUser.id,
@@ -276,27 +239,7 @@ export function useRequestAssignees(
     };
 
     // Optimistic update
-    await mutate(
-      (currentData) => {
-        // Handle missing or malformed data
-        if (!currentData || !Array.isArray(currentData.assignees)) {
-          return {
-            requestId,
-            assignees: [newAssignee],
-            total: 1,
-          };
-        }
-        if (currentData.assignees.some((a) => a.userId === currentUser.id)) {
-          return currentData;
-        }
-        return {
-          ...currentData,
-          assignees: [...currentData.assignees, newAssignee],
-          total: currentData.total + 1,
-        };
-      },
-      { revalidate: false }
-    );
+    setAssignees([...assignees, newAssignee]);
 
     try {
       // Send request to server
@@ -308,48 +251,53 @@ export function useRequestAssignees(
       }
     } catch (err) {
       // Rollback on error
-      await mutate(previousData, { revalidate: false });
+      setAssignees(previousAssignees);
 
       const error =
         err instanceof Error ? err : new Error(getErrorMessage(err));
+      setError(error);
       if (onError) {
         onError(error);
       }
       throw error;
     }
-  };
+  }, [assignees, requestId, onAssigneeAdded, onError]);
 
   /**
    * Check if a user is already assigned to this request
    */
   const isUserAssigned = useCallback((userId: string): boolean => {
-    return data?.assignees.some((a) => a.userId === userId) ?? false;
-  }, [data?.assignees]);
+    return assignees.some((a) => a.userId === userId);
+  }, [assignees]);
 
   /**
    * Get assignee by user ID
    */
-  const getAssigneeByUserId = (userId: string): Assignee | undefined => {
-    return data?.assignees.find((a) => a.userId === userId);
-  };
+  const getAssigneeByUserId = useCallback((userId: string): Assignee | undefined => {
+    return assignees.find((a) => a.userId === userId);
+  }, [assignees]);
 
   /**
    * Force refresh the assignees from server
    */
-  const refresh = async () => {
-    await mutate();
-  };
+  const refresh = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get<AssigneesResponse>(
+        `/api/requests-details/${requestId}/assignees`
+      );
+      setAssignees(response.assignees);
+      setError(undefined);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(getErrorMessage(err));
+      setError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [requestId]);
 
-  /**
-   * Enhanced loading state that considers SSR data
-   * SWR's isLoading is true when no data and request is in flight
-   * But when fallbackData is provided, isLoading should be false
-   */
-  const assigneesLoading =
-    data === undefined &&
-    (initialData === undefined || initialData.length === 0)
-      ? isLoading
-      : false;
+  // For compatibility with SWR-like API
+  const mutate = refresh;
 
   /**
    * Check if user can add assignees
@@ -381,7 +329,7 @@ export function useRequestAssignees(
   const canRemoveAssignees = useMemo(() => {
     const isTechnician = options?.isTechnician || false;
     const countAsSolved = options?.countAsSolved || false;
-    const assigneeCount = data?.total || 0;
+    const assigneeCount = assignees.length;
 
     // If request is solved, no modifications allowed
     if (countAsSolved) return false;
@@ -392,7 +340,7 @@ export function useRequestAssignees(
     // Any technician can remove assignees from non-solved requests
     // Note: Cannot remove last assignee - enforced by backend
     return isTechnician;
-  }, [data?.total, options?.isTechnician, options?.countAsSolved]);
+  }, [assignees.length, options?.isTechnician, options?.countAsSolved]);
 
   /**
    * Backward compatibility: canEditAssignees now means canAddAssignees
@@ -408,7 +356,7 @@ export function useRequestAssignees(
     const currentUserId = options?.currentUserId;
     const isTechnician = options?.isTechnician || false;
     const countAsSolved = options?.countAsSolved || false;
-    const assigneeCount = data?.total || 0;
+    const assigneeCount = assignees.length;
     const alreadyAssigned = currentUserId
       ? isUserAssigned(currentUserId)
       : false;
@@ -418,7 +366,7 @@ export function useRequestAssignees(
 
     return assigneeCount === 0 && isTechnician && !alreadyAssigned;
   }, [
-    data?.total,
+    assignees.length,
     options?.currentUserId,
     options?.isTechnician,
     options?.countAsSolved,
@@ -426,9 +374,9 @@ export function useRequestAssignees(
   ]);
 
   return {
-    assignees: data?.assignees || [],
-    total: data?.total || 0,
-    isLoading: assigneesLoading,
+    assignees,
+    total: assignees.length,
+    isLoading,
     error,
     addAssignee,
     removeAssignee,

@@ -7,12 +7,12 @@
  * Features:
  * - **WebSocket for Real-time Messaging**: Chat messages only, no metadata enrichment
  * - **Server-Side Rendering**: Initial data fetched on page load (technicians, priorities, statuses, notes, assignees, messages)
- * - Uses SWR for mutations with optimistic updates (notes, assignees, status, priority)
+ * - Uses simple state hooks with optimistic updates (notes, assignees, status, priority)
  * - Real-time chat messages with sequence-based gap detection
  * - Implements messaging permissions (assignee only)
  * - Clean separation: WebSocket = messaging, REST API = data & mutations
  *
- * Architecture: SSR (initial load) → WebSocket (real-time messages) → SWR (mutations) → REST API (persistence)
+ * Architecture: SSR (initial load) → WebSocket (real-time messages) → State hooks (mutations) → REST API (persistence)
  */
 
 import { createContext, useContext, useMemo, useCallback, useState, useRef, useEffect } from 'react';
@@ -124,7 +124,7 @@ import type { SubTask, SubTaskStats } from '@/types/sub-task';
 import type { ScreenshotItem } from '@/types/media-viewer';
 import type { Category } from '@/lib/hooks/use-categories-tags';
 
-// API functions have been moved to individual SWR hooks:
+// API functions have been moved to individual hooks:
 // - useChatMutations: sendMessage, uploadAttachments
 // - useRequestTicket: updateStatus, updatePriority
 
@@ -269,7 +269,7 @@ export function RequestDetailProvider({
     } as any;
   }, [getTechnicianByIdRaw]);
 
-  // **SWR-POWERED TICKET MUTATIONS**
+  // **TICKET MUTATIONS**
   // Handles status and priority updates with optimistic updates and rollback
   // MOVED BEFORE useChatWebSocket so mutateTicket is available for handleTaskStatusChanged
   const {
@@ -461,7 +461,7 @@ export function RequestDetailProvider({
   // NOTE: Chat is marked as read during SSR in getRequestDetailsPageData()
   // This happens BEFORE the page renders, so the list is already updated
 
-  // **SWR-POWERED NOTES**
+  // **NOTES (SWR for background refresh)**
   // Use SSR data for initial notes
   const {
     notes,
@@ -500,7 +500,7 @@ export function RequestDetailProvider({
     ]);
   }, [mutateTicket]);
 
-  // **SWR-POWERED ASSIGNEES**
+  // **ASSIGNEES**
   // Use SSR data for initial assignees
   const {
     assignees,
@@ -652,7 +652,7 @@ export function RequestDetailProvider({
     console.error('❌ Chat mutation error:', error);
   }, []);
 
-  // **SWR-LIKE CHAT MUTATIONS**
+  // **CHAT MUTATIONS**
   // Handles send message and upload with optimistic updates
   const {
     isSending: sendingMessage,
@@ -731,7 +731,7 @@ export function RequestDetailProvider({
   }, [screenshots.length]);
 
   // **TAKE REQUEST ACTION**
-  // Wraps the SWR takeRequest with current user
+  // Wraps the takeRequest with current user
   const takeRequest = async () => {
     if (!currentUser) {
       throw new Error('Not authenticated');
@@ -739,21 +739,21 @@ export function RequestDetailProvider({
     await takeRequestSWR(currentUser);
   };
 
-  // Build context value with WebSocket + SWR-managed state
+  // Build context value with WebSocket + state-managed data
   const value: RequestDetailsContextType = {
-    // Ticket data (WebSocket-first, then SWR-managed)
+    // Ticket data (state-managed)
     ticket: ticketData,
     technicians: techniciansData,
     priorities: prioritiesData,
     statuses: statusesData,
     categories: initialCategories,  // SSR data passed directly
 
-    // Notes (WebSocket-first, then SWR-managed)
+    // Notes (SWR-managed for background refresh)
     notes,
     notesLoading,
     addNote,
 
-    // Assignees (SWR-managed with technicians cache)
+    // Assignees (state-managed with technicians cache)
     assignees,
     assigneesLoading,
     addAssignee,
@@ -772,7 +772,7 @@ export function RequestDetailProvider({
     messages,
     messagesLoading,
 
-    // Chat mutations (SWR-like)
+    // Chat mutations
     sendMessage,
     sendAttachmentMessage,
     retryMessage,
@@ -794,7 +794,7 @@ export function RequestDetailProvider({
     navigateMediaViewer,
     setMediaViewerIndex,
 
-    // Ticket mutations (SWR-managed)
+    // Ticket mutations (state-managed)
     updateTicketStatus,
     updateTicketPriority,
     updatingTicket,

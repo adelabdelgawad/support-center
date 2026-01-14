@@ -131,6 +131,21 @@ class RemoteAccessService:
             f"Agent: {agent.username}, Request: {request_id}"
         )
 
+        # AUDIT LOG: remote_session_started (FR-011)
+        # Log structured audit event for session start with all required fields
+        logger.info(
+            "AUDIT: remote_session_started",
+            extra={
+                "event": "remote_session_started",
+                "session_id": str(session.id),
+                "agent_id": str(agent_id),
+                "agent_username": agent.username,
+                "requester_id": str(request.requester_id),
+                "request_id": str(request_id),
+                "timestamp": session.created_at.isoformat() if session.created_at else None,
+            },
+        )
+
         # Notify requester via SignalR
         try:
             await signalr_client.notify_remote_session_auto_start(
@@ -274,6 +289,27 @@ class RemoteAccessService:
 
         logger.info(
             f"Ended remote access session {session_id} - reason: {end_reason}"
+        )
+
+        # AUDIT LOG: remote_session_ended (FR-011)
+        # Log structured audit event for session end with all required fields
+        # Calculate duration if both timestamps are available
+        duration_seconds = None
+        if session.created_at and session.ended_at:
+            duration_seconds = (session.ended_at - session.created_at).total_seconds()
+
+        logger.info(
+            "AUDIT: remote_session_ended",
+            extra={
+                "event": "remote_session_ended",
+                "session_id": str(session_id),
+                "agent_id": str(session.agent_id),
+                "agent_username": None,  # Would need to join User table to get this
+                "requester_id": str(session.requester_id),
+                "end_reason": end_reason,
+                "duration_seconds": duration_seconds,
+                "timestamp": session.ended_at.isoformat() if session.ended_at else None,
+            },
         )
 
         # Broadcast via SignalR AFTER DB commit (handled by transactional decorator)

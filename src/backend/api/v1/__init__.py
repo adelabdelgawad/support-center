@@ -28,6 +28,7 @@ from .endpoints import (
     remote_access,
     report_configs,
     reports,
+    request_details_metadata,
     request_notes,
     request_status,
     request_types,
@@ -67,6 +68,12 @@ api_router.include_router(
 
 api_router.include_router(
     priorities.router, prefix="/priorities", tags=["priorities"]
+)
+
+api_router.include_router(
+    request_details_metadata.router,
+    prefix="/request-details-metadata",
+    tags=["metadata"],
 )
 
 api_router.include_router(

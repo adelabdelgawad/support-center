@@ -2,33 +2,26 @@
 
 /**
  * Custom View Hook
+ * SIMPLIFIED: No localStorage caching - uses simple state with backend response
  *
- * Fetches user's custom view settings using SWR with localStorage caching.
- * Enables instant rendering with cached data while revalidating in background.
+ * Fetches user's custom view settings.
  *
  * Strategy:
- * - On mount: use default data (hydration safe)
- * - After hydration: read from localStorage cache
+ * - On mount: use default settings
  * - Background: fetch fresh data from API
- * - On success: update localStorage cache
- *
- * HYDRATION SAFETY:
- * - Server and client initial render use DEFAULT_VIEW_SETTINGS
- * - After hydration, reads from localStorage cache
- * - This prevents hydration mismatch errors
+ * - On success: update state
  */
 
-import { useEffect, useState } from 'react';
-import useSWR from 'swr';
+import { useEffect, useState, useCallback } from 'react';
 import { fetchCustomView } from '@/lib/api/custom-views';
-import { cacheKeys } from '@/lib/swr/cache-keys';
-import {
-  getCachedCustomView,
-  setCachedCustomView,
-  DEFAULT_VIEW_SETTINGS,
-} from '@/lib/cache/custom-views-cache';
 import type { UserCustomView, AvailableTabId } from '@/types/custom-views';
 import type { ViewType } from '@/types/requests-list';
+
+// Default view settings (used until data is fetched)
+const DEFAULT_VIEW_SETTINGS = {
+  visibleTabs: ['all', 'assigned', 'unassigned', 'overdue'] as ViewType[],
+  defaultTab: 'all' as ViewType,
+};
 
 interface UseCustomViewResult {
   visibleTabs: ViewType[];
@@ -45,60 +38,46 @@ interface UseCustomViewResult {
  * @returns Custom view data and helpers
  */
 export function useCustomView(): UseCustomViewResult {
-  // Track hydration state to avoid reading localStorage during SSR
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [cachedData, setCachedData] = useState(DEFAULT_VIEW_SETTINGS);
+  const [data, setData] = useState<UserCustomView | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | undefined>(undefined);
 
-  // After hydration, read from localStorage cache
+  // Fetch fresh data on mount
   useEffect(() => {
-    setIsHydrated(true);
-    const cached = getCachedCustomView();
-    setCachedData(cached);
+    const doFetch = async () => {
+      setIsValidating(true);
+      try {
+        const result = await fetchCustomView();
+        setData(result);
+        setError(undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to fetch custom view'));
+      } finally {
+        setIsLoading(false);
+        setIsValidating(false);
+      }
+    };
+
+    doFetch();
   }, []);
 
-  // Build fallback data - use cache after hydration, default during SSR
-  const fallbackViewData = isHydrated ? cachedData : DEFAULT_VIEW_SETTINGS;
-
-  const { data, error, isLoading, isValidating, mutate } = useSWR<UserCustomView>(
-    cacheKeys.customView,
-    fetchCustomView,
-    {
-      // Use hydration-safe fallback data
-      // Note: Static timestamp to avoid hydration mismatch
-      fallbackData: {
-        id: 0,
-        userId: '',
-        visibleTabs: fallbackViewData.visibleTabs as AvailableTabId[],
-        defaultTab: fallbackViewData.defaultTab as AvailableTabId,
-        isActive: true,
-        createdAt: '1970-01-01T00:00:00.000Z',
-        updatedAt: '1970-01-01T00:00:00.000Z',
-      },
-      revalidateOnMount: true, // Always fetch fresh data on mount
-      revalidateOnFocus: false, // Don't refetch on focus
-      revalidateOnReconnect: true, // Refetch on reconnect
-      dedupingInterval: 5000, // Dedupe requests within 5 seconds
+  const refresh = useCallback(async () => {
+    setIsValidating(true);
+    try {
+      const result = await fetchCustomView();
+      setData(result);
+      setError(undefined);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch custom view'));
+    } finally {
+      setIsValidating(false);
     }
-  );
+  }, []);
 
-  // Update localStorage cache when data changes
-  useEffect(() => {
-    if (data && data.visibleTabs && data.defaultTab) {
-      setCachedCustomView(data.visibleTabs as ViewType[], data.defaultTab as ViewType);
-      setCachedData({
-        visibleTabs: data.visibleTabs as ViewType[],
-        defaultTab: data.defaultTab as ViewType,
-      });
-    }
-  }, [data]);
-
-  // Derive values from data or cache
-  const visibleTabs = (data?.visibleTabs as ViewType[]) ?? cachedData.visibleTabs;
-  const defaultTab = (data?.defaultTab as ViewType) ?? cachedData.defaultTab;
-
-  const refresh = async () => {
-    await mutate();
-  };
+  // Derive values from data or defaults
+  const visibleTabs = (data?.visibleTabs as ViewType[]) ?? DEFAULT_VIEW_SETTINGS.visibleTabs;
+  const defaultTab = (data?.defaultTab as ViewType) ?? DEFAULT_VIEW_SETTINGS.defaultTab;
 
   return {
     visibleTabs,

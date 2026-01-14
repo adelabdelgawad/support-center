@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronRight, Mail, User as UserIcon, Building, Phone, FileText, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -45,16 +44,37 @@ export function UserInfoSidebar() {
 
   // Fetch user session status - only when sidebar is visible (PERF: defer until needed)
   // PERF: No polling for solved tickets - user status doesn't change for completed requests
-  const { data: userStatus } = useSWR<UserSessionStatus>(
-    isVisible ? `user-status-${ticket.requesterId}` : null, // PERF: Only fetch when visible
-    () => getUserStatus(ticket.requesterId),
-    {
-      refreshInterval: isStatusSolved ? 0 : 30000, // PERF: No polling for solved tickets
-      revalidateOnMount: true, // Always fetch when sidebar becomes visible
-      revalidateOnFocus: false, // PERF: No refetch on window focus
-      revalidateOnReconnect: !isStatusSolved, // PERF: No reconnect revalidation for solved
+  const [userStatus, setUserStatus] = useState<UserSessionStatus | undefined>(undefined);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    const fetchStatus = async () => {
+      if (!isMountedRef.current) return;
+      try {
+        const status = await getUserStatus(ticket.requesterId);
+        if (isMountedRef.current) {
+          setUserStatus(status);
+        }
+      } catch (err) {
+        // Silently fail - status is optional
+      }
+    };
+
+    fetchStatus();
+
+    // Set up polling if not solved
+    if (!isStatusSolved) {
+      const intervalId = setInterval(fetchStatus, 30000);
+      return () => clearInterval(intervalId);
     }
-  );
+  }, [isVisible, ticket.requesterId, isStatusSolved]);
 
   // Build user info from ticket requester
   const user = {
