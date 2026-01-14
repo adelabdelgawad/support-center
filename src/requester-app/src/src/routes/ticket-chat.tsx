@@ -369,7 +369,7 @@ function MessageBubble(props: {
 
         {/* Message text - only show if NOT default screenshot text */}
         <Show when={!props.message.isScreenshot || (props.message.content && !props.message.content.includes("📷") && props.message.content.trim() !== "Screenshot")}>
-          <p class="whitespace-pre-wrap break-words text-sm" classList={{ "mt-2": props.message.isScreenshot || !!hasFileAttachment() }}>
+          <p dir="auto" class="whitespace-pre-wrap break-words text-sm" classList={{ "mt-2": props.message.isScreenshot || !!hasFileAttachment() }}>
             {props.message.content}
           </p>
         </Show>

@@ -374,7 +374,7 @@ export function RightChatMessage({
 
             {/* Message text - only show if NOT default screenshot text */}
             {(!isScreenshot || (content && !content.includes("📷") && content.trim() !== "Screenshot" && content.trim() !== "[Screenshot]")) && (
-              <p className="whitespace-pre-line break-words text-white m-0 leading-tight text-right">
+              <p dir="auto" className="whitespace-pre-line break-words text-white m-0 leading-tight">
                 {content}
               </p>
             )}

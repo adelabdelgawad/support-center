@@ -296,7 +296,7 @@ export function LeftChatMessage({
 
             {/* Message text - only show if NOT default screenshot text */}
             {(!isScreenshot || (content && !content.includes("📷") && content.trim() !== "Screenshot" && content.trim() !== "[Screenshot]")) && (
-              <p className="whitespace-pre-line wrap-break text-foreground m-0 leading-tight">
+              <p dir="auto" className="whitespace-pre-line wrap-break text-foreground m-0 leading-tight">
                 {content}
               </p>
             )}
