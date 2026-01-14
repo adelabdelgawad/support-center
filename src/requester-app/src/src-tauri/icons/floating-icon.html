@@ -53,7 +53,7 @@
             font-weight: bold;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
         }
-        
+
         .notification {
             position: absolute;
             top: 5px;
@@ -65,7 +65,18 @@
             border: 2px solid white;
             animation: blink 1s infinite;
         }
-        
+
+        .remote-indicator {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            width: 10px;
+            height: 10px;
+            background: #dc2626;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+
         @keyframes blink {
             0%, 50% { opacity: 1; }
             51%, 100% { opacity: 0; }
@@ -75,12 +86,14 @@
 <body>
     <div class="icon-container" id="iconContainer">
         <div class="notification" id="notification" style="display: none;"></div>
+        <div class="remote-indicator" id="remoteIndicator" style="display: none;"></div>
         <div class="icon-text">IT</div>
     </div>
 
     <script>
         const iconContainer = document.getElementById('iconContainer');
         const notification = document.getElementById('notification');
+        const remoteIndicator = document.getElementById('remoteIndicator');
         let isDragging = false;
         let dragOffsetX = 0;
         let dragOffsetY = 0;
@@ -135,6 +148,28 @@
                 iconContainer.style.transition = 'all 0.2s ease';
             }
         });
+
+        // Listen for remote session state changes
+        if (window.__TAURI__) {
+            window.__TAURI__.event.listen('remote-session-state', (event) => {
+                const data = event.payload;
+                remoteIndicator.style.display = data.isActive ? 'block' : 'none';
+            });
+
+            // Existing notification event listeners
+            window.__TAURI__.event.listen('update-unread-count', (event) => {
+                const count = event.payload.count;
+                notification.style.display = count > 0 ? 'block' : 'none';
+            });
+
+            window.__TAURI__.event.listen('new-message-flash', (event) => {
+                const originalBackground = iconContainer.style.background || '#4CAF50';
+                iconContainer.style.background = '#ff4444';
+                setTimeout(() => {
+                    iconContainer.style.background = originalBackground;
+                }, 300);
+            });
+        }
 
         // Prevent context menu
         document.addEventListener('contextmenu', function(e) {

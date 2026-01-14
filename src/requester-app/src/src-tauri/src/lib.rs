@@ -1177,6 +1177,21 @@ fn trigger_floating_icon_flash(app: AppHandle, count: Option<u32>) -> Result<(),
     }
 }
 
+/// Update floating icon to show remote session active state
+#[tauri::command]
+fn update_floating_icon_remote_state(app: AppHandle, is_active: bool, agent_name: Option<String>) -> Result<(), String> {
+    if let Some(floating_icon) = app.get_webview_window("floating-icon") {
+        let payload = serde_json::json!({
+            "isActive": is_active,
+            "agentName": agent_name
+        });
+        floating_icon.emit("remote-session-state", payload)
+            .map_err(|e| format!("Failed to emit event: {}", e))
+    } else {
+        Err("Floating icon window not found".to_string())
+    }
+}
+
 
 /// Setup global notification event listener
 fn setup_notification_listener(app: &AppHandle) {
@@ -1643,6 +1658,7 @@ pub fn run() {
             is_window_focused,
             update_floating_icon_unread_count,
             trigger_floating_icon_flash,
+            update_floating_icon_remote_state,
             remote_mouse_move,
             remote_mouse_down,
             remote_mouse_up,

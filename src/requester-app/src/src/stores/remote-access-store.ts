@@ -328,6 +328,9 @@ function createRemoteAccessStore() {
       });
     }
 
+    // Update floating icon to show remote session active
+    await updateFloatingIconRemoteState(true, newBannerSession.agentName);
+
     try {
       // SILENT MODE: No notification, no window foreground, no picker
       // Auto-select primary monitor and start immediately
@@ -459,7 +462,7 @@ function createRemoteAccessStore() {
    * Handle remote session ended (FR-007, FR-017, FR-018)
    * Clears the banner when session terminates
    */
-  function handleRemoteSessionEnded(sessionId: string): void {
+  async function handleRemoteSessionEnded(sessionId: string): Promise<void> {
     logger.info('remote-support', 'Remote session ended - clearing banner', {
       sessionId,
     });
@@ -471,6 +474,11 @@ function createRemoteAccessStore() {
     );
     setState("bannerSessions", updatedSessions);
 
+    // Reset floating icon if no more active sessions
+    if (updatedSessions.length === 0) {
+      await updateFloatingIconRemoteState(false);
+    }
+
     logger.info('remote-support', 'Banner session removed', {
       sessionId,
       remainingSessions: updatedSessions.length,
@@ -481,10 +489,13 @@ function createRemoteAccessStore() {
    * Clear all banner sessions (for disconnect/cleanup scenarios)
    * Called when connection is definitively lost (FR-019)
    */
-  function clearAllBannerSessions(): void {
+  async function clearAllBannerSessions(): Promise<void> {
     logger.info('remote-support', 'Clearing all banner sessions (disconnect)');
     console.log("[RemoteAccess] Clearing all banner sessions");
     setState("bannerSessions", []);
+
+    // Reset floating icon
+    await updateFloatingIconRemoteState(false);
   }
 
   /**
@@ -502,6 +513,78 @@ function createRemoteAccessStore() {
     return state.bannerSessions.length > 0;
   }
 
+  /**
+   * Update floating icon remote session state
+   */
+  async function updateFloatingIconRemoteState(isActive: boolean, agentName?: string): Promise<void> {
+    try {
+      await invoke('update_floating_icon_remote_state', {
+        isActive,
+        agentName: agentName || null
+      });
+      logger.info('remote-support', 'Floating icon remote state updated', {
+        isActive,
+        agentName,
+      });
+    } catch (error) {
+      logger.error('remote-support', 'Failed to update floating icon remote state', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Handle termination request from user (via terminate button)
+   * Stops WebRTC session, notifies agent, and hides panel
+   */
+  async function handleTerminationRequest(sessionId: string): Promise<void> {
+    logger.info('remote-support', 'User requested session termination', {
+      sessionId,
+    });
+    console.log("[RemoteAccess] User terminated session:", sessionId);
+
+    try {
+      // Stop WebRTC session
+      if (webrtcHost) {
+        console.log("[RemoteAccess] Stopping WebRTC session...");
+        await webrtcHost.stop();
+        webrtcHost = null;
+      }
+
+      // Remove from banner sessions
+      const updatedSessions = state.bannerSessions.filter(
+        (s) => s.sessionId !== sessionId
+      );
+      setState("bannerSessions", updatedSessions);
+
+      // Update floating icon if no more sessions
+      if (updatedSessions.length === 0) {
+        await updateFloatingIconRemoteState(false);
+      }
+
+      // Notify agent via SignalR (optional - will be handled by SignalR disconnect)
+      // The WebRTC stop() will close the signaling connection, which automatically
+      // notifies the agent that the session ended
+
+      logger.info('remote-support', 'Session terminated by user', {
+        sessionId,
+      });
+      console.log("[RemoteAccess] ✅ Session terminated successfully");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('remote-support', 'Failed to terminate session', {
+        sessionId,
+        error: errorMessage,
+      });
+      console.error("[RemoteAccess] ❌ Failed to terminate session:", errorMessage);
+      setState({
+        error: errorMessage,
+        activeSession: null,
+        controlEnabled: false,
+      });
+    }
+  }
+
   return {
     state,
     handleRemoteAccessRequest,
@@ -517,8 +600,17 @@ function createRemoteAccessStore() {
     setResolutionProfile,
     handleControlEnabled,
     handleControlDisabled,
+    updateFloatingIconRemoteState,
+    handleTerminationRequest,
   };
 }
 
 // Create singleton instance
 export const remoteAccessStore = createRoot(createRemoteAccessStore);
+
+/**
+ * Hook to access banner sessions for the RemoteSessionBanner component
+ */
+export function useBannerSessions() {
+  return remoteAccessStore.getBannerSessions();
+}
