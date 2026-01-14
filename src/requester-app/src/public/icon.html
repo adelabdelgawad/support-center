@@ -70,12 +70,33 @@
         #badge.show {
             display: flex;
         }
+
+        /* Remote session indicator - bottom-right corner */
+        #remote-indicator {
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            width: 20px;
+            height: 20px;
+            background: transparent;
+            border-radius: 50%;
+            border: 2px solid white;
+            z-index: 10;
+            pointer-events: none;
+            display: none;
+        }
+
+        #remote-indicator.active {
+            display: block;
+            background: #22c55e;
+        }
     </style>
 </head>
 <body>
     <div id="icon-container">
         <img id="icon" src="icon.png" draggable="false" alt="App Icon">
         <div id="badge">0</div>
+        <div id="remote-indicator"></div>
     </div>
 
     <script>
@@ -137,6 +158,21 @@
                     triggerRedFlash();
                     if (e.payload?.count !== undefined) {
                         updateBadgeCount(e.payload.count);
+                    }
+                });
+
+                // Listen for remote session state changes
+                event.listen('remote-session-state', (e) => {
+                    const payload = e.payload || {};
+                    const isActive = payload.isActive ?? false;
+                    const remoteIndicator = document.getElementById('remote-indicator');
+                    // Show/hide indicator based on session state
+                    if (remoteIndicator) {
+                        if (isActive) {
+                            remoteIndicator.classList.add('active');
+                        } else {
+                            remoteIndicator.classList.remove('active');
+                        }
                     }
                 });
 

@@ -411,6 +411,14 @@ export default function RemoteSessionClient({
       await joinSession(sessionId, "agent");
       console.log("[RemoteSession] Joined session via SignalR");
 
+      // Step 2.5: Wait for requester to accept and start WebRTC host
+      // The requester has a 10-second auto-accept timer, so we wait for acceptance
+      // before sending our offer to ensure their WebRTC host is ready
+      console.log("[RemoteSession] Step 2.5: Waiting for requester to accept...");
+      const WAIT_FOR_ACCEPTANCE_MS = 11000; // Wait 11 seconds (10s auto-accept + 1s buffer)
+      await new Promise(resolve => setTimeout(resolve, WAIT_FOR_ACCEPTANCE_MS));
+      console.log("[RemoteSession] Wait complete, proceeding with WebRTC setup");
+
       // Step 3: Create RTCPeerConnection
       console.log("[RemoteSession] Step 3: Creating RTCPeerConnection");
 

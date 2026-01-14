@@ -130,10 +130,18 @@ export function RemoteSessionBanner() {
         </For>
       </div>
       {/* Spacer to push content down when banner is visible */}
+      {/* Stacking: Add 64px for incoming banner if pending */}
       <div style={{
         height: `${remoteAccessStore.state.bannerSessions.length * 56}px`,
         'pointer-events': 'none'
       }} />
+      {/* Additional spacer for incoming banner (shown above this one) */}
+      <Show when={remoteAccessStore.state.pendingSession}>
+        <div style={{
+          height: '64px',
+          'pointer-events': 'none'
+        }} />
+      </Show>
     </Show>
   );
 }

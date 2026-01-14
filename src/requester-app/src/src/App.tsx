@@ -26,6 +26,7 @@ import { ConnectionErrorBanner } from "@/components/connection-error-banner";
 import { FloatingIconSync } from "@/components/floating-icon-sync";
 import { AppShellSkeleton } from "@/components/app-shell-skeleton";
 import { RemoteSessionBanner } from "@/components/remote-session-banner";
+import { IncomingRequestBanner } from "@/components/incoming-request-banner";
 import { listen } from "@tauri-apps/api/event";
 import { RuntimeConfig } from "@/lib/runtime-config";
 import UpdateRequired from "@/components/UpdateRequired";
@@ -255,6 +256,9 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
       <Show when={!isRuntimeConfigReady()} fallback={
         /* Normal app content - only shown when not in update required state */
         <Show when={!updateRequired()}>
+          {/* Incoming Request Banner - Shows when waiting for user acceptance */}
+          {isAuthenticated() && <IncomingRequestBanner />}
+
           {/* Remote Session Banner - Shows when remote session is active */}
           {isAuthenticated() && <RemoteSessionBanner />}
 

@@ -35,6 +35,16 @@ interface BannerSession {
   startedAt: string;
 }
 
+/** Pending session waiting for user acceptance */
+interface PendingSession {
+  sessionId: string;
+  agentName: string;
+  requestTitle: string;
+  expiresAt: string;
+  countdownSeconds: number;
+  createdAt: string;
+}
+
 interface RemoteAccessState {
   /** Whether an action is in progress */
   isProcessing: boolean;
@@ -55,6 +65,8 @@ interface RemoteAccessState {
   resolutionProfile: ResolutionProfile;
   /** Banner visibility state for user awareness (FR-002) */
   bannerSessions: BannerSession[];
+  /** Session waiting for user acceptance (with countdown) */
+  pendingSession: PendingSession | null;
 }
 
 // Store WebRTCHost instance outside of state (not serializable)
@@ -62,6 +74,15 @@ let webrtcHost: WebRTCHost | null = null;
 
 // Track session currently being started to prevent duplicate calls
 let sessionStartInProgress: string | null = null;
+
+// Shared constant for acceptance timeout
+const ACCEPTANCE_TIMEOUT_SECONDS = 10;
+
+// Track active countdown timers
+const countdownTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+// Track action taken to prevent race conditions (timeout vs user action)
+const sessionActionTaken: Map<string, boolean> = new Map();
 
 function createRemoteAccessStore() {
   const [state, setState] = createStore<RemoteAccessState>({
@@ -76,6 +97,8 @@ function createRemoteAccessStore() {
     resolutionProfile: "standard",
     // Banner sessions for user awareness indicator (FR-002)
     bannerSessions: [],
+    // Pending session waiting for user acceptance
+    pendingSession: null,
   });
 
   /**
@@ -103,6 +126,244 @@ function createRemoteAccessStore() {
       console.error("[RemoteAccess] Failed to get monitors:", error);
       return null;
     }
+  }
+
+  /**
+   * Start acceptance timer for pending session
+   * Auto-accepts after ACCEPTANCE_TIMEOUT_SECONDS
+   */
+  function startAcceptanceTimer(sessionId: string): void {
+    // Clear existing timer if any
+    if (countdownTimers.has(sessionId)) {
+      clearTimeout(countdownTimers.get(sessionId)!);
+    }
+
+    // Set 10-second timer - timeout results in ACCEPT, not reject
+    const timerId = setTimeout(async () => {
+      console.log("[RemoteAccess] Acceptance timeout - auto-accepting session:", sessionId);
+      await acceptPendingSession();
+    }, ACCEPTANCE_TIMEOUT_SECONDS * 1000);
+
+    countdownTimers.set(sessionId, timerId);
+    logger.info('remote-support', 'Acceptance timer started', { sessionId, timeout: ACCEPTANCE_TIMEOUT_SECONDS });
+  }
+
+  /**
+   * Clear acceptance timer for a session
+   */
+  function clearAcceptanceTimer(sessionId: string): void {
+    if (countdownTimers.has(sessionId)) {
+      clearTimeout(countdownTimers.get(sessionId)!);
+      countdownTimers.delete(sessionId);
+      logger.info('remote-support', 'Acceptance timer cleared', { sessionId });
+    }
+  }
+
+  /**
+   * Handle incoming remote session request (NEW FLOW - requires acceptance)
+   *
+   * This replaces silent auto-start with a user-controlled flow:
+   * - Shows banner with countdown (10s)
+   * - User can Accept or Reject
+   * - Auto-rejects on timeout
+   * - WebRTC only starts after Accept
+   */
+  async function handleIncomingSessionRequest(data: RemoteAccessRequestData): Promise<void> {
+    logger.info('remote-support', 'Incoming remote session request (acceptance required)', {
+      sessionId: data.sessionId,
+      agentName: data.agentName,
+      requestTitle: data.requestTitle,
+    });
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] 📨 INCOMING REMOTE SESSION REQUEST");
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] Received data:", JSON.stringify(data, null, 2));
+    console.log("[RemoteAccess] Agent:", data.agentName);
+    console.log("[RemoteAccess] Session ID:", data.sessionId);
+    console.log("[RemoteAccess] Request Title:", data.requestTitle);
+
+    // Deduplication: skip if already pending
+    if (state.pendingSession?.sessionId === data.sessionId) {
+      console.log("[RemoteAccess] ⏭️ Session already pending, skipping duplicate call");
+      return;
+    }
+
+    // Deduplication: skip if session is already active
+    if (state.activeSession?.sessionId === data.sessionId) {
+      console.log("[RemoteAccess] ⏭️ Session already active, skipping duplicate call");
+      return;
+    }
+
+    // Clear any existing pending session (only one pending at a time)
+    if (state.pendingSession) {
+      console.log("[RemoteAccess] Clearing existing pending session:", state.pendingSession.sessionId);
+      clearAcceptanceTimer(state.pendingSession.sessionId);
+      sessionActionTaken.delete(state.pendingSession.sessionId);
+    }
+
+    // Create pending session with countdown
+    const pending: PendingSession = {
+      sessionId: data.sessionId,
+      agentName: data.agentName || "IT Support",
+      requestTitle: data.requestTitle || "Remote Support",
+      expiresAt: data.expiresAt || new Date(Date.now() + ACCEPTANCE_TIMEOUT_SECONDS * 1000).toISOString(),
+      countdownSeconds: ACCEPTANCE_TIMEOUT_SECONDS,
+      createdAt: new Date().toISOString(),
+    };
+
+    setState({ pendingSession: pending });
+
+    // Start countdown timer (auto-reject after 10s)
+    startAcceptanceTimer(data.sessionId);
+
+    logger.info('remote-support', 'Pending session created - waiting for user acceptance', {
+      sessionId: data.sessionId,
+      agentName: pending.agentName,
+      timeoutSeconds: ACCEPTANCE_TIMEOUT_SECONDS,
+    });
+    console.log("[RemoteAccess] ✅ Pending session created - waiting for user acceptance");
+  }
+
+  /**
+   * Accept pending session - start WebRTC connection
+   * Called when user clicks Accept button
+   */
+  async function acceptPendingSession(): Promise<void> {
+    const pending = state.pendingSession;
+    if (!pending) {
+      console.warn("[RemoteAccess] No pending session to accept");
+      return;
+    }
+
+    // Check if action already taken (race condition prevention)
+    if (sessionActionTaken.get(pending.sessionId)) {
+      console.log("[RemoteAccess] Action already taken for session - ignoring");
+      return;
+    }
+
+    // Mark action as taken
+    sessionActionTaken.set(pending.sessionId, true);
+
+    logger.info('remote-support', 'User accepted remote session', {
+      sessionId: pending.sessionId,
+      agentName: pending.agentName,
+    });
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] ✅ USER ACCEPTED REMOTE SESSION");
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] Session ID:", pending.sessionId);
+    console.log("[RemoteAccess] Agent:", pending.agentName);
+
+    // Clear countdown timer
+    clearAcceptanceTimer(pending.sessionId);
+
+    // Remove from pending state
+    setState({ pendingSession: null });
+
+    // Mark session as being started
+    sessionStartInProgress = pending.sessionId;
+
+    try {
+      // Add to banner sessions immediately for user awareness
+      const newBannerSession: BannerSession = {
+        sessionId: pending.sessionId,
+        agentName: pending.agentName,
+        startedAt: new Date().toISOString(),
+      };
+
+      setState("bannerSessions", [...state.bannerSessions, newBannerSession]);
+      logger.info('remote-support', 'Banner session added after acceptance', {
+        sessionId: pending.sessionId,
+        agentName: newBannerSession.agentName,
+      });
+
+      // Update floating icon
+      await updateFloatingIconRemoteState(true, pending.agentName);
+
+      // Get primary monitor (same as auto-start flow)
+      console.log("[RemoteAccess] Getting primary monitor...");
+      const primaryMonitor = await getPrimaryMonitor();
+
+      if (!primaryMonitor) {
+        console.error("[RemoteAccess] ❌ Failed to get primary monitor");
+        setState({ error: "Failed to detect monitor for screen sharing" });
+        await rejectPendingSession("error");
+        return;
+      }
+
+      console.log("[RemoteAccess] ✅ Auto-selected primary monitor:", primaryMonitor.name);
+
+      // Start WebRTC session
+      console.log("[RemoteAccess] Starting WebRTC session...");
+      await startWebRTCSession(pending.sessionId, primaryMonitor);
+
+      logger.info('remote-support', 'Remote session started after acceptance', {
+        sessionId: pending.sessionId,
+      });
+      console.log("[RemoteAccess] ✅✅✅ Remote session started after acceptance");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('remote-support', 'Failed to start session after acceptance', {
+        sessionId: pending.sessionId,
+        error: errorMessage,
+      });
+      console.error("[RemoteAccess] ❌ Failed to start session after acceptance:", errorMessage);
+      setState({ error: errorMessage });
+    } finally {
+      // Clear the in-progress flag and action flag
+      sessionStartInProgress = null;
+      sessionActionTaken.delete(pending.sessionId);
+    }
+  }
+
+  /**
+   * Reject pending session - reuse termination logic
+   * Called when user clicks Reject or timeout occurs
+   */
+  async function rejectPendingSession(reason: "user" | "timeout" | "error" = "user"): Promise<void> {
+    const pending = state.pendingSession;
+    if (!pending) {
+      console.warn("[RemoteAccess] No pending session to reject");
+      return;
+    }
+
+    // Check if action already taken (race condition prevention)
+    if (sessionActionTaken.get(pending.sessionId)) {
+      console.log("[RemoteAccess] Action already taken for session - ignoring");
+      return;
+    }
+
+    // Mark action as taken
+    sessionActionTaken.set(pending.sessionId, true);
+
+    logger.info('remote-support', 'Rejecting pending session', {
+      sessionId: pending.sessionId,
+      reason,
+    });
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] ❌ REJECTING PENDING SESSION");
+    console.log("[RemoteAccess] ========================================");
+    console.log("[RemoteAccess] Session ID:", pending.sessionId);
+    console.log("[RemoteAccess] Reason:", reason);
+
+    // Clear countdown timer
+    clearAcceptanceTimer(pending.sessionId);
+
+    // Remove from pending state
+    setState({ pendingSession: null });
+
+    // Reuse termination logic for cleanup
+    // This stops any partially started session, cleans up state
+    await handleTerminationRequest(pending.sessionId);
+
+    logger.info('remote-support', 'Pending session rejected', {
+      sessionId: pending.sessionId,
+      reason,
+    });
+    console.log("[RemoteAccess] ✅ Pending session rejected successfully");
+
+    // Clear action flag
+    sessionActionTaken.delete(pending.sessionId);
   }
 
   /**
@@ -261,118 +522,30 @@ function createRemoteAccessStore() {
   }
 
   /**
-   * Handle remote session auto-start (SILENT auto-open flow)
+   * Handle remote session auto-start (NOW REDIRECTS TO ACCEPTANCE FLOW)
    *
-   * This is the completely silent flow where:
-   * - NO approval dialog is shown
-   * - NO notification is shown
-   * - NO screen picker is shown
-   * - Primary monitor is auto-selected
-   * - Screen sharing starts IMMEDIATELY in background
-   * - Default mode is VIEW
-   * - Agent can switch to CONTROL mode instantly (no approval needed)
+   * Previously: Silent auto-start (no approval)
+   * Now: Redirects to handleIncomingSessionRequest which requires user acceptance
+   *
+   * This is the NEW flow where:
+   * - Shows banner with countdown (10s)
+   * - User must click Accept or Reject
+   * - Auto-rejects on timeout
+   * - WebRTC only starts after Accept
    */
   async function handleRemoteSessionAutoStart(data: RemoteAccessRequestData): Promise<void> {
-    logger.info('remote-support', 'Remote session auto-start received', {
+    logger.info('remote-support', 'Remote session auto-start received - redirecting to acceptance flow', {
       sessionId: data.sessionId,
       agentName: data.agentName,
       requestTitle: data.requestTitle,
     });
     console.log("[RemoteAccess] ========================================");
-    console.log("[RemoteAccess] 🚀🚀🚀 SILENT REMOTE SESSION AUTO-START!");
+    console.log("[RemoteAccess] 📨 REMOTE SESSION REQUEST - REQUIRES ACCEPTANCE");
     console.log("[RemoteAccess] ========================================");
-    console.log("[RemoteAccess] Received data:", JSON.stringify(data, null, 2));
-    console.log("[RemoteAccess] Agent:", data.agentName);
-    console.log("[RemoteAccess] Session ID:", data.sessionId);
-    console.log("[RemoteAccess] Request Title:", data.requestTitle);
+    console.log("[RemoteAccess] Redirecting to handleIncomingSessionRequest...");
 
-    // Deduplication: skip if this session is already being started
-    if (sessionStartInProgress === data.sessionId) {
-      console.log("[RemoteAccess] ⏭️ Session already being started, skipping duplicate call");
-      return;
-    }
-
-    // Deduplication: skip if session is already active
-    if (state.activeSession?.sessionId === data.sessionId) {
-      console.log("[RemoteAccess] ⏭️ Session already active, skipping duplicate call");
-      return;
-    }
-
-    // Mark this session as being started
-    sessionStartInProgress = data.sessionId;
-
-    // Add to banner sessions immediately for user awareness (FR-002, FR-003, FR-004)
-    const newBannerSession: BannerSession = {
-      sessionId: data.sessionId,
-      agentName: data.agentName || "IT Support", // Fallback if agentName is empty (FR-012)
-      startedAt: new Date().toISOString(),
-    };
-
-    // Check if this session is already in the banner (e.g., reconnection)
-    const existingIndex = state.bannerSessions.findIndex(
-      (s) => s.sessionId === data.sessionId
-    );
-    if (existingIndex === -1) {
-      // New session - add to banner
-      setState("bannerSessions", [...state.bannerSessions, newBannerSession]);
-      logger.info('remote-support', 'Banner session added for user awareness', {
-        sessionId: data.sessionId,
-        agentName: newBannerSession.agentName,
-      });
-    } else {
-      // Existing session (reconnection) - update agent name if changed
-      setState("bannerSessions", existingIndex, "agentName", newBannerSession.agentName);
-      logger.info('remote-support', 'Banner session updated (reconnection)', {
-        sessionId: data.sessionId,
-        agentName: newBannerSession.agentName,
-      });
-    }
-
-    // Update floating icon to show remote session active
-    await updateFloatingIconRemoteState(true, newBannerSession.agentName);
-
-    try {
-      // SILENT MODE: No notification, no window foreground, no picker
-      // Auto-select primary monitor and start immediately
-
-      console.log("[RemoteAccess] Step 1: Getting primary monitor...");
-      // Get primary monitor
-      const primaryMonitor = await getPrimaryMonitor();
-
-      if (!primaryMonitor) {
-        console.error("[RemoteAccess] ❌ Failed to get primary monitor - cannot auto-start");
-        setState({ error: "Failed to detect monitor for screen sharing" });
-        return;
-      }
-
-      console.log("[RemoteAccess] ✅ Auto-selected primary monitor:", primaryMonitor.name);
-      console.log("[RemoteAccess] Monitor ID:", primaryMonitor.id);
-      console.log("[RemoteAccess] Resolution:", primaryMonitor.width, "x", primaryMonitor.height);
-
-      console.log("[RemoteAccess] Step 2: Starting WebRTC session...");
-      // Start WebRTC session immediately with primary monitor (completely silent)
-      await startWebRTCSession(data.sessionId, primaryMonitor);
-
-      logger.info('remote-support', 'Silent auto-start complete - screen sharing active', {
-        sessionId: data.sessionId,
-      });
-      console.log("[RemoteAccess] ✅✅✅ Silent auto-start complete - screen sharing active");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('remote-support', 'Error in handleRemoteSessionAutoStart', {
-        sessionId: data.sessionId,
-        error: errorMessage,
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
-      console.error("[RemoteAccess] ❌❌❌ Error in handleRemoteSessionAutoStart:");
-      console.error("[RemoteAccess] Error type:", error instanceof Error ? error.constructor.name : typeof error);
-      console.error("[RemoteAccess] Error message:", error instanceof Error ? error.message : String(error));
-      console.error("[RemoteAccess] Error stack:", error instanceof Error ? error.stack : "No stack");
-      setState({ error: error instanceof Error ? error.message : String(error) });
-    } finally {
-      // Clear the in-progress flag regardless of success/failure
-      sessionStartInProgress = null;
-    }
+    // Redirect to new acceptance flow
+    await handleIncomingSessionRequest(data);
   }
 
   /**
@@ -494,6 +667,13 @@ function createRemoteAccessStore() {
     console.log("[RemoteAccess] Clearing all banner sessions");
     setState("bannerSessions", []);
 
+    // Also clear any pending session
+    if (state.pendingSession) {
+      console.log("[RemoteAccess] Clearing pending session during disconnect");
+      clearAcceptanceTimer(state.pendingSession.sessionId);
+      setState({ pendingSession: null });
+    }
+
     // Reset floating icon
     await updateFloatingIconRemoteState(false);
   }
@@ -602,6 +782,8 @@ function createRemoteAccessStore() {
     handleControlDisabled,
     updateFloatingIconRemoteState,
     handleTerminationRequest,
+    acceptPendingSession,
+    rejectPendingSession,
   };
 }
 
