@@ -148,6 +148,7 @@ export function SLAReportClient({ initialData }: SLAReportClientProps) {
     fetcher,
     {
       fallbackData: initialData,
+      revalidateIfStale: false,
       revalidateOnFocus: false,
     }
   );

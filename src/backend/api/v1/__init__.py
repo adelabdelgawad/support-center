@@ -23,6 +23,7 @@ from .endpoints import (
     files,
     internal,
     notifications,
+    organizational_units,
     pages,
     priorities,
     remote_access,
@@ -35,6 +36,7 @@ from .endpoints import (
     requests,
     roles,
     screenshots,
+    scheduler,
     search,
     service_sections,
     session_stats,
@@ -54,6 +56,12 @@ api_router.include_router(users.router, prefix="/users", tags=["users"])
 
 api_router.include_router(
     domain_users.router, prefix="/domain-users", tags=["domain-users"]
+)
+
+api_router.include_router(
+    organizational_units.router,
+    prefix="/organizational-units",
+    tags=["organizational-units"],
 )
 
 api_router.include_router(
@@ -183,3 +191,8 @@ api_router.include_router(
     deployment_jobs.router, prefix="/deployment-jobs", tags=["deployment-jobs"]
 )
 api_router.include_router(internal.router, prefix="/internal", tags=["internal"])
+
+# Scheduler Management
+api_router.include_router(
+    scheduler.router, prefix="/scheduler", tags=["scheduler"]
+)

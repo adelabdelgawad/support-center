@@ -194,6 +194,7 @@ export function ReportsDashboardClient({ initialData }: ReportsDashboardClientPr
     fetcher,
     {
       fallbackData: initialData ?? undefined,
+      revalidateIfStale: false,
       revalidateOnFocus: false,
       refreshInterval: 5 * 60 * 1000, // Refresh every 5 minutes
     }

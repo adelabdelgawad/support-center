@@ -161,8 +161,8 @@ export async function fetchRoleUsers(roleId: string): Promise<AuthUserResponse[]
  */
 export async function updateRoleUsers(
   roleId: string,
-  originalUserIds: number[],
-  updatedUserIds: number[]
+  originalUserIds: string[],
+  updatedUserIds: string[]
 ): Promise<{ message: string; added: number; removed: number }> {
   const request: RoleUsersUpdateRequest = {
     originalUserIds,

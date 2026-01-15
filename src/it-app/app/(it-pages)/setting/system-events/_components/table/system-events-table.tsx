@@ -2,7 +2,6 @@
 
 import { useSearchParams } from 'next/navigation';
 import { Pagination } from '@/components/data-table';
-import { EventsPanel } from '../sidebar/events-panel';
 import { SystemEventsTableBody } from './system-events-table-body';
 import type { SystemEventListResponse, SystemEventResponse } from '@/types/system-events';
 import { useCallback, useState, useEffect } from 'react';
@@ -93,16 +92,9 @@ function SystemEventsTable({ initialData }: SystemEventsTableProps) {
       onAddToCache={addEventToCache}
       onRefetch={handleRefetch}
     >
-      <div className="relative h-full flex bg-muted min-h-0 p-1">
-        {/* Events Panel */}
-        <EventsPanel
-          total={totalItems}
-          activeCount={activeCount}
-          inactiveCount={inactiveCount}
-        />
-
+      <div className="relative h-full bg-muted min-h-0 p-1">
         {/* Main Content */}
-        <div className="h-full flex-1 flex flex-col min-h-0 min-w-0 ml-2 space-y-2">
+        <div className="h-full flex flex-col min-h-0 min-w-0 ml-2 space-y-2">
           {/* Table */}
           <div className="flex-1 min-h-0 flex flex-col">
             <SystemEventsTableBody

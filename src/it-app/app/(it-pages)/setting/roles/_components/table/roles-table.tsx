@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import { useState, useCallback } from "react";
 import { Pagination } from "@/components/data-table";
 import { RolesTableBody } from "./roles-table-body";
 import { MobileRolesView } from "../mobile/mobile-roles-view";
@@ -9,7 +9,6 @@ import LoadingSkeleton from "@/components/loading-skelton";
 import type { SettingRolesResponse, RoleResponse } from "@/types/roles";
 import type { PageResponse } from "@/types/pages";
 import type { AuthUserResponse } from "@/types/users";
-import { useCallback } from "react";
 
 interface RolesTableProps {
   initialData: SettingRolesResponse;
@@ -18,7 +17,7 @@ interface RolesTableProps {
 }
 
 /**
- * Fetcher function for SWR - uses Next.js API routes
+ * Fetcher function - uses Next.js API routes
  * This ensures backend is only accessible from server
  */
 const fetcher = async (url: string): Promise<SettingRolesResponse> => {
@@ -57,38 +56,11 @@ function RolesTable({
   // Use Next.js API route - proxies to backend
   const apiUrl = `/api/setting/roles?${params.toString()}`;
 
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.roles && initialData.roles.length > 0;
-
-  // SWR hook with optimized configuration
-  const {
-    data,
-    mutate,
-    isLoading,
-    isValidating,
-    error,
-  } = useSWR<SettingRolesResponse>(apiUrl, fetcher, {
-    // Use server-side data as initial cache
-    fallbackData: initialData,
-
-    // Keep showing previous data while fetching new data (smooth transitions)
-    keepPreviousData: true,
-
-    // Fetch on mount if no real initial data (e.g., came from empty fallback)
-    revalidateOnMount: !hasRealInitialData,
-
-    // Don't auto-refetch stale data - we control when to refetch
-    revalidateIfStale: false,
-
-    // Disable automatic refetch on window focus
-    revalidateOnFocus: false,
-
-    // Disable automatic refetch on reconnect
-    revalidateOnReconnect: false,
-
-    // Dedupe requests within 2 seconds
-    dedupingInterval: 2000,
-  });
+  // Simple state management (useState instead of SWR)
+  const [data, setData] = useState<SettingRolesResponse | null>(initialData);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   const roles = data?.roles ?? [];
   const activeCount = data?.activeCount ?? 0;
@@ -96,12 +68,27 @@ function RolesTable({
   const totalItems = data?.total ?? 0;
 
   /**
-   * Update roles in SWR cache with backend-returned data
-   * Uses the returned record from API without triggering background refetch
+   * Manual refresh function
    */
-  const updateRolesOptimistic = useCallback(
+  const refresh = useCallback(async () => {
+    setIsValidating(true);
+    setError(null);
+    try {
+      const response = await fetcher(apiUrl);
+      setData(response);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setIsValidating(false);
+    }
+  }, [apiUrl]);
+
+  /**
+   * Update roles with backend-returned data
+   * Uses the returned record from API
+   */
+  const updateRoles = useCallback(
     async (updatedRoles: RoleResponse[]) => {
-      // Get current data to compute new state
       const currentData = data;
       if (!currentData) return;
 
@@ -118,17 +105,17 @@ function RolesTable({
         roles: updatedRolesList,
       };
 
-      // Update SWR cache without background refetch - API already returned fresh data
-      await mutate(newData, { revalidate: false });
+      // Update state without background refetch - API already returned fresh data
+      setData(newData);
     },
-    [mutate, data]
+    [data]
   );
 
   /**
    * Add new role to cache - for when a new role is created
-   * This adds the role to current page data and triggers a background refetch
+   * This adds the role to current page data
    */
-  const addRoleToCache = useCallback(
+  const addRole = useCallback(
     async (newRole: RoleResponse) => {
       const currentData = data;
       if (!currentData) return;
@@ -145,18 +132,13 @@ function RolesTable({
           : currentData.inactiveCount,
       };
 
-      // Update cache and trigger background refetch for accurate pagination
-      await mutate(newData, { revalidate: true });
+      // Update state
+      setData(newData);
+      // Refresh to get accurate pagination from backend
+      await refresh();
     },
-    [mutate, data]
+    [data, refresh]
   );
-
-  /**
-   * Force refetch - use sparingly (e.g., manual refresh button)
-   */
-  const refetch = useCallback(() => {
-    mutate();
-  }, [mutate]);
 
   // Error state with retry button
   if (error) {
@@ -168,7 +150,7 @@ function RolesTable({
             {error.message}
           </div>
           <button
-            onClick={() => mutate()}
+            onClick={refresh}
             className="text-primary hover:underline"
           >
             Retry
@@ -194,9 +176,9 @@ function RolesTable({
             <RolesTableBody
               roles={roles}
               page={page}
-              refetch={refetch}
-              updateRoles={updateRolesOptimistic}
-              addRole={addRoleToCache}
+              refetch={refresh}
+              updateRoles={updateRoles}
+              addRole={addRole}
               preloadedPages={preloadedPages}
               preloadedUsers={preloadedUsers}
               isValidating={isValidating}
@@ -227,9 +209,9 @@ function RolesTable({
           pageSize={limit}
           activeCount={activeCount}
           inactiveCount={inactiveCount}
-          refetch={refetch}
-          updateRoles={updateRolesOptimistic}
-          addRole={addRoleToCache}
+          refetch={refresh}
+          updateRoles={updateRoles}
+          addRole={addRole}
           preloadedPages={preloadedPages}
           preloadedUsers={preloadedUsers}
           isValidating={isValidating}

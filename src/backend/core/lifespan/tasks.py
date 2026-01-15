@@ -96,28 +96,30 @@ async def initialize_external_services(cache, settings):
 
 
 async def start_background_scheduler():
-    """Start background scheduler for periodic tasks."""
-    from core.scheduler import start_scheduler
+    """Start database-driven background scheduler for periodic tasks."""
+    from core.scheduler_manager import get_scheduler_manager
 
     logger = logging.getLogger("main")
     try:
-        start_scheduler()
-        print("✅ Background scheduler started")
-        logger.info("✅ Background scheduler started")
+        manager = get_scheduler_manager()
+        await manager.start()
+        print("✅ Database-driven scheduler manager started")
+        logger.info("✅ Database-driven scheduler manager started")
     except Exception as e:
         print(f"⚠️  Scheduler initialization failed: {e}")
         logger.warning(f"⚠️  Scheduler initialization failed: {e}")
 
 
 async def shutdown_scheduler_task():
-    """Shutdown background scheduler."""
-    from core.scheduler import shutdown_scheduler
+    """Shutdown database-driven background scheduler."""
+    from core.scheduler_manager import get_scheduler_manager
 
     logger = logging.getLogger("main")
     try:
-        shutdown_scheduler()
-        print("✅ Background scheduler shut down")
-        logger.info("✅ Background scheduler shut down")
+        manager = get_scheduler_manager()
+        await manager.stop()
+        print("✅ Database-driven scheduler manager shut down")
+        logger.info("✅ Database-driven scheduler manager shut down")
     except Exception as e:
         print(f"⚠️  Scheduler shutdown error: {e}")
         logger.warning(f"⚠️  Scheduler shutdown error: {e}")

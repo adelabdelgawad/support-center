@@ -1,8 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import useSWR from "swr";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { SettingUsersResponse, UserWithRolesResponse } from "@/types/users";
 import type { RoleResponse } from "@/types/roles";
 import { StatusPanel } from "../sidebar/status-panel";
@@ -33,10 +32,10 @@ interface UsersTableProps {
 }
 
 /**
- * Fetcher function for SWR - optimized for caching and deduping
+ * Fetcher function for manual data fetching
  * Uses Next.js internal API routes for authentication
  */
-const fetcher = async (url: string) => {
+const fetcher = async (url: string): Promise<SettingUsersResponse> => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🌍 [Fetcher] FETCHING DATA');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -120,93 +119,89 @@ function UsersTable({
 
   console.log('🌐 [UsersTable] API URL:', apiUrl);
 
-  /**
-   * SWR Configuration - Manual Refetch Only
-   *
-   * ALL automatic client-side refetching is DISABLED:
-   * - No refetch on mount
-   * - No refetch on window focus
-   * - No refetch on reconnect
-   * - No refetch when data becomes stale
-   *
-   * Data ONLY refetches when:
-   * - Filters change (isActiveFilter, userTypeFilter, filter, role)
-   * - Page changes
-   * - Manual refetch is called (via refresh button, etc.)
-   *
-   * This is handled by the useEffect below that watches filter parameters.
-   */
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.users && initialData.users.length > 0;
+  // ============================================================
+  // STATE MANAGEMENT (useState - Strategy A: Simple Fetching)
+  // ============================================================
 
-  const { data, mutate, isLoading, isValidating, error } = useSWR<SettingUsersResponse>(
-    apiUrl,
-    fetcher,
-    {
-      // Use server-side data as initial cache
-      fallbackData: initialData ?? undefined,
+  // Initialize state with server-side data
+  const [data, setData] = useState<SettingUsersResponse | null>(initialData);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-      // Keep previous data for smooth transitions
-      keepPreviousData: true,
-
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateIfStale: false,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-
-      // Dedupe requests within 2 seconds
-      dedupingInterval: 2000,
-    }
-  );
-
-  // Track if this is the initial mount to avoid unnecessary refetch
+  // Track if this is the initial mount to avoid unnecessary fetch
   const isInitialMount = useRef(true);
   // Track the previous initialData to detect SSR navigation
   const prevInitialDataRef = useRef(initialData);
+  // Track current API URL to detect changes
+  const currentUrlRef = useRef(apiUrl);
 
-  // When initialData changes (SSR navigation), update SWR cache directly
-  // This avoids a redundant CSR fetch after URL navigation
+  /**
+   * Manual refresh function - fetches data from API
+   */
+  const refresh = useCallback(async () => {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔄 [refresh] MANUAL REFRESH');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('URL:', apiUrl);
+    console.log('Timestamp:', new Date().toISOString());
+
+    setIsValidating(true);
+    try {
+      const response = await fetcher(apiUrl);
+      console.log('✅ [refresh] FETCH SUCCESS - updating state');
+      setData(response);
+      setError(null);
+    } catch (err) {
+      console.log('❌ [refresh] FETCH ERROR:', err);
+      setError(err as Error);
+    } finally {
+      setIsValidating(false);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    }
+  }, [apiUrl]);
+
+  /**
+   * Handle SSR data changes (URL navigation)
+   * When initialData changes, update state directly without refetching
+   */
   useEffect(() => {
-    // If initialData changed (due to URL navigation with SSR data)
     if (initialData && initialData !== prevInitialDataRef.current) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📦 [useEffect] SSR DATA CHANGED - UPDATING SWR CACHE');
+      console.log('📦 [useEffect] SSR DATA CHANGED - updating state');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      // Update SWR cache with new SSR data (no revalidation needed)
-      mutate(initialData, { revalidate: false });
+      setData(initialData);
       prevInitialDataRef.current = initialData;
     }
-  }, [initialData, mutate]);
+  }, [initialData]);
 
-  // Force revalidation ONLY for manual refresh (not on filter/page changes)
-  // URL navigation already provides fresh SSR data via initialData
+  /**
+   * Handle URL parameter changes (filters, pagination)
+   * When apiUrl changes, fetch new data
+   */
   useEffect(() => {
     // Skip the first render - we already have data from SSR
     if (isInitialMount.current) {
       isInitialMount.current = false;
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🚀 [useEffect] INITIAL MOUNT - SKIPPING REFETCH (using SSR data)');
+      console.log('🚀 [useEffect] INITIAL MOUNT - using SSR data');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      currentUrlRef.current = apiUrl;
       return;
     }
 
-    // If initialData is available and matches current filters, skip refetch
-    // The SSR data update effect above handles this case
-    if (initialData) {
+    // Only fetch if URL changed
+    if (apiUrl !== currentUrlRef.current) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📦 [useEffect] SSR DATA AVAILABLE - SKIPPING CSR REFETCH');
+      console.log('🔍 [useEffect] URL CHANGED - fetching new data');
+      console.log('Old URL:', currentUrlRef.current);
+      console.log('New URL:', apiUrl);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      return;
+
+      currentUrlRef.current = apiUrl;
+      refresh();
     }
-
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔄 [useEffect] NO SSR DATA - TRIGGERING CSR REFETCH');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-
-    // Only fetch if we don't have SSR data
-    mutate();
-  }, [isActiveFilter, userTypeFilter, filter, role, page, mutate, initialData]);
+  }, [apiUrl, refresh]);
 
   const users = data?.users ?? [];
 
@@ -271,13 +266,13 @@ function UsersTable({
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   /**
-   * Optimistic update - updates specific users in SWR cache WITHOUT refetching
+   * Update users in state - updates specific users and refreshes to get accurate counts
    * Use this for updates where we already have the new data from API response
    */
-  const updateUsersOptimistic = useCallback(
+  const updateUsers = useCallback(
     async (updatedUsers: UserWithRolesResponse[]) => {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('⚡ [updateUsersOptimistic] OPTIMISTIC UPDATE');
+      console.log('⚡ [updateUsers] OPTIMISTIC UPDATE');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('Updated users count:', updatedUsers.length);
       console.log('Updated users:', updatedUsers.map(u => ({
@@ -301,36 +296,35 @@ function UsersTable({
         updatedMap.has(user.id) ? updatedMap.get(user.id)! : user
       );
 
-      console.log('Updating SWR cache with updated users (will revalidate to get fresh counts)');
+      console.log('Updating state with updated users (will refresh to get fresh counts)');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-      // For status/technician updates, just update the users list
-      // and let the backend provide accurate counts on next fetch
-      const newData: SettingUsersResponse = {
+      // Update state immediately with new user data
+      setData({
         ...currentData,
         users: updatedUsersList,
-      };
+      });
 
-      // Revalidate to get fresh counts from backend
-      await mutate(newData, { revalidate: true });
+      // Then refresh to get accurate counts from backend
+      await refresh();
     },
-    [mutate, data]
+    [data, refresh]
   );
 
   /**
-   * Add new user to cache
+   * Add new user to state
    */
-  const addUserToCache = useCallback(
+  const addUser = useCallback(
     async (newUser: UserWithRolesResponse) => {
       const currentData = data;
       if (!currentData) return;
 
-      // Add user to list and revalidate to get fresh counts from backend
-      const newData: SettingUsersResponse = {
+      // Add user to list
+      setData({
         ...currentData,
         users: [newUser, ...currentData.users],
         total: currentData.total + 1,
-        // These will be refreshed from backend on revalidate
+        // These will be refreshed from backend on refresh
         globalTotal: currentData.globalTotal + 1,
         technicianCount: newUser.isTechnician
           ? currentData.technicianCount + 1
@@ -344,19 +338,18 @@ function UsersTable({
         inactiveCount: !newUser.isActive
           ? currentData.inactiveCount + 1
           : currentData.inactiveCount,
-      };
+      });
 
-      await mutate(newData, { revalidate: true });
+      // Refresh to get accurate counts from backend
+      await refresh();
     },
-    [mutate, data]
+    [data, refresh]
   );
 
   /**
-   * Force refetch
+   * Force refetch - alias for refresh
    */
-  const refetch = useCallback(() => {
-    mutate();
-  }, [mutate]);
+  const refetch = refresh;
 
   // Error state with retry button
   if (error) {
@@ -365,7 +358,7 @@ function UsersTable({
         <div className="text-center">
           <div className="text-destructive mb-2">Failed to load users</div>
           <div className="text-muted-foreground text-sm mb-4">{error.message}</div>
-          <button onClick={() => mutate()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">
+          <button onClick={refresh} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">
             Retry
           </button>
         </div>
@@ -384,7 +377,7 @@ function UsersTable({
         // Use Next.js API route via lib/api/users.ts
         const updatedUser = await toggleUserStatus(String(userId), isActive);
         // Optimistic update with response data
-        await updateUsersOptimistic([updatedUser]);
+        await updateUsers([updatedUser]);
         toastSuccess(`User ${isActive ? "activated" : "deactivated"} successfully`);
         return { success: true };
       } catch (err: unknown) {
@@ -398,7 +391,7 @@ function UsersTable({
         // Use Next.js API route via lib/api/users.ts
         const updatedUser = await toggleUserTechnicianStatus(String(userId), isTechnician);
         // Optimistic update with response data
-        await updateUsersOptimistic([updatedUser]);
+        await updateUsers([updatedUser]);
         toastSuccess(`User ${isTechnician ? "marked as technician" : "unmarked as technician"} successfully`);
         return { success: true };
       } catch (err: unknown) {
@@ -425,7 +418,7 @@ function UsersTable({
           throw new Error(error.detail || "Failed to update user");
         }
         const data = await response.json();
-        await updateUsersOptimistic([data]);
+        await updateUsers([data]);
         toastSuccess("User updated successfully");
         return { success: true, data };
       } catch (err: unknown) {
@@ -434,14 +427,14 @@ function UsersTable({
         return { success: false, error: errorMessage };
       }
     },
-    updateUsers: updateUsersOptimistic,
-    addUser: addUserToCache,
+    updateUsers,
+    addUser,
     onBulkUpdateStatus: async (userIds: number[], isActive: boolean) => {
       try {
         // Use Next.js API route via lib/api/users.ts
         const response = await updateUsersStatus(userIds.map(String), isActive);
         if (response.updatedUsers?.length > 0) {
-          await updateUsersOptimistic(response.updatedUsers);
+          await updateUsers(response.updatedUsers);
         }
         toastSuccess(`Successfully ${isActive ? "activated" : "deactivated"} ${userIds.length} user(s)`);
         return { success: true, data: response.updatedUsers };
@@ -456,7 +449,7 @@ function UsersTable({
         // Use Next.js API route via lib/api/users.ts
         const response = await updateUsersTechnicianStatus(userIds.map(String), isTechnician);
         if (response.updatedUsers?.length > 0) {
-          await updateUsersOptimistic(response.updatedUsers);
+          await updateUsers(response.updatedUsers);
         }
         toastSuccess(`Successfully ${isTechnician ? "converted" : "removed"} ${userIds.length} user(s) ${isTechnician ? "to" : "from"} technician`);
         return { success: true, data: response.updatedUsers };
@@ -467,7 +460,7 @@ function UsersTable({
       }
     },
     onRefreshUsers: async () => {
-      await mutate();
+      await refresh();
       return { success: true };
     },
     refetch,
@@ -500,8 +493,8 @@ function UsersTable({
                   users={users}
                   page={page}
                   refetch={refetch}
-                  updateUsers={updateUsersOptimistic}
-                  addUser={addUserToCache}
+                  updateUsers={updateUsers}
+                  addUser={addUser}
                   isValidating={isValidating}
                   activeCount={scopedActiveCount}
                   inactiveCount={scopedInactiveCount}
@@ -539,8 +532,8 @@ function UsersTable({
               roles={roles}
               roleCounts={roleCounts}
               refetch={refetch}
-              updateUsers={updateUsersOptimistic}
-              addUser={addUserToCache}
+              updateUsers={updateUsers}
+              addUser={addUser}
               isValidating={isValidating}
             />
           </ErrorBoundary>

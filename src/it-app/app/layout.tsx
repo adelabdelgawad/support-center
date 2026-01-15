@@ -88,7 +88,7 @@ export default async function RootLayout({
       data-arp=""
       suppressHydrationWarning // Required for next-themes: prevents warning when theme class/style applied on client
     >
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning>
         {/*
           ClientAppWrapper is the main client provider for session and theme.
           It receives the server-fetched session and provides it to

@@ -65,6 +65,7 @@ export const NAVIGATION_SECTION_MAP: Record<string, NavigationSection> = {
   "Categories": "admin",
   "Priorities": "admin",
   "Settings": "admin",
+  "Scheduler": "admin",
 };
 
 /**

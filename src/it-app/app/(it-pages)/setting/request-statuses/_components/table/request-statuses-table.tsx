@@ -75,7 +75,7 @@ function RequestStatusesTable({ initialData }: RequestStatusesTableProps) {
         total: data.total + 1,
         activeCount: newStatus.isActive ? data.activeCount + 1 : data.activeCount,
         inactiveCount: !newStatus.isActive ? data.inactiveCount + 1 : data.inactiveCount,
-        readonlyCount: newStatus.isReadonly ? data.readonlyCount + 1 : data.readonlyCount,
+        readonlyCount: newStatus.readonly ? data.readonlyCount + 1 : data.readonlyCount,
       };
       setData(newData);
     },

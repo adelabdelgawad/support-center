@@ -21,11 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@/lib/toast";
 import { Upload, File, X } from "lucide-react";
 import { createClientVersion, uploadInstaller } from "@/lib/api/client-versions";
 
-import type { ClientVersion } from "@/types/client-versions";
+import type { ClientVersion, ClientVersionCreate } from "@/types/client-versions";
 
 // Allowed file extensions for installer
 const ALLOWED_EXTENSIONS = [".exe", ".msi"];
@@ -34,7 +34,8 @@ const MAX_FILE_SIZE_MB = 50;
 interface AddVersionSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (version: ClientVersion) => void;
+  onSave: (data: ClientVersionCreate) => Promise<void>;
+  onInstallerFileChange?: (file: File | null) => void;
   currentLatest?: string; // Current latest version for reference
 }
 
@@ -56,7 +57,8 @@ function parseVersion(v: string | undefined): { major: number; minor: number; pa
 export function AddVersionSheet({
   open,
   onOpenChange,
-  onSuccess,
+  onSave,
+  onInstallerFileChange,
   currentLatest,
 }: AddVersionSheetProps) {
   const [loading, setLoading] = useState(false);
@@ -133,17 +135,19 @@ export function AddVersionSheet({
 
     const error = validateFile(file);
     if (error) {
-      toast.error(error);
+      toastError(error);
       e.target.value = "";
       return;
     }
 
     setInstallerFile(file);
+    onInstallerFileChange?.(file);
   };
 
   // Remove selected file
   const handleRemoveFile = () => {
     setInstallerFile(null);
+    onInstallerFileChange?.(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -160,14 +164,14 @@ export function AddVersionSheet({
     e.preventDefault();
 
     if (!isValidVersion) {
-      toast.error(`Version ${versionString} must be greater than ${currentLatest}`);
+      toastError(`Version ${versionString} must be greater than ${currentLatest}`);
       return;
     }
 
     setLoading(true);
     try {
-      // Step 1: Create the version
-      const newVersion = await createClientVersion({
+      // Call the parent's onSave handler
+      await onSave({
         versionString,
         isEnforced,
         releaseNotes: releaseNotes.trim() || null,
@@ -175,31 +179,10 @@ export function AddVersionSheet({
         silentInstallArgs: silentInstallArgs.trim() || null,
       });
 
-      // Step 2: Upload installer if file selected
-      let finalVersion = newVersion;
-      if (installerFile) {
-        setUploading(true);
-        try {
-          finalVersion = await uploadInstaller(newVersion.id, installerFile);
-          toast.success(`Version ${versionString} created with installer.`);
-        } catch (uploadError) {
-          // Version was created but upload failed
-          toast.warning(
-            `Version ${versionString} created, but installer upload failed: ${
-              uploadError instanceof Error ? uploadError.message : "Unknown error"
-            }`
-          );
-        } finally {
-          setUploading(false);
-        }
-      } else {
-        toast.success(`Version ${versionString} is now the latest version.`);
-      }
-
+      toastSuccess("Version created successfully");
       resetForm();
-      onSuccess(finalVersion);
     } catch (error) {
-      toast.error(
+      toastError(
         error instanceof Error ? error.message : "Failed to create version"
       );
     } finally {

@@ -254,6 +254,9 @@ export function createUsersTableColumns({
           row.original.id && updatingIds.has(typeof row.original.id === 'string' ? parseInt(row.original.id, 10) : row.original.id)
         );
         const userRoles = row.original.roles || [];
+        const displayLimit = 3;
+        const hasMore = userRoles.length > displayLimit;
+        const displayRoles = hasMore ? userRoles.slice(0, displayLimit) : userRoles;
 
         if (!userRoles || userRoles.length === 0) {
           return (
@@ -271,15 +274,18 @@ export function createUsersTableColumns({
 
         return (
           <div
-            className={`flex flex-wrap gap-1 justify-center ${
+            className={`flex flex-wrap gap-1 justify-center items-center ${
               isRowUpdating ? "opacity-60 pointer-events-none" : ""
             }`}
           >
-            {userRoles.map((role) => (
+            {displayRoles.map((role) => (
               <Badge key={role.id} variant="outline" className="text-xs">
                 {role.name}
               </Badge>
             ))}
+            {hasMore && (
+              <span className="text-xs text-muted-foreground">...</span>
+            )}
           </div>
         );
       },
@@ -294,6 +300,9 @@ export function createUsersTableColumns({
           row.original.id && updatingIds.has(typeof row.original.id === 'string' ? parseInt(row.original.id, 10) : row.original.id)
         );
         const businessUnits = row.original.businessUnits || [];
+        const displayLimit = 3;
+        const hasMore = businessUnits.length > displayLimit;
+        const displayUnits = hasMore ? businessUnits.slice(0, displayLimit) : businessUnits;
 
         if (!businessUnits || businessUnits.length === 0) {
           return (
@@ -311,11 +320,11 @@ export function createUsersTableColumns({
 
         return (
           <div
-            className={`flex flex-wrap gap-1 justify-center ${
+            className={`flex flex-wrap gap-1 justify-center items-center ${
               isRowUpdating ? "opacity-60 pointer-events-none" : ""
             }`}
           >
-            {businessUnits.map((bu) => (
+            {displayUnits.map((bu) => (
               <Badge
                 key={bu.id}
                 variant={bu.isActive ? "default" : "secondary"}
@@ -324,6 +333,9 @@ export function createUsersTableColumns({
                 {bu.name}
               </Badge>
             ))}
+            {hasMore && (
+              <span className="text-xs text-muted-foreground">...</span>
+            )}
           </div>
         );
       },

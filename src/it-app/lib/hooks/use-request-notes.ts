@@ -28,6 +28,7 @@ export function useRequestNotes(requestId: string, initialData?: RequestNote[]) 
     fetcher,
     {
       fallbackData: initialData,
+      revalidateIfStale: false, // Don't refetch stale data on mount (SSR data is fresh)
       // Fetch on mount if no real initial data (e.g., came from empty fallback)
       revalidateOnMount: !hasRealInitialData,
       revalidateOnFocus: false, // Don't refetch when window regains focus

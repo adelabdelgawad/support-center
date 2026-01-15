@@ -40,6 +40,7 @@ export default function OperationsDashboardClient({ initialData }: OperationsDas
       }),
     {
       fallbackData: initialData,
+      revalidateIfStale: false,
       refreshInterval: 300000, // 5 minutes
       revalidateOnFocus: true,
     }

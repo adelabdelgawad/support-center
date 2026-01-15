@@ -864,6 +864,70 @@ class RequestResolution(TableModel, table=True):
     )
 
 
+class OrganizationalUnit(TableModel, table=True):
+    """Organizational Unit model for Active Directory OU management."""
+
+    __tablename__ = "organizational_units"
+
+    id: int = Field(
+        default=None,
+        sa_column=Column(Integer, primary_key=True, autoincrement=True),
+        description="Auto-incrementing primary key",
+    )
+    ou_name: str = Field(
+        min_length=1,
+        max_length=100,
+        sa_column=Column(String(100), nullable=False, unique=True),
+        description="OU short name (e.g., 'SMH', 'EHQ')",
+    )
+    ou_dn: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        sa_column=Column(String(500), nullable=True),
+        description="Full distinguished name (e.g., 'OU=SMH,DC=example,DC=com')",
+    )
+    is_enabled: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default="true"),
+        description="Whether this OU should be included in AD sync",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        sa_column=Column(String(500), nullable=True),
+        description="Optional description of the OU",
+    )
+    user_count: Optional[int] = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=True, server_default="0"),
+        description="Last synced user count from this OU",
+    )
+    last_synced_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="Last time this OU was successfully synced",
+    )
+    created_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+        description="Record creation timestamp",
+    )
+    updated_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "onupdate": text("CURRENT_TIMESTAMP"),
+        },
+        description="Last update timestamp",
+    )
+
+    __table_args__ = (
+        Index("ix_organizational_units_ou_name", "ou_name", unique=True),
+        Index("ix_organizational_units_is_enabled", "is_enabled"),
+        Index("ix_organizational_units_last_synced_at", "last_synced_at"),
+    )
+
+
 class DomainUser(TableModel, table=True):
     """Domain user model for Active Directory user synchronization."""
 
@@ -4724,3 +4788,452 @@ class Credential(TableModel, table=True):
 # - BusinessUnitRole (lines 1415-1440 in original)
 # - BusinessUnitUserAssign (lines 1443-1524 in original)
 # ============================================================================
+
+# =============================================================================
+# SCHEDULER MANAGEMENT MODELS
+# =============================================================================
+
+
+class TaskFunction(TableModel, table=True):
+    """Registry of available task functions that can be scheduled."""
+
+    __tablename__ = "task_functions"
+
+    id: int = Field(default=None, primary_key=True)
+    name: str = Field(
+        max_length=100,
+        sa_column=Column(String(100), nullable=False, unique=True),
+        description="Task function identifier (e.g., sync_domain_users)",
+    )
+    display_name: str = Field(
+        max_length=200,
+        sa_column=Column(String(200), nullable=False),
+        description="Human-readable display name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        sa_column=Column(String(500), nullable=True),
+        description="Task description",
+    )
+    handler_path: str = Field(
+        max_length=500,
+        sa_column=Column(String(500), nullable=False),
+        description="Python module path (e.g., tasks.ad_sync_tasks.sync_domain_users_task)",
+    )
+    handler_type: str = Field(
+        max_length=20,
+        sa_column=Column(String(20), nullable=False),
+        description="Handler type: celery_task or async_function",
+    )
+    queue: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        sa_column=Column(String(50), nullable=True),
+        description="Celery queue name (for celery_task type)",
+    )
+    default_timeout_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        sa_column=Column(Integer, nullable=False, default=300),
+        description="Default execution timeout in seconds",
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+        description="Whether this task function is active",
+    )
+    is_system: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+        description="System tasks cannot be deleted",
+    )
+    created_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+    )
+    updated_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "onupdate": text("CURRENT_TIMESTAMP"),
+        },
+    )
+
+    # Relationships
+    scheduled_jobs: List["ScheduledJob"] = Relationship(
+        back_populates="task_function",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    __table_args__ = (
+        Index("ix_task_functions_name", "name", unique=True),
+        Index("ix_task_functions_is_active", "is_active"),
+    )
+
+
+class SchedulerJobType(TableModel, table=True):
+    """Lookup table for job schedule types."""
+
+    __tablename__ = "scheduler_job_types"
+
+    id: int = Field(default=None, primary_key=True)
+    name: str = Field(
+        max_length=50,
+        sa_column=Column(String(50), nullable=False, unique=True),
+        description="Job type name (interval, cron)",
+    )
+    display_name: str = Field(
+        max_length=100,
+        sa_column=Column(String(100), nullable=False),
+        description="Human-readable display name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        sa_column=Column(String(500), nullable=True),
+        description="Job type description",
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+        description="Whether this job type is active",
+    )
+
+    # Relationships
+    scheduled_jobs: List["ScheduledJob"] = Relationship(
+        back_populates="job_type",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    __table_args__ = (
+        Index("ix_scheduler_job_types_name", "name", unique=True),
+    )
+
+
+class ScheduledJob(TableModel, table=True):
+    """Job configuration with schedule settings."""
+
+    __tablename__ = "scheduled_jobs"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        sa_column=Column(PostgreSQL_UUID(as_uuid=True), primary_key=True),
+    )
+    name: str = Field(
+        max_length=200,
+        sa_column=Column(String(200), nullable=False),
+        description="Job name",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+        sa_column=Column(Text, nullable=True),
+        description="Job description",
+    )
+
+    # Task function reference
+    task_function_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("task_functions.id"), nullable=False),
+        description="Task function to execute",
+    )
+    task_function: "TaskFunction" = Relationship(
+        back_populates="scheduled_jobs",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    # Schedule type reference
+    job_type_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("scheduler_job_types.id"), nullable=False),
+        description="Schedule type (interval or cron)",
+    )
+    job_type: "SchedulerJobType" = Relationship(
+        back_populates="scheduled_jobs",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    # Schedule configuration (JSON)
+    schedule_config: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+        description="Schedule configuration (interval or cron settings)",
+    )
+    task_args: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="Arguments to pass to task function",
+    )
+
+    # Execution settings
+    max_instances: int = Field(
+        default=1,
+        ge=1,
+        le=10,
+        sa_column=Column(Integer, nullable=False, default=1),
+        description="Maximum concurrent instances",
+    )
+    timeout_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        sa_column=Column(Integer, nullable=False, default=300),
+        description="Execution timeout in seconds",
+    )
+    retry_count: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        sa_column=Column(Integer, nullable=False, default=3),
+        description="Number of retries on failure",
+    )
+    retry_delay_seconds: int = Field(
+        default=60,
+        ge=0,
+        le=3600,
+        sa_column=Column(Integer, nullable=False, default=60),
+        description="Delay between retries in seconds",
+    )
+
+    # Status
+    is_enabled: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, default=True),
+        description="Whether this job is enabled",
+    )
+    is_paused: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+        description="Whether this job is temporarily paused",
+    )
+    next_run_time: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="Next scheduled execution time",
+    )
+    last_run_time: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="Last execution time",
+    )
+    last_status: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        sa_column=Column(String(20), nullable=True),
+        description="Last execution status (success, failed, running)",
+    )
+
+    # Audit
+    created_by: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    updated_by: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    created_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+    )
+    updated_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "onupdate": text("CURRENT_TIMESTAMP"),
+        },
+    )
+
+    # Relationships
+    executions: List["ScheduledJobExecution"] = Relationship(
+        back_populates="job",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    creator: Optional["User"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "ScheduledJob.created_by",
+        }
+    )
+    updater: Optional["User"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "ScheduledJob.updated_by",
+        }
+    )
+
+    __table_args__ = (
+        Index("ix_scheduled_jobs_is_enabled", "is_enabled"),
+        Index("ix_scheduled_jobs_next_run_time", "next_run_time"),
+        Index("ix_scheduled_jobs_task_function_id", "task_function_id"),
+        Index("ix_scheduled_jobs_created_at", "created_at"),
+    )
+
+
+class ScheduledJobExecution(TableModel, table=True):
+    """Execution history for scheduled jobs."""
+
+    __tablename__ = "scheduled_job_executions"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        sa_column=Column(PostgreSQL_UUID(as_uuid=True), primary_key=True),
+    )
+    job_id: UUID = Field(
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("scheduled_jobs.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        description="Scheduled job ID",
+    )
+    job: "ScheduledJob" = Relationship(
+        back_populates="executions",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+
+    celery_task_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        sa_column=Column(String(100), nullable=True),
+        description="Celery task ID",
+    )
+    status: str = Field(
+        max_length=20,
+        sa_column=Column(String(20), nullable=False),
+        description="Execution status: pending, running, success, failed, timeout",
+    )
+
+    started_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+        description="Execution start time",
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="Execution completion time",
+    )
+    duration_seconds: Optional[float] = Field(
+        default=None,
+        ge=0,
+        sa_column=Column(Integer, nullable=True),
+        description="Execution duration in seconds",
+    )
+
+    result: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+        description="Execution result data",
+    )
+    error_message: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        sa_column=Column(String(2000), nullable=True),
+        description="Error message if failed",
+    )
+    error_traceback: Optional[str] = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+        description="Full error traceback",
+    )
+
+    triggered_by: str = Field(
+        max_length=50,
+        sa_column=Column(String(50), nullable=False),
+        description="Trigger source: scheduler, manual, api",
+    )
+    triggered_by_user_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="User who triggered the execution (for manual/api)",
+    )
+    scheduler_instance_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("scheduler_instances.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="Scheduler instance that triggered this execution",
+    )
+
+    # Relationships
+    triggered_by_user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "ScheduledJobExecution.triggered_by_user_id",
+        }
+    )
+
+    __table_args__ = (
+        Index("ix_scheduled_job_executions_job_id", "job_id"),
+        Index("ix_scheduled_job_executions_status", "status"),
+        Index("ix_scheduled_job_executions_started_at", "started_at"),
+        Index("ix_scheduled_job_executions_job_status", "job_id", "status"),
+    )
+
+
+class SchedulerInstance(TableModel, table=True):
+    """Tracks scheduler instances for leader election."""
+
+    __tablename__ = "scheduler_instances"
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        sa_column=Column(PostgreSQL_UUID(as_uuid=True), primary_key=True),
+    )
+    hostname: str = Field(
+        max_length=255,
+        sa_column=Column(String(255), nullable=False),
+        description="Instance hostname",
+    )
+    pid: int = Field(
+        sa_column=Column(Integer, nullable=False),
+        description="Process ID",
+    )
+
+    is_leader: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, default=False),
+        description="Whether this instance is the leader",
+    )
+    leader_since: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="When this instance became leader",
+    )
+    last_heartbeat: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+        description="Last heartbeat timestamp",
+    )
+
+    started_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+        description="Instance start time",
+    )
+    version: str = Field(
+        max_length=50,
+        sa_column=Column(String(50), nullable=False),
+        description="Scheduler version",
+    )
+
+    __table_args__ = (
+        Index("ix_scheduler_instances_is_leader", "is_leader"),
+        Index("ix_scheduler_instances_last_heartbeat", "last_heartbeat"),
+        Index("ix_scheduler_instances_hostname_pid", "hostname", "pid"),
+    )

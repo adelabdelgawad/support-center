@@ -44,6 +44,8 @@ from models import (  # NOTE: AssignType and SessionType are now enums in model_
     UserRole,
 )
 
+# Import scheduler models locally in seed function to avoid circular imports
+
 # Setup logging
 logger = logging.getLogger(__name__)
 
@@ -1055,6 +1057,14 @@ class DatabaseSetup:
                     "path": "setting/client-versions",
                     "parent_id": 1,
                 },
+                {
+                    "id": 20,
+                    "title": "Categories",
+                    "description": "Manage service request categories",
+                    "icon": "folder",
+                    "path": "setting/categories",
+                    "parent_id": 1,
+                },
                 # Support Center children
                 {
                     "id": 21,
@@ -1138,6 +1148,14 @@ class DatabaseSetup:
                     "path": "management/deployments",
                     "parent_id": 4,
                 },
+                {
+                    "id": 45,
+                    "title": "Scheduler",
+                    "description": "Manage scheduled jobs and task automation",
+                    "icon": "schedule",
+                    "path": "management/scheduler",
+                    "parent_id": 4,
+                },
             ]
 
             # Create child pages
@@ -1209,6 +1227,7 @@ class DatabaseSetup:
                 17,  # System Messages
                 18,  # Request Types
                 19,  # Client Versions
+                20,  # Categories
             ]
 
             # 3. Reports pages - Manager and Administrator roles
@@ -1228,6 +1247,7 @@ class DatabaseSetup:
             management_pages = [
                 41,  # Active Sessions
                 42,  # Deployments
+                45,  # Scheduler
             ]
 
             permissions_created = 0
@@ -1801,6 +1821,109 @@ class DatabaseSetup:
             await db.rollback()
             return False
 
+    async def seed_scheduler_data(self, db: AsyncSession) -> bool:
+        """Seed scheduler job types and task functions."""
+        try:
+            # Import here to avoid circular imports
+            from models.database_models import (
+                SchedulerJobType,
+                TaskFunction,
+            )
+
+            logger.info("🕐 Seeding scheduler data...")
+
+            # Check if already seeded
+            job_types_result = await db.execute(select(SchedulerJobType).limit(1))
+            if job_types_result.scalar_one_or_none() is not None:
+                logger.info("✅ Scheduler data already seeded, skipping")
+                return True
+
+            # Create job types
+            job_types_data = [
+                {
+                    "name": "interval",
+                    "display_name": "Interval Schedule",
+                    "description": "Run at regular intervals (seconds, minutes, hours)",
+                    "is_active": True,
+                },
+                {
+                    "name": "cron",
+                    "display_name": "Cron Schedule",
+                    "description": "Run using cron expression (second, minute, hour, day, month, day_of_week)",
+                    "is_active": True,
+                },
+            ]
+
+            for jt_data in job_types_data:
+                job_type = SchedulerJobType(**jt_data)
+                db.add(job_type)
+
+            await db.commit()
+            logger.info(f"✅ Created {len(job_types_data)} job types")
+
+            # Get job type IDs for task functions
+            interval_result = await db.execute(
+                select(SchedulerJobType).where(SchedulerJobType.name == "interval")
+            )
+            interval_type = interval_result.scalar_one()
+
+            cron_result = await db.execute(
+                select(SchedulerJobType).where(SchedulerJobType.name == "cron")
+            )
+            cron_type = cron_result.scalar_one()
+
+            # Create task functions (system tasks that cannot be deleted)
+            task_functions_data = [
+                {
+                    "name": "sync_domain_users",
+                    "display_name": "Sync Domain Users from AD",
+                    "description": "Synchronize enabled users from Active Directory",
+                    "handler_path": "tasks.ad_sync_tasks.sync_domain_users_task",
+                    "handler_type": "celery_task",
+                    "queue": "ad_queue",
+                    "default_timeout_seconds": 600,
+                    "is_active": True,
+                    "is_system": True,
+                },
+                {
+                    "name": "cleanup_expired_sessions",
+                    "display_name": "Cleanup Expired Sessions",
+                    "description": "Remove expired desktop and web sessions from database",
+                    "handler_path": "tasks.maintenance_tasks.cleanup_expired_sessions_task",
+                    "handler_type": "async_function",
+                    "queue": None,
+                    "default_timeout_seconds": 300,
+                    "is_active": True,
+                    "is_system": True,
+                },
+                {
+                    "name": "cleanup_old_executions",
+                    "display_name": "Cleanup Old Job Executions",
+                    "description": "Remove job execution records older than 90 days",
+                    "handler_path": "tasks.maintenance_tasks.cleanup_old_job_executions_task",
+                    "handler_type": "async_function",
+                    "queue": None,
+                    "default_timeout_seconds": 600,
+                    "is_active": True,
+                    "is_system": True,
+                },
+            ]
+
+            for tf_data in task_functions_data:
+                task_function = TaskFunction(**tf_data)
+                db.add(task_function)
+
+            await db.commit()
+            logger.info(f"✅ Created {len(task_functions_data)} task functions")
+
+            logger.info("✅ Scheduler data seeded successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to seed scheduler data: {str(e)}")
+            await db.rollback()
+            return False
+
     async def is_database_already_initialized(self, db: AsyncSession) -> bool:
         """
         Quick check to see if database has already been initialized.
@@ -1909,9 +2032,9 @@ class DatabaseSetup:
             if not await self.create_page_role_permissions(db, admin_user):
                 return False
 
-            # Step 7-8: Create system messages and bilingual data SEQUENTIALLY
+            # Step 7-9: Create system messages, bilingual data, and scheduler data SEQUENTIALLY
             logger.info(
-                "📬 Step 7-8: Creating system messages and bilingual data..."
+                "📬 Step 7-9: Creating system messages, bilingual data, and scheduler data..."
             )
             final_steps = [
                 ("system messages", self.create_system_messages(db)),
@@ -1919,6 +2042,7 @@ class DatabaseSetup:
                     "bilingual status names",
                     self.seed_bilingual_status_names(db),
                 ),
+                ("scheduler data", self.seed_scheduler_data(db)),
             ]
 
             for step_name, task in final_steps:
@@ -1956,7 +2080,7 @@ class DatabaseSetup:
                 f"✅ 8 business units created (Andalusia hospitals and facilities)"
             )
             logger.info(
-                f"✅ 23 default pages created (4 parent + 19 child: 9 Settings, 1 Support Center, 7 Reports, 2 Management)"
+                f"✅ 24 default pages created (4 parent + 20 child: 10 Settings, 1 Support Center, 7 Reports, 2 Management)"
             )
             logger.info(
                 f"✅ Page-role permissions created (Reports accessible to Manager and Administrator, Management accessible to all technician roles)"

@@ -329,7 +329,10 @@ class ActiveDirectorySettings(BaseSettings):
     ldap_username: str = "ldap_user"
     ldap_password: str = Field(default="", description="LDAP password (REQUIRED)")
     base_dn: str = "DC=example,DC=com"
-    desired_ous: List[str] = ["Users"]
+    desired_ous: List[str] = Field(
+        default=["Users"],
+        description='OUs to sync. Use ["*"] to sync all OUs, or specify OU names like ["SMH","EHQ"]'
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="AD_",

@@ -116,6 +116,7 @@ export function OutshiftReportClient({ initialData }: OutshiftReportClientProps)
     fetcher,
     {
       fallbackData: initialData,
+      revalidateIfStale: false,
       revalidateOnMount: !hasRealInitialData,
       revalidateOnFocus: false,
     }

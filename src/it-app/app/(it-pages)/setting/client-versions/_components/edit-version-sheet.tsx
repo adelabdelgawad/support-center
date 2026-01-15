@@ -14,10 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@/lib/toast";
 import { Upload, File, X, Check } from "lucide-react";
-import { updateClientVersion, uploadInstaller } from "@/lib/api/client-versions";
-import type { ClientVersion } from "@/types/client-versions";
+import type { ClientVersion, ClientVersionUpdate } from "@/types/client-versions";
 
 // Allowed file extensions for installer
 const ALLOWED_EXTENSIONS = [".exe", ".msi"];
@@ -27,7 +26,8 @@ interface EditVersionSheetProps {
   version: ClientVersion;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (version: ClientVersion) => void;
+  onSave: (data: ClientVersionUpdate) => Promise<void>;
+  onInstallerFileChange?: (file: File | null) => void;
 }
 
 // Extract filename from installer URL or object key
@@ -58,7 +58,8 @@ export function EditVersionSheet({
   version,
   open,
   onOpenChange,
-  onSuccess,
+  onSave,
+  onInstallerFileChange,
 }: EditVersionSheetProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -105,17 +106,19 @@ export function EditVersionSheet({
 
     const error = validateFile(file);
     if (error) {
-      toast.error(error);
+      toastError(error);
       e.target.value = "";
       return;
     }
 
     setInstallerFile(file);
+    onInstallerFileChange?.(file);
   };
 
   // Remove selected file
   const handleRemoveFile = () => {
     setInstallerFile(null);
+    onInstallerFileChange?.(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -133,35 +136,15 @@ export function EditVersionSheet({
 
     setLoading(true);
     try {
-      // Step 1: Update version metadata
-      let updatedVersion = await updateClientVersion(version.id, {
+      // Call the parent's onSave handler
+      await onSave({
         isActive,
         releaseNotes: releaseNotes.trim() || null,
         silentInstallArgs: silentInstallArgs.trim() || null,
       });
-
-      // Step 2: Upload new installer if selected
-      if (installerFile) {
-        setUploading(true);
-        try {
-          updatedVersion = await uploadInstaller(version.id, installerFile);
-          toast.success(`Version ${version.versionString} updated with new installer.`);
-        } catch (uploadError) {
-          toast.warning(
-            `Version updated, but installer upload failed: ${
-              uploadError instanceof Error ? uploadError.message : "Unknown error"
-            }`
-          );
-        } finally {
-          setUploading(false);
-        }
-      } else {
-        toast.success(`Version ${version.versionString} has been updated.`);
-      }
-
-      onSuccess(updatedVersion);
+      toastSuccess("Version updated successfully");
     } catch (error) {
-      toast.error(
+      toastError(
         error instanceof Error ? error.message : "Failed to update version"
       );
     } finally {

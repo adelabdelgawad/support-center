@@ -243,99 +243,56 @@ class LdapService:
             office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
         )
 
-    async def get_enabled_users(self):
-        """Fetch all enabled users from configured OUs."""
+    async def get_enabled_users(self, enabled_ou_names: Optional[List[str]] = None):
+        """
+        Fetch all enabled users from configured OUs.
+
+        Args:
+            enabled_ou_names: Optional list of OU names to sync.
+                            If None, reads from config (deprecated).
+                            If empty list, syncs all OUs.
+                            If ["*"], syncs all OUs.
+        """
         ous = await self.fetch_child_ous()
         logger.info(f"Found {len(ous)} OUs under base DN: {[sn for _, sn in ous]}")
 
-        targets = [
-            (dn, sn)
-            for dn, sn in ous
-            if sn in settings.active_directory.desired_ous
-        ]
+        # Determine which OUs to target
+        if enabled_ou_names is None:
+            # Legacy: Read from config (deprecated)
+            logger.warning("Using deprecated config-based OU selection. Please configure OUs in database.")
+            if "*" in settings.active_directory.desired_ous or not settings.active_directory.desired_ous:
+                targets = ous
+                logger.info(f"Wildcard detected: syncing all {len(targets)} OUs")
+            else:
+                targets = [
+                    (dn, sn)
+                    for dn, sn in ous
+                    if sn in settings.active_directory.desired_ous
+                ]
+        elif "*" in enabled_ou_names:
+            # Sync all OUs (explicit wildcard)
+            targets = ous
+            logger.info(f"Wildcard detected: syncing all {len(targets)} OUs")
+        elif enabled_ou_names:
+            # Sync only specified OUs from database (non-empty list)
+            targets = [
+                (dn, sn)
+                for dn, sn in ous
+                if sn in enabled_ou_names
+            ]
+            logger.info(f"Database configuration: syncing {len(targets)} OUs: {[sn for _, sn in targets]}")
+        else:
+            # Empty list [] - sync nothing
+            targets = []
+            logger.info("Empty OU list provided - syncing no OUs")
 
         if not targets:
             logger.warning(
-                f"No OUs matched desired_ous={settings.active_directory.desired_ous}. "
-                f"Found OUs: {[sn for _, sn in ous]}. "
-                f"Searching entire base DN instead..."
+                f"No OUs matched enabled_ou_names={enabled_ou_names}. "
+                f"Found OUs in AD: {[sn for _, sn in ous]}. "
+                f"Returning empty user list."
             )
-            # Fallback: search entire base DN for all enabled users
-            try:
-                conn = await self.connect()
-
-                def _full_search():
-                    users = []
-                    conn.search(
-                        search_base=self.domain_base,
-                        search_filter=self.USER_FILTER,
-                        search_scope=SUBTREE,
-                        attributes=self.USER_ATTRS,
-                        paged_size=self.PAGE_SIZE
-                    )
-
-                    for entry in conn.entries:
-                        try:
-                            user = DomainUser(
-                                username=str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') else "",
-                                full_name=str(entry.displayName) if hasattr(entry, 'displayName') else None,
-                                email=str(entry.mail) if hasattr(entry, 'mail') else None,
-                                title=str(entry.title) if hasattr(entry, 'title') else None,
-                                office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
-                            )
-                            users.append(user)
-                        except Exception as entry_error:
-                            logger.debug(f"Skipping entry due to error: {entry_error}")
-                            continue
-
-                    # Handle pagination
-                    cookie = conn.result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
-                    while cookie:
-                        conn.search(
-                            search_base=self.domain_base,
-                            search_filter=self.USER_FILTER,
-                            search_scope=SUBTREE,
-                            attributes=self.USER_ATTRS,
-                            paged_size=self.PAGE_SIZE,
-                            paged_cookie=cookie
-                        )
-                        for entry in conn.entries:
-                            try:
-                                user = DomainUser(
-                                    username=str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') else "",
-                                    full_name=str(entry.displayName) if hasattr(entry, 'displayName') else None,
-                                    email=str(entry.mail) if hasattr(entry, 'mail') else None,
-                                    title=str(entry.title) if hasattr(entry, 'title') else None,
-                                    office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
-                                )
-                                users.append(user)
-                            except Exception as entry_error:
-                                logger.debug(f"Skipping entry due to error: {entry_error}")
-                                continue
-                        cookie = conn.result['controls']['1.2.840.113556.1.4.319']['value']['cookie']
-
-                    return users
-
-                users = await asyncio.to_thread(_full_search)
-                conn.unbind()
-
-                logger.info(f"Found {len(users)} enabled users in entire base DN")
-                return users
-
-            except LDAPException as e:
-                error_msg = str(e)
-                if "referral" in error_msg.lower() or "operations error" in error_msg.lower():
-                    logger.error(
-                        f"LDAP referral/operations error during full base DN search: {error_msg}. "
-                        "Unable to fetch users from Active Directory."
-                    )
-                    return []
-                else:
-                    logger.error(f"LDAP error during full base DN search: {e}", exc_info=True)
-                    raise
-            except Exception as e:
-                logger.error(f"Unexpected error during full base DN search: {e}", exc_info=True)
-                raise
+            return []
 
         # Pull specified OUs in parallel
         logger.info(f"Searching {len(targets)} matching OUs: {[sn for _, sn in targets]}")

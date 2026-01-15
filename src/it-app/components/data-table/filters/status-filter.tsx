@@ -64,7 +64,7 @@ export function StatusFilter({
   return (
     <div className="inline-flex items-center rounded-lg border border-border bg-muted p-1">
       {filterOptions.map((option) => {
-        const Icon = option.icon;
+        const IconComponent = option.icon;
         const isActive = currentStatus === option.value;
 
         return (
@@ -81,7 +81,7 @@ export function StatusFilter({
               }
             `}
           >
-            <Icon className={`h-3.5 w-3.5 mr-1.5 ${isActive ? option.color : ""}`} />
+            <IconComponent className={`h-3.5 w-3.5 mr-1.5 ${isActive ? option.color : ""}`} />
             {option.label}
             <span
               className={`

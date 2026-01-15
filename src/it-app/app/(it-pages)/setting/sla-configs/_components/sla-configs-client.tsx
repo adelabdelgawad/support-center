@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,9 +54,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 
-// Mock API functions - replace with actual implementations
+// API functions
 const listSLAConfigs = async () => {
-  const response = await fetch('/api/sla-configs');
+  const response = await fetch('/api/sla-configs', {
+    credentials: 'include',
+  });
   if (!response.ok) throw new Error('Failed to fetch SLA configs');
   return response.json();
 };
@@ -66,6 +67,7 @@ const createSLAConfig = async (data: any) => {
   const response = await fetch('/api/sla-configs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!response.ok) throw new Error('Failed to create SLA config');
@@ -76,6 +78,7 @@ const updateSLAConfig = async (id: number, data: any) => {
   const response = await fetch(`/api/sla-configs/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data),
   });
   if (!response.ok) throw new Error('Failed to update SLA config');
@@ -85,6 +88,7 @@ const updateSLAConfig = async (id: number, data: any) => {
 const deleteSLAConfig = async (id: number) => {
   const response = await fetch(`/api/sla-configs/${id}`, {
     method: 'DELETE',
+    credentials: 'include',
   });
   if (!response.ok) throw new Error('Failed to delete SLA config');
 };
@@ -116,18 +120,35 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 export default function SLAConfigsClient() {
+  // Simple state management (useState instead of SWR)
+  const [configs, setConfigs] = useState<SLAConfig[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<SLAConfig | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const { data: configs, error, isLoading, mutate } = useSWR<SLAConfig[]>(
-    '/api/sla-configs',
-    listSLAConfigs,
-    {
-      refreshInterval: 60000,
-      revalidateOnFocus: true,
+  /**
+   * Manual refresh function
+   */
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await listSLAConfigs();
+      setConfigs(response);
+    } catch (err) {
+      setError(err as Error);
+    } finally {
+      setIsLoading(false);
     }
-  );
+  }, []);
+
+  // Initial data fetch on mount
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -146,7 +167,7 @@ export default function SLAConfigsClient() {
       await createSLAConfig(data);
       setIsCreateDialogOpen(false);
       form.reset();
-      mutate();
+      await refresh();
     } catch (error) {
       console.error('Failed to create SLA config:', error);
     }
@@ -159,7 +180,7 @@ export default function SLAConfigsClient() {
       await updateSLAConfig(editingConfig.id, data);
       setEditingConfig(null);
       form.reset();
-      mutate();
+      await refresh();
     } catch (error) {
       console.error('Failed to update SLA config:', error);
     }
@@ -169,7 +190,7 @@ export default function SLAConfigsClient() {
     try {
       await deleteSLAConfig(id);
       setDeletingId(null);
-      mutate();
+      await refresh();
     } catch (error) {
       console.error('Failed to delete SLA config:', error);
     }

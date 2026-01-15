@@ -277,3 +277,74 @@ class DeploymentJobService:
         )
         result = await db.execute(stmt)
         return result.scalar() or 0
+
+    @staticmethod
+    @transactional_database_operation("cleanup_stale_jobs")
+    @log_database_operation("stale job cleanup", level="info")
+    async def cleanup_stale_jobs(
+        db: AsyncSession,
+        timeout_minutes: int = 60,
+    ) -> dict:
+        """
+        Cleanup stale deployment jobs stuck in IN_PROGRESS status.
+
+        Jobs that have been claimed but not completed within the timeout
+        are marked as FAILED with an appropriate error message.
+
+        Args:
+            db: Database session
+            timeout_minutes: Minutes before a job is considered stale (default: 60)
+
+        Returns:
+            dict: Cleanup statistics with keys:
+                - jobs_cleaned: Number of stale jobs marked as failed
+                - timestamp: UTC timestamp of cleanup operation
+        """
+        from datetime import timedelta
+        from sqlalchemy import update
+
+        timeout_threshold = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+
+        # Find stale jobs (IN_PROGRESS and claimed more than timeout_minutes ago)
+        stmt = select(DeploymentJob).where(
+            DeploymentJob.status == DeploymentJobStatus.IN_PROGRESS.value,
+            DeploymentJob.claimed_at.isnot(None),
+            DeploymentJob.claimed_at < timeout_threshold,
+        )
+
+        result = await db.execute(stmt)
+        stale_jobs = result.scalars().all()
+
+        if not stale_jobs:
+            logger.debug("No stale deployment jobs found")
+            return {
+                "jobs_cleaned": 0,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+        # Mark stale jobs as FAILED
+        stale_job_ids = [job.id for job in stale_jobs]
+
+        update_stmt = (
+            update(DeploymentJob)
+            .where(DeploymentJob.id.in_(stale_job_ids))
+            .values(
+                status=DeploymentJobStatus.FAILED.value,
+                completed_at=datetime.utcnow(),
+                error_message=f"Job timed out after {timeout_minutes} minutes without completion",
+            )
+        )
+
+        await db.execute(update_stmt)
+        await db.commit()
+
+        count = len(stale_jobs)
+        logger.info(
+            f"Cleaned up {count} stale deployment jobs "
+            f"(timeout: {timeout_minutes} minutes)"
+        )
+
+        return {
+            "jobs_cleaned": count,
+            "timestamp": datetime.utcnow().isoformat(),
+        }

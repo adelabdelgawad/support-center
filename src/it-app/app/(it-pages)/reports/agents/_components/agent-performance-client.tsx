@@ -100,6 +100,7 @@ export function AgentPerformanceClient({ initialData }: AgentPerformanceClientPr
     fetcher,
     {
       fallbackData: initialData,
+      revalidateIfStale: false,
       revalidateOnFocus: false,
     }
   );

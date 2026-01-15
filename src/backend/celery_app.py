@@ -164,3 +164,4 @@ from tasks import minio_file_tasks  # noqa: F401, E402
 from tasks import ad_sync_tasks  # noqa: F401, E402
 from tasks import whatsapp_tasks  # noqa: F401, E402
 from tasks import deployment_tasks  # noqa: F401, E402
+from tasks import scheduler_tasks  # noqa: F401, E402

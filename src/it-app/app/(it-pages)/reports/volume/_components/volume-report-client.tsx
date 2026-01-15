@@ -127,6 +127,7 @@ export function VolumeReportClient({ initialData }: VolumeReportClientProps) {
     fetcher,
     {
       fallbackData: initialData,
+      revalidateIfStale: false,
       revalidateOnFocus: false,
     }
   );
