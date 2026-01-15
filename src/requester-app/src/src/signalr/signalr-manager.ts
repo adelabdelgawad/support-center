@@ -96,6 +96,10 @@ class SignalRHubManager {
   // Notification handlers (for notification hub)
   private notificationHandlers: Set<NotificationHandlers> = new Set();
 
+  // Pending custom event handlers (registered before connection is established)
+  // Map<eventName, Set<callback>>
+  private pendingEventHandlers: Map<string, Set<(...args: unknown[]) => void>> = new Map();
+
   // Reconnection tracking
   private reconnectAttempts = 0;
 
@@ -141,6 +145,58 @@ class SignalRHubManager {
   addNotificationHandler(handler: NotificationHandlers): () => void {
     this.notificationHandlers.add(handler);
     return () => this.notificationHandlers.delete(handler);
+  }
+
+  /**
+   * Register a custom event handler on the SignalR connection
+   * This allows registering handlers for events not in the predefined NotificationHandlers interface
+   * If the connection is not established yet, the handler will be registered when the connection is ready
+   */
+  on(eventName: string, callback: (...args: unknown[]) => void): void {
+    if (this.connection) {
+      this.connection.on(eventName, callback);
+    } else {
+      // Store the handler for later registration when connection is established
+      if (!this.pendingEventHandlers.has(eventName)) {
+        this.pendingEventHandlers.set(eventName, new Set());
+      }
+      this.pendingEventHandlers.get(eventName)!.add(callback);
+      console.log(`[SignalR:${this.hubType}] Handler for '${eventName}' queued for registration when connection is ready`);
+    }
+  }
+
+  /**
+   * Unregister a custom event handler from the SignalR connection
+   * Also removes from pending handlers if connection is not established
+   */
+  off(eventName: string, callback: (...args: unknown[]) => void): void {
+    if (this.connection) {
+      this.connection.off(eventName, callback);
+    }
+    // Also remove from pending handlers
+    const pending = this.pendingEventHandlers.get(eventName);
+    if (pending) {
+      pending.delete(callback);
+      if (pending.size === 0) {
+        this.pendingEventHandlers.delete(eventName);
+      }
+    }
+  }
+
+  /**
+   * Flush pending event handlers to the connection
+   * Called when the connection is established
+   */
+  private flushPendingEventHandlers(): void {
+    if (!this.connection) return;
+
+    this.pendingEventHandlers.forEach((callbacks, eventName) => {
+      callbacks.forEach(callback => {
+        this.connection!.on(eventName, callback);
+        console.log(`[SignalR:${this.hubType}] Registered pending handler for '${eventName}'`);
+      });
+    });
+    this.pendingEventHandlers.clear();
   }
 
   /**
@@ -231,6 +287,9 @@ class SignalRHubManager {
         this.state = SignalRState.CONNECTED;
         this.reconnectAttempts = 0;
 
+        // Flush any pending event handlers that were registered before connection
+        this.flushPendingEventHandlers();
+
         console.log(`%c[SignalR:${this.hubType}] Connected`, 'color: green; font-weight: bold');
         this.globalHandlers.onConnect?.();
 
@@ -266,6 +325,9 @@ class SignalRHubManager {
       this.state = SignalRState.CONNECTED;
       this.reconnectAttempts = 0;
       console.log(`%c[SignalR:${this.hubType}] Reconnected`, 'color: green; font-weight: bold');
+
+      // Flush any pending event handlers after reconnect
+      this.flushPendingEventHandlers();
 
       // Call onReconnected if defined, otherwise fall back to onConnect
       if (this.globalHandlers.onReconnected) {
@@ -476,6 +538,17 @@ class SignalRHubManager {
           }).catch((err) => {
             console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
           });
+
+          // Show desktop notification for incoming remote session request
+          // This is shown in addition to the in-app banner
+          import('@/lib/notifications').then(({ showRemoteSessionRequestNotification }) => {
+            showRemoteSessionRequestNotification(
+              session.agentName || 'Agent',
+              session.requestTitle
+            );
+          }).catch((err) => {
+            console.error(`[SignalR:${this.hubType}] Failed to show desktop notification:`, err);
+          });
         } else {
           console.warn(`[SignalR:${this.hubType}] RemoteSessionAutoStart received invalid data:`, data);
         }
@@ -569,6 +642,24 @@ class SignalRHubManager {
       // Register both PascalCase and lowercase versions
       this.connection.on('SessionLeft', handleSessionLeft);
       this.connection.on('sessionleft', handleSessionLeft);
+
+      // Participant left handler (when a participant leaves the remote session)
+      const handleParticipantLeft = (data: unknown) => {
+        console.log(`[SignalR:${this.hubType}] ParticipantLeft received:`, data);
+        const participant = data as {
+          sessionId: string;
+          userId: string;
+        };
+        if (participant?.sessionId) {
+          console.log(`[SignalR:${this.hubType}] Participant ${participant.userId} left session ${participant.sessionId}`);
+          // Note: This is informational only - the session may still be active
+          // The SessionLeft event is used to clear the banner when the agent fully disconnects
+        }
+      };
+
+      // Register both PascalCase and lowercase versions
+      this.connection.on('ParticipantLeft', handleParticipantLeft);
+      this.connection.on('participantleft', handleParticipantLeft);
     }
   }
 

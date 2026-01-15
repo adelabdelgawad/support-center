@@ -292,11 +292,6 @@ export function IncomingRequestBanner() {
               }
             `}</style>
           </div>
-          {/* Spacer to push content down when banner is visible */}
-          <div style={{
-            height: '72px',
-            'pointer-events': 'none'
-          }} />
         </>
       )}
     </Show>

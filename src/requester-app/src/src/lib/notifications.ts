@@ -393,3 +393,27 @@ export async function showTicketUpdateNotification(
     type: "status_update",
   });
 }
+
+/**
+ * Show a notification for an incoming remote session request
+ */
+export async function showRemoteSessionRequestNotification(
+  agentName: string,
+  requestTitle?: string
+): Promise<void> {
+  console.log(`[Notifications] Preparing remote session request notification from ${agentName}`);
+
+  const title = "Incoming Remote Access Request";
+  const body = `${agentName} is requesting remote access${requestTitle ? ` for "${requestTitle}"` : ''}\n\nOpening in-app acceptance dialog...`;
+
+  await showNotification({
+    title,
+    body,
+    type: "remote_session_request",
+    tag: "remote-session-request", // Replace any previous remote session notification
+    data: {
+      agentName,
+      requestTitle: requestTitle || '',
+    },
+  });
+}
