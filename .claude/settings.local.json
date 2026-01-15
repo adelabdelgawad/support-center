@@ -15,7 +15,12 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(git status:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "WebFetch(domain:www.solid-ui.com)",
+      "Bash(npx solidui-cli@latest init --yes)",
+      "Bash(npx:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

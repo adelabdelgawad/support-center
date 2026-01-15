@@ -15,7 +15,9 @@ import { createSignal, onMount, createMemo, Show } from "solid-js";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Slider, SliderTrack, SliderFill, SliderThumb } from "@/components/ui";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { RTLSwitch } from "@/components/rtl-switch";
 import { useUser } from "@/stores";
 import { useLanguage, type Language } from "@/context/language-context";
 import { useTheme } from "@/context/theme-context";
@@ -25,64 +27,6 @@ import {
   type NotificationPreferences,
 } from "@/lib/notifications";
 import { X, User, Monitor, Moon, Sun, Languages, Bell, BellOff } from "lucide-solid";
-
-/**
- * RTL-aware Toggle Switch Component
- * Matches the IT-app (Next.js) Switch implementation for consistency
- * Uses direction detection from language context and negative translateX for RTL
- * Named ToggleSwitch to avoid conflict with SolidJS built-in Switch component
- */
-interface ToggleSwitchProps {
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-  "aria-label"?: string;
-}
-
-function ToggleSwitch(props: ToggleSwitchProps) {
-  const { direction } = useLanguage();
-  const isRTL = () => direction() === "rtl";
-
-  // Match IT-app implementation:
-  // - LTR checked: translate-x-5 (thumb moves right)
-  // - RTL checked: -translate-x-5 (thumb moves left)
-  // - Unchecked: translate-x-0 (both LTR and RTL)
-  const getThumbTransform = () => {
-    if (props.checked) {
-      // 5 units = moves to the other end of track (track is w-10, thumb is w-4)
-      return isRTL() ? "translateX(-1.25rem)" : "translateX(1.25rem)";
-    }
-    return "translateX(0)";
-  };
-
-  return (
-    <button
-      onClick={() => !props.disabled && props.onChange()}
-      disabled={props.disabled}
-      class={`
-        peer inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border transition-all duration-150
-        ${props.disabled ? "opacity-40 cursor-not-allowed" : ""}
-        ${props.checked
-          ? "bg-accent border-accent"
-          : "bg-muted border-muted-foreground"}
-      `}
-      role="switch"
-      aria-checked={props.checked}
-      aria-label={props["aria-label"]}
-      // RTL: Flip the entire switch track so thumb starts from right side
-      style={{
-        direction: isRTL() ? "rtl" : "ltr",
-      }}
-    >
-      <span
-        class="pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-150"
-        style={{
-          transform: getThumbTransform(),
-        }}
-      />
-    </button>
-  );
-}
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -378,9 +322,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   </div>
                 </div>
 
-                <ToggleSwitch
+                <RTLSwitch
                   checked={currentPreferences().notificationsEnabled}
-                  onChange={toggleNotifications}
+                  onChange={() => toggleNotifications()}
                   aria-label={t("settings.notificationsEnabled")}
                 />
               </div>
@@ -397,9 +341,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     </p>
                   </div>
 
-                  <ToggleSwitch
+                  <RTLSwitch
                     checked={currentPreferences().soundEnabled}
-                    onChange={toggleSound}
+                    onChange={() => toggleSound()}
                     aria-label={t("settings.sound")}
                   />
                 </div>
@@ -416,15 +360,19 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       </span>
                     </div>
 
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={currentPreferences().soundVolume}
-                      onInput={(e) => updateVolume(parseFloat(e.currentTarget.value))}
-                      class="w-full h-2 rounded-lg appearance-none cursor-pointer bg-secondary hover:bg-muted [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:cursor-pointer"
-                    />
+                    <Slider
+                      value={[currentPreferences().soundVolume]}
+                      onChange={(value) => updateVolume(value[0])}
+                      minValue={0}
+                      maxValue={1}
+                      step={0.1}
+                      class="w-full"
+                    >
+                      <SliderTrack>
+                        <SliderFill />
+                        <SliderThumb />
+                      </SliderTrack>
+                    </Slider>
                   </div>
                 </Show>
               </Show>

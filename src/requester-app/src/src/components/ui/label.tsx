@@ -1,17 +1,12 @@
-/**
- * Label Component
- * Styled form label
- */
+import type { Component, ComponentProps } from "solid-js"
+import { splitProps } from "solid-js"
 
-import { cn } from "@/lib/utils";
-import type { JSX, ParentComponent } from "solid-js";
-import { splitProps } from "solid-js";
+import { cn } from "@/lib/utils"
 
-export interface LabelProps extends JSX.LabelHTMLAttributes<HTMLLabelElement> {}
+type LabelProps = ComponentProps<"label">
 
-export const Label: ParentComponent<LabelProps> = (props) => {
-  const [local, others] = splitProps(props, ["class", "children"]);
-
+const Label: Component<LabelProps> = (props) => {
+  const [local, others] = splitProps(props, ["class"])
   return (
     <label
       class={cn(
@@ -19,8 +14,9 @@ export const Label: ParentComponent<LabelProps> = (props) => {
         local.class
       )}
       {...others}
-    >
-      {local.children}
-    </label>
-  );
-};
+    />
+  )
+}
+
+export { Label }
+export type { LabelProps }

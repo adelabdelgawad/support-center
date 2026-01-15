@@ -1,36 +1,48 @@
-/**
- * Badge Component
- * Small status indicator with variants
- */
+import type { Component, ComponentProps } from "solid-js"
+import { splitProps } from "solid-js"
 
-import { cn } from "@/lib/utils";
-import type { JSX, ParentComponent } from "solid-js";
-import { splitProps } from "solid-js";
+import type { VariantProps } from "class-variance-authority"
+import { cva } from "class-variance-authority"
 
-export interface BadgeProps extends JSX.HTMLAttributes<HTMLDivElement> {
-  variant?: "default" | "secondary" | "destructive" | "outline";
-}
+import { cn } from "@/lib/utils"
 
-const badgeVariants = {
-  default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-  secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-  destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-  outline: "text-foreground",
-};
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
+        secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
+        outline: "text-foreground",
+        success: "border-transparent bg-success text-success-foreground",
+        warning: "border-transparent bg-warning text-warning-foreground"
+      }
+    },
+    defaultVariants: {
+      variant: "default"
+    }
+  }
+)
 
-export const Badge: ParentComponent<BadgeProps> = (props) => {
-  const [local, others] = splitProps(props, ["class", "variant", "children"]);
+type BadgeProps = ComponentProps<"div"> &
+  VariantProps<typeof badgeVariants> & {
+    round?: boolean
+  }
 
+const Badge: Component<BadgeProps> = (props) => {
+  const [local, others] = splitProps(props, ["class", "variant", "round"])
   return (
     <div
       class={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-        badgeVariants[local.variant || "default"],
+        badgeVariants({ variant: local.variant }),
+        local.round && "rounded-full",
         local.class
       )}
       {...others}
-    >
-      {local.children}
-    </div>
-  );
-};
+    />
+  )
+}
+
+export type { BadgeProps }
+export { Badge, badgeVariants }

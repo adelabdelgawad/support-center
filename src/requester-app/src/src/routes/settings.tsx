@@ -21,6 +21,7 @@ import { open } from "@tauri-apps/plugin-shell";
 import { authStore } from "@/stores";
 import { NotificationPreferencesCard } from "@/components/notification-preferences";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -32,7 +33,7 @@ import {
   type NotificationPreferences,
 } from "@/lib/notifications";
 import { logger } from "@/logging";
-import { Monitor, Moon, Sun, Languages, FolderOpen } from "lucide-solid";
+import { Monitor, Moon, Sun, Languages, FolderOpen, ArrowLeft } from "lucide-solid";
 
 export default function SettingsPage() {
   const navigate = useNavigate();
@@ -244,25 +245,13 @@ export default function SettingsPage() {
       {/* Header */}
       <div class="bg-card border-b border-border px-4 py-3 sticky top-0 z-10">
         <div class="flex items-center gap-3">
-          <button
+          <Button
             onClick={handleBack}
             class="p-2 rounded-lg hover:bg-secondary transition-colors"
             aria-label="Go back"
           >
-            <svg
-              class="w-5 h-5 text-muted-foreground"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
+            <ArrowLeft class="w-5 h-5 text-muted-foreground" />
+          </Button>
           <h1 class="text-lg font-semibold text-foreground">
             {t("settings.title")}
           </h1>
@@ -331,7 +320,7 @@ export default function SettingsPage() {
             {/* Theme Options */}
             <div class="grid grid-cols-3 gap-3">
               {/* Light */}
-              <button
+              <Button
                 onClick={() => setCurrentTheme("light")}
                 class={`
                   flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
@@ -358,10 +347,10 @@ export default function SettingsPage() {
                 >
                   {t("theme.light")}
                 </span>
-              </button>
+              </Button>
 
               {/* Dark */}
-              <button
+              <Button
                 onClick={() => setCurrentTheme("dark")}
                 class={`
                   flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
@@ -388,10 +377,10 @@ export default function SettingsPage() {
                 >
                   {t("theme.dark")}
                 </span>
-              </button>
+              </Button>
 
               {/* System */}
-              <button
+              <Button
                 onClick={() => setCurrentTheme("system")}
                 class={`
                   flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all
@@ -418,7 +407,7 @@ export default function SettingsPage() {
                 >
                   {t("theme.system")}
                 </span>
-              </button>
+              </Button>
             </div>
           </div>
         </Card>
@@ -447,7 +436,7 @@ export default function SettingsPage() {
                   }
                 `}
               >
-                <input
+                <Input
                   type="radio"
                   name="language"
                   value="en"
@@ -477,7 +466,7 @@ export default function SettingsPage() {
                   }
                 `}
               >
-                <input
+                <Input
                   type="radio"
                   name="language"
                   value="ar"

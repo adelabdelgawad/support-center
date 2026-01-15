@@ -300,7 +300,7 @@ function MessageBubble(props: {
                 </div>
               </Show>
             }>
-              <button
+              <Button
                 onClick={(e) => {
                   e.stopPropagation();
                   props.onImageClick?.();
@@ -329,14 +329,14 @@ function MessageBubble(props: {
                   loading="lazy"
                   decoding="async"
                 />
-              </button>
+              </Button>
             </Show>
           </div>
         </Show>
 
         {/* File attachment (non-image files from IT agents) */}
         <Show when={hasFileAttachment()}>
-          <button
+          <Button
             onClick={(e) => {
               e.stopPropagation();
               handleFileDownload();
@@ -364,7 +364,7 @@ function MessageBubble(props: {
             <div class="flex-shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">
               <Download class="h-4 w-4 text-muted-foreground" />
             </div>
-          </button>
+          </Button>
         </Show>
 
         {/* Message text - only show if NOT default screenshot text */}
@@ -387,7 +387,7 @@ function MessageBubble(props: {
             <Clock class="h-3 w-3 text-muted-foreground animate-pulse" title="Sending..." />
           </Show>
           <Show when={props.message.status === 'failed'}>
-            <button
+            <Button
               onClick={(e) => {
                 e.stopPropagation();
                 if (props.message.tempId && props.onRetry) {
@@ -400,7 +400,7 @@ function MessageBubble(props: {
               type="button"
             >
               ↻ Retry
-            </button>
+            </Button>
           </Show>
         </Show>
       </div>
@@ -1855,7 +1855,7 @@ function TicketChatPageInner() {
         {/* Floating "Scroll to Bottom" button - appears when user scrolls up */}
         <Show when={!isOnBottom() && messages().length > 0}>
           <div class="sticky bottom-4 left-0 right-0 flex justify-center pointer-events-none">
-            <button
+            <Button
               type="button"
               onClick={() => {
                 scrollToBottom(true, true);
@@ -1874,7 +1874,7 @@ function TicketChatPageInner() {
                   Scroll to bottom
                 </span>
               </Show>
-            </button>
+            </Button>
           </div>
         </Show>
       </div>
@@ -1918,7 +1918,7 @@ function TicketChatPageInner() {
               </div>
 
               {/* Remove button */}
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   const screenshot = pendingScreenshot();
@@ -1931,7 +1931,7 @@ function TicketChatPageInner() {
                 title="Remove screenshot"
               >
                 <X class="h-4 w-4" />
-              </button>
+              </Button>
             </div>
           </div>
         </Show>
