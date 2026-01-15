@@ -68,7 +68,8 @@ export function SystemEventsTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedEvents([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

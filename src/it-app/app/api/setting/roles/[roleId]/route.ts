@@ -20,7 +20,7 @@ export async function PUT(
 
     const response = await makeAuthenticatedRequest(
       "PUT",
-      `roles/${roleId}`,
+      `/roles/${roleId}`,
       body
     );
 

@@ -80,7 +80,8 @@ export function SystemMessagesTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedMessages([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

@@ -65,8 +65,8 @@ export interface RolePagesUpdateRequest {
  * Maps to backend RoleUsersUpdateRequest schema
  */
 export interface RoleUsersUpdateRequest {
-  originalUserIds: number[];
-  updatedUserIds: number[];
+  originalUserIds: string[];  // UUID strings
+  updatedUserIds: string[];   // UUID strings
 }
 
 /**

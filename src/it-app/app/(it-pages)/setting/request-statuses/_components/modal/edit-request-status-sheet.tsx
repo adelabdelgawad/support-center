@@ -1,250 +1,264 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
+import { z } from 'zod';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { EntityFormSheet } from '@/components/settings';
 import { updateRequestStatus } from '@/lib/api/request-statuses';
 import { useRequestStatusesActions } from '../../context/request-statuses-actions-context';
-import { toast } from 'sonner';
-import { UnsavedChangesWarning } from '@/components/ui/unsaved-changes-warning';
+import { CircleDot, Lock } from 'lucide-react';
 import type { RequestStatusResponse, RequestStatusUpdate } from '@/types/request-statuses';
+
+const requestStatusSchema = z.object({
+  name: z.string().min(1, 'Internal name is required').max(50, 'Name must be 50 characters or less'),
+  nameEn: z.string().min(1, 'English name is required').max(100, 'Name must be 100 characters or less'),
+  nameAr: z.string().min(1, 'Arabic name is required').max(100, 'Name must be 100 characters or less'),
+  description: z.string().max(500, 'Description must be 500 characters or less').optional().nullable(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format').optional().nullable(),
+  countAsSolved: z.boolean(),
+  visibleOnRequesterPage: z.boolean(),
+  isActive: z.boolean(),
+});
+
+type RequestStatusFormData = z.infer<typeof requestStatusSchema>;
 
 interface EditRequestStatusSheetProps {
   status: RequestStatusResponse;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function EditRequestStatusSheet({
+export function EditRequestStatusSheet({
   status,
   onOpenChange,
 }: EditRequestStatusSheetProps) {
   const { updateStatusesOptimistic } = useRequestStatusesActions();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  const [formData, setFormData] = useState<RequestStatusUpdate>({
+
+  const handleSubmit = async (data: RequestStatusFormData) => {
+    const updateData: RequestStatusUpdate = {
+      name: data.name !== status.name ? data.name : null,
+      nameEn: data.nameEn !== status.nameEn ? data.nameEn : null,
+      nameAr: data.nameAr !== status.nameAr ? data.nameAr : null,
+      description: data.description !== status.description ? (data.description || null) : null,
+      color: data.color !== status.color ? (data.color || null) : null,
+      countAsSolved: data.countAsSolved !== status.countAsSolved ? data.countAsSolved : null,
+      visibleOnRequesterPage: data.visibleOnRequesterPage !== status.visibleOnRequesterPage ? data.visibleOnRequesterPage : null,
+      isActive: data.isActive !== status.isActive ? data.isActive : null,
+    };
+
+    const updatedStatus = await updateRequestStatus(status.id.toString(), updateData);
+    await updateStatusesOptimistic([updatedStatus]);
+  };
+
+  const defaultValues: RequestStatusFormData = useMemo(() => ({
     name: status.name,
     nameEn: status.nameEn,
     nameAr: status.nameAr,
-    description: status.description,
-    color: status.color,
-    readonly: status.readonly,
-    isActive: status.isActive,
+    description: status.description ?? null,
+    color: status.color ?? null,
     countAsSolved: status.countAsSolved,
     visibleOnRequesterPage: status.visibleOnRequesterPage,
-  });
+    isActive: status.isActive,
+  }), [status]);
 
-  const hasChanges =
-    formData.name !== status.name ||
-    formData.nameEn !== status.nameEn ||
-    formData.nameAr !== status.nameAr ||
-    formData.description !== status.description ||
-    formData.color !== status.color ||
-    formData.readonly !== status.readonly ||
-    formData.isActive !== status.isActive ||
-    formData.countAsSolved !== status.countAsSolved ||
-    formData.visibleOnRequesterPage !== status.visibleOnRequesterPage;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.name?.trim()) {
-      toast.error('Name is required');
-      return;
-    }
-
-    if (!formData.nameEn?.trim()) {
-      toast.error('English name is required');
-      return;
-    }
-
-    if (!formData.nameAr?.trim()) {
-      toast.error('Arabic name is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const updatedStatus = await updateRequestStatus(status.id.toString(), formData);
-      await updateStatusesOptimistic([updatedStatus]);
-      toast.success('Request status updated successfully');
-      onOpenChange?.(false);
-    } catch (error) {
-      toast.error('Failed to update request status');
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const isReadonly = status.readonly;
 
   return (
-    <Sheet open={true} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Edit Request Status</SheetTitle>
-          <SheetDescription>Update the request status details</SheetDescription>
-        </SheetHeader>
+    <EntityFormSheet<RequestStatusFormData>
+      open={true}
+      onOpenChange={onOpenChange ?? (() => {})}
+      mode="edit"
+      title="Request Status"
+      description={`Update details for "${status.nameEn}".`}
+      icon={CircleDot}
+      schema={requestStatusSchema}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      size="md"
+    >
+      {(form) => (
+        <>
+          {isReadonly && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                  This is a system status and some fields cannot be modified.
+                </span>
+              </div>
+            </div>
+          )}
 
-        <UnsavedChangesWarning show={hasChanges} className="mt-4 mx-4" />
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Internal Name <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="e.g., in_progress" disabled={isReadonly} />
+                </FormControl>
+                <FormDescription>
+                  Unique identifier used in the system
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-6 px-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Internal Name *</Label>
-            <Input
-              id="name"
-              placeholder="e.g., in_progress"
-              value={formData.name || ''}
-              onChange={(e) => {
-                setFormData({ ...formData, name: e.target.value });
-                setIsDirty(true);
-              }}
-              disabled={isSubmitting || status.readonly}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="nameEn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    English Name <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g., In Progress" disabled={isReadonly} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="nameAr"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Arabic Name <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g., قيد التنفيذ" dir="rtl" disabled={isReadonly} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="nameEn">English Name *</Label>
-            <Input
-              id="nameEn"
-              placeholder="e.g., In Progress"
-              value={formData.nameEn || ''}
-              onChange={(e) => {
-                setFormData({ ...formData, nameEn: e.target.value });
-                setIsDirty(true);
-              }}
-              disabled={isSubmitting || status.readonly}
+          <FormField
+            control={form.control}
+            name="color"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Color</FormLabel>
+                <div className="flex items-center gap-2">
+                  <FormControl>
+                    <Input
+                      type="color"
+                      value={field.value || '#6b7280'}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      className="w-16 h-10 cursor-pointer p-1"
+                      disabled={isReadonly}
+                    />
+                  </FormControl>
+                  <Input
+                    type="text"
+                    placeholder="#6b7280"
+                    value={field.value || ''}
+                    onChange={(e) => field.onChange(e.target.value || null)}
+                    className="flex-1"
+                    disabled={isReadonly}
+                  />
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="Optional description"
+                    rows={3}
+                    disabled={isReadonly}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="space-y-3 border-t pt-4">
+            <FormField
+              control={form.control}
+              name="countAsSolved"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal cursor-pointer">
+                    Count as Solved
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="visibleOnRequesterPage"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal cursor-pointer">
+                    Visible to Requester
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isActive"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="font-normal cursor-pointer">Active</FormLabel>
+                </FormItem>
+              )}
             />
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="nameAr">Arabic Name *</Label>
-            <Input
-              id="nameAr"
-              placeholder="e.g., قيد التنفيذ"
-              value={formData.nameAr || ''}
-              onChange={(e) => {
-                setFormData({ ...formData, nameAr: e.target.value });
-                setIsDirty(true);
-              }}
-              disabled={isSubmitting || status.readonly}
-              dir="rtl"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="color">Color</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="color"
-                type="color"
-                value={formData.color || '#6b7280'}
-                onChange={(e) => {
-                  setFormData({ ...formData, color: e.target.value });
-                  setIsDirty(true);
-                }}
-                disabled={isSubmitting || status.readonly}
-                className="w-16 h-10 cursor-pointer"
-              />
-              <Input
-                type="text"
-                placeholder="#6b7280"
-                value={formData.color || ''}
-                onChange={(e) => {
-                  setFormData({ ...formData, color: e.target.value || null });
-                  setIsDirty(true);
-                }}
-                disabled={isSubmitting || status.readonly}
-                className="flex-1"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              placeholder="Optional description"
-              value={formData.description || ''}
-              onChange={(e) => {
-                setFormData({ ...formData, description: e.target.value || null });
-                setIsDirty(true);
-              }}
-              disabled={isSubmitting || status.readonly}
-              rows={3}
-            />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="countAsSolved"
-                checked={formData.countAsSolved || false}
-                onCheckedChange={(checked) => {
-                  setFormData({ ...formData, countAsSolved: checked === true });
-                  setIsDirty(true);
-                }}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="countAsSolved" className="font-normal cursor-pointer">
-                Count as Solved
-              </Label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="visibleOnRequesterPage"
-                checked={formData.visibleOnRequesterPage !== false}
-                onCheckedChange={(checked) => {
-                  setFormData({ ...formData, visibleOnRequesterPage: checked === true });
-                  setIsDirty(true);
-                }}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="visibleOnRequesterPage" className="font-normal cursor-pointer">
-                Visible to Requester
-              </Label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="isActive"
-                checked={formData.isActive !== false}
-                onCheckedChange={(checked) => {
-                  setFormData({ ...formData, isActive: checked === true });
-                  setIsDirty(true);
-                }}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="isActive" className="font-normal cursor-pointer">
-                Active
-              </Label>
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !hasChanges}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+        </>
+      )}
+    </EntityFormSheet>
   );
 }
+
+export default EditRequestStatusSheet;

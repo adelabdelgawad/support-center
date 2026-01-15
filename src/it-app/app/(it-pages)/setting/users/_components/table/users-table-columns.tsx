@@ -164,6 +164,7 @@ export function createUsersTableColumns({
             className={`flex justify-center items-center ${
               isRowUpdating ? "opacity-60 pointer-events-none" : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <StatusSwitch
               checked={user.isActive}
@@ -210,6 +211,7 @@ export function createUsersTableColumns({
             className={`flex justify-center items-center ${
               isRowUpdating ? "opacity-60 pointer-events-none" : ""
             }`}
+            onClick={(e) => e.stopPropagation()}
           >
             <StatusSwitch
               checked={user.isTechnician}

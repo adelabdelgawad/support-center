@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(netstat:*)",
+      "Bash(ss:*)",
+      "Bash(bun run build:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(while read file)",
+      "Bash(do)",
+      "Bash(if ! grep -q \"EntityFormSheet\\\\|EntityViewSheet\" \"$file\")",
+      "Bash(then)",
+      "Bash(echo:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(git status:*)",
+      "Bash(kill:*)"
     ]
   }
 }

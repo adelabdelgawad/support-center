@@ -12,17 +12,17 @@ import {
 import { Label } from "@/components/ui/label";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog";
-import { Loader2, Users } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Users, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { UnsavedChangesWarning } from '@/components/ui/unsaved-changes-warning';
 import { toastSuccess, toastError } from "@/lib/toast";
 import Select, { MultiValue, components, OptionProps } from "react-select";
-import { fetchRoleUsers, updateRoleUsers } from "@/lib/api/roles";
+import { updateRoleUsers } from "@/lib/api/roles";
 import type { RoleResponse } from "@/types/roles";
 import type { AuthUserResponse } from "@/types/users";
 
 interface UserOptionType {
-  value: number;
+  value: string;  // UUID
   label: string;
   username: string;
   email?: string | null;
@@ -30,10 +30,10 @@ interface UserOptionType {
 
 interface EditRoleUsersSheetProps {
   role: RoleResponse;
-  preloadedUsers: AuthUserResponse[];
-  onMutate?: () => void;
+  currentUsers: AuthUserResponse[];  // Users currently assigned to role
+  availableUsers: AuthUserResponse[];  // All available users
+  onMutate?: (updatedRole: RoleResponse) => void;
   onSuccess?: () => void;
-  open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -52,72 +52,64 @@ const CustomUserOption = (props: OptionProps<UserOptionType, true>) => {
 
 export function EditRoleUsersSheet({
   role,
-  preloadedUsers,
+  currentUsers,
+  availableUsers,
   onMutate,
   onSuccess,
-  open,
   onOpenChange,
 }: EditRoleUsersSheetProps) {
   const roleId = role.id;
-  const [selectedUsers, setSelectedUsers] = useState<
-    MultiValue<UserOptionType>
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Store original user IDs for comparison/reset
-  const originalUserIds = useRef<number[]>([]);
-
-  // Options derived from pre-loaded users
-  const userOptions: UserOptionType[] = useMemo(
-    () =>
-      preloadedUsers.map((u) => ({
-        value: typeof u.id === 'string' ? parseInt(u.id, 10) : u.id,
-        label: u.username,
-        username: u.username,
-        email: u.fullName || null, // Using fullName as display info
-      })),
-    [preloadedUsers]
+  // Extract original user IDs (UUIDs as strings)
+  const originalUserIds = useMemo(
+    () => currentUsers.map((u) => u.id),
+    [currentUsers]
   );
 
-  /* ------------------------------------------------------------------
-   * Single effect: fetch role users + initialise selection on open
-   * -----------------------------------------------------------------*/
-  useEffect(() => {
-    const fetchAndInit = async () => {
-      if (!roleId || !open) {return;}
+  // Options derived from available users, ensuring currently assigned users are included
+  const userOptions: UserOptionType[] = useMemo(() => {
+    const userMap = new Map<string, UserOptionType>();
 
-      setIsLoading(true);
-      try {
-        const users = await fetchRoleUsers(roleId);
+    // First, add all currently assigned users (even if not in availableUsers)
+    currentUsers.forEach((u) => {
+      userMap.set(u.id, {
+        value: u.id,
+        label: u.username,
+        username: u.username,
+        email: u.fullName || null,
+      });
+    });
 
-        const initialSelected = userOptions.filter((opt) =>
-          users.some((u) => (typeof u.id === 'string' ? parseInt(u.id, 10) : u.id) === opt.value)
-        );
-        setSelectedUsers(initialSelected);
-        originalUserIds.current = initialSelected.map((u) => u.value);
-      } catch {
-        toastError("Failed to load role users");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Then add/update with all available users
+    availableUsers.forEach((u) => {
+      userMap.set(u.id, {
+        value: u.id,
+        label: u.username,
+        username: u.username,
+        email: u.fullName || null,
+      });
+    });
 
-    fetchAndInit();
-     
-  }, [roleId, open, userOptions]);
+    // Convert to array and sort by username
+    return Array.from(userMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [availableUsers, currentUsers]);
+
+  // Initialize selected users from current users
+  const [selectedUsers, setSelectedUsers] = useState<MultiValue<UserOptionType>>(
+    userOptions.filter((opt) => originalUserIds.includes(opt.value))
+  );
 
   // Change detection
   const hasChanges = useMemo(() => {
     const curr = selectedUsers.map((u) => u.value).sort();
-    const orig = [...originalUserIds.current].sort();
+    const orig = [...originalUserIds].sort();
     return (
-      curr.length !== orig.length || curr.some((_id, idx) => _id !== orig[idx])
+      curr.length !== orig.length || curr.some((id, idx) => id !== orig[idx])
     );
-  }, [selectedUsers]);
+  }, [selectedUsers, originalUserIds]);
 
-  /* ------------------------------------------------------------------
-   * Confirmation dialog
-   * -----------------------------------------------------------------*/
+  // Confirmation dialog
   const {
     isOpen: confirmOpen,
     _isLoading: confirmLoading,
@@ -133,35 +125,33 @@ export function EditRoleUsersSheet({
     variant: "default",
   });
 
-  /* ------------------------------------------------------------------
-   * Save & cancel handlers
-   * -----------------------------------------------------------------*/
+  // Save handler
   const performSave = async () => {
-    setIsLoading(true);
+    setIsSaving(true);
     try {
       const updatedIds = selectedUsers.map((u) => u.value);
       // Call API to update role users with original and updated IDs
-      await updateRoleUsers(roleId, originalUserIds.current, updatedIds);
+      const updatedRole = await updateRoleUsers(roleId, originalUserIds, updatedIds);
 
       toastSuccess("Role users updated!");
-      if (onMutate) {onMutate();}
-      if (onSuccess) {onSuccess();}
+      if (onMutate) onMutate(updatedRole);
+      if (onSuccess) onSuccess();
       onOpenChange(false);
-    } catch {
-      toastError("Failed to update role users");
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : "Failed to update role users");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
   const handleSave = () => {
-    if (!hasChanges) {return;}
+    if (!hasChanges) return;
     openDialog(performSave);
   };
 
   const handleCancel = () => {
     const reset = userOptions.filter((o) =>
-      originalUserIds.current.includes(o.value)
+      originalUserIds.includes(o.value)
     );
     setSelectedUsers(reset);
     onOpenChange(false);
@@ -169,7 +159,7 @@ export function EditRoleUsersSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={handleCancel}>
+      <Sheet open={true} onOpenChange={handleCancel}>
         <SheetContent className="w-full sm:max-w-xl">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
@@ -179,7 +169,7 @@ export function EditRoleUsersSheet({
             <SheetDescription>Choose which users are assigned to this role. Any changes will require confirmation.</SheetDescription>
           </SheetHeader>
 
-          <UnsavedChangesWarning show={hasChanges && !isLoading} className="mt-4" />
+          <UnsavedChangesWarning show={hasChanges} className="mt-4" />
 
           <div className="py-6">
             <div className="space-y-2">
@@ -188,71 +178,68 @@ export function EditRoleUsersSheet({
                 ({selectedUsers.length} selected)
               </Label>
 
-              {isLoading ? (
-                <div className="flex items-center justify-center h-[120px] border rounded-md">
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                </div>
-              ) : (
-                <Select<UserOptionType, true>
-                  instanceId="role-users-select"
-                  options={userOptions}
-                  isMulti
-                  isSearchable
-                  onChange={setSelectedUsers}
-                  value={selectedUsers}
-                  placeholder="Search users..."
-                  className="react-select-container"
-                  classNamePrefix="react-select"
-                  components={{ Option: CustomUserOption }}
-                  isDisabled={isLoading}
-                  maxMenuHeight={200}
-                  menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-                  menuPosition="fixed"
-                  menuShouldBlockScroll={false}
-                  styles={{
-                    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                    menuList: (base) => ({
-                      ...base,
-                      maxHeight: 200,
-                      overflowY: 'auto',
-                    }),
-                  }}
-                  noOptionsMessage={({ inputValue }) =>
-                    inputValue
-                      ? `No users found matching "${inputValue}"`
-                      : "No users available"
-                  }
-                  filterOption={(option, inputVal) => {
-                    if (!inputVal) {return true;}
-                    const term = inputVal.toLowerCase();
-                    return (
-                      option.label.toLowerCase().includes(term) ||
-                      (option.data.email?.toLowerCase() ?? "").includes(term)
-                    );
-                  }}
-                />
-              )}
+              <Select<UserOptionType, true>
+                instanceId="role-users-select"
+                options={userOptions}
+                isMulti
+                isSearchable
+                onChange={setSelectedUsers}
+                value={selectedUsers}
+                placeholder="Search users..."
+                className="react-select-container"
+                classNamePrefix="react-select"
+                components={{ Option: CustomUserOption }}
+                isDisabled={isSaving}
+                maxMenuHeight={200}
+                menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+                menuPosition="fixed"
+                menuShouldBlockScroll={false}
+                styles={{
+                  menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                  menuList: (base) => ({
+                    ...base,
+                    maxHeight: 200,
+                    overflowY: 'auto',
+                  }),
+                }}
+                noOptionsMessage={({ inputValue }) =>
+                  inputValue
+                    ? `No users found matching "${inputValue}"`
+                    : "No users available"
+                }
+                filterOption={(option, inputVal) => {
+                  if (!inputVal) return true;
+                  const term = inputVal.toLowerCase();
+                  return (
+                    option.label.toLowerCase().includes(term) ||
+                    (option.data.email?.toLowerCase() ?? "").includes(term)
+                  );
+                }}
+              />
             </div>
           </div>
 
           <SheetFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={isLoading}
-              size="sm"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={!hasChanges || isLoading}
-              size="sm"
-            >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? "Saving..." : "Save Changes"}
-            </Button>
+            <div className="flex flex-col-reverse sm:flex-row gap-3 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isSaving}
+                className="flex-1 sm:flex-none min-w-[120px]"
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={!hasChanges || isSaving}
+                className="flex-1 sm:flex-none min-w-[120px]"
+              >
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
           </SheetFooter>
         </SheetContent>
       </Sheet>

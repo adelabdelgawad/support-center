@@ -97,7 +97,7 @@ function RolesTable({
 
   /**
    * Update roles in SWR cache with backend-returned data
-   * Uses the returned record from API and triggers background revalidation for fresh counts
+   * Uses the returned record from API without triggering background refetch
    */
   const updateRolesOptimistic = useCallback(
     async (updatedRoles: RoleResponse[]) => {
@@ -112,14 +112,14 @@ function RolesTable({
         updatedMap.has(role.id) ? updatedMap.get(role.id)! : role
       );
 
-      // Create new data object - keep existing counts, backend will provide fresh ones on revalidate
+      // Create new data object with updated roles
       const newData: SettingRolesResponse = {
         ...currentData,
         roles: updatedRolesList,
       };
 
-      // Update SWR cache and trigger background revalidation for fresh counts
-      await mutate(newData, { revalidate: true });
+      // Update SWR cache without background refetch - API already returned fresh data
+      await mutate(newData, { revalidate: false });
     },
     [mutate, data]
   );

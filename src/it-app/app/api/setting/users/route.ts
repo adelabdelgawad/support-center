@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest) {
 
     const response = await makeAuthenticatedRequest(
       "GET",
-      `/users/?${searchParams.toString()}`
+      `/users?${searchParams.toString()}`
     );
 
     return NextResponse.json(response);
@@ -40,7 +40,7 @@ export async function POST(_request: NextRequest) {
 
     const response = await makeAuthenticatedRequest(
       "POST",
-      "/users/",
+      "/users",
       body
     );
 

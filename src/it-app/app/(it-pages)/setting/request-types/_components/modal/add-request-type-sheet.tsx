@@ -1,164 +1,169 @@
 'use client';
 
-import { useState } from 'react';
+import { z } from 'zod';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EntityFormSheet } from '@/components/settings';
 import { createRequestType } from '@/lib/api/request-types';
 import { useRequestTypesActions } from '../../context/request-types-actions-context';
-import { toast } from 'sonner';
+import { FileType } from 'lucide-react';
 import type { RequestTypeCreate } from '@/types/request-types';
+
+const requestTypeSchema = z.object({
+  nameEn: z.string().min(1, 'English name is required').max(100, 'Name must be 100 characters or less'),
+  nameAr: z.string().min(1, 'Arabic name is required').max(100, 'Name must be 100 characters or less'),
+  briefEn: z.string().max(500, 'Description must be 500 characters or less').optional().nullable(),
+  briefAr: z.string().max(500, 'Description must be 500 characters or less').optional().nullable(),
+  isActive: z.boolean(),
+});
+
+type RequestTypeFormData = z.infer<typeof requestTypeSchema>;
 
 interface AddRequestTypeSheetProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function AddRequestTypeSheet({
+export function AddRequestTypeSheet({
   open = true,
   onOpenChange,
 }: AddRequestTypeSheetProps) {
   const { addTypeToCache } = useRequestTypesActions();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<RequestTypeCreate>({
+
+  const handleSubmit = async (data: RequestTypeFormData) => {
+    const createData: RequestTypeCreate = {
+      nameEn: data.nameEn,
+      nameAr: data.nameAr,
+      briefEn: data.briefEn || null,
+      briefAr: data.briefAr || null,
+      isActive: data.isActive,
+    };
+
+    const newType = await createRequestType(createData);
+    await addTypeToCache(newType);
+  };
+
+  const defaultValues: RequestTypeFormData = {
     nameEn: '',
     nameAr: '',
     briefEn: null,
     briefAr: null,
     isActive: true,
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.nameEn.trim()) {
-      toast.error('English name is required');
-      return;
-    }
-
-    if (!formData.nameAr.trim()) {
-      toast.error('Arabic name is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const newType = await createRequestType(formData);
-      await addTypeToCache(newType);
-      toast.success('Request type created successfully');
-      setFormData({
-        nameEn: '',
-        nameAr: '',
-        briefEn: null,
-        briefAr: null,
-        isActive: true,
-      });
-      onOpenChange?.(false);
-    } catch (error) {
-      toast.error('Failed to create request type');
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Add Request Type</SheetTitle>
-          <SheetDescription>Create a new request type</SheetDescription>
-        </SheetHeader>
+    <EntityFormSheet<RequestTypeFormData>
+      open={open}
+      onOpenChange={onOpenChange ?? (() => {})}
+      mode="add"
+      title="Request Type"
+      description="Create a new request type for categorizing service requests."
+      icon={FileType}
+      schema={requestTypeSchema}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      size="md"
+    >
+      {(form) => (
+        <>
+          <FormField
+            control={form.control}
+            name="nameEn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Name (English) <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="e.g., Hardware Request" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-6 px-4">
-          <div className="space-y-2">
-            <Label htmlFor="nameEn">Name (English) *</Label>
-            <Input
-              id="nameEn"
-              placeholder="e.g., Hardware Request"
-              value={formData.nameEn}
-              onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
-              disabled={isSubmitting}
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="nameAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Name (Arabic) <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="e.g., طلب أجهزة" dir="rtl" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="nameAr">Name (Arabic) *</Label>
-            <Input
-              id="nameAr"
-              placeholder="e.g., طلب أجهزة"
-              value={formData.nameAr}
-              onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-              disabled={isSubmitting}
-              dir="rtl"
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="briefEn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (English)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="Optional description"
+                    rows={3}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="briefEn">Description (English)</Label>
-            <Textarea
-              id="briefEn"
-              placeholder="Optional description"
-              value={formData.briefEn || ''}
-              onChange={(e) => setFormData({ ...formData, briefEn: e.target.value || null })}
-              disabled={isSubmitting}
-              rows={3}
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="briefAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (Arabic)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="وصف اختياري"
+                    rows={3}
+                    dir="rtl"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="briefAr">Description (Arabic)</Label>
-            <Textarea
-              id="briefAr"
-              placeholder="وصف اختياري"
-              value={formData.briefAr || ''}
-              onChange={(e) => setFormData({ ...formData, briefAr: e.target.value || null })}
-              disabled={isSubmitting}
-              rows={3}
-              dir="rtl"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="isActive"
-                checked={formData.isActive !== false}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, isActive: checked === true })
-                }
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="isActive" className="font-normal cursor-pointer">
-                Active
-              </Label>
-            </div>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create'}
-            </Button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center gap-2 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal cursor-pointer">Active</FormLabel>
+              </FormItem>
+            )}
+          />
+        </>
+      )}
+    </EntityFormSheet>
   );
 }
+
+export default AddRequestTypeSheet;

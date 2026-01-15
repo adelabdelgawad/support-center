@@ -70,7 +70,8 @@ export function BusinessUnitsTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedUnits([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

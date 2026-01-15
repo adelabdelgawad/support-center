@@ -81,7 +81,8 @@ export function RequestStatusesTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedStatuses([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

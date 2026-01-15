@@ -271,11 +271,23 @@ function createRemoteAccessStore() {
         startedAt: new Date().toISOString(),
       };
 
-      setState("bannerSessions", [...state.bannerSessions, newBannerSession]);
-      logger.info('remote-support', 'Banner session added after acceptance', {
-        sessionId: pending.sessionId,
-        agentName: newBannerSession.agentName,
-      });
+      // Check if session already exists in banner (prevent duplicates)
+      const existingIndex = state.bannerSessions.findIndex(
+        (s) => s.sessionId === pending.sessionId
+      );
+
+      if (existingIndex === -1) {
+        // Only add if not already present
+        setState("bannerSessions", [...state.bannerSessions, newBannerSession]);
+        logger.info('remote-support', 'Banner session added after acceptance', {
+          sessionId: pending.sessionId,
+          agentName: newBannerSession.agentName,
+        });
+      } else {
+        logger.info('remote-support', 'Banner session already exists, skipping duplicate', {
+          sessionId: pending.sessionId,
+        });
+      }
 
       // Update floating icon
       await updateFloatingIconRemoteState(true, pending.agentName);

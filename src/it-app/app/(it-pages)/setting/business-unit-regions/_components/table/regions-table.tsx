@@ -7,7 +7,6 @@ import type { BusinessUnitRegionListResponse, BusinessUnitRegionResponse } from 
 import { useCallback, useState, useEffect } from 'react';
 import { RegionsActionsProvider } from '../../context/regions-actions-context';
 import { MobileRegionsView } from '../mobile/mobile-regions-view';
-import { getBusinessUnitRegionCounts } from '@/lib/api/business-unit-regions';
 
 interface BusinessUnitRegionsTableProps {
   initialData: BusinessUnitRegionListResponse;
@@ -32,66 +31,51 @@ function BusinessUnitRegionsTable({ initialData }: BusinessUnitRegionsTableProps
 
   /**
    * Update regions with backend-returned data
-   * Uses the returned record from API and fetches fresh counts from backend
+   * Computes count changes locally based on status transitions
    */
   const updateRegionsOptimistic = useCallback(
     async (updatedRegions: BusinessUnitRegionResponse[]) => {
       const updatedMap = new Map(updatedRegions.map((r) => [r.id, r]));
+
+      // Calculate count changes based on status transitions
+      let activeCountDelta = 0;
+      data.regions.forEach((region) => {
+        const updated = updatedMap.get(region.id);
+        if (updated && region.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      });
 
       // Update only the affected rows with backend-returned data
       const updatedRegionsList = data.regions.map((region) =>
         updatedMap.has(region.id) ? updatedMap.get(region.id)! : region
       );
 
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getBusinessUnitRegionCounts();
-        const newData: BusinessUnitRegionListResponse = {
-          ...data,
-          regions: updatedRegionsList,
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, still update the rows but keep existing counts
-        const newData: BusinessUnitRegionListResponse = {
-          ...data,
-          regions: updatedRegionsList,
-        };
-        setData(newData);
-      }
+      const newData: BusinessUnitRegionListResponse = {
+        ...data,
+        regions: updatedRegionsList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
+      };
+      setData(newData);
     },
     [data]
   );
 
   /**
    * Add new region to cache with backend-returned data
-   * Fetches fresh counts from backend
+   * Computes counts locally based on new region's status
    */
   const addRegionToCache = useCallback(
     async (newRegion: BusinessUnitRegionResponse) => {
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getBusinessUnitRegionCounts();
-        const newData: BusinessUnitRegionListResponse = {
-          ...data,
-          regions: [newRegion, ...data.regions],
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, add the region but keep existing counts
-        const newData: BusinessUnitRegionListResponse = {
-          ...data,
-          regions: [newRegion, ...data.regions],
-          total: data.total + 1,
-        };
-        setData(newData);
-      }
+      const newData: BusinessUnitRegionListResponse = {
+        ...data,
+        regions: [newRegion, ...data.regions],
+        total: data.total + 1,
+        activeCount: newRegion.isActive ? data.activeCount + 1 : data.activeCount,
+        inactiveCount: !newRegion.isActive ? data.inactiveCount + 1 : data.inactiveCount,
+      };
+      setData(newData);
     },
     [data]
   );

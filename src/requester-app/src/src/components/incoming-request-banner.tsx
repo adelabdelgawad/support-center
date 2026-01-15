@@ -72,21 +72,17 @@ export function IncomingRequestBanner() {
     setCountdown(10);
     console.log("[IncomingRequestBanner] Countdown started at:", countdown());
 
-    // Simple decrementing timer - updates every second
+    // Simple decrementing timer - updates every second (display only)
+    // Auto-accept is handled by store's startAcceptanceTimer to avoid race conditions
     intervalId = setInterval(() => {
       setCountdown(prev => {
         const newValue = Math.max(0, prev - 1);
         console.log(`[IncomingRequestBanner] Countdown: ${prev} -> ${newValue}`);
 
-        // Auto-ACCEPT when countdown reaches 0 (timeout = accept)
-        if (newValue === 0) {
-          console.log("[IncomingRequestBanner] Countdown reached 0, auto-accepting");
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = undefined;
-          }
-          // Delay accept slightly to ensure state update propagates
-          setTimeout(() => handleAccept(), 50);
+        // Stop decrementing at 0 (store's timer handles auto-accept)
+        if (newValue === 0 && intervalId) {
+          clearInterval(intervalId);
+          intervalId = undefined;
         }
 
         return newValue;

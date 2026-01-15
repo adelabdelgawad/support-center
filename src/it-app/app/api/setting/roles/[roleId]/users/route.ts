@@ -19,7 +19,7 @@ export async function GET(
 
     const response = await makeAuthenticatedRequest(
       "GET",
-      `roles/${roleId}/users`
+      `/roles/${roleId}/users`
     );
 
     return NextResponse.json(response);
@@ -45,7 +45,7 @@ export async function PUT(
 
     const response = await makeAuthenticatedRequest(
       "PUT",
-      `roles/${roleId}/users`,
+      `/roles/${roleId}/users`,
       body
     );
 

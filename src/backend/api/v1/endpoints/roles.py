@@ -246,14 +246,14 @@ async def get_role_pages(
     )
 
 
-@router.put("/{role_id}/pages")
+@router.put("/{role_id}/pages", response_model=RoleWithPagesAndUsers)
 async def update_role_pages(
     role_id: UUID,
     request: RolePagesUpdateRequest,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Update pages assigned to a role."""
+    """Update pages assigned to a role. Returns updated role with pages and user count."""
     # Verify role exists
     role = await RoleService.get_role(db=db, role_id=role_id)
     if not role:
@@ -266,18 +266,15 @@ async def update_role_pages(
     pages_to_add = list(updated_set - original_set)
     pages_to_remove = list(original_set - updated_set)
 
-    added_count = 0
-    removed_count = 0
-
     # Add new pages
     if pages_to_add:
-        added_count = await RoleService.assign_pages_to_role(
+        await RoleService.assign_pages_to_role(
             db=db, role_id=role_id, page_ids=pages_to_add, created_by=current_user.id
         )
 
     # Remove old pages
     if pages_to_remove:
-        removed_count = await RoleService.remove_pages_from_role(
+        await RoleService.remove_pages_from_role(
             db=db, role_id=role_id, page_ids=pages_to_remove
         )
 
@@ -285,11 +282,22 @@ async def update_role_pages(
     from services.permission_cache_service import permission_cache
     await permission_cache.invalidate_role_users(role_id, db)
 
-    return {
-        "message": "Role pages updated successfully",
-        "added": added_count,
-        "removed": removed_count,
-    }
+    # Return updated role with pages and user count
+    pages = await role.get_pages(include_inactive=False)
+    users = await role.get_users(include_inactive=True)
+
+    return RoleWithPagesAndUsers(
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        is_active=role.is_active,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+        created_by=role.created_by,
+        updated_by=role.updated_by,
+        page_paths=[page.path for page in pages if page.path],
+        total_users=len(users),
+    )
 
 
 # Role users management
@@ -312,14 +320,14 @@ async def get_role_users(
     return [UserListItem.model_validate(user) for user in users]
 
 
-@router.put("/{role_id}/users")
+@router.put("/{role_id}/users", response_model=RoleWithPagesAndUsers)
 async def update_role_users(
     role_id: UUID,
     request: RoleUsersUpdateRequest,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Update users assigned to a role."""
+    """Update users assigned to a role. Returns updated role with pages and user count."""
     # Verify role exists
     role = await RoleService.get_role(db=db, role_id=role_id)
     if not role:
@@ -332,18 +340,15 @@ async def update_role_users(
     users_to_add = list(updated_set - original_set)
     users_to_remove = list(original_set - updated_set)
 
-    added_count = 0
-    removed_count = 0
-
     # Add new users
     if users_to_add:
-        added_count = await RoleService.assign_users_to_role(
+        await RoleService.assign_users_to_role(
             db=db, role_id=role_id, user_ids=users_to_add, created_by=current_user.id
         )
 
     # Remove old users
     if users_to_remove:
-        removed_count = await RoleService.remove_users_from_role(
+        await RoleService.remove_users_from_role(
             db=db, role_id=role_id, user_ids=users_to_remove
         )
 
@@ -353,8 +358,19 @@ async def update_role_users(
     for user_id in all_affected_users:
         await permission_cache.invalidate_user_permissions(user_id)
 
-    return {
-        "message": "Role users updated successfully",
-        "added": added_count,
-        "removed": removed_count,
-    }
+    # Return updated role with pages and user count
+    pages = await role.get_pages(include_inactive=False)
+    users = await role.get_users(include_inactive=True)
+
+    return RoleWithPagesAndUsers(
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        is_active=role.is_active,
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+        created_by=role.created_by,
+        updated_by=role.updated_by,
+        page_paths=[page.path for page in pages if page.path],
+        total_users=len(users),
+    )

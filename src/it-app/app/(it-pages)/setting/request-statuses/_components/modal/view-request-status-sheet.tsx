@@ -1,154 +1,175 @@
 'use client';
 
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import type { RequestStatusResponse } from '@/types/request-statuses';
-import { formatDate } from '@/lib/utils/date-formatting';
+import { EntityViewSheet } from '@/components/settings';
 import { Badge } from '@/components/ui/badge';
-import { Lock } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { formatDate } from '@/lib/utils/date-formatting';
+import { CircleDot, CheckCircle, XCircle, Calendar, Lock, Languages, Eye, CheckSquare } from 'lucide-react';
+import type { RequestStatusResponse } from '@/types/request-statuses';
 
 interface ViewRequestStatusSheetProps {
   status: RequestStatusResponse;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function ViewRequestStatusSheet({
+export function ViewRequestStatusSheet({
   status,
   onOpenChange,
 }: ViewRequestStatusSheetProps) {
   return (
-    <Sheet open={true} onOpenChange={onOpenChange}>
-      <SheetContent>
-        <SheetHeader>
-          <SheetTitle>Request Status Details</SheetTitle>
-          <SheetDescription>View request status information</SheetDescription>
-        </SheetHeader>
+    <EntityViewSheet
+      open={true}
+      onOpenChange={onOpenChange ?? (() => {})}
+      title="Request Status"
+      description={`Viewing details for "${status.nameEn}"`}
+      icon={CircleDot}
+      size="md"
+    >
+      {/* Status Badges */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <Badge
+          variant={status.isActive ? 'default' : 'secondary'}
+          className="flex items-center gap-1"
+        >
+          {status.isActive ? (
+            <CheckCircle className="w-3 h-3" />
+          ) : (
+            <XCircle className="w-3 h-3" />
+          )}
+          {status.isActive ? 'Active' : 'Inactive'}
+        </Badge>
+        {status.readonly && (
+          <Badge variant="outline" className="flex items-center gap-1">
+            <Lock className="w-3 h-3" />
+            System Status
+          </Badge>
+        )}
+        <span className="text-sm text-muted-foreground">ID: #{status.id}</span>
+      </div>
 
-        <div className="space-y-6 pt-6 px-4">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Name</h3>
-            <p className="mt-1 text-base font-medium flex items-center gap-2">
+      {/* Names & Color Card */}
+      <Card className="border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Languages className="h-4 w-4 text-primary" />
+            Basic Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label className="text-muted-foreground text-xs font-medium">Internal Name</Label>
+            <div className="text-sm bg-muted px-3 py-2 rounded border font-mono">
               {status.name}
-              {status.readonly && (
-                <Badge variant="outline" className="gap-1">
-                  <Lock className="h-3 w-3" />
-                  Readonly
-                </Badge>
-              )}
-            </p>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Color</h3>
-            <div className="mt-1 flex items-center gap-2">
-              {status.color ? (
-                <>
-                  <div
-                    className="w-8 h-8 rounded border border-gray-300"
-                    style={{ backgroundColor: status.color }}
-                  />
-                  <span className="text-sm">{status.color}</span>
-                </>
-              ) : (
-                <span className="text-gray-400">—</span>
-              )}
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Description</h3>
-            <p className="mt-1 text-base text-gray-900">
-              {status.description || '—'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Status</h3>
-              <div className="mt-1">
-                <Badge
-                  variant={status.isActive ? 'default' : 'secondary'}
-                  className={
-                    status.isActive
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }
-                >
-                  {status.isActive ? 'Active' : 'Inactive'}
-                </Badge>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">English Name</Label>
+              <div className="text-sm bg-muted px-3 py-2 rounded border font-medium">
+                {status.nameEn}
               </div>
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Count as Solved</h3>
-              <div className="mt-1">
-                <Badge
-                  variant={status.countAsSolved ? 'default' : 'secondary'}
-                  className={
-                    status.countAsSolved
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }
-                >
-                  {status.countAsSolved ? 'Yes' : 'No'}
-                </Badge>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Visible to Requester</h3>
-              <div className="mt-1">
-                <Badge
-                  variant={status.visibleOnRequesterPage ? 'default' : 'secondary'}
-                  className={
-                    status.visibleOnRequesterPage
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }
-                >
-                  {status.visibleOnRequesterPage ? 'Yes' : 'No'}
-                </Badge>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Arabic Name</Label>
+              <div className="text-sm bg-muted px-3 py-2 rounded border font-medium" dir="rtl">
+                {status.nameAr}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Created At</h3>
-              <p className="mt-1 text-sm">
-                {formatDate(status.createdAt)}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Updated At</h3>
-              <p className="mt-1 text-sm">
-                {formatDate(status.updatedAt)}
-              </p>
-            </div>
+          <div className="space-y-1">
+            <Label className="text-muted-foreground text-xs font-medium">Color</Label>
+            {status.color ? (
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded border"
+                  style={{ backgroundColor: status.color }}
+                />
+                <span className="text-sm font-mono">{status.color}</span>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No color set</div>
+            )}
           </div>
 
-          {status.createdBy && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-500">Created By</h3>
-              <p className="mt-1 text-sm">{status.createdBy}</p>
+          {status.description && (
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Description</Label>
+              <div className="text-sm bg-muted px-3 py-2 rounded border">
+                {status.description}
+              </div>
             </div>
           )}
+        </CardContent>
+      </Card>
 
-          <div className="flex gap-2 justify-end pt-4 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-            >
-              Close
-            </Button>
+      {/* Settings Card */}
+      <Card className="border mt-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <CheckSquare className="h-4 w-4 text-primary" />
+            Settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Count as Solved</Label>
+              <Badge
+                variant={status.countAsSolved ? 'default' : 'secondary'}
+                className="flex items-center gap-1 w-fit"
+              >
+                {status.countAsSolved ? 'Yes' : 'No'}
+              </Badge>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Visible to Requester</Label>
+              <Badge
+                variant={status.visibleOnRequesterPage ? 'default' : 'secondary'}
+                className="flex items-center gap-1 w-fit"
+              >
+                <Eye className="w-3 h-3" />
+                {status.visibleOnRequesterPage ? 'Yes' : 'No'}
+              </Badge>
+            </div>
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </CardContent>
+      </Card>
+
+      <Separator className="my-4" />
+
+      {/* Timestamps */}
+      <Card className="border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Calendar className="h-4 w-4 text-primary" />
+            Timestamps
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Created At</Label>
+              <div className="text-sm">{formatDate(status.createdAt)}</div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Updated At</Label>
+              <div className="text-sm">{formatDate(status.updatedAt)}</div>
+            </div>
+          </div>
+          {status.createdBy && (
+            <div className="mt-4 space-y-1">
+              <Label className="text-muted-foreground text-xs font-medium">Created By</Label>
+              <div className="text-sm">{status.createdBy}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </EntityViewSheet>
   );
 }
+
+export default ViewRequestStatusSheet;

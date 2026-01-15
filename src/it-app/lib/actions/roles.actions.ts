@@ -128,13 +128,14 @@ export async function updateRolePages(
 }
 
 /**
- * Get all users (for role assignment)
+ * Get all technician users (for role assignment)
+ * Only fetches users where is_technician=true
  *
  * Cache: 1 minute (user list, may change frequently)
  */
 export async function getAllUsers(): Promise<AuthUserResponse[]> {
   return serverFetch<AuthUserResponse[]>(
-    '/users/?per_page=100',
+    '/users?is_technician=true&per_page=100',
     CACHE_PRESETS.SHORT_LIVED()
   );
 }

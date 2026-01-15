@@ -1,17 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
+import { z } from 'zod';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -20,198 +19,220 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { EntityFormSheet } from '@/components/settings';
 import { updateSystemEvent } from '@/lib/api/system-events';
 import { useSystemEventsActions } from '../../context/system-events-actions-context';
-import { toast } from 'sonner';
-import { UnsavedChangesWarning } from '@/components/ui/unsaved-changes-warning';
+import { Zap } from 'lucide-react';
 import type { SystemEventResponse, SystemEventUpdate } from '@/types/system-events';
+
+const systemEventSchema = z.object({
+  eventNameEn: z.string().min(1, 'English name is required').max(100, 'Name must be 100 characters or less'),
+  eventNameAr: z.string().min(1, 'Arabic name is required').max(100, 'Name must be 100 characters or less'),
+  descriptionEn: z.string().max(500, 'Description must be 500 characters or less').optional().nullable(),
+  descriptionAr: z.string().max(500, 'Description must be 500 characters or less').optional().nullable(),
+  systemMessageId: z.number().optional().nullable(),
+  triggerTiming: z.enum(['immediate', 'delayed']),
+  isActive: z.boolean(),
+});
+
+type SystemEventFormData = z.infer<typeof systemEventSchema>;
 
 interface EditSystemEventSheetProps {
   event: SystemEventResponse;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function EditSystemEventSheet({
+export function EditSystemEventSheet({
   event,
   onOpenChange,
 }: EditSystemEventSheetProps) {
   const { updateEventsOptimistic } = useSystemEventsActions();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<SystemEventUpdate>({
-    eventNameEn: event.eventNameEn,
-    eventNameAr: event.eventNameAr,
-    descriptionEn: event.descriptionEn,
-    descriptionAr: event.descriptionAr,
-    systemMessageId: event.systemMessageId,
-    triggerTiming: event.triggerTiming,
-    isActive: event.isActive,
-  });
 
-  const hasChanges =
-    formData.eventNameEn !== event.eventNameEn ||
-    formData.eventNameAr !== event.eventNameAr ||
-    formData.descriptionEn !== event.descriptionEn ||
-    formData.descriptionAr !== event.descriptionAr ||
-    formData.systemMessageId !== event.systemMessageId ||
-    formData.triggerTiming !== event.triggerTiming ||
-    formData.isActive !== event.isActive;
+  const handleSubmit = async (data: SystemEventFormData) => {
+    const updateData: SystemEventUpdate = {
+      eventNameEn: data.eventNameEn !== event.eventNameEn ? data.eventNameEn : null,
+      eventNameAr: data.eventNameAr !== event.eventNameAr ? data.eventNameAr : null,
+      descriptionEn: data.descriptionEn !== event.descriptionEn ? (data.descriptionEn || null) : null,
+      descriptionAr: data.descriptionAr !== event.descriptionAr ? (data.descriptionAr || null) : null,
+      systemMessageId: data.systemMessageId !== event.systemMessageId ? (data.systemMessageId || null) : null,
+      triggerTiming: data.triggerTiming !== event.triggerTiming ? data.triggerTiming : null,
+      isActive: data.isActive !== event.isActive ? data.isActive : null,
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.eventNameEn?.trim()) {
-      toast.error('Event name (English) is required');
-      return;
-    }
-    if (!formData.eventNameAr?.trim()) {
-      toast.error('Event name (Arabic) is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const updatedEvent = await updateSystemEvent(String(event.id), formData);
-      await updateEventsOptimistic([updatedEvent]);
-      toast.success('System event updated successfully');
-      onOpenChange?.(false);
-    } catch (error) {
-      toast.error('Failed to update system event');
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    const updatedEvent = await updateSystemEvent(String(event.id), updateData);
+    await updateEventsOptimistic([updatedEvent]);
   };
 
+  const defaultValues: SystemEventFormData = useMemo(() => ({
+    eventNameEn: event.eventNameEn,
+    eventNameAr: event.eventNameAr,
+    descriptionEn: event.descriptionEn ?? null,
+    descriptionAr: event.descriptionAr ?? null,
+    systemMessageId: event.systemMessageId ?? null,
+    triggerTiming: (event.triggerTiming as 'immediate' | 'delayed') || 'immediate',
+    isActive: event.isActive,
+  }), [event]);
+
   return (
-    <Sheet open={true} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Edit System Event</SheetTitle>
-          <SheetDescription>Update the system event details</SheetDescription>
-        </SheetHeader>
-
-        <UnsavedChangesWarning show={hasChanges} className="mt-4" />
-
-        <form onSubmit={handleSubmit} className="space-y-4 pt-6">
+    <EntityFormSheet<SystemEventFormData>
+      open={true}
+      onOpenChange={onOpenChange ?? (() => {})}
+      mode="edit"
+      title="System Event"
+      description={`Update details for "${event.eventNameEn}".`}
+      icon={Zap}
+      schema={systemEventSchema}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      size="md"
+    >
+      {(form) => (
+        <>
+          {/* Event Key - Read Only */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-500">Event Key</Label>
-            <p className="text-sm text-muted-foreground bg-muted p-2 rounded">
+            <Label className="text-sm font-medium">Event Key</Label>
+            <div className="text-sm bg-muted px-3 py-2 rounded border font-mono">
               {event.eventKey}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Event key cannot be changed
+              Event key cannot be changed after creation
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="eventNameEn">Event Name (English) *</Label>
-            <Input
-              id="eventNameEn"
-              placeholder="e.g., New Request Created"
-              value={formData.eventNameEn || ''}
-              onChange={(e) => setFormData({ ...formData, eventNameEn: e.target.value })}
-              disabled={isSubmitting}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="eventNameEn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Name (English) <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g., New Request Created" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="eventNameAr"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Name (Arabic) <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="e.g., طلب جديد تم إنشاؤه" dir="rtl" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="eventNameAr">Event Name (Arabic) *</Label>
-            <Input
-              id="eventNameAr"
-              placeholder="e.g., طلب جديد تم إنشاؤه"
-              value={formData.eventNameAr || ''}
-              onChange={(e) => setFormData({ ...formData, eventNameAr: e.target.value })}
-              disabled={isSubmitting}
-              dir="rtl"
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="descriptionEn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (English)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="Optional description"
+                    rows={2}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="descriptionEn">Description (English)</Label>
-            <Textarea
-              id="descriptionEn"
-              placeholder="Optional description"
-              value={formData.descriptionEn || ''}
-              onChange={(e) => setFormData({ ...formData, descriptionEn: e.target.value || null })}
-              disabled={isSubmitting}
-              rows={2}
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="descriptionAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Description (Arabic)</FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    value={field.value ?? ''}
+                    placeholder="وصف اختياري"
+                    rows={2}
+                    dir="rtl"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="descriptionAr">Description (Arabic)</Label>
-            <Textarea
-              id="descriptionAr"
-              placeholder="وصف اختياري"
-              value={formData.descriptionAr || ''}
-              onChange={(e) => setFormData({ ...formData, descriptionAr: e.target.value || null })}
-              disabled={isSubmitting}
-              dir="rtl"
-              rows={2}
-            />
-          </div>
+          <FormField
+            control={form.control}
+            name="triggerTiming"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Trigger Timing</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select trigger timing" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="immediate">Immediate</SelectItem>
+                    <SelectItem value="delayed">Delayed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="triggerTiming">Trigger Timing</Label>
-            <Select
-              value={formData.triggerTiming || 'immediate'}
-              onValueChange={(value) => setFormData({ ...formData, triggerTiming: value })}
-              disabled={isSubmitting}
-            >
-              <SelectTrigger id="triggerTiming">
-                <SelectValue placeholder="Select trigger timing" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="immediate">Immediate</SelectItem>
-                <SelectItem value="delayed">Delayed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <FormField
+            control={form.control}
+            name="systemMessageId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>System Message ID (Optional)</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="Leave empty if not linking to a message"
+                    value={field.value ?? ''}
+                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="systemMessageId">System Message ID (Optional)</Label>
-            <Input
-              id="systemMessageId"
-              type="number"
-              placeholder="Leave empty if not linking to a message"
-              value={formData.systemMessageId || ''}
-              onChange={(e) => setFormData({
-                ...formData,
-                systemMessageId: e.target.value ? Number(e.target.value) : null
-              })}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="isActive"
-              checked={formData.isActive !== false}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, isActive: checked === true })
-              }
-              disabled={isSubmitting}
-            />
-            <Label htmlFor="isActive" className="font-normal cursor-pointer">
-              Active
-            </Label>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !hasChanges}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center gap-2 space-y-0 border-t pt-4">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal cursor-pointer">Active</FormLabel>
+              </FormItem>
+            )}
+          />
+        </>
+      )}
+    </EntityFormSheet>
   );
 }
+
+export default EditSystemEventSheet;

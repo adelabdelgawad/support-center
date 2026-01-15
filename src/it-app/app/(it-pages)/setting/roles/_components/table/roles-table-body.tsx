@@ -209,7 +209,10 @@ export function RolesTableBody({
           const isRoleUpdating = updatingIds.has(role.id);
 
           return (
-            <div className={`flex justify-center ${isRoleUpdating ? 'opacity-60' : ''}`}>
+            <div
+              className={`flex justify-center ${isRoleUpdating ? 'opacity-60' : ''}`}
+              onClick={(e) => e.stopPropagation()}
+            >
               <StatusSwitch
                 checked={role.isActive}
                 onToggle={async () => {
@@ -233,7 +236,10 @@ export function RolesTableBody({
         id: "actions",
         header: () => <div className="text-center">Actions</div>,
         cell: ({ row }) => (
-          <div className="flex justify-center">
+          <div
+            className="flex justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <RoleActions
               role={row.original}
               preloadedPages={preloadedPages}

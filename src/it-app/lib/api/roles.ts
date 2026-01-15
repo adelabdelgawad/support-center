@@ -121,30 +121,32 @@ export async function getRolePages(
 
 /**
  * Updates pages associated with a role
+ * Returns the updated role with pages and user count
  */
 export async function updateRolePages(
   roleId: string,
   originalPageIds: number[],
   updatedPageIds: number[]
-): Promise<void> {
+): Promise<RoleResponse> {
   try {
     const request: RolePagesUpdateRequest = {
       originalPageIds,
       updatedPageIds,
     };
 
-    await apiClient.put(`${API_BASE}/${roleId}/pages`, request);
+    return await apiClient.put<RoleResponse>(`${API_BASE}/${roleId}/pages`, request);
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }
 }
 
 /**
- * Fetches all users (with max pagination)
+ * Fetches all technician users (for role assignment)
+ * Only fetches users where is_technician=true
  */
 export async function getAllUsers(): Promise<AuthUserResponse[]> {
   try {
-    return await apiClient.get<AuthUserResponse[]>('/api/setting/users?per_page=100');
+    return await apiClient.get<AuthUserResponse[]>('/api/setting/users?is_technician=true&per_page=100');
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }
@@ -163,19 +165,20 @@ export async function fetchRoleUsers(roleId: string): Promise<AuthUserResponse[]
 
 /**
  * Updates users associated with a role
+ * Returns the updated role with pages and user count
  */
 export async function updateRoleUsers(
   roleId: string,
-  originalUserIds: number[],
-  updatedUserIds: number[]
-): Promise<{ message: string; added: number; removed: number }> {
+  originalUserIds: string[],
+  updatedUserIds: string[]
+): Promise<RoleResponse> {
   try {
     const request: RoleUsersUpdateRequest = {
       originalUserIds,
       updatedUserIds,
     };
 
-    return await apiClient.put<{ message: string; added: number; removed: number }>(
+    return await apiClient.put<RoleResponse>(
       `${API_BASE}/${roleId}/users`,
       request
     );

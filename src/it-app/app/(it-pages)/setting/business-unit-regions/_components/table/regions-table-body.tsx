@@ -65,7 +65,8 @@ export function RegionsTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedRegions([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

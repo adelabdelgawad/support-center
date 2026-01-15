@@ -7,21 +7,16 @@ interface EnhancedError extends Error {
 }
 
 /**
- * PUT /api/api/v1/roles/[roleId]/status
- * Toggles role active status
+ * GET /api/setting/pages
+ * Fetches all pages with pagination and filtering
  */
-export async function PUT(
-  _request: NextRequest,
-  { params }: { params: Promise<{ roleId: string }> }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { roleId } = await params;
-    const searchParams = _request.nextUrl.searchParams;
-    const _isActive = searchParams.get("is_active");
+    const searchParams = request.nextUrl.searchParams;
 
     const response = await makeAuthenticatedRequest(
-      "PUT",
-      `/roles/${roleId}/status?is_active=${_isActive}`
+      "GET",
+      `/pages/?${searchParams.toString()}`
     );
 
     return NextResponse.json(response);

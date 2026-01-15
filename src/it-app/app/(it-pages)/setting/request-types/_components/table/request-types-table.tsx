@@ -31,25 +31,32 @@ function RequestTypesTable({ initialData }: RequestTypesTableProps) {
 
   /**
    * Update request types with backend-returned data
-   * Uses the returned record from API - no frontend count recalculation
-   * Counts will refresh on next navigation (SSR)
+   * Computes count changes locally based on status transitions
    */
   const updateTypesOptimistic = useCallback(
     async (updatedTypes: RequestType[]) => {
       const updatedMap = new Map(updatedTypes.map((t) => [t.id, t]));
+
+      // Calculate count changes based on status transitions
+      let activeCountDelta = 0;
+      data.types.forEach((type) => {
+        const updated = updatedMap.get(type.id);
+        if (updated && type.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      });
 
       // Update only the affected rows with backend-returned data
       const updatedTypesList = data.types.map((type) =>
         updatedMap.has(type.id) ? updatedMap.get(type.id)! : type
       );
 
-      // Keep existing counts - no frontend calculation
-      // Counts will be accurate on next page navigation (SSR)
       const newData: RequestTypeListResponse = {
         ...data,
         types: updatedTypesList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
       };
-
       setData(newData);
     },
     [data]
@@ -57,18 +64,17 @@ function RequestTypesTable({ initialData }: RequestTypesTableProps) {
 
   /**
    * Add new request type to cache with backend-returned data
-   * No frontend count recalculation - counts refresh on next navigation (SSR)
+   * Computes counts locally based on new type's state
    */
   const addTypeToCache = useCallback(
     async (newType: RequestType) => {
-      // Add the type and increment total, but don't recalculate active/inactive counts
-      // Counts will be accurate on next page navigation (SSR)
       const newData: RequestTypeListResponse = {
         ...data,
         types: [newType, ...data.types],
         total: data.total + 1,
+        activeCount: newType.isActive ? data.activeCount + 1 : data.activeCount,
+        inactiveCount: !newType.isActive ? data.inactiveCount + 1 : data.inactiveCount,
       };
-
       setData(newData);
     },
     [data]

@@ -7,7 +7,6 @@ import type { RequestStatusListResponse, RequestStatusResponse } from '@/types/r
 import { useCallback, useState, useEffect } from 'react';
 import { RequestStatusesActionsProvider } from '../../context/request-statuses-actions-context';
 import { MobileRequestStatusesView } from '../mobile';
-import { getRequestStatusCounts } from '@/lib/api/request-statuses';
 
 interface RequestStatusesTableProps {
   initialData: RequestStatusListResponse;
@@ -33,68 +32,52 @@ function RequestStatusesTable({ initialData }: RequestStatusesTableProps) {
 
   /**
    * Update request statuses with backend-returned data
-   * Uses the returned record from API and fetches fresh counts from backend
+   * Computes count changes locally based on status transitions
    */
   const updateStatusesOptimistic = useCallback(
     async (updatedStatuses: RequestStatusResponse[]) => {
       const updatedMap = new Map(updatedStatuses.map((s) => [s.id, s]));
+
+      // Calculate count changes based on status transitions
+      let activeCountDelta = 0;
+      data.statuses.forEach((status) => {
+        const updated = updatedMap.get(status.id);
+        if (updated && status.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      });
 
       // Update only the affected rows with backend-returned data
       const updatedStatusesList = data.statuses.map((status) =>
         updatedMap.has(status.id) ? updatedMap.get(status.id)! : status
       );
 
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getRequestStatusCounts();
-        const newData: RequestStatusListResponse = {
-          ...data,
-          statuses: updatedStatusesList,
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-          readonlyCount: counts.readonlyCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, still update the rows but keep existing counts
-        const newData: RequestStatusListResponse = {
-          ...data,
-          statuses: updatedStatusesList,
-        };
-        setData(newData);
-      }
+      const newData: RequestStatusListResponse = {
+        ...data,
+        statuses: updatedStatusesList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
+      };
+      setData(newData);
     },
     [data]
   );
 
   /**
    * Add new request status to cache with backend-returned data
-   * Fetches fresh counts from backend
+   * Computes counts locally based on new status's state
    */
   const addStatusToCache = useCallback(
     async (newStatus: RequestStatusResponse) => {
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getRequestStatusCounts();
-        const newData: RequestStatusListResponse = {
-          ...data,
-          statuses: [newStatus, ...data.statuses],
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-          readonlyCount: counts.readonlyCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, add the status but keep existing counts
-        const newData: RequestStatusListResponse = {
-          ...data,
-          statuses: [newStatus, ...data.statuses],
-          total: data.total + 1,
-        };
-        setData(newData);
-      }
+      const newData: RequestStatusListResponse = {
+        ...data,
+        statuses: [newStatus, ...data.statuses],
+        total: data.total + 1,
+        activeCount: newStatus.isActive ? data.activeCount + 1 : data.activeCount,
+        inactiveCount: !newStatus.isActive ? data.inactiveCount + 1 : data.inactiveCount,
+        readonlyCount: newStatus.isReadonly ? data.readonlyCount + 1 : data.readonlyCount,
+      };
+      setData(newData);
     },
     [data]
   );

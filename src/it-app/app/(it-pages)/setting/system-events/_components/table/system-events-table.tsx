@@ -7,7 +7,6 @@ import { SystemEventsTableBody } from './system-events-table-body';
 import type { SystemEventListResponse, SystemEventResponse } from '@/types/system-events';
 import { useCallback, useState, useEffect } from 'react';
 import { SystemEventsActionsProvider } from '../../context/system-events-actions-context';
-import { getSystemEventCounts } from '@/lib/api/system-events';
 
 interface SystemEventsTableProps {
   initialData: SystemEventListResponse;
@@ -32,66 +31,51 @@ function SystemEventsTable({ initialData }: SystemEventsTableProps) {
 
   /**
    * Update system events with backend-returned data
-   * Uses the returned record from API and fetches fresh counts from backend
+   * Computes count changes locally based on status transitions
    */
   const updateEventsOptimistic = useCallback(
     async (updatedEvents: SystemEventResponse[]) => {
       const updatedMap = new Map(updatedEvents.map((e) => [e.id, e]));
+
+      // Calculate count changes based on status transitions
+      let activeCountDelta = 0;
+      data.events.forEach((event) => {
+        const updated = updatedMap.get(event.id);
+        if (updated && event.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      });
 
       // Update only the affected rows with backend-returned data
       const updatedEventsList = data.events.map((event) =>
         updatedMap.has(event.id) ? updatedMap.get(event.id)! : event
       );
 
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getSystemEventCounts();
-        const newData: SystemEventListResponse = {
-          ...data,
-          events: updatedEventsList,
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, still update the rows but keep existing counts
-        const newData: SystemEventListResponse = {
-          ...data,
-          events: updatedEventsList,
-        };
-        setData(newData);
-      }
+      const newData: SystemEventListResponse = {
+        ...data,
+        events: updatedEventsList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
+      };
+      setData(newData);
     },
     [data]
   );
 
   /**
    * Add new system event to cache with backend-returned data
-   * Fetches fresh counts from backend
+   * Computes counts locally based on new event's state
    */
   const addEventToCache = useCallback(
     async (newEvent: SystemEventResponse) => {
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getSystemEventCounts();
-        const newData: SystemEventListResponse = {
-          ...data,
-          events: [newEvent, ...data.events],
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, add the event but keep existing counts
-        const newData: SystemEventListResponse = {
-          ...data,
-          events: [newEvent, ...data.events],
-          total: data.total + 1,
-        };
-        setData(newData);
-      }
+      const newData: SystemEventListResponse = {
+        ...data,
+        events: [newEvent, ...data.events],
+        total: data.total + 1,
+        activeCount: newEvent.isActive ? data.activeCount + 1 : data.activeCount,
+        inactiveCount: !newEvent.isActive ? data.inactiveCount + 1 : data.inactiveCount,
+      };
+      setData(newData);
     },
     [data]
   );

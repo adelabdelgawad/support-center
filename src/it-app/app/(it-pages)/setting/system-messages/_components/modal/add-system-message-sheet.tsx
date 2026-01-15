@@ -1,161 +1,163 @@
 'use client';
 
-import { useState } from 'react';
+import { z } from 'zod';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EntityFormSheet } from '@/components/settings';
 import { createSystemMessage } from '@/lib/api/system-messages';
 import { useSystemMessagesActions } from '../../context/system-messages-actions-context';
-import { toast } from 'sonner';
+import { MessageSquare } from 'lucide-react';
 import type { SystemMessageCreate } from '@/types/system-messages';
+
+const systemMessageSchema = z.object({
+  messageType: z.string().min(1, 'Message type is required').max(100, 'Message type must be 100 characters or less')
+    .regex(/^[a-z_]+$/, 'Message type must be lowercase with underscores only'),
+  templateEn: z.string().min(1, 'English template is required').max(2000, 'Template must be 2000 characters or less'),
+  templateAr: z.string().min(1, 'Arabic template is required').max(2000, 'Template must be 2000 characters or less'),
+  isActive: z.boolean(),
+});
+
+type SystemMessageFormData = z.infer<typeof systemMessageSchema>;
 
 interface AddSystemMessageSheetProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function AddSystemMessageSheet({
+export function AddSystemMessageSheet({
   open = true,
   onOpenChange,
 }: AddSystemMessageSheetProps) {
   const { addMessageToCache } = useSystemMessagesActions();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<SystemMessageCreate>({
+
+  const handleSubmit = async (data: SystemMessageFormData) => {
+    const createData: SystemMessageCreate = {
+      messageType: data.messageType,
+      templateEn: data.templateEn,
+      templateAr: data.templateAr,
+      isActive: data.isActive,
+    };
+
+    const newMessage = await createSystemMessage(createData);
+    await addMessageToCache(newMessage);
+  };
+
+  const defaultValues: SystemMessageFormData = {
     messageType: '',
     templateEn: '',
     templateAr: '',
     isActive: true,
-  });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.messageType.trim()) {
-      toast.error('Message type is required');
-      return;
-    }
-    if (!formData.templateEn.trim()) {
-      toast.error('English template is required');
-      return;
-    }
-    if (!formData.templateAr.trim()) {
-      toast.error('Arabic template is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const newMessage = await createSystemMessage(formData);
-      await addMessageToCache(newMessage);
-      toast.success('System message created successfully');
-      setFormData({
-        messageType: '',
-        templateEn: '',
-        templateAr: '',
-        isActive: true,
-      });
-      onOpenChange?.(false);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create system message';
-      toast.error(errorMessage);
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Add System Message</SheetTitle>
-          <SheetDescription>Create a new system message template</SheetDescription>
-        </SheetHeader>
+    <EntityFormSheet<SystemMessageFormData>
+      open={open}
+      onOpenChange={onOpenChange ?? (() => {})}
+      mode="add"
+      title="System Message"
+      description="Create a new message template for system notifications."
+      icon={MessageSquare}
+      schema={systemMessageSchema}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      size="lg"
+    >
+      {(form) => (
+        <>
+          <FormField
+            control={form.control}
+            name="messageType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Message Type <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="e.g., new_request, ticket_assigned" className="font-mono" />
+                </FormControl>
+                <FormDescription>
+                  Unique identifier (lowercase, underscores only)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-6">
-          <div className="space-y-2">
-            <Label htmlFor="messageType">Message Type *</Label>
-            <Input
-              id="messageType"
-              placeholder="e.g., new_request, ticket_assigned, request_solved"
-              value={formData.messageType}
-              onChange={(e) => setFormData({ ...formData, messageType: e.target.value })}
-              disabled={isSubmitting}
-            />
-            <p className="text-xs text-muted-foreground">
-              Unique identifier for this message template (lowercase, underscores)
-            </p>
-          </div>
+          <FormField
+            control={form.control}
+            name="templateEn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  English Template <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="e.g., New request created: {request_title}"
+                    rows={6}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Use placeholders like {'{placeholder}'} for dynamic values
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="templateEn">English Template *</Label>
-            <Textarea
-              id="templateEn"
-              placeholder="e.g., New request created: {request_title}"
-              value={formData.templateEn}
-              onChange={(e) => setFormData({ ...formData, templateEn: e.target.value })}
-              disabled={isSubmitting}
-              rows={6}
-            />
-            <p className="text-xs text-muted-foreground">
-              Use placeholders like {'{'}placeholder{'}'} for dynamic values
-            </p>
-          </div>
+          <FormField
+            control={form.control}
+            name="templateAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Arabic Template <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="مثال: تم إنشاء طلب جديد: {request_title}"
+                    rows={6}
+                    dir="rtl"
+                  />
+                </FormControl>
+                <FormDescription dir="rtl">
+                  استخدم متغيرات مثل {'{placeholder}'} للقيم الديناميكية
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="templateAr">Arabic Template *</Label>
-            <Textarea
-              id="templateAr"
-              placeholder="مثال: تم إنشاء طلب جديد: {request_title}"
-              value={formData.templateAr}
-              onChange={(e) => setFormData({ ...formData, templateAr: e.target.value })}
-              disabled={isSubmitting}
-              dir="rtl"
-              rows={6}
-            />
-            <p className="text-xs text-muted-foreground" dir="rtl">
-              استخدم متغيرات مثل {'{'}placeholder{'}'} للقيم الديناميكية
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="isActive"
-              checked={formData.isActive !== false}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, isActive: checked === true })
-              }
-              disabled={isSubmitting}
-            />
-            <Label htmlFor="isActive" className="font-normal cursor-pointer">
-              Active
-            </Label>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating...' : 'Create'}
-            </Button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center gap-2 space-y-0 border-t pt-4">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal cursor-pointer">Active</FormLabel>
+              </FormItem>
+            )}
+          />
+        </>
+      )}
+    </EntityFormSheet>
   );
 }
+
+export default AddSystemMessageSheet;

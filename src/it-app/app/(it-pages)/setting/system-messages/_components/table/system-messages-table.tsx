@@ -30,25 +30,32 @@ function SystemMessagesTable({ initialData }: SystemMessagesTableProps) {
 
   /**
    * Update system messages with backend-returned data
-   * Uses the returned record from API - no frontend count recalculation
-   * Counts will refresh on next navigation (SSR)
+   * Computes count changes locally based on status transitions
    */
   const updateMessagesOptimistic = useCallback(
     async (updatedMessages: SystemMessageResponse[]) => {
       const updatedMap = new Map(updatedMessages.map((m) => [m.id, m]));
+
+      // Calculate count changes based on status transitions
+      let activeCountDelta = 0;
+      data.messages.forEach((message) => {
+        const updated = updatedMap.get(message.id);
+        if (updated && message.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      });
 
       // Update only the affected rows with backend-returned data
       const updatedMessagesList = data.messages.map((message) =>
         updatedMap.has(message.id) ? updatedMap.get(message.id)! : message
       );
 
-      // Keep existing counts - no frontend calculation
-      // Counts will be accurate on next page navigation (SSR)
       const newData: SystemMessageListResponse = {
         ...data,
         messages: updatedMessagesList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
       };
-
       setData(newData);
     },
     [data]
@@ -56,18 +63,17 @@ function SystemMessagesTable({ initialData }: SystemMessagesTableProps) {
 
   /**
    * Add new system message to cache with backend-returned data
-   * No frontend count recalculation - counts refresh on next navigation (SSR)
+   * Computes counts locally based on new message's state
    */
   const addMessageToCache = useCallback(
     async (newMessage: SystemMessageResponse) => {
-      // Add the message and increment total, but don't recalculate active/inactive counts
-      // Counts will be accurate on next page navigation (SSR)
       const newData: SystemMessageListResponse = {
         ...data,
         messages: [newMessage, ...data.messages],
         total: data.total + 1,
+        activeCount: newMessage.isActive ? data.activeCount + 1 : data.activeCount,
+        inactiveCount: !newMessage.isActive ? data.inactiveCount + 1 : data.inactiveCount,
       };
-
       setData(newData);
     },
     [data]

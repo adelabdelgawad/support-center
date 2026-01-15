@@ -1,153 +1,152 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
+import { z } from 'zod';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { EntityFormSheet } from '@/components/settings';
 import { updateSystemMessage } from '@/lib/api/system-messages';
 import { useSystemMessagesActions } from '../../context/system-messages-actions-context';
-import { toast } from 'sonner';
-import { UnsavedChangesWarning } from '@/components/ui/unsaved-changes-warning';
+import { MessageSquare } from 'lucide-react';
 import type { SystemMessageResponse, SystemMessageUpdate } from '@/types/system-messages';
+
+const systemMessageSchema = z.object({
+  templateEn: z.string().min(1, 'English template is required').max(2000, 'Template must be 2000 characters or less'),
+  templateAr: z.string().min(1, 'Arabic template is required').max(2000, 'Template must be 2000 characters or less'),
+  isActive: z.boolean(),
+});
+
+type SystemMessageFormData = z.infer<typeof systemMessageSchema>;
 
 interface EditSystemMessageSheetProps {
   message: SystemMessageResponse;
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function EditSystemMessageSheet({
+export function EditSystemMessageSheet({
   message,
   onOpenChange,
 }: EditSystemMessageSheetProps) {
   const { updateMessagesOptimistic } = useSystemMessagesActions();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<SystemMessageUpdate>({
+
+  const handleSubmit = async (data: SystemMessageFormData) => {
+    const updateData: SystemMessageUpdate = {
+      templateEn: data.templateEn !== message.templateEn ? data.templateEn : null,
+      templateAr: data.templateAr !== message.templateAr ? data.templateAr : null,
+      isActive: data.isActive !== message.isActive ? data.isActive : null,
+    };
+
+    const updatedMessage = await updateSystemMessage(String(message.id), updateData);
+    await updateMessagesOptimistic([updatedMessage]);
+  };
+
+  const defaultValues: SystemMessageFormData = useMemo(() => ({
     templateEn: message.templateEn,
     templateAr: message.templateAr,
     isActive: message.isActive,
-  });
-
-  const hasChanges =
-    formData.templateEn !== message.templateEn ||
-    formData.templateAr !== message.templateAr ||
-    formData.isActive !== message.isActive;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.templateEn?.trim()) {
-      toast.error('English template is required');
-      return;
-    }
-    if (!formData.templateAr?.trim()) {
-      toast.error('Arabic template is required');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const updatedMessage = await updateSystemMessage(String(message.id), formData);
-      await updateMessagesOptimistic([updatedMessage]);
-      toast.success('System message updated successfully');
-      onOpenChange?.(false);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update system message';
-      toast.error(errorMessage);
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  }), [message]);
 
   return (
-    <Sheet open={true} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Edit System Message</SheetTitle>
-          <SheetDescription>Update the system message template</SheetDescription>
-        </SheetHeader>
-
-        <UnsavedChangesWarning show={hasChanges} className="mt-4" />
-
-        <form onSubmit={handleSubmit} className="space-y-4 pt-6">
+    <EntityFormSheet<SystemMessageFormData>
+      open={true}
+      onOpenChange={onOpenChange ?? (() => {})}
+      mode="edit"
+      title="System Message"
+      description={`Update template for "${message.messageType}".`}
+      icon={MessageSquare}
+      schema={systemMessageSchema}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      size="lg"
+    >
+      {(form) => (
+        <>
+          {/* Message Type - Read Only */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium text-gray-500">Message Type</Label>
-            <p className="text-sm text-muted-foreground bg-muted p-2 rounded font-mono">
+            <Label className="text-sm font-medium">Message Type</Label>
+            <div className="text-sm bg-muted px-3 py-2 rounded border font-mono">
               {message.messageType}
-            </p>
+            </div>
             <p className="text-xs text-muted-foreground">
               Message type cannot be changed after creation
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="templateEn">English Template *</Label>
-            <Textarea
-              id="templateEn"
-              placeholder="e.g., Status changed from {old_status} to {new_status}"
-              value={formData.templateEn || ''}
-              onChange={(e) => setFormData({ ...formData, templateEn: e.target.value })}
-              disabled={isSubmitting}
-              rows={6}
-            />
-            <p className="text-xs text-muted-foreground">
-              Use placeholders like {'{'}placeholder{'}'} for dynamic values
-            </p>
-          </div>
+          <FormField
+            control={form.control}
+            name="templateEn"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  English Template <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="e.g., Status changed from {old_status} to {new_status}"
+                    rows={6}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Use placeholders like {'{placeholder}'} for dynamic values
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="templateAr">Arabic Template *</Label>
-            <Textarea
-              id="templateAr"
-              placeholder="مثال: تم تغيير الحالة من {old_status} إلى {new_status}"
-              value={formData.templateAr || ''}
-              onChange={(e) => setFormData({ ...formData, templateAr: e.target.value })}
-              disabled={isSubmitting}
-              dir="rtl"
-              rows={6}
-            />
-            <p className="text-xs text-muted-foreground" dir="rtl">
-              استخدم متغيرات مثل {'{'}placeholder{'}'} للقيم الديناميكية
-            </p>
-          </div>
+          <FormField
+            control={form.control}
+            name="templateAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Arabic Template <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="مثال: تم تغيير الحالة من {old_status} إلى {new_status}"
+                    rows={6}
+                    dir="rtl"
+                  />
+                </FormControl>
+                <FormDescription dir="rtl">
+                  استخدم متغيرات مثل {'{placeholder}'} للقيم الديناميكية
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="isActive"
-              checked={formData.isActive !== false}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, isActive: checked === true })
-              }
-              disabled={isSubmitting}
-            />
-            <Label htmlFor="isActive" className="font-normal cursor-pointer">
-              Active
-            </Label>
-          </div>
-
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange?.(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !hasChanges}>
-              {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+          <FormField
+            control={form.control}
+            name="isActive"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center gap-2 space-y-0 border-t pt-4">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel className="font-normal cursor-pointer">Active</FormLabel>
+              </FormItem>
+            )}
+          />
+        </>
+      )}
+    </EntityFormSheet>
   );
 }
+
+export default EditSystemMessageSheet;

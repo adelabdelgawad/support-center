@@ -79,7 +79,8 @@ export function RequestTypesTableBody({
    */
   const handleClearSelection = useCallback(() => {
     setSelectedTypes([]);
-  }, []);
+    tableInstance?.resetRowSelection();
+  }, [tableInstance]);
 
   /**
    * Handle refresh

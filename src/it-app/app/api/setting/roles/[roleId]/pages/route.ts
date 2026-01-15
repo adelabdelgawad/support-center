@@ -20,7 +20,7 @@ export async function GET(
 
     const response = await makeAuthenticatedRequest(
       "GET",
-      `roles/${roleId}/pages?${searchParams.toString()}`
+      `/roles/${roleId}/pages?${searchParams.toString()}`
     );
 
     return NextResponse.json(response);
@@ -46,7 +46,7 @@ export async function PUT(
 
     const response = await makeAuthenticatedRequest(
       "PUT",
-      `roles/${roleId}/pages`,
+      `/roles/${roleId}/pages`,
       body
     );
 

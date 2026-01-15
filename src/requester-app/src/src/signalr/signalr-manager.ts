@@ -554,9 +554,8 @@ class SignalRHubManager {
         }
       };
 
-      // Register both PascalCase and lowercase versions
+      // Register event handler (SignalR normalizes case)
       this.connection.on('RemoteSessionAutoStart', handleRemoteSessionAutoStart);
-      this.connection.on('remotesessionautostart', handleRemoteSessionAutoStart);
 
       // Remote session reconnect handler
       const handleRemoteSessionReconnect = (data: unknown) => {
@@ -592,9 +591,8 @@ class SignalRHubManager {
         }
       };
 
-      // Register both PascalCase and lowercase versions
+      // Register event handler (SignalR normalizes case)
       this.connection.on('RemoteSessionReconnect', handleRemoteSessionReconnect);
-      this.connection.on('remotesessionreconnect', handleRemoteSessionReconnect);
 
       // Remote session ended handler (FR-007, FR-017, FR-018)
       // Clears the user awareness banner when session terminates
@@ -619,9 +617,8 @@ class SignalRHubManager {
         }
       };
 
-      // Register both PascalCase and lowercase versions
+      // Register event handler (SignalR normalizes case)
       this.connection.on('RemoteSessionEnded', handleRemoteSessionEnded);
-      this.connection.on('remotesessionended', handleRemoteSessionEnded);
 
       // Session left handler (when agent leaves the session)
       const handleSessionLeft = (data: unknown) => {
@@ -639,9 +636,8 @@ class SignalRHubManager {
         }
       };
 
-      // Register both PascalCase and lowercase versions
+      // Register event handler (SignalR normalizes case)
       this.connection.on('SessionLeft', handleSessionLeft);
-      this.connection.on('sessionleft', handleSessionLeft);
 
       // Participant left handler (when a participant leaves the remote session)
       const handleParticipantLeft = (data: unknown) => {
