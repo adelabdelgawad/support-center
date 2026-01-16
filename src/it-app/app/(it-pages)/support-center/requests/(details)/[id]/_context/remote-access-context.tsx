@@ -257,6 +257,15 @@ export function RemoteAccessProvider({ children, requestId }: RemoteAccessProvid
     setSessionStatus('ending');
 
     try {
+      // End session in backend database (triggers RemoteSessionEnded event)
+      console.log('[RemoteAccessContext] 📡 Calling backend to end session...');
+      await fetch(`/api/remote-access/${sessionId}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason }),
+      }).catch(err => console.error('[RemoteAccessContext] Failed to end session in backend:', err));
+
       // Run cleanup - this will close WebSocket and peer connection
       if (cleanupFnRef.current) {
         console.log('[RemoteAccessContext] 🧹 Running cleanup function...');
@@ -264,8 +273,6 @@ export function RemoteAccessProvider({ children, requestId }: RemoteAccessProvid
         cleanupFnRef.current = null;
       }
 
-      // Note: Ephemeral sessions - no backend API call needed
-      // Session ends automatically when WebSocket closes
       console.log('[RemoteAccessContext] ✅ Session cleanup complete');
     } catch (error) {
       console.error('[RemoteAccessContext] ❌ Error during cleanup:', error);

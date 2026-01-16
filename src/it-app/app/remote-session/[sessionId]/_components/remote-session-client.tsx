@@ -128,12 +128,16 @@ export default function RemoteSessionClient({
         return;
       }
 
-      // Only set remote description if we're in the right state
+      // Only set remote description if connection is still viable
+      if (pc.connectionState === "closed" || pc.connectionState === "failed") {
+        console.warn("[RemoteSession] ⚠️ Ignoring SDP answer - connection is", pc.connectionState);
+        return;
+      }
+
+      // CRITICAL: Only accept answer in "have-local-offer" state
+      // If in "stable", the answer was already processed (duplicate message)
       if (pc.signalingState !== "have-local-offer") {
-        console.warn("[RemoteSession] ⚠️ Ignoring SDP answer - wrong signaling state", {
-          currentState: pc.signalingState,
-          expectedState: "have-local-offer",
-        });
+        console.warn("[RemoteSession] ⚠️ Ignoring SDP answer - signaling state is", pc.signalingState, "(expected 'have-local-offer')");
         return;
       }
 
@@ -1006,8 +1010,20 @@ export default function RemoteSessionClient({
 
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
 
-    // Leave session via SignalR
-    await leaveSession(sessionId).catch(console.error);
+    try {
+      // End session in backend database (triggers RemoteSessionEnded event)
+      await fetch(`/api/remote-access/${sessionId}/end`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: 'Agent ended session' }),
+      }).catch(console.error);
+
+      // Leave session via SignalR
+      await leaveSession(sessionId).catch(console.error);
+    } catch (error) {
+      console.error('[RemoteSession] Error ending session:', error);
+    }
 
     window.close();
   };

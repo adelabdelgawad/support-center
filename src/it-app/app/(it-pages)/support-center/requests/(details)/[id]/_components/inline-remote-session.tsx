@@ -119,16 +119,20 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
         return;
       }
 
-      // Guard: Only process answer if we're waiting for one
-      if (pc.signalingState !== 'have-local-offer') {
-        console.warn('[InlineRemote] ⚠️ Ignoring SDP answer in wrong signaling state', {
-          currentState: pc.signalingState,
-          expectedState: 'have-local-offer',
-        });
+      // Guard: Only process answer if connection is still viable
+      if (pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+        console.warn('[InlineRemote] ⚠️ Ignoring SDP answer - connection is', pc.connectionState);
         return;
       }
 
-      // Guard: Don't process if already have remote description
+      // CRITICAL: Only accept answer in "have-local-offer" state
+      // If in "stable", the answer was already processed (duplicate message)
+      if (pc.signalingState !== 'have-local-offer') {
+        console.warn('[InlineRemote] ⚠️ Ignoring SDP answer - signaling state is', pc.signalingState, '(expected \'have-local-offer\')');
+        return;
+      }
+
+      // Guard: Don't process if already have remote description (additional safety check)
       if (pc.remoteDescription) {
         console.warn('[InlineRemote] ⚠️ Ignoring duplicate SDP answer - already have remote description');
         return;

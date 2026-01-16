@@ -275,6 +275,22 @@ async def start_remote_access_by_user(
 
     logger.info(f"User {user_id_str} is online via SignalR")
 
+    # IDEMPOTENCY: Check for existing active session with this agent + requester
+    from repositories.remote_access_repository import RemoteAccessRepository
+    existing_active_session = await RemoteAccessRepository.get_active_session_for_pair(
+        db=db,
+        agent_id=current_user.id,
+        requester_id=user_id
+    )
+
+    if existing_active_session:
+        logger.info(f"[Backend] ⚠️ Active session already exists: {existing_active_session.id}")
+        session_dict = RemoteAccessSessionRead.model_validate(existing_active_session).model_dump(by_alias=True)
+        from datetime import datetime, timezone
+        server_now = datetime.now(timezone.utc).replace(tzinfo=None)
+        session_dict['serverTime'] = server_now.isoformat() + 'Z'
+        return session_dict
+
     # Find user's most recent open (unsolved) request
     stmt = (
         select(ServiceRequest)

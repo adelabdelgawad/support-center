@@ -88,6 +88,12 @@ export function RemoteAccessActions({
   };
 
   const startRemoteAccess = async (selectedSessionId: string) => {
+    // Prevent duplicate calls while loading
+    if (isLoading) {
+      console.log("[RemoteAccess] Already starting session, ignoring duplicate call");
+      return;
+    }
+
     setIsLoading(true);
     setShowSessionDialog(false);
 

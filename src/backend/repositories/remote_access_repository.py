@@ -224,3 +224,36 @@ class RemoteAccessRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def get_active_session_for_pair(
+        db: AsyncSession,
+        agent_id: UUID,
+        requester_id: UUID,
+    ) -> Optional[RemoteAccessSession]:
+        """Get active session for specific agent + requester pair (for idempotency).
+
+        Args:
+            db: Database session
+            agent_id: Agent ID
+            requester_id: Requester ID
+
+        Returns:
+            Active session or None
+        """
+        result = await db.execute(
+            select(RemoteAccessSession)
+            .where(
+                RemoteAccessSession.agent_id == agent_id,
+                RemoteAccessSession.requester_id == requester_id,
+                RemoteAccessSession.status == "active",
+            )
+            .options(
+                selectinload(RemoteAccessSession.agent),
+                selectinload(RemoteAccessSession.requester),
+                selectinload(RemoteAccessSession.request),
+            )
+            .order_by(desc(RemoteAccessSession.created_at))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()

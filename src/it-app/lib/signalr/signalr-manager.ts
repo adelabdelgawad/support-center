@@ -173,23 +173,53 @@ class SignalRHubManager {
    */
   private getBaseUrl(): string {
     if (typeof window === 'undefined') {
-      return process.env.NEXT_PUBLIC_SIGNALR_URL || 'https://supportcenter.andalusiagroup.net/signalr';
+      // Server-side: use env variable or fallback
+      return process.env.NEXT_PUBLIC_SIGNALR_URL || 'http://localhost:5000/signalr';
     }
 
-    // Client-side: use environment variable or auto-detect
+    // Client-side: check if env variable is set
     const envUrl = process.env.NEXT_PUBLIC_SIGNALR_URL;
     if (envUrl) {
       return envUrl;
     }
 
-    // Auto-detect based on current page
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const host = window.location.hostname;
-    const port = window.location.protocol === 'https:'
-      ? (window.location.port || '443')
-      : '5000'; // SignalR default port
+    // Auto-detect based on current page URL
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
 
-    return `${protocol}//${host}:${port}/signalr`;
+    // Parse hostname mappings from environment variable
+    // Format: hostname1:url1,hostname2:url2
+    const mappingsStr = process.env.NEXT_PUBLIC_SIGNALR_HOSTNAME_MAPPINGS || '';
+    if (mappingsStr) {
+      const mappings: Record<string, string> = {};
+      mappingsStr.split(',').forEach(mapping => {
+        // Split only on the FIRST colon to avoid breaking HTTPS URLs
+        const colonIndex = mapping.indexOf(':');
+        if (colonIndex > 0) {
+          const host = mapping.substring(0, colonIndex).trim();
+          const url = mapping.substring(colonIndex + 1).trim();
+          if (host && url) {
+            mappings[host] = url;
+          }
+        }
+      });
+
+      if (mappings[hostname]) {
+        return mappings[hostname];
+      }
+    }
+
+    // Get SignalR port from environment variable or default to 5000
+    const signalrPort = process.env.NEXT_PUBLIC_SIGNALR_PORT || '5000';
+
+    // Fallback: construct URL dynamically based on protocol and hostname
+    if (protocol === 'https:') {
+      // For HTTPS, SignalR available through nginx
+      return `https://${hostname}`;
+    } else {
+      // For HTTP, connect directly to SignalR port
+      return `http://${hostname}:${signalrPort}`;
+    }
   }
 
   /**
