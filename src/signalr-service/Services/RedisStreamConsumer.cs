@@ -125,25 +125,30 @@ public class RedisStreamConsumer : BackgroundService
             try
             {
                 // XREADGROUP: Blocking read from consumer group
+                // Note: StackExchange.Redis doesn't support blocking reads directly
+                // We'll poll with a delay instead
                 var entries = await db.StreamReadGroupAsync(
                     streamName,
                     ConsumerGroupName,
                     _consumerName,
                     ">",  // Only new messages not yet delivered
-                    count: 100,  // Batch size
-                    blockSizeMs: 5000  // 5 second blocking read
+                    count: 100  // Batch size
                 );
 
-                if (entries.Length > 0)
+                // If no entries, wait before polling again
+                if (entries.Length == 0)
                 {
-                    _logger.LogDebug("Received {Count} entries from stream {StreamName}",
-                        entries.Length, streamName);
+                    await Task.Delay(5000, cancellationToken);
+                    continue;
+                }
 
-                    // Process each entry
-                    foreach (var entry in entries)
-                    {
-                        await ProcessStreamEntryAsync(streamName, entry, cancellationToken);
-                    }
+                _logger.LogDebug("Received {Count} entries from stream {StreamName}",
+                    entries.Length, streamName);
+
+                // Process each entry
+                foreach (var entry in entries)
+                {
+                    await ProcessStreamEntryAsync(streamName, entry, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -229,11 +234,16 @@ public class RedisStreamConsumer : BackgroundService
         {
             var eventDict = new Dictionary<string, string>();
 
-            foreach (var name in entry.NameValues)
+            // StreamEntry.Values is a RedisValue[] - need to parse as key-value pairs
+            // The Redis stream stores data as alternating key-value pairs
+            var values = entry.Values;
+            for (int i = 0; i < values.Length; i += 2)
             {
-                if (name.Value.HasValue && name.Value.Value is RedisValue redisValue)
+                var key = values[i].ToString();
+                if (i + 1 < values.Length)
                 {
-                    eventDict[name.ToString()!] = redisValue.ToString()!;
+                    var value = values[i + 1].ToString();
+                    eventDict[key] = value;
                 }
             }
 
@@ -363,7 +373,7 @@ public class RedisStreamConsumer : BackgroundService
         var userId = streamEvent.Payload.GetValueOrDefault("user_id", "")?.ToString();
         var username = streamEvent.Payload.GetValueOrDefault("username", "")?.ToString();
 
-        await chatHub.Clients.OthersInGroup(roomName).SendAsync("TypingIndicator", new
+        await chatHub.Clients.Group(roomName).SendAsync("TypingIndicator", new
         {
             requestId = streamEvent.RoomId,
             userId,
@@ -394,7 +404,7 @@ public class RedisStreamConsumer : BackgroundService
             }
         }
 
-        await chatHub.Clients.OthersInGroup(roomName).SendAsync("ReadStatusUpdate", new
+        await chatHub.Clients.Group(roomName).SendAsync("ReadStatusUpdate", new
         {
             requestId = streamEvent.RoomId,
             userId,
@@ -491,17 +501,10 @@ public class RedisStreamConsumer : BackgroundService
         {
             try
             {
-                var info = await db.StreamInfoAsync(stream.Name);
-                var groups = await db.StreamGroupInfoAsync(stream.Name);
-
-                foreach (var group in groups)
-                {
-                    if (group.Name == ConsumerGroupName)
-                    {
-                        lag[stream.Name] = group.Pending;
-                        break;
-                    }
-                }
+                // Get pending message count for this consumer group
+                // StreamPendingAsync returns pending message info
+                var pendingInfo = await db.StreamPendingAsync(stream.Name, ConsumerGroupName);
+                lag[stream.Name] = pendingInfo.PendingMessageCount;
             }
             catch (Exception ex)
             {

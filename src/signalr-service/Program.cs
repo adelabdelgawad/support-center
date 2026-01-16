@@ -27,8 +27,73 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<IdempotencyGuard>();
 builder.Services.AddSingleton<ConnectionTracker>();
 
+// Register Redis connection for Streams consumer (Feature 001: Real-Time Messaging Latency Optimization)
+var redisUrl = builder.Configuration["REDIS_URL"];
+bool redisConnected = false;
+if (!string.IsNullOrEmpty(redisUrl))
+{
+    try
+    {
+        ConfigurationOptions configOptions;
+
+        // Handle redis:// URL format with password but no username
+        // Expected format: redis://:password@host:port or redis://:password@host:port/db
+        if (redisUrl.StartsWith("redis://"))
+        {
+            // Parse the URL and convert to StackExchange.Redis format
+            var uri = new Uri(redisUrl);
+
+            // Extract password from UserInfo (format is ":password")
+            var password = string.Empty;
+            if (!string.IsNullOrEmpty(uri.UserInfo))
+            {
+                // UserInfo starts with ':' for password-only auth
+                password = uri.UserInfo.StartsWith(":")
+                    ? uri.UserInfo.Substring(1)
+                    : uri.UserInfo;
+            }
+
+            configOptions = new ConfigurationOptions
+            {
+                EndPoints = { { uri.Host, uri.Port } },
+                Password = password,
+                AbortOnConnectFail = false,
+                ConnectRetry = 3,
+                ConnectTimeout = 5000,
+                ReconnectRetryPolicy = new ExponentialRetry(1000)
+            };
+        }
+        else
+        {
+            // Use standard parsing
+            configOptions = ConfigurationOptions.Parse(redisUrl);
+            configOptions.AbortOnConnectFail = false;
+            configOptions.ConnectRetry = 3;
+            configOptions.ConnectTimeout = 5000;
+            configOptions.ReconnectRetryPolicy = new ExponentialRetry(1000);
+        }
+
+        var redis = ConnectionMultiplexer.Connect(configOptions);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+        redisConnected = true;
+        Log.Information("Redis connection established for Streams consumer");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Failed to connect to Redis. Streams consumer will not function. SignalR will work without real-time stream events.");
+    }
+}
+else
+{
+    Log.Warning("REDIS_URL not configured. Streams consumer will not function.");
+}
+
 // Register Redis Streams consumer (Feature 001: Real-Time Messaging Latency Optimization)
-builder.Services.AddHostedService<RedisStreamConsumer>();
+// Only register if Redis connection was successful
+if (redisConnected)
+{
+    builder.Services.AddHostedService<RedisStreamConsumer>();
+}
 
 // Configure SignalR
 var signalRBuilder = builder.Services.AddSignalR(options =>
@@ -40,7 +105,6 @@ var signalRBuilder = builder.Services.AddSignalR(options =>
 });
 
 // Redis backplane - enable when needed for horizontal scaling
-var redisUrl = builder.Configuration["REDIS_URL"];
 if (!string.IsNullOrEmpty(redisUrl) && builder.Configuration.GetValue<bool>("EnableRedisBackplane"))
 {
     signalRBuilder.AddStackExchangeRedis(redisUrl, options =>

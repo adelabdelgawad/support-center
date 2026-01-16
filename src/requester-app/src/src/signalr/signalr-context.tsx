@@ -336,17 +336,23 @@ export function useSignalRChatRoom(
           );
           if (optimisticIndex !== -1) {
             const updated = [...prev];
-            // FIX: Preserve BOTH id and tempId to prevent component re-mount
-            // Changing the id causes SolidJS For to see it as a new item and re-render
-            // Store real server ID separately for any API calls that need it
-            const originalId = prev[optimisticIndex].id;
-            const originalTempId = prev[optimisticIndex].tempId;
+            const optimistic = prev[optimisticIndex];
+            // FIX: Preserve optimistic sequenceNumber and createdAt to prevent reordering
+            // When server confirms, its values may differ (clock skew, race conditions)
+            // Preserving optimistic values keeps message in user's expected position
+            // This prevents: 1) message jumping in list, 2) scroll position reset
             updated[optimisticIndex] = {
               ...message,
-              id: originalId,  // Keep original id to prevent For re-mount
-              serverId: message.id,  // Store real server ID if needed
+              // Preserve optimistic values to prevent reordering and scroll jump
+              id: optimistic.id,
+              sequenceNumber: optimistic.sequenceNumber,
+              createdAt: optimistic.createdAt,
+              // Store server values for any API calls that need them
+              serverId: message.id,
+              serverSequenceNumber: message.sequenceNumber,
+              serverCreatedAt: message.createdAt,
               status: 'sent',
-              tempId: originalTempId
+              tempId: optimistic.tempId
             };
             return updated;
           }

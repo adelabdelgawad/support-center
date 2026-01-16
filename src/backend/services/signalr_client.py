@@ -1,5 +1,5 @@
 """
-SignalR Client Service - Event broadcasting to SignalR microservice.
+SignalR Client Service - Event broadcasting to SignalR microservice via Redis Streams.
 
 This service sends events to SignalR via Redis Streams for low-latency delivery.
 
@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 
 class SignalRClient:
-    """HTTP client for SignalR internal API broadcasts."""
+    """Redis Streams client for SignalR event broadcasting."""
 
     _client: Optional[httpx.AsyncClient] = None
 
@@ -89,7 +89,7 @@ class SignalRClient:
 
     @classmethod
     async def close(cls):
-        """Close the HTTP client (call during shutdown)."""
+        """Close all connections (call during shutdown)."""
         if cls._client is not None and not cls._client.is_closed:
             await cls._client.aclose()
             cls._client = None
@@ -244,192 +244,6 @@ class SignalRClient:
         }
 
         await cls._publish_event(event_type, request_id, payload)
-        """
-        Send POST request to SignalR internal API.
-
-        This is non-fatal - errors are logged but not propagated.
-
-        Args:
-            endpoint: API endpoint path (e.g., "/internal/chat/message")
-            payload: JSON payload to send
-
-        Returns:
-            True if successful, False otherwise
-        """
-        if not settings.signalr.enabled:
-            logger.debug("SignalR broadcasting is disabled, skipping")
-            return False
-
-        # SECURITY: Ensure API key is configured before making requests
-        if not settings.signalr.internal_api_key:
-            logger.error(
-                "SECURITY: SignalR is enabled but SIGNALR_INTERNAL_API_KEY is not set. "
-                "Refusing to broadcast without authentication."
-            )
-            return False
-
-        try:
-            client = await cls.get_client()
-            response = await client.post(endpoint, json=payload)
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("duplicate"):
-                    logger.debug(f"SignalR duplicate event: {payload.get('eventId')}")
-                else:
-                    logger.info(f"SignalR broadcast successful: {endpoint}")
-                return True
-            else:
-                logger.warning(
-                    f"SignalR broadcast failed: {endpoint} - "
-                    f"Status: {response.status_code}, Body: {response.text[:200]}"
-                )
-                return False
-
-        except httpx.TimeoutException as e:
-            logger.error(f"SignalR timeout: {endpoint} - {e}")
-            return False
-        except httpx.RequestError as e:
-            logger.error(f"SignalR request error: {endpoint} - {e}")
-            return False
-        except Exception as e:
-            logger.error(f"SignalR unexpected error: {endpoint} - {e}", exc_info=True)
-            return False
-
-    # ==================== Chat Events ====================
-
-    @classmethod
-    async def broadcast_chat_message(
-        cls,
-        request_id: str,
-        message: Dict[str, Any],
-    ):
-        """
-        Broadcast a chat message to request room.
-
-        Args:
-            request_id: Service request UUID
-            message: Message data dict (camelCase)
-        """
-        # Use new event transport if enabled, otherwise fall back to HTTP
-        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
-            if _DUAL_WRITE_ENABLED:
-                # Dual-write mode: publish to both
-                await cls._publish_event_dual_write(
-                    EventType.CHAT_MESSAGE,
-                    request_id,
-                    message,
-                )
-            else:
-                # Single transport mode
-                await cls._publish_event(
-                    EventType.CHAT_MESSAGE,
-                    request_id,
-                    message,
-                )
-        else:
-            # Legacy HTTP mode
-            await cls._post(
-                "/internal/chat/message",
-                {
-                    "event_id": cls._generate_event_id(),
-                    "request_id": request_id,
-                    "message": message,
-                },
-            )
-
-    @classmethod
-    async def broadcast_typing_indicator(
-        cls,
-        request_id: str,
-        user_id: str,
-        is_typing: bool,
-    ):
-        """Broadcast typing indicator to request room.
-
-        Uses 100ms coalescing to reduce traffic - only latest state is sent.
-        """
-        # Determine event type based on typing state
-        event_type = EventType.TYPING_START if is_typing else EventType.TYPING_STOP
-
-        payload = {
-            "user_id": user_id,
-            "username": "",  # Will be filled by consumer if needed
-            "is_typing": is_typing,
-        }
-
-        # Use coalescer for typing events (enabled by default)
-        # Coalescer automatically publishes via event transport
-        await typing_coalescer.submit(request_id, event_type, payload)
-
-    @classmethod
-    async def broadcast_read_status(
-        cls,
-        request_id: str,
-        user_id: str,
-        message_ids: List[str],
-    ):
-        """Broadcast read status update to request room."""
-        await cls._post(
-            "/internal/chat/read-status",
-            {
-                "event_id": cls._generate_event_id(),
-                "request_id": request_id,
-                "user_id": user_id,
-                "message_ids": message_ids,
-            },
-        )
-
-    # ==================== Ticket Events ====================
-
-    @classmethod
-    async def broadcast_ticket_update(
-        cls,
-        request_id: str,
-        update_type: str,
-        update_data: Dict[str, Any],
-    ):
-        """
-        Broadcast ticket update (status change, assignment, etc.).
-
-        Args:
-            request_id: Service request UUID
-            update_type: Type of update (e.g., "status_changed", "assigned")
-            update_data: Update data dict
-        """
-        # Map update_type to EventType
-        event_type_map = {
-            "status_changed": EventType.STATUS_CHANGE,
-            "assigned": EventType.ASSIGNMENT_CHANGE,
-        }
-        event_type = event_type_map.get(update_type, EventType.STATUS_CHANGE)
-
-        # Build payload for new transport
-        payload = {
-            "request_id": request_id,
-            **update_data,
-        }
-
-        # Use new event transport if enabled
-        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
-            if _DUAL_WRITE_ENABLED:
-                await cls._publish_event_dual_write(event_type, request_id, payload)
-            else:
-                await cls._publish_event(event_type, request_id, payload)
-        else:
-            # Legacy HTTP mode
-            await cls._post(
-                "/internal/ticket/update",
-                {
-                    "event_id": cls._generate_event_id(),
-                    "request_id": request_id,
-                    "update": {
-                        "type": update_type,
-                        "data": update_data,
-                        "requestId": request_id,
-                    },
-                },
-            )
 
     @classmethod
     async def broadcast_task_status_changed(
@@ -439,12 +253,13 @@ class SignalRClient:
         changed_by: str,
     ):
         """Broadcast task status change."""
-        await cls._post(
-            "/internal/ticket/task-status",
+        await cls._publish_event(
+            EventType.STATUS_CHANGE,
+            request_id,
             {
-                "event_id": cls._generate_event_id(),
                 "request_id": request_id,
-                "status": status,
+                "old_status": "",
+                "new_status": status,
                 "changed_by": changed_by,
             },
         )
@@ -457,10 +272,10 @@ class SignalRClient:
         ticket: Dict[str, Any],
     ):
         """Broadcast new ticket notification."""
-        await cls._post(
-            "/internal/ticket/new",
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            requester_id,  # Room ID = requester_id for user notifications
             {
-                "event_id": cls._generate_event_id(),
                 "requester_id": requester_id,
                 "assigned_to_id": assigned_to_id,
                 "ticket": ticket,
@@ -482,13 +297,15 @@ class SignalRClient:
             message_type: Type of system message
             message: Message data dict (camelCase)
         """
-        await cls._post(
-            "/internal/ticket/system-message",
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            request_id,
             {
-                "event_id": cls._generate_event_id(),
-                "request_id": request_id,
                 "type": message_type,
-                "message": message,
+                "title": "",  # Will be populated from message
+                "body": "",  # Will be populated from message
+                "action_url": "",  # Will be populated from message
+                **message,
             },
         )
 
@@ -505,10 +322,10 @@ class SignalRClient:
 
         This is for desktop notifications (Tauri app).
         """
-        await cls._post(
-            "/internal/notification/new-message",
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            request_id,  # Room ID = request_id for message notifications
             {
-                "event_id": cls._generate_event_id(),
                 "request_id": request_id,
                 "message": message,
             },
@@ -521,13 +338,10 @@ class SignalRClient:
         notification: Dict[str, Any],
     ):
         """Send notification to specific user."""
-        await cls._post(
-            "/internal/notification/send",
-            {
-                "event_id": cls._generate_event_id(),
-                "user_id": user_id,
-                "notification": notification,
-            },
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            user_id,  # Room ID = user_id for user notifications
+            notification,
         )
 
     @classmethod
@@ -537,10 +351,11 @@ class SignalRClient:
         request_id: str,
     ):
         """Notify user that they were subscribed to a request."""
-        await cls._post(
-            "/internal/notification/subscription-added",
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            user_id,  # Room ID = user_id for subscription notifications
             {
-                "event_id": cls._generate_event_id(),
+                "type": "subscription_added",
                 "user_id": user_id,
                 "request_id": request_id,
             },
@@ -553,10 +368,11 @@ class SignalRClient:
         request_id: str,
     ):
         """Notify user that they were unsubscribed from a request."""
-        await cls._post(
-            "/internal/notification/subscription-removed",
+        await cls._publish_event(
+            EventType.NOTIFICATION,
+            user_id,  # Room ID = user_id for subscription notifications
             {
-                "event_id": cls._generate_event_id(),
+                "type": "subscription_removed",
                 "user_id": user_id,
                 "request_id": request_id,
             },
@@ -582,30 +398,11 @@ class SignalRClient:
             **session,
         }
 
-        # Use new event transport if enabled
-        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
-            if _DUAL_WRITE_ENABLED:
-                await cls._publish_event_dual_write(
-                    EventType.REMOTE_SESSION_START,
-                    requester_id,
-                    payload
-                )
-            else:
-                await cls._publish_event(
-                    EventType.REMOTE_SESSION_START,
-                    requester_id,
-                    payload
-                )
-        else:
-            # Legacy HTTP mode
-            await cls._post(
-                "/internal/remote-access/auto-start",
-                {
-                    "event_id": cls._generate_event_id(),
-                    "requester_id": requester_id,
-                    "session": session,
-                },
-            )
+        await cls._publish_event(
+            EventType.REMOTE_SESSION_START,
+            requester_id,  # Room ID = requester_id for user notifications
+            payload,
+        )
 
     @classmethod
     async def notify_remote_session_ended(
@@ -621,38 +418,16 @@ class SignalRClient:
         DURABLE: Called after DB persistence of session end.
         Broadcasts to both agent and requester.
         """
-        payload = {
-            "session_id": session_id,
-            "agent_id": agent_id,
-            "requester_id": requester_id,
-            "reason": reason,
-        }
-
-        # Use new event transport if enabled
-        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
-            if _DUAL_WRITE_ENABLED:
-                await cls._publish_event_dual_write(
-                    EventType.REMOTE_SESSION_END,
-                    requester_id,
-                    payload
-                )
-            else:
-                await cls._publish_event(
-                    EventType.REMOTE_SESSION_END,
-                    requester_id,
-                    payload
-                )
-        else:
-            # Legacy HTTP mode
-            await cls._post(
-                "/internal/remote-access/ended",
-                {
-                    "event_id": cls._generate_event_id(),
-                    "session_id": session_id,
-                    "reason": reason,
-                    "ended_by": agent_id,
-                },
-            )
+        await cls._publish_event(
+            EventType.REMOTE_SESSION_END,
+            requester_id,  # Room ID = requester_id for user notifications
+            {
+                "session_id": session_id,
+                "agent_id": agent_id,
+                "requester_id": requester_id,
+                "reason": reason,
+            },
+        )
 
     @classmethod
     async def notify_control_mode_changed(
@@ -666,20 +441,13 @@ class SignalRClient:
 
         DURABLE: Called after DB persistence of control toggle.
         """
-        payload = {
-            "session_id": session_id,
-            "requester_id": requester_id,
-            "mode": "control" if enabled else "view",
-        }
-
-        # For now, use legacy HTTP mode for control mode changes
-        # (can be migrated to Redis Streams later if needed)
-        await cls._post(
-            "/internal/remote-access/control-changed",
+        await cls._publish_event(
+            EventType.REMOTE_SESSION_END,  # Use REMOTE_SESSION_END for all remote events
+            requester_id,
             {
-                "event_id": cls._generate_event_id(),
                 "session_id": session_id,
-                "enabled": enabled,
+                "requester_id": requester_id,
+                "mode": "control" if enabled else "view",
             },
         )
 
@@ -690,38 +458,55 @@ class SignalRClient:
         session: Dict[str, Any],
     ):
         """Notify requester to reconnect to session."""
-        await cls._post(
-            "/internal/remote-access/reconnect",
+        await cls._publish_event(
+            EventType.REMOTE_SESSION_END,  # Reuse event type for simplicity
+            requester_id,
             {
-                "event_id": cls._generate_event_id(),
+                "session_id": session.get("session_id", ""),
                 "requester_id": requester_id,
-                "session": session,
+                "reconnect": True,
             },
         )
 
     @classmethod
     async def notify_uac_detected(cls, session_id: str, agent_id: str = ""):
         """Notify agent that UAC prompt is active."""
-        await cls._post(
-            "/internal/remote-access/uac-detected",
-            {
-                "event_id": cls._generate_event_id(),
-                "session_id": session_id,
-                "agent_id": agent_id,
-            },
-        )
+        # UAC notifications don't go through Redis Streams - they're time-sensitive
+        # Call SignalR internal API directly (not Redis Streams)
+        try:
+            client = await cls.get_client()
+            response = await client.post(
+                "/internal/remote-access/uac-detected",
+                json={
+                    "event_id": cls._generate_event_id(),
+                    "session_id": session_id,
+                    "agent_id": agent_id,
+                },
+            )
+            response.raise_for_status()
+            logger.info(f"UAC detection notification sent for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to send UAC notification for session {session_id}: {e}")
 
     @classmethod
     async def notify_uac_dismissed(cls, session_id: str, agent_id: str = ""):
         """Notify agent that UAC prompt was dismissed."""
-        await cls._post(
-            "/internal/remote-access/uac-dismissed",
-            {
-                "event_id": cls._generate_event_id(),
-                "session_id": session_id,
-                "agent_id": agent_id,
-            },
-        )
+        # UAC notifications don't go through Redis Streams - they're time-sensitive
+        # Call SignalR internal API directly (not Redis Streams)
+        try:
+            client = await cls.get_client()
+            response = await client.post(
+                "/internal/remote-access/uac-dismissed",
+                json={
+                    "event_id": cls._generate_event_id(),
+                    "session_id": session_id,
+                    "agent_id": agent_id,
+                },
+            )
+            response.raise_for_status()
+            logger.info(f"UAC dismissed notification sent for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to send UAC dismissed notification for session {session_id}: {e}")
 
     # ==================== Stats & Status ====================
 

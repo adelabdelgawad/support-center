@@ -21,6 +21,8 @@ from models import User
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Constants
+CONSUMER_GROUP = "signalr-consumers"
 
 # Default stream names based on event_types.py
 DEFAULT_STREAMS = [
@@ -164,7 +166,8 @@ async def get_consumer_lag(
             "stream_count": 0,
         }
 
-        consumer_group = settings.event_transport.consumer_group
+        # Hardcoded consumer group constant
+        CONSUMER_GROUP = "signalr-consumers"
 
         # Check each stream
         for stream in DEFAULT_STREAMS:
@@ -178,7 +181,7 @@ async def get_consumer_lag(
                 # Update Prometheus metrics
                 update_consumer_lag(
                     stream=stream,
-                    consumer_group=consumer_group,
+                    consumer_group=CONSUMER_GROUP,
                     lag=lag_info["lag"]
                 )
 
@@ -240,7 +243,7 @@ async def list_streams(
 
     try:
         streams_info = []
-        consumer_group = settings.event_transport.consumer_group
+        consumer_group = "signalr-consumers"
 
         for stream in DEFAULT_STREAMS:
             try:
@@ -323,12 +326,12 @@ async def events_health_check(
         return {
             "status": "unhealthy",
             "redis_connected": False,
-            "transport_mode": "redis_streams" if settings.event_transport.use_redis_streams else "http",
+            "transport_mode": "redis_streams",
             "error": "Cannot connect to Redis"
         }
 
     try:
-        consumer_group = settings.event_transport.consumer_group
+        consumer_group = "signalr-consumers"
         stream_status = {"healthy": 0, "degraded": 0, "unhealthy": 0}
         max_lag = 0
         total_lag = 0
@@ -365,7 +368,7 @@ async def events_health_check(
         return {
             "status": overall_status,
             "redis_connected": redis_connected,
-            "transport_mode": "redis_streams" if settings.event_transport.use_redis_streams else "http",
+            "transport_mode": "redis_streams",
             "streams": stream_status,
             "max_lag": max_lag,
             "total_lag": total_lag,
