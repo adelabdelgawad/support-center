@@ -27,6 +27,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSingleton<IdempotencyGuard>();
 builder.Services.AddSingleton<ConnectionTracker>();
 
+// Register Redis Streams consumer (Feature 001: Real-Time Messaging Latency Optimization)
+builder.Services.AddHostedService<RedisStreamConsumer>();
+
 // Configure SignalR
 var signalRBuilder = builder.Services.AddSignalR(options =>
 {

@@ -1,11 +1,10 @@
 """
-SignalR Client Service - HTTP client for broadcasting events to SignalR microservice.
+SignalR Client Service - Event broadcasting to SignalR microservice.
 
-This service sends events to the SignalR microservice's internal API,
-which then broadcasts them to connected clients.
+This service sends events to SignalR via Redis Streams for low-latency delivery.
 
 Key principles:
-- Non-blocking: Never fails the main operation if SignalR broadcast fails
+- Non-blocking: Never fails the main operation if broadcast fails
 - Idempotent: Uses event IDs for duplicate detection
 - Fire-and-forget: Logs errors but doesn't propagate them
 
@@ -44,12 +43,18 @@ TODO FOR FUTURE:
 """
 
 import logging
+import time
 import uuid
 from typing import Any, Dict, List, Optional
 
 import httpx
 
 from core.config import settings
+from core.metrics import track_event_publish
+from services.event_coalescer import typing_coalescer
+from services.event_models import StreamEvent
+from services.event_publisher import publish_event, _get_stream_name
+from services.event_types import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -88,14 +93,157 @@ class SignalRClient:
         if cls._client is not None and not cls._client.is_closed:
             await cls._client.aclose()
             cls._client = None
+        # Also close publisher connections
+        from services.event_publisher import redis_streams_publisher
+        await redis_streams_publisher.close()
 
     @classmethod
     def _generate_event_id(cls) -> str:
         """Generate unique event ID for idempotency."""
         return str(uuid.uuid4())
 
+    # ==================== Event Transport ====================
+
     @classmethod
-    async def _post(cls, endpoint: str, payload: Dict[str, Any]) -> bool:
+    async def _publish_event(
+        cls,
+        event_type: str,
+        room_id: str,
+        payload: Dict[str, Any],
+    ) -> bool:
+        """
+        Publish event via Redis Streams transport.
+
+        Args:
+            event_type: Event type from EventType enum
+            room_id: Target room ID (typically request UUID)
+            payload: Event payload
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not settings.signalr.enabled:
+            logger.debug("SignalR broadcasting is disabled, skipping event publish")
+            return False
+
+        # Create StreamEvent
+        event = StreamEvent(
+            event_type=event_type,
+            room_id=room_id,
+            payload=payload,
+        )
+
+        # Get stream name for this event type
+        stream = _get_stream_name(event_type)
+
+        # Publish via Redis Streams
+        start_time = time.time()
+        success = await publish_event(event_type, room_id, payload)
+        duration = time.time() - start_time
+
+        # Track metrics
+        track_event_publish(
+            transport="redis_streams",
+            event_type=event_type,
+            duration_seconds=duration,
+            success=success
+        )
+
+        return success
+
+    # ==================== Chat Events ====================
+
+    @classmethod
+    async def broadcast_chat_message(
+        cls,
+        request_id: str,
+        message: Dict[str, Any],
+    ):
+        """
+        Broadcast a chat message to request room.
+
+        Args:
+            request_id: Service request UUID
+            message: Message data dict (camelCase)
+        """
+        await cls._publish_event(
+            EventType.CHAT_MESSAGE,
+            request_id,
+            message,
+        )
+
+    @classmethod
+    async def broadcast_typing_indicator(
+        cls,
+        request_id: str,
+        user_id: str,
+        is_typing: bool,
+    ):
+        """Broadcast typing indicator to request room.
+
+        Uses 100ms coalescing to reduce traffic - only latest state is sent.
+        """
+        # Determine event type based on typing state
+        event_type = EventType.TYPING_START if is_typing else EventType.TYPING_STOP
+
+        payload = {
+            "user_id": user_id,
+            "username": "",  # Will be filled by consumer if needed
+            "is_typing": is_typing,
+        }
+
+        # Use coalescer for typing events (enabled by default)
+        # Coalescer automatically publishes via event transport
+        await typing_coalescer.submit(request_id, event_type, payload)
+
+    @classmethod
+    async def broadcast_read_status(
+        cls,
+        request_id: str,
+        user_id: str,
+        message_ids: List[str],
+    ):
+        """Broadcast read status update to request room."""
+        await cls._publish_event(
+            EventType.READ_RECEIPT,
+            request_id,
+            {
+                "user_id": user_id,
+                "message_ids": message_ids,
+            },
+        )
+
+    # ==================== Ticket Events ====================
+
+    @classmethod
+    async def broadcast_ticket_update(
+        cls,
+        request_id: str,
+        update_type: str,
+        update_data: Dict[str, Any],
+    ):
+        """
+        Broadcast ticket update (status change, assignment, etc.).
+
+        Args:
+            request_id: Service request UUID
+            update_type: Type of update (e.g., "status_changed", "assigned")
+            update_data: Update data dict
+        """
+        # Map update_type to EventType
+        event_type_map = {
+            "status_changed": EventType.STATUS_CHANGE,
+            "assigned": EventType.ASSIGNMENT_CHANGE,
+        }
+        event_type = event_type_map.get(update_type, EventType.STATUS_CHANGE)
+
+        # Build payload
+        payload = {
+            "request_id": request_id,
+            **update_data,
+        }
+
+        await cls._publish_event(event_type, request_id, payload)
         """
         Send POST request to SignalR internal API.
 
@@ -163,14 +311,32 @@ class SignalRClient:
             request_id: Service request UUID
             message: Message data dict (camelCase)
         """
-        await cls._post(
-            "/internal/chat/message",
-            {
-                "event_id": cls._generate_event_id(),
-                "request_id": request_id,
-                "message": message,
-            },
-        )
+        # Use new event transport if enabled, otherwise fall back to HTTP
+        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
+            if _DUAL_WRITE_ENABLED:
+                # Dual-write mode: publish to both
+                await cls._publish_event_dual_write(
+                    EventType.CHAT_MESSAGE,
+                    request_id,
+                    message,
+                )
+            else:
+                # Single transport mode
+                await cls._publish_event(
+                    EventType.CHAT_MESSAGE,
+                    request_id,
+                    message,
+                )
+        else:
+            # Legacy HTTP mode
+            await cls._post(
+                "/internal/chat/message",
+                {
+                    "event_id": cls._generate_event_id(),
+                    "request_id": request_id,
+                    "message": message,
+                },
+            )
 
     @classmethod
     async def broadcast_typing_indicator(
@@ -179,16 +345,22 @@ class SignalRClient:
         user_id: str,
         is_typing: bool,
     ):
-        """Broadcast typing indicator to request room."""
-        await cls._post(
-            "/internal/chat/typing",
-            {
-                "event_id": cls._generate_event_id(),
-                "request_id": request_id,
-                "user_id": user_id,
-                "is_typing": is_typing,
-            },
-        )
+        """Broadcast typing indicator to request room.
+
+        Uses 100ms coalescing to reduce traffic - only latest state is sent.
+        """
+        # Determine event type based on typing state
+        event_type = EventType.TYPING_START if is_typing else EventType.TYPING_STOP
+
+        payload = {
+            "user_id": user_id,
+            "username": "",  # Will be filled by consumer if needed
+            "is_typing": is_typing,
+        }
+
+        # Use coalescer for typing events (enabled by default)
+        # Coalescer automatically publishes via event transport
+        await typing_coalescer.submit(request_id, event_type, payload)
 
     @classmethod
     async def broadcast_read_status(
@@ -225,18 +397,39 @@ class SignalRClient:
             update_type: Type of update (e.g., "status_changed", "assigned")
             update_data: Update data dict
         """
-        await cls._post(
-            "/internal/ticket/update",
-            {
-                "event_id": cls._generate_event_id(),
-                "request_id": request_id,
-                "update": {
-                    "type": update_type,
-                    "data": update_data,
-                    "requestId": request_id,
+        # Map update_type to EventType
+        event_type_map = {
+            "status_changed": EventType.STATUS_CHANGE,
+            "assigned": EventType.ASSIGNMENT_CHANGE,
+        }
+        event_type = event_type_map.get(update_type, EventType.STATUS_CHANGE)
+
+        # Build payload for new transport
+        payload = {
+            "request_id": request_id,
+            **update_data,
+        }
+
+        # Use new event transport if enabled
+        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
+            if _DUAL_WRITE_ENABLED:
+                await cls._publish_event_dual_write(event_type, request_id, payload)
+            else:
+                await cls._publish_event(event_type, request_id, payload)
+        else:
+            # Legacy HTTP mode
+            await cls._post(
+                "/internal/ticket/update",
+                {
+                    "event_id": cls._generate_event_id(),
+                    "request_id": request_id,
+                    "update": {
+                        "type": update_type,
+                        "data": update_data,
+                        "requestId": request_id,
+                    },
                 },
-            },
-        )
+            )
 
     @classmethod
     async def broadcast_task_status_changed(
@@ -384,14 +577,35 @@ class SignalRClient:
             requester_id: Requester user ID
             session: Session data dict with sessionId, agentId, etc.
         """
-        await cls._post(
-            "/internal/remote-access/auto-start",
-            {
-                "event_id": cls._generate_event_id(),
-                "requester_id": requester_id,
-                "session": session,
-            },
-        )
+        payload = {
+            "requester_id": requester_id,
+            **session,
+        }
+
+        # Use new event transport if enabled
+        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
+            if _DUAL_WRITE_ENABLED:
+                await cls._publish_event_dual_write(
+                    EventType.REMOTE_SESSION_START,
+                    requester_id,
+                    payload
+                )
+            else:
+                await cls._publish_event(
+                    EventType.REMOTE_SESSION_START,
+                    requester_id,
+                    payload
+                )
+        else:
+            # Legacy HTTP mode
+            await cls._post(
+                "/internal/remote-access/auto-start",
+                {
+                    "event_id": cls._generate_event_id(),
+                    "requester_id": requester_id,
+                    "session": session,
+                },
+            )
 
     @classmethod
     async def notify_remote_session_ended(
@@ -407,15 +621,38 @@ class SignalRClient:
         DURABLE: Called after DB persistence of session end.
         Broadcasts to both agent and requester.
         """
-        await cls._post(
-            "/internal/remote-access/ended",
-            {
-                "event_id": cls._generate_event_id(),
-                "session_id": session_id,
-                "reason": reason,
-                "ended_by": agent_id,
-            },
-        )
+        payload = {
+            "session_id": session_id,
+            "agent_id": agent_id,
+            "requester_id": requester_id,
+            "reason": reason,
+        }
+
+        # Use new event transport if enabled
+        if settings.event_transport.use_redis_streams or _DUAL_WRITE_ENABLED:
+            if _DUAL_WRITE_ENABLED:
+                await cls._publish_event_dual_write(
+                    EventType.REMOTE_SESSION_END,
+                    requester_id,
+                    payload
+                )
+            else:
+                await cls._publish_event(
+                    EventType.REMOTE_SESSION_END,
+                    requester_id,
+                    payload
+                )
+        else:
+            # Legacy HTTP mode
+            await cls._post(
+                "/internal/remote-access/ended",
+                {
+                    "event_id": cls._generate_event_id(),
+                    "session_id": session_id,
+                    "reason": reason,
+                    "ended_by": agent_id,
+                },
+            )
 
     @classmethod
     async def notify_control_mode_changed(
@@ -429,6 +666,14 @@ class SignalRClient:
 
         DURABLE: Called after DB persistence of control toggle.
         """
+        payload = {
+            "session_id": session_id,
+            "requester_id": requester_id,
+            "mode": "control" if enabled else "view",
+        }
+
+        # For now, use legacy HTTP mode for control mode changes
+        # (can be migrated to Redis Streams later if needed)
         await cls._post(
             "/internal/remote-access/control-changed",
             {

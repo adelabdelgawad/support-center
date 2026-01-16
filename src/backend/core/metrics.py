@@ -966,3 +966,188 @@ def track_pubsub_message(channel_type: str, direction: str):
 def set_cluster_instance_count(count: int):
     """Set the number of healthy backend instances."""
     websocket_cluster_instances.set(count)
+
+
+# ==============================================================================
+# Event Transport Metrics (Redis Streams)
+# ==============================================================================
+# Metrics for the new Redis Streams event transport system (Feature 001)
+
+event_publish_duration_seconds = Histogram(
+    'event_publish_duration_seconds',
+    'Time to publish event to transport layer',
+    ['transport', 'event_type'],  # transport: http/redis_streams
+    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
+)
+
+event_delivery_duration_seconds = Histogram(
+    'event_delivery_duration_seconds',
+    'End-to-end time from publish to SignalR broadcast',
+    ['event_type', 'transport'],
+    buckets=(0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0)
+)
+
+event_queue_depth = Gauge(
+    'event_queue_depth',
+    'Number of events pending in Redis Streams (per stream)',
+    ['stream']  # stream: events:chat, events:ticket, events:remote
+)
+
+events_published_total = Counter(
+    'events_published_total',
+    'Total events published to transport layer',
+    ['transport', 'event_type', 'status']  # status: success/failure
+)
+
+events_coalesced_total = Counter(
+    'events_coalesced_total',
+    'Events coalesced (merged into single event)',
+    ['event_type']
+)
+
+event_consumer_lag = Gauge(
+    'event_consumer_lag',
+    'Number of unprocessed entries in consumer group',
+    ['stream', 'consumer_group']  # consumer_group: signalr-consumers
+)
+
+event_transport_fallback_total = Counter(
+    'event_transport_fallback_total',
+    'Number of times HTTP fallback was used when Redis Streams failed',
+    ['reason']  # reason: redis_error, timeout, connection_lost
+)
+
+dual_write_status = Gauge(
+    'event_dual_write_status',
+    'Dual-write mode status (1=enabled, 0=disabled)',
+)
+
+dual_write_success_total = Counter(
+    'event_dual_write_success_total',
+    'Dual-write publish success counts',
+    ['transport']  # transport: http/redis_streams
+)
+
+dual_write_failure_total = Counter(
+    'event_dual_write_failure_total',
+    'Dual-write publish failure counts',
+    ['transport']
+)
+
+
+# ==============================================================================
+# Event Transport Helper Functions
+# ==============================================================================
+
+def track_event_publish(
+    transport: str,
+    event_type: str,
+    duration_seconds: float,
+    success: bool
+):
+    """Track event publish to transport layer.
+
+    Args:
+        transport: Transport name (http, redis_streams)
+        event_type: Event type (chat_message, typing_start, etc.)
+        duration_seconds: Time taken to publish
+        success: Whether publish succeeded
+    """
+    event_publish_duration_seconds.labels(
+        transport=transport,
+        event_type=event_type
+    ).observe(duration_seconds)
+
+    events_published_total.labels(
+        transport=transport,
+        event_type=event_type,
+        status='success' if success else 'failure'
+    ).inc()
+
+
+def track_event_delivery(
+    event_type: str,
+    transport: str,
+    duration_seconds: float
+):
+    """Track end-to-end event delivery latency.
+
+    Args:
+        event_type: Event type
+        transport: Transport used
+        duration_seconds: End-to-end duration
+    """
+    event_delivery_duration_seconds.labels(
+        event_type=event_type,
+        transport=transport
+    ).observe(duration_seconds)
+
+
+def track_event_coalesced(event_type: str, count: int):
+    """Track event coalescing.
+
+    Args:
+        event_type: Event type that was coalesced
+        count: Number of events merged
+    """
+    events_coalesced_total.labels(event_type=event_type).inc(count)
+
+
+def update_event_queue_depth(stream: str, depth: int):
+    """Update event queue depth gauge.
+
+    Args:
+        stream: Stream name (events:chat, events:ticket, etc.)
+        depth: Current queue depth
+    """
+    event_queue_depth.labels(stream=stream).set(depth)
+
+
+def update_consumer_lag(stream: str, consumer_group: str, lag: int):
+    """Update consumer group lag gauge.
+
+    Args:
+        stream: Stream name
+        consumer_group: Consumer group name
+        lag: Number of unprocessed entries
+    """
+    event_consumer_lag.labels(
+        stream=stream,
+        consumer_group=consumer_group
+    ).set(lag)
+
+
+def track_transport_fallback(reason: str):
+    """Track HTTP fallback from Redis Streams.
+
+    Args:
+        reason: Fallback reason (redis_error, timeout, connection_lost)
+    """
+    event_transport_fallback_total.labels(reason=reason).inc()
+
+
+def set_dual_write_status(enabled: bool):
+    """Set dual-write mode status gauge.
+
+    Args:
+        enabled: Whether dual-write is enabled
+    """
+    dual_write_status.set(1 if enabled else 0)
+
+
+def track_dual_write_success(transport: str):
+    """Track successful dual-write publish.
+
+    Args:
+        transport: Transport that succeeded
+    """
+    dual_write_success_total.labels(transport=transport).inc()
+
+
+def track_dual_write_failure(transport: str):
+    """Track failed dual-write publish.
+
+    Args:
+        transport: Transport that failed
+    """
+    dual_write_failure_total.labels(transport=transport).inc()

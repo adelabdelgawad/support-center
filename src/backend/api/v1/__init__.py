@@ -20,6 +20,7 @@ from .endpoints import (
     desktop_sessions,
     devices,
     domain_users,
+    events,
     files,
     internal,
     notifications,
@@ -195,4 +196,9 @@ api_router.include_router(internal.router, prefix="/internal", tags=["internal"]
 # Scheduler Management
 api_router.include_router(
     scheduler.router, prefix="/scheduler", tags=["scheduler"]
+)
+
+# Events Monitoring (Redis Streams)
+api_router.include_router(
+    events.router, prefix="/events", tags=["Events"]
 )

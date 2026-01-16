@@ -21,6 +21,34 @@ Service Catalog Application - A comprehensive IT service catalog system with Fas
   - WebSocket handlers: `src/requester-app/src/src/api/notification-websocket.ts`, `global-websocket.ts`
   - Remote access approval dialog implementation required in this app
 
+## Real-Time Event Transport (Feature 001)
+
+The system uses Redis Streams for low-latency event delivery between FastAPI and SignalR.
+
+### Architecture
+
+```
+FastAPI → Redis Streams (XADD) → SignalR Consumer (XREADGROUP) → WebSocket → Clients
+```
+
+### Environment Variables
+
+- `EVENT_TRANSPORT_USE_REDIS_STREAMS` (default: false) - Enable Redis Streams
+- `EVENT_TRANSPORT_REDIS_PERCENTAGE` (default: 0) - Traffic percentage for rollout
+- `EVENT_TRANSPORT_FALLBACK_TO_HTTP` (default: true) - HTTP fallback on failure
+- `EVENT_TRANSPORT_STREAM_MAX_LEN` (default: 10000) - Max stream length
+- `EVENT_TRANSPORT_CONSUMER_GROUP` (default: signalr-consumers) - Consumer group name
+
+### Rollback
+
+Set `EVENT_TRANSPORT_USE_REDIS_STREAMS=false` to route all traffic to HTTP bridge.
+
+### Key Files
+
+- `src/backend/services/event_publisher.py` - Publisher abstraction
+- `src/backend/services/event_coalescer.py` - Typing indicator coalescing
+- `src/signalr-service/Services/RedisStreamConsumer.cs` - Redis Streams consumer
+
 ## ⚠️ CRITICAL: Model Selection for Tasks
 
 **Different task types MUST use specific models. This is MANDATORY:**
@@ -816,6 +844,8 @@ Cache keys centralized in `lib/swr/cache-keys.ts`.
 - PostgreSQL with asyncpg (001-fix-assignees-update)
 - Python 3.12+ (Backend), TypeScript 5.x (Requester App) + FastAPI, SQLModel, Tauri v2, SolidJS, SignalR (004-remote-support-auto-start)
 - PostgreSQL (session records already exist) (004-remote-support-auto-start)
+- Python 3.12+ (Backend), C# (.NET) for SignalR service + FastAPI, httpx (current), redis-py with Streams support, SignalR ASP.NET Core (001-realtime-latency-optimization)
+- Redis (existing infrastructure at redis://localhost:6380) (001-realtime-latency-optimization)
 
 ## Recent Changes
 - 001-fix-assignees-update: Added Python 3.12+ (Backend), TypeScript 5.x (Frontend) + FastAPI, SQLModel, Next.js 15, React 19, SWR

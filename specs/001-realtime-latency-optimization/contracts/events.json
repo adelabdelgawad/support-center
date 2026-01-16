@@ -1,0 +1,320 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Real-Time Event Contracts",
+  "description": "JSON Schema definitions for events published to Redis Streams",
+  "definitions": {
+    "StreamEvent": {
+      "type": "object",
+      "required": ["event_id", "event_type", "timestamp", "room_id", "payload"],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for idempotency"
+        },
+        "event_type": {
+          "$ref": "#/definitions/EventType"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Event creation time (ISO8601)"
+        },
+        "room_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Target room/group for broadcast"
+        },
+        "payload": {
+          "type": "object",
+          "description": "Event-specific data (see event type schemas)"
+        },
+        "metadata": {
+          "$ref": "#/definitions/EventMetadata"
+        }
+      }
+    },
+    "EventType": {
+      "type": "string",
+      "enum": [
+        "chat_message",
+        "typing_start",
+        "typing_stop",
+        "read_receipt",
+        "status_change",
+        "assignment_change",
+        "notification",
+        "remote_session_start",
+        "remote_session_end"
+      ]
+    },
+    "EventMetadata": {
+      "type": "object",
+      "properties": {
+        "trace_id": {
+          "type": "string",
+          "description": "Distributed tracing ID"
+        },
+        "source_instance": {
+          "type": "string",
+          "description": "FastAPI instance identifier"
+        },
+        "coalesced_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of events merged (for coalesced events)"
+        }
+      }
+    },
+    "SenderInfo": {
+      "type": "object",
+      "required": ["id", "username"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "username": {
+          "type": "string"
+        },
+        "full_name": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
+    },
+    "ChatMessagePayload": {
+      "type": "object",
+      "required": ["id", "request_id", "content", "sequence_number", "is_screenshot", "created_at"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Message ID from database"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Parent request ID"
+        },
+        "sender_id": {
+          "type": ["string", "null"],
+          "format": "uuid",
+          "description": "Null for system messages"
+        },
+        "sender": {
+          "$ref": "#/definitions/SenderInfo"
+        },
+        "content": {
+          "type": "string",
+          "description": "Message content"
+        },
+        "sequence_number": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ordering within request"
+        },
+        "is_screenshot": {
+          "type": "boolean",
+          "description": "Screenshot attachment flag"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Message creation time"
+        },
+        "client_temp_id": {
+          "type": "string",
+          "description": "Client-side optimistic ID"
+        }
+      }
+    },
+    "TypingPayload": {
+      "type": "object",
+      "required": ["user_id", "username", "is_typing"],
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User who is typing"
+        },
+        "username": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "is_typing": {
+          "type": "boolean",
+          "description": "Current typing state"
+        }
+      }
+    },
+    "ReadReceiptPayload": {
+      "type": "object",
+      "required": ["user_id", "message_ids"],
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "User who read messages"
+        },
+        "message_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "description": "IDs of messages marked as read"
+        }
+      }
+    },
+    "StatusChangePayload": {
+      "type": "object",
+      "required": ["request_id", "old_status", "new_status", "changed_by", "changed_at"],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Affected request"
+        },
+        "old_status": {
+          "type": "string",
+          "description": "Previous status name"
+        },
+        "new_status": {
+          "type": "string",
+          "description": "New status name"
+        },
+        "changed_by": {
+          "type": "string",
+          "description": "User who made the change"
+        },
+        "changed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time of change"
+        }
+      }
+    },
+    "AssignmentChangePayload": {
+      "type": "object",
+      "required": ["request_id", "assignee_id", "assigned_by"],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assignee_id": {
+          "type": ["string", "null"],
+          "format": "uuid",
+          "description": "New assignee (null if unassigned)"
+        },
+        "assignee_name": {
+          "type": "string"
+        },
+        "assigned_by": {
+          "type": "string",
+          "description": "User who made assignment"
+        }
+      }
+    },
+    "NotificationPayload": {
+      "type": "object",
+      "required": ["type", "title"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Notification category"
+        },
+        "title": {
+          "type": "string",
+          "description": "Notification title"
+        },
+        "body": {
+          "type": "string",
+          "description": "Notification body"
+        },
+        "action_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional action URL"
+        }
+      }
+    },
+    "RemoteSessionPayload": {
+      "type": "object",
+      "required": ["session_id", "agent_id", "requester_id"],
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "agent_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "agent_name": {
+          "type": "string"
+        },
+        "requester_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "request_title": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["view", "control"]
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for session end (for end events)"
+        }
+      }
+    }
+  },
+  "examples": {
+    "chat_message": {
+      "event_id": "550e8400-e29b-41d4-a716-446655440000",
+      "event_type": "chat_message",
+      "timestamp": "2026-01-16T10:30:00.000Z",
+      "room_id": "request-abc123",
+      "payload": {
+        "id": "msg-123",
+        "request_id": "abc123",
+        "sender_id": "user-456",
+        "sender": {
+          "id": "user-456",
+          "username": "john.doe",
+          "full_name": "John Doe"
+        },
+        "content": "Hello, how can I help?",
+        "sequence_number": 5,
+        "is_screenshot": false,
+        "created_at": "2026-01-16T10:30:00.000Z"
+      }
+    },
+    "typing_start": {
+      "event_id": "550e8400-e29b-41d4-a716-446655440001",
+      "event_type": "typing_start",
+      "timestamp": "2026-01-16T10:30:05.000Z",
+      "room_id": "request-abc123",
+      "payload": {
+        "user_id": "user-456",
+        "username": "john.doe",
+        "is_typing": true
+      },
+      "metadata": {
+        "coalesced_count": 3
+      }
+    }
+  }
+}

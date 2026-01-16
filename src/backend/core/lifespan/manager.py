@@ -47,6 +47,9 @@ async def lifespan(app: FastAPI):
     # Start background scheduler for periodic tasks
     await tasks.start_background_scheduler()
 
+    # Initialize event coalescer (Feature 001)
+    await tasks.initialize_event_coalescer()
+
     yield
 
     # Shutdown
@@ -58,6 +61,9 @@ async def lifespan(app: FastAPI):
 
     # Close SignalR HTTP client
     await tasks.shutdown_signalr_client()
+
+    # Shutdown event coalescer (Feature 001)
+    await tasks.shutdown_event_coalescer()
 
     # Close Redis cache connections
     await tasks.shutdown_redis_cache(cache)
