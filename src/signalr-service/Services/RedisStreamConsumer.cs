@@ -428,20 +428,28 @@ public class RedisStreamConsumer : BackgroundService
     }
 
     /// <summary>
-    /// Broadcast notification to NotificationHub.
+    /// Broadcast notification to NotificationHub and ChatHub.
     /// </summary>
     private async Task BroadcastNotificationAsync(IServiceScope scope, StreamEvent streamEvent, CancellationToken cancellationToken)
     {
         var notificationHub = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
+        var chatHub = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 
-        // CRITICAL FIX: Send payload directly as "Notification", not wrapped
-        // Clients expect Notification to receive notification data directly
         var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
 
-        await notificationHub.Clients.All.SendAsync("Notification", payload, cancellationToken);
+        // BUGFIX: Send to specific user groups on BOTH hubs (like HTTP controller does)
+        // streamEvent.RoomId contains the target user's ID
+        // Requester app listens on ChatHub (user:{userId} group), IT app on NotificationHub
+        var userNotifGroup = $"notifications:{streamEvent.RoomId}";
+        var userChatGroup = $"user:{streamEvent.RoomId}";
 
-        _logger.LogInformation("Broadcast notification type: {NotificationType}",
-            payload?.GetValueOrDefault("type", "unknown"));
+        await Task.WhenAll(
+            notificationHub.Clients.Group(userNotifGroup).SendAsync("Notification", payload, cancellationToken),
+            chatHub.Clients.Group(userChatGroup).SendAsync("Notification", payload, cancellationToken)
+        );
+
+        _logger.LogInformation("Broadcast notification type: {NotificationType}, user: {UserId}",
+            payload?.GetValueOrDefault("type", "unknown"), streamEvent.RoomId);
     }
 
     /// <summary>
@@ -450,6 +458,7 @@ public class RedisStreamConsumer : BackgroundService
     private async Task BroadcastRemoteAccessEventAsync(IServiceScope scope, StreamEvent streamEvent, CancellationToken cancellationToken)
     {
         var notificationHub = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
+        var chatHub = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 
         var methodName = streamEvent.EventType switch
         {
@@ -462,10 +471,19 @@ public class RedisStreamConsumer : BackgroundService
         // Clients expect event data directly (sessionId, agentId, etc.)
         var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
 
-        await notificationHub.Clients.All.SendAsync(methodName, payload, cancellationToken);
+        // BUGFIX: Send to specific user groups instead of broadcasting to all clients
+        // streamEvent.RoomId contains the requester's user ID for remote session events
+        // Send to BOTH NotificationHub and ChatHub (like HTTP controller does)
+        var userNotifGroup = $"notifications:{streamEvent.RoomId}";
+        var userChatGroup = $"user:{streamEvent.RoomId}";
 
-        _logger.LogInformation("Broadcast remote access event: {EventType}, sessionId: {SessionId}",
-            streamEvent.EventType, payload?.GetValueOrDefault("sessionId", "unknown"));
+        await Task.WhenAll(
+            notificationHub.Clients.Group(userNotifGroup).SendAsync(methodName, payload, cancellationToken),
+            chatHub.Clients.Group(userChatGroup).SendAsync(methodName, payload, cancellationToken)
+        );
+
+        _logger.LogInformation("Broadcast remote access event: {EventType}, sessionId: {SessionId}, user: {UserId}",
+            streamEvent.EventType, payload?.GetValueOrDefault("sessionId", "unknown"), streamEvent.RoomId);
     }
 
     /// <summary>

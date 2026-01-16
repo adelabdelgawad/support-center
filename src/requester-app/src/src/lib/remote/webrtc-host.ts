@@ -19,6 +19,7 @@ import { signalRRemoteAccess } from '@/signalr';
 import type { HubConnection } from '@microsoft/signalr';
 import * as signalR from '@microsoft/signalr';
 import { logger } from '@/logging/logger';
+import { RuntimeConfig } from '../runtime-config';
 
 interface SignalingMessage {
   type: string;
@@ -1267,9 +1268,12 @@ export class WebRTCHost {
    */
   private async sendHeartbeat(): Promise<void> {
     try {
+      // Get runtime API URL (handles network detection)
+      const apiBaseUrl = RuntimeConfig.getServerAddress();
+
       // Call backend heartbeat endpoint
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/remote-access/${this.sessionId}/heartbeat`,
+        `${apiBaseUrl}/remote-access/${this.sessionId}/heartbeat`,
         {
           method: 'POST',
           credentials: 'include',

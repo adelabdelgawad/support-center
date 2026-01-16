@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: servicecatalog_postgres
+    container_name: supportcenter-postgres
     env_file:
       - docker/env/.env.postgres
     volumes:
@@ -15,13 +15,13 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
 
   # PgBouncer - Connection Pooler for Horizontal Scaling
   pgbouncer:
     image: edoburu/pgbouncer:latest
-    container_name: servicecatalog_pgbouncer
+    container_name: supportcenter-pgbouncer
     environment:
       - DATABASE_URL=postgres://${PGBOUNCER_DB_USER:-servicecatalog}:${PGBOUNCER_DB_PASSWORD:-servicecatalog}@postgres:5432/${PGBOUNCER_DB_NAME:-servicecatalog}
       - POOL_MODE=transaction
@@ -41,13 +41,13 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
 
   # Redis for Caching and Pub/Sub (Scaled for 1000+ connections)
   redis:
     image: redis:7-alpine
-    container_name: servicecatalog_redis
+    container_name: supportcenter-redis
     env_file:
       - docker/env/.env.redis
     command: sh -c 'redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru --appendonly yes --notify-keyspace-events Ex --maxclients 10000 --timeout 0 --tcp-keepalive 300 --requirepass $$REDIS_PASSWORD'
@@ -61,7 +61,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
 
   # MinIO Object Storage
@@ -69,7 +69,7 @@ services:
   # No ports are exposed to host - only accessible from backend containers
   minio:
     image: minio/minio:latest
-    container_name: servicecatalog_minio
+    container_name: supportcenter-minio
     command: server /data --console-address ":9001"
     env_file:
       - docker/env/.env.minio
@@ -85,7 +85,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - servicecatalog_minio_network  # Internal network only
+      - supportcenter-minio-network  # Internal network only
     restart: unless-stopped
 
   # FastAPI Backend Instance 1 (Primary)
@@ -93,7 +93,7 @@ services:
     build:
       context: ./src/backend
       dockerfile: ../../docker/backend/Dockerfile
-    container_name: servicecatalog_backend_1
+    container_name: supportcenter-backend-1
     environment:
       - INSTANCE_ID=backend-1
     env_file:
@@ -124,8 +124,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - servicecatalog_network
-      - servicecatalog_minio_network  # SECURITY (Finding #38): Access to isolated MinIO
+      - supportcenter-network
+      - supportcenter-minio-network  # SECURITY (Finding #38): Access to isolated MinIO
     restart: unless-stopped
 
   # FastAPI Backend Instance 2
@@ -133,7 +133,7 @@ services:
     build:
       context: ./src/backend
       dockerfile: ../../docker/backend/Dockerfile
-    container_name: servicecatalog_backend_2
+    container_name: supportcenter-backend-2
     environment:
       - INSTANCE_ID=backend-2
     env_file:
@@ -164,8 +164,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - servicecatalog_network
-      - servicecatalog_minio_network  # SECURITY (Finding #38): Access to isolated MinIO
+      - supportcenter-network
+      - supportcenter-minio-network  # SECURITY (Finding #38): Access to isolated MinIO
     restart: unless-stopped
 
   # FastAPI Backend Instance 3
@@ -173,7 +173,7 @@ services:
     build:
       context: ./src/backend
       dockerfile: ../../docker/backend/Dockerfile
-    container_name: servicecatalog_backend_3
+    container_name: supportcenter-backend-3
     environment:
       - INSTANCE_ID=backend-3
     env_file:
@@ -204,8 +204,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - servicecatalog_network
-      - servicecatalog_minio_network  # SECURITY (Finding #38): Access to isolated MinIO
+      - supportcenter-network
+      - supportcenter-minio-network  # SECURITY (Finding #38): Access to isolated MinIO
     restart: unless-stopped
 
   # Celery Worker
@@ -213,7 +213,7 @@ services:
     build:
       context: ./src/backend
       dockerfile: ../../docker/backend/Dockerfile
-    container_name: servicecatalog_celery_worker
+    container_name: supportcenter-celery-worker
     command: celery -A celery_app worker --loglevel=info --concurrency=4 -Q celery,file_queue,ad_queue
     env_file:
       - docker/env/.env.backend
@@ -233,8 +233,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - servicecatalog_network
-      - servicecatalog_minio_network  # SECURITY (Finding #38): Access to isolated MinIO
+      - supportcenter-network
+      - supportcenter-minio-network  # SECURITY (Finding #38): Access to isolated MinIO
     restart: unless-stopped
 
   # Next.js Frontend
@@ -246,7 +246,7 @@ services:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend-1:8000}
         - NEXT_PUBLIC_API_BASE_PATH=${NEXT_PUBLIC_API_BASE_PATH:-/api/v1}
         - NEXT_PUBLIC_SIGNALR_URL=${NEXT_PUBLIC_SIGNALR_URL:-http://signalr-service:5000/hubs}
-    container_name: servicecatalog_frontend
+    container_name: supportcenter-frontend
     env_file:
       - docker/env/.env.frontend
     ports:
@@ -261,13 +261,13 @@ services:
       retries: 3
       start_period: 20s
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
 
   # Prometheus - Metrics Collection and Monitoring
   prometheus:
     image: prom/prometheus:v2.48.0
-    container_name: servicecatalog_prometheus
+    container_name: supportcenter-prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -284,7 +284,7 @@ services:
     ports:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
     depends_on:
       - backend-1
@@ -300,7 +300,7 @@ services:
   # Grafana - Metrics Visualization and Dashboards
   grafana:
     image: grafana/grafana:10.2.2
-    container_name: servicecatalog_grafana
+    container_name: supportcenter-grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-grafana_admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-ChangeMeInProd2024!}
@@ -315,7 +315,7 @@ services:
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3030}:3000"
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -329,7 +329,7 @@ services:
   # CoTURN TURN Server for WebRTC NAT Traversal
   coturn:
     image: coturn/coturn:latest
-    container_name: servicecatalog_coturn
+    container_name: supportcenter-coturn
     network_mode: host  # Use host networking to avoid port mapping issues
     env_file:
       - docker/env/.env.coturn
@@ -359,7 +359,7 @@ services:
     build:
       context: .
       dockerfile: docker/signalr-service/Dockerfile
-    container_name: servicecatalog_signalr
+    container_name: supportcenter-signalr
     environment:
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -383,13 +383,13 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
 
   # Nginx Reverse Proxy with SSL/TLS
   nginx:
     image: nginx:alpine
-    container_name: servicecatalog_nginx
+    container_name: supportcenter-nginx
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
@@ -400,7 +400,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - servicecatalog_network
+      - supportcenter-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "sh", "-c", "nc -zv 127.0.0.1 443 || exit 1"]
@@ -410,7 +410,7 @@ services:
       start_period: 10s
 
 networks:
-  servicecatalog_network:
+  supportcenter-network:
     driver: bridge
 
   # SECURITY (Finding #38): Isolated internal network for MinIO object storage
@@ -418,6 +418,6 @@ networks:
   # - Host system (no port exposure)
   # - Other containers that don't need storage access
   # Only backend services and celery workers are connected to this network
-  servicecatalog_minio_network:
+  supportcenter-minio-network:
     driver: bridge
     internal: true  # No external connectivity - internal Docker network only
