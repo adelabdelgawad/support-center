@@ -894,6 +894,11 @@ function TicketChatPageInner() {
 
       setMessages(cacheData.messages);
 
+      // FIX: Update latestSequence from cached messages immediately
+      // This provides the earliest possible sequence initialization, ensuring
+      // optimistic messages get correct sequence even if sent before HTTP completes
+      realTimeChat.updateLatestSequenceFromMessages(cacheData.messages);
+
       // Check if there are screenshot messages that need to load images
       const hasScreenshots = cacheData.messages.some(msg => msg.isScreenshot && msg.screenshotFileName);
 
@@ -994,6 +999,12 @@ function TicketChatPageInner() {
               return merged;
             });
           }
+
+          // FIX: Update latestSequence in signalr-context from HTTP-loaded messages
+          // This ensures optimistic messages get correct sequence numbers even if
+          // user sends a message before SignalR's onInitialState fires.
+          // Without this, optimistic messages would get sequence=1 and appear at TOP.
+          realTimeChat.updateLatestSequenceFromMessages(fetchedMessages);
 
           // CACHE WRITE: Save fresh messages to IndexedDB for next visit
           messageCache.cacheMessages(id, fetchedMessages).catch((err) =>

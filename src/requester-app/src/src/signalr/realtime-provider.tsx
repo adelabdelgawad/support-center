@@ -70,6 +70,12 @@ export interface UseRealTimeChatRoomResult {
   updateMessageStatus: (tempId: string, status: 'pending' | 'sent' | 'failed', errorMessage?: string) => void;
   sendTypingIndicator: (isTyping: boolean) => void;
   markAsRead: (messageIds: string[]) => void;
+  /**
+   * FIX: Update latestSequence from external messages (e.g., HTTP-loaded data)
+   * This ensures optimistic messages get correct sequence numbers even before
+   * SignalR's onInitialState fires.
+   */
+  updateLatestSequenceFromMessages: (msgs: ChatMessage[]) => void;
 }
 
 /**
@@ -106,6 +112,7 @@ export function useRealTimeChatRoom(
     updateMessageStatus: result.updateMessageStatus,
     sendTypingIndicator: result.sendTypingIndicator,
     markAsRead: result.markAsRead,
+    updateLatestSequenceFromMessages: result.updateLatestSequenceFromMessages,
   };
 }
 

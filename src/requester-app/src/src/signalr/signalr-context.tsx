@@ -258,6 +258,12 @@ export interface UseSignalRChatRoomResult {
   updateMessageStatus: (tempId: string, status: 'pending' | 'sent' | 'failed', errorMessage?: string) => void;
   sendTypingIndicator: (isTyping: boolean) => void;
   markAsRead: (messageIds: string[]) => void;
+  /**
+   * FIX: Update latestSequence from external messages (e.g., HTTP-loaded data)
+   * This ensures optimistic messages get correct sequence numbers even before
+   * SignalR's onInitialState fires.
+   */
+  updateLatestSequenceFromMessages: (msgs: ChatMessage[]) => void;
 }
 
 export function useSignalRChatRoom(
@@ -429,10 +435,28 @@ export function useSignalRChatRoom(
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     if (user) {
-      // FIX: Use latestSequence + 1 instead of Date.now() to prevent sort order change
-      // When server confirms with real sequence, it will be same/similar value
-      // Date.now() caused huge sequence numbers that would reorder when replaced
-      const optimisticSequence = latestSequence() + 1;
+      // FIX: Calculate sequence properly even if latestSequence hasn't been set yet
+      // This handles the race condition where user sends message before SignalR's
+      // onInitialState fires (which is the normal case - HTTP loads data faster)
+      let optimisticSequence: number;
+      const currentLatest = latestSequence();
+
+      if (currentLatest === 0) {
+        // latestSequence not yet set - calculate from current messages
+        const currentMsgs = messages();
+        if (currentMsgs.length > 0) {
+          // Find max sequence from existing messages
+          const maxSeq = Math.max(0, ...currentMsgs.map(m => m.sequenceNumber ?? 0));
+          optimisticSequence = maxSeq + 1;
+        } else {
+          // No messages and no sequence info - use timestamp as fallback
+          // This ensures the message appears last (timestamps are much larger than sequences)
+          // The server will provide the real sequence on confirmation
+          optimisticSequence = Date.now();
+        }
+      } else {
+        optimisticSequence = currentLatest + 1;
+      }
 
       const optimisticMessage: ChatMessage = {
         id: tempId,
@@ -512,6 +536,31 @@ export function useSignalRChatRoom(
     }
   };
 
+  /**
+   * FIX: Update latestSequence from external messages (e.g., HTTP-loaded data)
+   *
+   * This solves a critical race condition:
+   * 1. HTTP GET loads messages with sequences like 50, 51, 52 (fast, ~100ms)
+   * 2. SignalR is still connecting (~2-3 seconds)
+   * 3. User sends message before SignalR connects
+   * 4. Without this fix, latestSequence would be 0, causing sequence=1
+   * 5. Message with sequence=1 sorts BEFORE existing messages (wrong!)
+   *
+   * By calling this when HTTP data loads, we ensure optimistic messages
+   * get sequence numbers that place them correctly at the END.
+   */
+  const updateLatestSequenceFromMessages = (msgs: ChatMessage[]): void => {
+    if (!msgs || msgs.length === 0) return;
+
+    // Calculate max sequence from provided messages
+    const maxSeq = Math.max(0, ...msgs.map(m => m.sequenceNumber ?? 0));
+
+    // Only update if this is higher than current value (don't regress)
+    if (maxSeq > latestSequence()) {
+      setLatestSequence(maxSeq);
+    }
+  };
+
   return {
     messages,
     isLoading,
@@ -523,6 +572,7 @@ export function useSignalRChatRoom(
     updateMessageStatus,
     sendTypingIndicator,
     markAsRead,
+    updateLatestSequenceFromMessages,
   };
 }
 
