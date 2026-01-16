@@ -136,9 +136,11 @@ public class RedisStreamConsumer : BackgroundService
                 );
 
                 // If no entries, wait before polling again
+                // CRITICAL FIX: Reduced from 5000ms to 100ms for low-latency message delivery
+                // Prevents 0-5 second delay in real-time message broadcast
                 if (entries.Length == 0)
                 {
-                    await Task.Delay(5000, cancellationToken);
+                    await Task.Delay(100, cancellationToken);
                     continue;
                 }
 
@@ -234,17 +236,12 @@ public class RedisStreamConsumer : BackgroundService
         {
             var eventDict = new Dictionary<string, string>();
 
-            // StreamEntry.Values is a RedisValue[] - need to parse as key-value pairs
-            // The Redis stream stores data as alternating key-value pairs
-            var values = entry.Values;
-            for (int i = 0; i < values.Length; i += 2)
+            // CRITICAL FIX: StreamEntry.Values is NameValueEntry[], not alternating key-value pairs
+            // Each entry has .Name and .Value properties
+            // Previous code incorrectly treated it as flat array causing all events to fail deserialization
+            foreach (var nameValue in entry.Values)
             {
-                var key = values[i].ToString();
-                if (i + 1 < values.Length)
-                {
-                    var value = values[i + 1].ToString();
-                    eventDict[key] = value;
-                }
+                eventDict[nameValue.Name.ToString()] = nameValue.Value.ToString();
             }
 
             // Extract required fields
@@ -351,14 +348,11 @@ public class RedisStreamConsumer : BackgroundService
         var payload = JsonSerializer.Deserialize<ChatMessagePayload>(JsonSerializer.Serialize(streamEvent.Payload));
         if (payload == null) return;
 
-        await chatHub.Clients.Group(roomName).SendAsync("ReceiveMessage", new
-        {
-            eventId = streamEvent.EventId,
-            requestId = streamEvent.RoomId,
-            message = payload
-        }, cancellationToken);
+        // CRITICAL FIX: Send message payload directly, not wrapped in { eventId, requestId, message }
+        // Clients expect ReceiveMessage to receive ChatMessage directly
+        await chatHub.Clients.Group(roomName).SendAsync("ReceiveMessage", payload, cancellationToken);
 
-        _logger.LogDebug("Broadcast chat message to room {RoomName}", roomName);
+        _logger.LogInformation("Broadcast chat message {MessageId} to room {RoomName}", payload.Id, roomName);
     }
 
     /// <summary>
@@ -440,13 +434,14 @@ public class RedisStreamConsumer : BackgroundService
     {
         var notificationHub = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
 
-        await notificationHub.Clients.All.SendAsync("ReceiveNotification", new
-        {
-            eventId = streamEvent.EventId,
-            notification = streamEvent.Payload
-        }, cancellationToken);
+        // CRITICAL FIX: Send payload directly as "Notification", not wrapped
+        // Clients expect Notification to receive notification data directly
+        var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
 
-        _logger.LogDebug("Broadcast notification to all clients");
+        await notificationHub.Clients.All.SendAsync("Notification", payload, cancellationToken);
+
+        _logger.LogInformation("Broadcast notification type: {NotificationType}",
+            payload?.GetValueOrDefault("type", "unknown"));
     }
 
     /// <summary>
@@ -463,13 +458,14 @@ public class RedisStreamConsumer : BackgroundService
             _ => "RemoteAccessEvent"
         };
 
-        await notificationHub.Clients.All.SendAsync(methodName, new
-        {
-            eventId = streamEvent.EventId,
-            data = streamEvent.Payload
-        }, cancellationToken);
+        // CRITICAL FIX: Send payload directly, not wrapped in { eventId, data }
+        // Clients expect event data directly (sessionId, agentId, etc.)
+        var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
 
-        _logger.LogDebug("Broadcast remote access event: {EventType}", streamEvent.EventType);
+        await notificationHub.Clients.All.SendAsync(methodName, payload, cancellationToken);
+
+        _logger.LogInformation("Broadcast remote access event: {EventType}, sessionId: {SessionId}",
+            streamEvent.EventType, payload?.GetValueOrDefault("sessionId", "unknown"));
     }
 
     /// <summary>

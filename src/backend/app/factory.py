@@ -20,6 +20,8 @@ from core.middleware import (
     DebugLoggingMiddleware,
     SecurityHeadersMiddleware,
     OriginValidationMiddleware,
+    RequestDebugMiddleware,
+    RawRequestLogger,
 )
 
 
@@ -50,6 +52,15 @@ def create_app() -> FastAPI:
     # Add rate limiter
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # Raw request logging at ASGI level (only when explicitly enabled)
+    # WARNING: Very verbose, use only for debugging invalid HTTP requests
+    if settings.logging.enable_raw_request_logging:
+        app.add_middleware(RawRequestLogger)
+
+    # Request debug middleware (enabled via LOG_ENABLE_REQUEST_DEBUG)
+    if settings.logging.enable_request_debug:
+        app.add_middleware(RequestDebugMiddleware)
 
     # Debug logging middleware (only enabled when DEBUG=True)
     if settings.api.debug:

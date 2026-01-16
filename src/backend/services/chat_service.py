@@ -251,8 +251,20 @@ class ChatService:
                 message=signalr_message,
             )
         except Exception as e:
-            # Don't fail message creation if SignalR fails
-            logger.warning(f"Failed to broadcast via SignalR: {e}")
+            # CRITICAL: Don't fail message creation if SignalR fails
+            # Message is persisted to DB but real-time delivery failed
+            # Recipient will only see message after page reload (DB fetch)
+            logger.error(
+                f"SignalR broadcast FAILED for message {message.id} in request {message.request_id}. "
+                f"Real-time delivery unavailable - message saved to DB only. Error: {e}",
+                exc_info=True,
+                extra={
+                    "message_id": str(message.id),
+                    "request_id": str(message.request_id),
+                    "sender_id": str(message.sender_id) if message.sender_id else None,
+                    "client_temp_id": message_data.client_temp_id,
+                }
+            )
 
         return message
 

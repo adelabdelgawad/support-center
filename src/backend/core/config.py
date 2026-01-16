@@ -508,6 +508,16 @@ class LoggingSettings(BaseSettings):
     backup_count: int = 5
     enable_console_logging: bool = True
 
+    # Request debugging for tracking invalid HTTP requests
+    enable_request_debug: bool = Field(
+        default=False,
+        description="Enable detailed request debugging to track invalid HTTP requests"
+    )
+    enable_raw_request_logging: bool = Field(
+        default=False,
+        description="Enable ASGI-level raw request logging (very verbose, use only for debugging)"
+    )
+
     model_config = SettingsConfigDict(
         env_prefix="LOG_",
         env_file=".env",

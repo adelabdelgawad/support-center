@@ -12,9 +12,20 @@ import logging
 async def initialize_logging(settings, log_config):
     """Setup logging configuration."""
     from core.logging_config import setup_logging
+    from core.uvicorn_logging import setup_uvicorn_error_logging
 
     logger = logging.getLogger("main")
     setup_logging(log_config)
+
+    # Setup enhanced uvicorn error logging to capture invalid HTTP requests
+    setup_uvicorn_error_logging()
+
+    # Log request debugging status
+    if settings.logging.enable_request_debug:
+        logger.info("🔍 Request debugging enabled - detailed request logs will be captured")
+    if settings.logging.enable_raw_request_logging:
+        logger.warning("⚠️  Raw request logging enabled - this is VERY verbose!")
+
     logger.info("🚀 Starting Service Catalog API...")
 
 

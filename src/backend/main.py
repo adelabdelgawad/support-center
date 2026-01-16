@@ -12,6 +12,7 @@ if __name__ == "__main__":
     import uvicorn
 
     from core.config import settings
+    from core.uvicorn_logging import LOGGING_CONFIG
 
     # Run FastAPI app directly (native WebSocket support)
     uvicorn.run(
@@ -21,6 +22,7 @@ if __name__ == "__main__":
         reload=settings.api.debug,
         workers=1 if settings.api.debug else 4,
         log_level="info",
+        log_config=LOGGING_CONFIG,  # Custom logging config to capture invalid requests
         access_log=True,
         timeout_graceful_shutdown=10,  # Graceful shutdown timeout
         server_header=False,            # Hide server header for security

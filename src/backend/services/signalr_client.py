@@ -326,7 +326,9 @@ class SignalRClient:
             EventType.NOTIFICATION,
             request_id,  # Room ID = request_id for message notifications
             {
-                "request_id": request_id,
+                "type": "new_message_notification",  # CRITICAL: type field required by clients
+                "requestId": request_id,  # camelCase for client compatibility
+                "request_id": request_id,  # snake_case for backwards compatibility
                 "message": message,
             },
         )

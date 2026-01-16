@@ -7,9 +7,12 @@ This package contains all custom middleware used by the application.
 from .debug import DebugLoggingMiddleware
 from .security_headers import SecurityHeadersMiddleware
 from .origin_validation import OriginValidationMiddleware
+from .request_debug import RequestDebugMiddleware, RawRequestLogger
 
 __all__ = [
     "DebugLoggingMiddleware",
     "SecurityHeadersMiddleware",
     "OriginValidationMiddleware",
+    "RequestDebugMiddleware",
+    "RawRequestLogger",
 ]

@@ -84,6 +84,9 @@ const countdownTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 // Track action taken to prevent race conditions (timeout vs user action)
 const sessionActionTaken: Map<string, boolean> = new Map();
 
+// Track banner sessions being added to prevent duplicates during race conditions
+const bannerSessionAddInProgress: Set<string> = new Set();
+
 function createRemoteAccessStore() {
   const [state, setState] = createStore<RemoteAccessState>({
     isProcessing: false,
@@ -241,8 +244,18 @@ function createRemoteAccessStore() {
       return;
     }
 
+    // Check if banner is already being added (duplicate banner prevention)
+    if (bannerSessionAddInProgress.has(pending.sessionId)) {
+      console.log("[RemoteAccess] Banner session already being added - ignoring duplicate call");
+      logger.info('remote-support', 'Banner session addition already in progress', {
+        sessionId: pending.sessionId,
+      });
+      return;
+    }
+
     // Mark action as taken
     sessionActionTaken.set(pending.sessionId, true);
+    bannerSessionAddInProgress.add(pending.sessionId);
 
     logger.info('remote-support', 'User accepted remote session', {
       sessionId: pending.sessionId,
@@ -289,6 +302,9 @@ function createRemoteAccessStore() {
         });
       }
 
+      // Clear the in-progress flag after banner is added or checked
+      bannerSessionAddInProgress.delete(pending.sessionId);
+
       // Update floating icon
       await updateFloatingIconRemoteState(true, pending.agentName);
 
@@ -325,6 +341,7 @@ function createRemoteAccessStore() {
       // Clear the in-progress flag and action flag
       sessionStartInProgress = null;
       sessionActionTaken.delete(pending.sessionId);
+      bannerSessionAddInProgress.delete(pending.sessionId);
     }
   }
 

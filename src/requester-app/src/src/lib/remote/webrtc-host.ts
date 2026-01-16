@@ -70,6 +70,10 @@ export class WebRTCHost {
   private disconnectedTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private static readonly DISCONNECTED_TIMEOUT_MS = 5000; // 5 seconds grace period
 
+  // SignalR disconnect detection: timeout for SignalR reconnect before stopping
+  private signalRDisconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private static readonly SIGNALR_DISCONNECT_TIMEOUT_MS = 15000; // 15 seconds grace period
+
   // Selected source from custom picker
   private selectedSource: SelectedSource | null = null;
 
@@ -181,15 +185,36 @@ export class WebRTCHost {
         throw new Error("Failed to get SignalR connection");
       }
 
-      // CRITICAL: Register for SignalR disconnect to stop capture immediately
+      // CRITICAL: Register for SignalR disconnect with grace period
       // This handles: IT browser crash, network drop, tab close without graceful leave
+      // NOTE: SignalR reconnects are common and transient - don't stop immediately
+      // WebRTC media can continue working during SignalR reconnects
       signalRRemoteAccess.setGlobalHandlers({
         onDisconnect: () => {
-          console.log('[WebRTCHost] ⚠️ SignalR DISCONNECTED - stopping screen capture immediately');
-          this.stop();
+          console.log('[WebRTCHost] ⚠️ SignalR DISCONNECTED - starting grace period');
+          logger.warn('remote-support', 'SignalR disconnected - starting grace period', {
+            sessionId: this.sessionId,
+            timeoutMs: WebRTCHost.SIGNALR_DISCONNECT_TIMEOUT_MS,
+          });
+          // Don't stop immediately - SignalR may reconnect
+          // WebRTC media can continue during SignalR reconnect
+          // Only stop if SignalR doesn't recover within 15 seconds
+          this.startSignalRDisconnectGracePeriod();
         },
         onReconnecting: (attempt) => {
-          console.log(`[WebRTCHost] ⚠️ SignalR reconnecting (attempt ${attempt}) - will stop if reconnect fails`);
+          console.log(`[WebRTCHost] ⚠️ SignalR reconnecting (attempt ${attempt}) - clearing grace period timeout`);
+          logger.info('remote-support', 'SignalR reconnecting - clearing grace period timeout', {
+            sessionId: this.sessionId,
+            attempt,
+          });
+          this.clearSignalRDisconnectGracePeriod();
+        },
+        onReconnected: () => {
+          console.log('[WebRTCHost] ✅ SignalR reconnected - clearing grace period timeout');
+          logger.info('remote-support', 'SignalR reconnected - clearing grace period timeout', {
+            sessionId: this.sessionId,
+          });
+          this.clearSignalRDisconnectGracePeriod();
         },
       });
 
@@ -719,6 +744,42 @@ export class WebRTCHost {
   }
 
   /**
+   * Start SignalR disconnect grace period
+   * Waits for SignalR to reconnect before stopping the session
+   */
+  private startSignalRDisconnectGracePeriod(): void {
+    // Clear existing timeout if any
+    this.clearSignalRDisconnectGracePeriod();
+
+    this.signalRDisconnectTimeoutId = setTimeout(() => {
+      logger.error('remote-support', 'SignalR did not reconnect within grace period - stopping session', {
+        sessionId: this.sessionId,
+      });
+      console.error('[WebRTCHost] ❌ SignalR did not recover after 15s - stopping session');
+      this.stop();
+    }, WebRTCHost.SIGNALR_DISCONNECT_TIMEOUT_MS);
+
+    logger.info('remote-support', 'SignalR disconnect grace period started', {
+      sessionId: this.sessionId,
+      timeoutMs: WebRTCHost.SIGNALR_DISCONNECT_TIMEOUT_MS,
+    });
+  }
+
+  /**
+   * Clear SignalR disconnect grace period
+   * Called when SignalR reconnects successfully
+   */
+  private clearSignalRDisconnectGracePeriod(): void {
+    if (this.signalRDisconnectTimeoutId) {
+      clearTimeout(this.signalRDisconnectTimeoutId);
+      this.signalRDisconnectTimeoutId = null;
+      logger.info('remote-support', 'SignalR disconnect grace period cleared', {
+        sessionId: this.sessionId,
+      });
+    }
+  }
+
+  /**
    * Set up control data channel
    */
   private setupControlChannel(channel: RTCDataChannel): void {
@@ -736,14 +797,49 @@ export class WebRTCHost {
     };
 
     channel.onclose = () => {
-      console.log("[WebRTCHost] ⚠️ Control channel closed - agent likely disconnected");
+      console.log("[WebRTCHost] ⚠️ Control channel closed - checking peer connection state");
+      logger.warn('remote-support', 'Control channel closed', {
+        sessionId: this.sessionId,
+        peerConnectionState: this.peerConnection?.connectionState,
+      });
       this.controlEnabled = false;
-      // Control channel close is a strong signal that the peer is gone
-      // Stop the session to prevent orphaned screen capture
-      // Only call stop if we haven't already started stopping (channel would be null)
-      if (this.controlChannel) {
-        this.stop();
+
+      // Control channel can close temporarily during network issues
+      // Don't stop immediately - check if WebRTC peer connection is still healthy
+      // Only stop if BOTH control channel is closed AND peer connection is failed
+      if (this.peerConnection?.connectionState === 'connected') {
+        // Peer is still connected - this is likely a temporary data channel issue
+        // WebRTC media tracks can continue even if control channel is down
+        console.log("[WebRTCHost] Peer still connected - waiting for control channel recovery");
+        logger.info('remote-support', 'Control channel closed but peer connected - waiting for recovery', {
+          sessionId: this.sessionId,
+        });
+      } else if (this.peerConnection?.connectionState === 'disconnected') {
+        // Peer is also in disconnected state - let peer's 5s timeout handle it
+        console.log("[WebRTCHost] Peer also disconnected - waiting for peer timeout");
+        logger.info('remote-support', 'Both control channel and peer disconnected - waiting for peer timeout', {
+          sessionId: this.sessionId,
+        });
+      } else if (this.peerConnection?.connectionState === 'failed' || this.peerConnection?.connectionState === 'closed') {
+        // Peer has failed - safe to stop
+        console.log("[WebRTCHost] Peer connection failed - stopping session");
+        logger.error('remote-support', 'Both control channel closed and peer failed - stopping session', {
+          sessionId: this.sessionId,
+          peerState: this.peerConnection?.connectionState,
+        });
+        // Only call stop if we haven't already started stopping (channel would be null)
+        if (this.controlChannel) {
+          this.stop();
+        }
+      } else {
+        // Peer is connecting, new, or checking - wait for peer to stabilize
+        console.log("[WebRTCHost] Peer state:", this.peerConnection?.connectionState, "- waiting for peer to stabilize");
+        logger.info('remote-support', 'Control channel closed, waiting for peer to stabilize', {
+          sessionId: this.sessionId,
+          peerState: this.peerConnection?.connectionState,
+        });
       }
+      // Don't call stop() immediately - let peer connection state determine session lifecycle
     };
 
     channel.onerror = (error) => {
@@ -1051,6 +1147,9 @@ export class WebRTCHost {
       clearTimeout(this.disconnectedTimeoutId);
       this.disconnectedTimeoutId = null;
     }
+
+    // Clear SignalR disconnect grace period timeout
+    this.clearSignalRDisconnectGracePeriod();
 
     // Stop UAC detection
     if (this.uacUnlisten) {
