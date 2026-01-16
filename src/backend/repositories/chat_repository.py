@@ -254,6 +254,118 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
         return messages, total, oldest_sequence
 
     @classmethod
+    async def find_by_request_id_delta_sync(
+        cls,
+        db: AsyncSession,
+        request_id: UUID,
+        *,
+        since_sequence: int = 0,
+        limit: int = 100
+    ) -> Tuple[List[ChatMessage], int, Optional[int], Optional[int]]:
+        """
+        Get messages for a request using delta sync (newer than since_sequence).
+
+        Returns messages with sequence_number > since_sequence in ascending order.
+        This is the primary method for efficient client synchronization.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+            since_sequence: Only get messages with sequence_number > this
+            limit: Maximum messages to return
+
+        Returns:
+            Tuple of (messages in chronological order, total count, oldest_sequence, newest_sequence)
+        """
+        # Get total count (for header)
+        count_stmt = select(func.count(ChatMessage.id)).where(
+            ChatMessage.request_id == request_id
+        )
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Build query with eager loading
+        # Filter: sequence_number > since_sequence AND matching request_id
+        stmt = (
+            select(ChatMessage)
+            .options(selectinload(ChatMessage.sender))
+            .where(
+                and_(
+                    ChatMessage.request_id == request_id,
+                    ChatMessage.sequence_number > since_sequence
+                )
+            )
+            .order_by(ChatMessage.sequence_number.asc())  # Ascending for delta sync
+            .limit(limit)
+        )
+
+        # Execute query
+        result = await db.execute(stmt)
+        messages = list(result.scalars().all())
+
+        # Calculate oldest and newest from results
+        oldest_sequence = messages[0].sequence_number if messages else None
+        newest_sequence = messages[-1].sequence_number if messages else None
+
+        return messages, total, oldest_sequence, newest_sequence
+
+    @classmethod
+    async def find_by_request_id_range(
+        cls,
+        db: AsyncSession,
+        request_id: UUID,
+        *,
+        start_sequence: int,
+        end_sequence: int
+    ) -> Tuple[List[ChatMessage], int, Optional[int], Optional[int]]:
+        """
+        Get messages for a request using sequence range query.
+
+        Returns messages where start_sequence <= sequence_number <= end_sequence.
+        This is used for gap filling when sequence gaps are detected.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+            start_sequence: Start of range (inclusive)
+            end_sequence: End of range (inclusive)
+
+        Returns:
+            Tuple of (messages in chronological order, total count, oldest_sequence, newest_sequence)
+        """
+        # Get total count (for header)
+        count_stmt = select(func.count(ChatMessage.id)).where(
+            ChatMessage.request_id == request_id
+        )
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Build query with eager loading
+        # Filter: start_sequence <= sequence_number <= end_sequence
+        stmt = (
+            select(ChatMessage)
+            .options(selectinload(ChatMessage.sender))
+            .where(
+                and_(
+                    ChatMessage.request_id == request_id,
+                    ChatMessage.sequence_number >= start_sequence,
+                    ChatMessage.sequence_number <= end_sequence
+                )
+            )
+            .order_by(ChatMessage.sequence_number.asc())
+        )
+
+        # Execute query
+        result = await db.execute(stmt)
+        messages = list(result.scalars().all())
+
+        # Calculate oldest and newest from results
+        oldest_sequence = messages[0].sequence_number if messages else None
+        newest_sequence = messages[-1].sequence_number if messages else None
+
+        return messages, total, oldest_sequence, newest_sequence
+
+    @classmethod
     async def get_message_ids_by_request(
         cls,
         db: AsyncSession,

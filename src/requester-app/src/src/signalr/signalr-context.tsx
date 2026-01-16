@@ -31,6 +31,7 @@ import {
 } from './signalr-manager';
 import type { ChatMessage, TypingIndicator, ReadStatusUpdate, TicketUpdateEvent, TaskStatusChangedEvent } from '@/types';
 import { logger } from '@/logging';
+import { syncEngine } from '@/lib/sync-engine';
 
 // Context value type
 interface SignalRContextValue {
@@ -96,6 +97,48 @@ export const SignalRProvider: ParentComponent = (props) => {
         logger.info('signalr', 'Chat hub reconnecting', { attempt });
         setState(SignalRState.RECONNECTING);
         setReconnectAttempt(attempt);
+      },
+      onReconnected: async () => {
+        logger.info('signalr', 'Chat hub reconnected - triggering delta sync for active chats');
+        setState(SignalRState.CONNECTED);
+        setError(null);
+        setReconnectAttempt(0);
+        updateSubscriptionCount();
+
+        // Trigger delta sync for all active subscriptions
+        const activeSubscriptionIds = signalRManager.chat.getActiveSubscriptionIds();
+
+        if (activeSubscriptionIds.length > 0) {
+          logger.info('signalr', `Starting delta sync for ${activeSubscriptionIds.length} active chats`, {
+            requestIds: activeSubscriptionIds
+          });
+
+          // Sync all active chats in parallel
+          const syncPromises = activeSubscriptionIds.map(async (requestId) => {
+            try {
+              const result = await syncEngine.syncChat(requestId);
+              logger.info('signalr', `Delta sync complete for ${requestId}`, {
+                messagesAdded: result.messagesAdded,
+                gapsFilled: result.gapsFilled,
+                syncDuration: result.syncDuration
+              });
+              return { requestId, result };
+            } catch (error) {
+              logger.error('signalr', `Delta sync failed for ${requestId}`, { error });
+              return { requestId, error };
+            }
+          });
+
+          const results = await Promise.all(syncPromises);
+
+          logger.info('signalr', 'All delta syncs complete', {
+            total: activeSubscriptionIds.length,
+            successful: results.filter(r => !('error' in r)).length,
+            failed: results.filter(r => 'error' in r).length
+          });
+        } else {
+          logger.info('signalr', 'No active subscriptions to sync');
+        }
       },
       onError: (errorMsg: string) => {
         logger.error('signalr', 'Chat hub error', { error: errorMsg });

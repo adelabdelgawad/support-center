@@ -223,13 +223,26 @@ async def get_messages(
     per_page: int = Query(50, ge=1, le=100),
     limit: Optional[int] = Query(None, ge=1, le=200, description="Limit for cursor-based pagination"),
     before_sequence: Optional[int] = Query(None, ge=1, description="Cursor: load messages with sequence < this"),
+    since_sequence: Optional[int] = Query(None, ge=0, description="Delta sync: get messages with sequence > this value"),
+    start_sequence: Optional[int] = Query(None, ge=1, description="Range query: start of sequence range"),
+    end_sequence: Optional[int] = Query(None, ge=1, description="Range query: end of sequence range"),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
     Get messages for a request with per-user read state.
 
-    Supports TWO pagination modes:
+    Supports THREE pagination modes:
+
+    **Delta Sync (for incremental updates)**:
+    - Use `since_sequence` parameter to get all messages newer than specified sequence
+    - Example: `?since_sequence=123` returns all messages with sequence_number > 123
+    - Response headers include `X-Newest-Sequence` and `X-Has-Newer`
+
+    **Range Query (for precise sequence ranges)**:
+    - Use `start_sequence` + `end_sequence` parameters
+    - Both must be provided together
+    - Example: `?start_sequence=100&end_sequence=200` returns messages 100-200
 
     **Cursor-based (RECOMMENDED for chat)**:
     - Use `limit` + optional `before_sequence` parameters
@@ -245,16 +258,59 @@ async def get_messages(
     - `X-Total-Count`: Total number of messages in the chat
     - `X-Oldest-Sequence`: Sequence number of oldest message in response (cursor for "load more")
     - `X-Has-More`: "true" if there are older messages to load
+    - `X-Newest-Sequence`: Sequence number of newest message in response
+    - `X-Has-Newer`: "true" if there are newer messages than this result
 
     Authorization: User must be the requester, assigned technician, or a technician/admin.
     """
     # Verify user has access to this service request
     await verify_request_access(request_id, current_user, db)
 
-    # Determine pagination mode
-    use_cursor_pagination = limit is not None
+    # Validate parameter combinations
+    if since_sequence is not None:
+        if before_sequence is not None:
+            raise HTTPException(status_code=400, detail="since_sequence and before_sequence are mutually exclusive")
+        if start_sequence is not None or end_sequence is not None:
+            raise HTTPException(status_code=400, detail="since_sequence cannot be combined with range queries")
 
-    if use_cursor_pagination:
+    if start_sequence is not None or end_sequence is not None:
+        if start_sequence is None or end_sequence is None:
+            raise HTTPException(status_code=400, detail="start_sequence and end_sequence must both be provided")
+        if before_sequence is not None:
+            raise HTTPException(status_code=400, detail="Range queries cannot be combined with cursor pagination")
+        if start_sequence > end_sequence:
+            raise HTTPException(status_code=400, detail="start_sequence must be <= end_sequence")
+
+    # Determine pagination mode
+    use_delta_sync = since_sequence is not None
+    use_range_query = start_sequence is not None and end_sequence is not None
+    use_cursor_pagination = limit is not None and not use_delta_sync and not use_range_query
+
+    if use_delta_sync:
+        # Delta sync mode: get all messages newer than since_sequence
+        messages, total, oldest_sequence, newest_sequence = await ChatService.get_messages_delta_sync(
+            db=db,
+            request_id=request_id,
+            current_user_id=current_user.id,
+            since_sequence=since_sequence,
+            limit=limit or 100
+        )
+        response.headers["X-Newest-Sequence"] = str(newest_sequence) if newest_sequence else ""
+        response.headers["X-Has-Newer"] = "false"  # Delta sync gets all newer messages
+        response.headers["X-Has-More"] = "false"  # No older messages in delta sync
+    elif use_range_query:
+        # Range query mode: get messages in exact sequence range
+        messages, total, oldest_sequence, newest_sequence = await ChatService.get_messages_range(
+            db=db,
+            request_id=request_id,
+            current_user_id=current_user.id,
+            start_sequence=start_sequence,
+            end_sequence=end_sequence
+        )
+        response.headers["X-Newest-Sequence"] = str(newest_sequence) if newest_sequence else ""
+        response.headers["X-Has-Newer"] = "false"  # Range query is exact
+        response.headers["X-Has-More"] = "false"  # No pagination for range queries
+    elif use_cursor_pagination:
         # Cursor-based pagination (preferred)
         messages, total, oldest_sequence = await ChatService.get_messages_cursor_paginated(
             db=db,
@@ -265,6 +321,17 @@ async def get_messages(
         )
         response.headers["X-Oldest-Sequence"] = str(oldest_sequence) if oldest_sequence else ""
         response.headers["X-Has-More"] = "true" if oldest_sequence and oldest_sequence > 1 else "false"
+
+        # Calculate X-Newest-Sequence and X-Has-Newer for cursor pagination
+        newest_sequence = max((m.sequence_number for m in messages), default=None)
+        response.headers["X-Newest-Sequence"] = str(newest_sequence) if newest_sequence else ""
+
+        if before_sequence is None:
+            # Initial load - we have the latest messages
+            response.headers["X-Has-Newer"] = "false"
+        else:
+            # Cursor pagination with before_sequence - there are newer messages we didn't fetch
+            response.headers["X-Has-Newer"] = "true"
     else:
         # Offset-based pagination (legacy)
         messages, total, user_id = await ChatService.get_messages(
@@ -275,6 +342,11 @@ async def get_messages(
             page=page,
             per_page=per_page,
         )
+
+        # Add headers for legacy mode
+        newest_sequence = max((m.sequence_number for m in messages), default=None)
+        response.headers["X-Newest-Sequence"] = str(newest_sequence) if newest_sequence else ""
+        response.headers["X-Has-Newer"] = "false"  # Legacy mode gets current page only
 
     response.headers["X-Total-Count"] = str(total)
 

@@ -8,6 +8,7 @@ import { PickRequestCard } from './pick-request-card';
 import { useViewport } from '@/hooks/use-mobile';
 import { ArrowDown } from 'lucide-react';
 import { useRequestDetail } from '../_context/request-detail-context';
+import { VirtualizedMessageList } from './virtualized-message-list';
 
 interface Message {
   id: string;
@@ -56,11 +57,71 @@ const MAX_INITIAL_SCROLL_RETRIES = 15; // ~250ms at 60fps
 // No-op function for fallback (prevents useEffect dependency array size changes)
 const noop = () => {};
 
+// ============================================================================
+// SCROLL POSITION STORAGE (T049)
+// ============================================================================
+const SCROLL_POSITION_KEY_PREFIX = 'chat_scroll_position_';
+
+/**
+ * Save scroll position for a specific chat
+ */
+function saveScrollPosition(requestId: string, scrollTop: number, scrollHeight: number): void {
+  try {
+    const key = `${SCROLL_POSITION_KEY_PREFIX}${requestId}`;
+    const data = {
+      scrollTop,
+      scrollHeight,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (error) {
+    console.warn('[TicketMessages] Failed to save scroll position:', error);
+  }
+}
+
+/**
+ * Load scroll position for a specific chat
+ */
+function loadScrollPosition(requestId: string): { scrollTop: number; scrollHeight: number } | null {
+  try {
+    const key = `${SCROLL_POSITION_KEY_PREFIX}${requestId}`;
+    const data = localStorage.getItem(key);
+    if (!data) return null;
+
+    const parsed = JSON.parse(data) as { scrollTop: number; scrollHeight: number; timestamp: number };
+
+    // Only restore if position is recent (within 1 hour)
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    if (parsed.timestamp < oneHourAgo) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    return { scrollTop: parsed.scrollTop, scrollHeight: parsed.scrollHeight };
+  } catch (error) {
+    console.warn('[TicketMessages] Failed to load scroll position:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear scroll position for a specific chat
+ */
+function clearScrollPosition(requestId: string): void {
+  try {
+    const key = `${SCROLL_POSITION_KEY_PREFIX}${requestId}`;
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.warn('[TicketMessages] Failed to clear scroll position:', error);
+  }
+}
+
 export function TicketMessages({ messages, isLoading = false, onRetryMessage }: TicketMessagesProps) {
   const { isMobile } = useViewport();
   const containerRef = useRef<HTMLDivElement>(null);
   const context = useRequestDetail();
-  const { canTakeRequest, registerScrollHandler } = context;
+  const { canTakeRequest, registerScrollHandler, ticket } = context;
+  const requestId = ticket?.id; // Get requestId from ticket context
   // Fallback to noop to prevent useEffect dependency array size changes during HMR
   const registerForceScrollHandler = context.registerForceScrollHandler ?? noop;
 
@@ -129,7 +190,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   }, [messages]);
 
   // ============================================================================
-  // PERFORM INITIAL SCROLL (with retry logic)
+  // PERFORM INITIAL SCROLL (with retry logic & position restoration)
   // ============================================================================
   const performInitialScroll = useCallback(() => {
     // Already done for this chat session
@@ -172,20 +233,57 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     // Container is ready - perform the scroll
     isScrollingProgrammaticallyRef.current = true;
 
-    // Instant scroll to bottom (no smooth animation for initial load)
-    container.scrollTop = scrollHeight;
+    // T049: Try to restore saved scroll position
+    let restoredPosition = false;
+    if (requestId) {
+      const savedPosition = loadScrollPosition(requestId);
+      if (savedPosition && savedPosition.scrollHeight > 0) {
+        // Calculate the proportional position based on current scroll height
+        // This handles cases where the chat has new messages
+        const proportionalScrollTop = (savedPosition.scrollTop / savedPosition.scrollHeight) * scrollHeight;
+
+        // Only restore if user was not at the bottom (scroll threshold check)
+        const wasAtBottom = (savedPosition.scrollHeight - savedPosition.scrollTop) <= SCROLL_THRESHOLD;
+        const isAtBottomNow = (scrollHeight - proportionalScrollTop) <= SCROLL_THRESHOLD;
+
+        if (!wasAtBottom || !isAtBottomNow) {
+          container.scrollTop = Math.min(proportionalScrollTop, scrollHeight - clientHeight);
+          restoredPosition = true;
+
+          console.log('[TicketMessages] Restored scroll position:', {
+            requestId,
+            savedTop: savedPosition.scrollTop,
+            savedHeight: savedPosition.scrollHeight,
+            newTop: container.scrollTop,
+            newHeight: scrollHeight,
+          });
+        }
+      }
+    }
+
+    // If no saved position or was at bottom, scroll to bottom
+    if (!restoredPosition) {
+      // Instant scroll to bottom (no smooth animation for initial load)
+      container.scrollTop = scrollHeight;
+      setIsOnBottom(true);
+    } else {
+      // Check if restored position is at bottom
+      const currentBottom = container.scrollTop + clientHeight;
+      const distanceFromBottom = scrollHeight - currentBottom;
+      const isAtBottom = distanceFromBottom <= SCROLL_THRESHOLD;
+      setIsOnBottom(isAtBottom);
+    }
 
     // Mark all states as complete
     hasPerformedInitialScrollRef.current = true;
     setInitialScrollDone(true);
-    setIsOnBottom(true);
     setNewMessagesWhileScrolledUp(0);
 
     // Reset programmatic flag
     setTimeout(() => {
       isScrollingProgrammaticallyRef.current = false;
     }, 0);
-  }, []);
+  }, [requestId]);
 
   // ============================================================================
   // SCROLL TO BOTTOM (for new messages)
@@ -230,7 +328,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   }, []); // Empty deps - uses refs for current values
 
   // ============================================================================
-  // HANDLE SCROLL (debounced with RAF)
+  // HANDLE SCROLL (debounced with RAF + position saving)
   // Uses ref for isOnBottom to avoid callback recreation on state change
   // ============================================================================
   const handleScroll = useCallback(() => {
@@ -272,8 +370,13 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
       if (isAtBottom) {
         setNewMessagesWhileScrolledUp(0);
       }
+
+      // T049: Save scroll position on user scroll (throttled)
+      if (requestId && !isAtBottom) {
+        saveScrollPosition(requestId, scrollTop, scrollHeight);
+      }
     });
-  }, [initialScrollDone]); // Removed isOnBottom - using ref instead
+  }, [initialScrollDone, requestId]); // Removed isOnBottom - using ref instead
 
   // ============================================================================
   // IMAGE LOAD CALLBACKS (coordinate scroll with image loading)
@@ -453,66 +556,18 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
 
   return (
     <div className="flex-1 relative overflow-hidden">
-      <div ref={containerRef} className={`h-full overflow-y-auto ${isMobile ? 'p-3' : 'p-6'} bg-background`}>
-        <div className={`max-w-4xl mx-auto ${isMobile ? 'space-y-4' : 'space-y-6'}`}>
-          {messages.map((message, index) => (
-            <div key={message.id}>
-              {message.isCurrentUser ? (
-                <RightChatMessage
-                  id={message.id}
-                  author={message.author}
-                  authorInitials={message.authorInitials}
-                  timestamp={message.timestamp}
-                  content={message.content}
-                  avatarUrl={message.avatarUrl}
-                  isScreenshot={message.isScreenshot}
-                  screenshotFileName={message.screenshotFileName}
-                  fileName={message.fileName}
-                  fileSize={message.fileSize}
-                  fileMimeType={message.fileMimeType}
-                  status={message.status}
-                  tempId={message.tempId}
-                  onRetry={onRetryMessage}
-                  isMobile={isMobile}
-                  onImageLoadStart={handleImageLoadStart}
-                  onImageLoad={handleImageLoad}
-                  createdAt={message.createdAt}
-                />
-              ) : (
-                <LeftChatMessage
-                  id={message.id}
-                  author={message.author}
-                  authorInitials={message.authorInitials}
-                  timestamp={message.timestamp}
-                  content={message.content}
-                  avatarUrl={message.avatarUrl}
-                  isScreenshot={message.isScreenshot}
-                  screenshotFileName={message.screenshotFileName}
-                  fileName={message.fileName}
-                  fileSize={message.fileSize}
-                  fileMimeType={message.fileMimeType}
-                  isMobile={isMobile}
-                  onImageLoadStart={handleImageLoadStart}
-                  onImageLoad={handleImageLoad}
-                />
-              )}
-
-              {/* Insert PickRequestCard after the last requester message */}
-              {index === lastRequesterMessageIndex && (
-                <div className="mt-4 md:mt-6">
-                  <PickRequestCard />
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* If no requester messages but canTakeRequest is true, show card at end */}
-          {/* HYDRATION FIX: Only show after mount since canTakeRequest depends on client session */}
-          {isMounted && canTakeRequest && lastRequesterMessageIndex === -1 && messages.length > 0 && (
-            <PickRequestCard />
-          )}
-        </div>
-      </div>
+      {/* T046: Use VirtualizedMessageList for efficient rendering */}
+      <VirtualizedMessageList
+        messages={messages}
+        requestId={requestId}
+        isMobile={isMobile}
+        onImageLoadStart={handleImageLoadStart}
+        onImageLoad={handleImageLoad}
+        onRetryMessage={onRetryMessage}
+        canTakeRequest={canTakeRequest}
+        lastRequesterMessageIndex={lastRequesterMessageIndex}
+        isMounted={isMounted}
+      />
 
       {/* Floating "Scroll to Bottom" button - appears when user scrolls up */}
       {!isOnBottom && messages.length > 0 && (

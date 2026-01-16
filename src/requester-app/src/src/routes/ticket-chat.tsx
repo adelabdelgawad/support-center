@@ -18,6 +18,7 @@ import { useNotificationSignalR } from "@/signalr";
 import { useImageViewer } from "@/context/image-viewer-context";
 import { useImageCache } from "@/context/image-cache-context";
 import { LazyImageProviders } from "@/context/lazy-image-providers";
+import { LazyImage } from "@/components/lazy-image";
 import { useUpdateTicketInCache, useTicketFromCache, useTicketDetail, useTicketMessagesCursor } from "@/queries";
 import type { GetMessagesCursorResponse } from "@/api/messages";
 import { sendMessage as sendMessageApi, markMessagesAsRead, getMessagesCursor } from "@/api/messages";
@@ -25,12 +26,13 @@ import { useRealTimeChatRoom } from "@/signalr";
 import { useChatMutations } from "@/hooks/use-chat-mutations";
 import { refreshUnreadCountFromAPI } from "@/lib/floating-icon-manager";
 import { messageCache } from "@/lib/message-cache";
+import { syncEngine } from "@/lib/sync-engine";
 import { ImageViewer } from "@/components/image-viewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { VirtualizedMessageList } from "@/components/chat/virtualized-message-list";
 
 /**
  * Messages skeleton - shows placeholder message bubbles while loading
@@ -275,7 +277,7 @@ function MessageBubble(props: {
           dir={language() === "ar" ? "rtl" : "ltr"}
         >
         {/* Screenshot thumbnail - Container with stable dimensions to prevent layout shift */}
-        <Show when={props.message.isScreenshot}>
+        <Show when={props.message.isScreenshot && props.message.screenshotFileName}>
           {/* FIX: Wrapper with stable dimensions - uses persisted dimensions or default 200x150 */}
           {/* This ensures placeholder and image have SAME size, preventing scroll jump */}
           <div
@@ -289,48 +291,35 @@ function MessageBubble(props: {
             }}
             class="relative overflow-hidden rounded bg-muted"
           >
-            <Show when={imageBlobUrl() && !imageError()} fallback={
-              <Show when={!imageError()} fallback={
-                <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground w-full h-full">
-                  <Image class="h-5 w-5" />
-                </div>
-              }>
-                <div class="flex items-center justify-center w-full h-full">
-                  <Spinner size="sm" />
-                </div>
-              </Show>
-            }>
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onImageClick?.();
-                }}
-                class="block hover:opacity-80 transition-opacity w-full h-full"
-                type="button"
-              >
-                <img
-                  src={imageBlobUrl()!}
-                  alt="Screenshot"
-                  class="w-full h-full object-cover rounded cursor-pointer shadow-sm"
-                  onError={() => setImageError(true)}
-                  onLoad={(e) => {
-                    // FIX: Store image dimensions for layout preservation on re-render
-                    const img = e.currentTarget;
-                    if (img.naturalWidth && img.naturalHeight) {
-                      const dims = { width: img.naturalWidth, height: img.naturalHeight };
-                      setImageDimensions(dims);
-                      // FIX: Notify parent to store dimensions persistently
-                      // This survives component re-creation (optimistic→server replacement)
-                      props.onImageDimensionsStored?.(props.message.id, dims);
-                    }
-                    // Notify parent that image has loaded and may have changed height
-                    props.onImageLoad?.(props.message.id);
-                  }}
-                  loading="lazy"
-                  decoding="async"
-                />
-              </Button>
-            </Show>
+            {/* Viewport-triggered lazy loading with IntersectionObserver */}
+            <LazyImage
+              requestId={props.message.requestId}
+              filename={props.message.screenshotFileName!}
+              width={imageDimensions()?.width ? Math.min(imageDimensions()!.width, 200) : 200}
+              height={imageDimensions()?.height ? Math.round(imageDimensions()!.height * (Math.min(imageDimensions()!.width, 200) / imageDimensions()!.width)) : 150}
+              alt="Screenshot"
+              showSpinner={true}
+              onClick={() => props.onImageClick?.()}
+              onLoad={(blobUrl) => {
+                // Notify parent that blob URL is ready (for image viewer)
+                props.onBlobUrlReady?.(props.message.id, blobUrl);
+
+                // Notify parent that image loading started (tracking)
+                if (!hasNotifiedLoadStart()) {
+                  props.onImageLoadStart?.(props.message.id);
+                  setHasNotifiedLoadStart(true);
+                }
+
+                // Notify parent that image has loaded and may have changed height
+                props.onImageLoad?.(props.message.id);
+              }}
+              onError={() => {
+                setImageError(true);
+                props.onImageLoadStart?.(props.message.id);
+                setHasNotifiedLoadStart(true);
+                props.onImageLoad?.(props.message.id);
+              }}
+            />
           </div>
         </Show>
 
@@ -1792,37 +1781,9 @@ function TicketChatPageInner() {
         </div>
       </header>
 
-      {/* Messages area */}
-      <div
-        ref={(el) => (scrollContainerRef = el)}
-        onScroll={handleScroll}
-        class="flex-1 relative overflow-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-transparent hover:scrollbar-thumb-foreground/20 active:scrollbar-thumb-foreground/30 scrollbar-thumb-rounded-full"
-        style={{ "overflow-anchor": "auto" }}
-      >
-        {/* Load more messages button - shown at top when there are older messages */}
-        <Show when={hasMoreMessages() && loadMoreCursor() !== undefined}>
-          <div class="flex justify-center p-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLoadMoreMessages}
-              disabled={isLoadingMore()}
-            >
-              {isLoadingMore() ? (
-                <>
-                  <Spinner size="sm" class="mr-2" />
-                  Loading...
-                </>
-              ) : (
-                <>Load {LOAD_MORE_LIMIT} older messages</>
-              )}
-            </Button>
-          </div>
-        </Show>
-
-        {/* Show messages if available, or loading spinner */}
-        <div>
-        <Show when={messages().length > 0} fallback={
+      {/* Messages area - T048: Integrated Virtualized Message List */}
+      <Show when={messages().length > 0} fallback={
+        <div class="flex-1 relative overflow-auto">
           <Show when={isLoadingMessages()} fallback={
             <div class="flex h-full flex-col items-center justify-center text-center p-4">
               <p class="text-muted-foreground">{t("chat.emptyState")}</p>
@@ -1834,66 +1795,105 @@ function TicketChatPageInner() {
             {/* Skeleton placeholder for loading state - better perceived performance */}
             <MessagesSkeleton />
           </Show>
-        }>
-          <div class="p-4 space-y-4">
-            <For each={groupedMessages()}>
-              {([date, dateMessages], dateIndex) => (
-                <div data-date={date}>
-                  <DateSeparator date={date} />
-                  <For each={dateMessages}>
-                    {(message, messageIndex) => (
-                      <MessageBubble
-                        message={message}
-                        isOwnMessage={message.senderId === user()?.id}
-                        showSender={messageIndex() === 0 || dateMessages[messageIndex() - 1]?.senderId !== message.senderId}
-                        onImageClick={() => handleImageClick(message.id)}
-                        onBlobUrlReady={handleBlobUrlReady}
-                        onImageLoad={handleImageLoad}
-                        onImageLoadStart={handleImageLoadStart}
-                        onRetry={(tempId) => chatMutations.retryMessage(tempId)}
-                        initialImageDimensions={messageImageDimensions().get(message.id)}
-                        onImageDimensionsStored={handleImageDimensionsStored}
-                      />
-                    )}
-                  </For>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
         </div>
+      }>
+        <VirtualizedMessageList
+          ticketId={ticketId()}
+          messages={messages()}
+          groupedMessages={groupedMessages()}
+          currentUserId={user()?.id}
+          renderMessage={(message, isOwnMessage, showSender, messageIndex, dateMessages) => (
+            <MessageBubble
+              message={message}
+              isOwnMessage={isOwnMessage}
+              showSender={showSender}
+              onImageClick={() => handleImageClick(message.id)}
+              onBlobUrlReady={handleBlobUrlReady}
+              onImageLoad={handleImageLoad}
+              onImageLoadStart={handleImageLoadStart}
+              onRetry={(tempId) => chatMutations.retryMessage(tempId)}
+              initialImageDimensions={messageImageDimensions().get(message.id)}
+              onImageDimensionsStored={handleImageDimensionsStored}
+            />
+          )}
+          renderDateSeparator={(date) => <DateSeparator date={date} />}
+          isLoadingMore={isLoadingMore()}
+          hasMoreMessages={hasMoreMessages() && loadMoreCursor() !== undefined}
+          onLoadMore={handleLoadMoreMessages}
+          estimatedRowHeight={60}
+          overscan={10}
+        />
+      </Show>
 
-        {/* Floating "Scroll to Bottom" button - appears when user scrolls up */}
-        <Show when={!isOnBottom() && messages().length > 0}>
-          <div class="sticky bottom-4 left-0 right-0 flex justify-center pointer-events-none">
-            <Button
-              type="button"
-              onClick={() => {
-                scrollToBottom(true, true);
-              }}
-              class="pointer-events-auto bg-accent-400 hover:bg-accent-500 text-white shadow-lg rounded-full px-4 py-2 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-              title="Scroll to bottom"
-            >
-              <ArrowDown class="h-4 w-4" />
-              <Show when={newMessagesWhileScrolledUp() > 0}>
-                <span class="text-xs font-medium">
-                  {newMessagesWhileScrolledUp()} new
-                </span>
-              </Show>
-              <Show when={newMessagesWhileScrolledUp() === 0}>
-                <span class="text-xs font-medium">
-                  Scroll to bottom
-                </span>
-              </Show>
-            </Button>
-          </div>
-        </Show>
-      </div>
+      {/* Floating "Scroll to Bottom" button - appears when user scrolls up */}
+      <Show when={!isOnBottom() && messages().length > 0}>
+        <div class="fixed bottom-24 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none z-50">
+          <Button
+            type="button"
+            onClick={() => {
+              scrollToBottom(true, true);
+            }}
+            class="pointer-events-auto bg-accent-400 hover:bg-accent-500 text-white shadow-lg rounded-full px-4 py-2 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+            title="Scroll to bottom"
+          >
+            <ArrowDown class="h-4 w-4" />
+            <Show when={newMessagesWhileScrolledUp() > 0}>
+              <span class="text-xs font-medium">
+                {newMessagesWhileScrolledUp()} new
+              </span>
+            </Show>
+            <Show when={newMessagesWhileScrolledUp() === 0}>
+              <span class="text-xs font-medium">
+                Scroll to bottom
+              </span>
+            </Show>
+          </Button>
+        </div>
+      </Show>
 
       {/* Error banner for send errors */}
       <Show when={sendError()}>
-        <div class="border-t bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          {sendError()}
+        <div class="border-t bg-destructive/10 px-4 py-2 text-sm text-destructive flex items-center justify-between">
+          <span>{sendError()}</span>
+        </div>
+      </Show>
+
+      {/* Failed messages banner with "Retry All" button */}
+      <Show when={chatMutations.failedMessages().size > 0}>
+        <div class="border-t bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 px-4 py-3">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <WifiOff class="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <span class="text-sm text-amber-700 dark:text-amber-300">
+                {chatMutations.failedMessages().size} message{chatMutations.failedMessages().size > 1 ? 's' : ''} failed to send
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => syncEngine.processOfflineQueue()}
+                class="text-xs bg-amber-100 dark:bg-amber-900 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800"
+              >
+                ↻ Retry All
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Discard all failed messages
+                  for (const [tempId] of chatMutations.failedMessages()) {
+                    chatMutations.discardFailedMessage(tempId);
+                  }
+                }}
+                class="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
         </div>
       </Show>
 

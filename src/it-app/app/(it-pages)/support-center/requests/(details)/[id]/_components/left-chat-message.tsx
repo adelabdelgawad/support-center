@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ImageIcon, Loader2, FileText, FileSpreadsheet, FileIcon, Download, Paperclip } from "lucide-react";
 import { useRequestDetail } from "../_context/request-detail-context";
 import { useFormattedChatTimestamp } from "@/lib/utils/hydration-safe-date";
+import { CachedImage } from "@/components/ui/cached-image";
 // NOTE: Using regular <img> instead of next/image because the screenshot endpoint
 // requires authentication cookies, which next/image doesn't send by default
 
@@ -57,6 +58,8 @@ function isImageMimeType(mimeType: string | null | undefined): boolean {
 interface LeftChatMessageProps {
   /** Unique message ID for tracking */
   id?: string;
+  /** Request ID for media caching */
+  requestId?: string;
   author: string;
   authorInitials: string;
   timestamp: string;
@@ -81,6 +84,7 @@ interface LeftChatMessageProps {
  */
 export function LeftChatMessage({
   id,
+  requestId,
   author,
   authorInitials,
   timestamp,
@@ -235,7 +239,7 @@ export function LeftChatMessage({
             )}
 
             {/* Screenshot thumbnail - only show when not processing */}
-            {isScreenshot && screenshotUrl && !imageError && !isProcessing && (
+            {isScreenshot && screenshotUrl && screenshotFileName && !imageError && !isProcessing && (
               <div
                 onClick={() => screenshotFileName && openMediaViewer(screenshotFileName)}
                 className="block hover:opacity-80 transition-opacity cursor-pointer"
@@ -249,16 +253,15 @@ export function LeftChatMessage({
                 }}
                 aria-label="View screenshot in full screen"
               >
-                {/* Using <img> instead of Next Image to preserve authentication cookies */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={imageKey}
-                  src={`${screenshotUrl}?v=${imageKey}`}
+                {/* Use CachedImage for viewport-aware loading with caching */}
+                <CachedImage
+                  requestId={requestId || ''}
+                  filename={screenshotFileName}
+                  presignedUrl={`${screenshotUrl}?v=${imageKey}`}
                   alt="Screenshot"
                   className="rounded border border-border cursor-pointer w-full h-auto shadow-sm max-w-md"
                   onLoad={handleImageLoad}
                   onError={handleImageError}
-                  loading="lazy"
                 />
               </div>
             )}

@@ -150,6 +150,12 @@ export interface RequestDetailsContextType {
   registerScrollHandler: (handler: (() => void) | null) => void;
   // Force scroll handler for when user sends their own message (always scrolls)
   registerForceScrollHandler: (handler: (() => void) | null) => void;
+
+  // **CACHE INTEGRATION**
+  // WhatsApp-style local cache state
+  cacheInitialized: boolean; // True when IndexedDB cache is ready
+  isSyncing: boolean; // True when delta sync is in progress
+  syncError: string | null; // Error message if sync failed
 }
 
 /**

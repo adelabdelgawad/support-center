@@ -30,6 +30,7 @@ import { listen } from "@tauri-apps/api/event";
 import { RuntimeConfig } from "@/lib/runtime-config";
 import UpdateRequired from "@/components/UpdateRequired";
 import { logger } from "@/logging";
+import { messageCache } from "@/lib/message-cache";
 
 // Route loading now uses AppShellSkeleton for instant visual structure
 // See components/app-shell-skeleton.tsx
@@ -58,6 +59,28 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
     // Initialize session logging first (fail-safe, non-blocking)
     await logger.init();
     logger.info('app', 'Frontend initialization started');
+
+    // T058: Check schema version on app startup
+    try {
+      const schemaCheck = await messageCache.checkSchemaVersion();
+      if (!schemaCheck.compatible) {
+        logger.warn('app', 'Schema version mismatch detected', {
+          current: schemaCheck.currentVersion,
+          expected: schemaCheck.expectedVersion,
+        });
+        // Clear cache and let it rebuild with correct schema
+        await messageCache.clearAll();
+        logger.info('app', 'Cache cleared due to schema version mismatch');
+      } else {
+        logger.info('app', 'Schema version check passed', {
+          version: schemaCheck.currentVersion,
+        });
+      }
+    } catch (error) {
+      logger.error('app', 'Schema version check failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Detect network mode (internal vs external) - needed for correct API URL
     // This MUST complete before any API calls are made

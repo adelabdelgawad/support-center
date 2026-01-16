@@ -7,6 +7,7 @@ import { ImageIcon, Clock, RotateCcw, Loader2, FileText, FileSpreadsheet, FileIc
 import { Button } from "@/components/ui/button";
 import { useRequestDetail } from "../_context/request-detail-context";
 import { useFormattedChatTimestamp } from "@/lib/utils/hydration-safe-date";
+import { CachedImage } from "@/components/ui/cached-image";
 // NOTE: Using regular <img> instead of next/image because the screenshot endpoint
 // requires authentication cookies, which next/image doesn't send by default
 
@@ -60,6 +61,8 @@ export type MessageStatus = 'pending' | 'sent' | 'failed';
 interface RightChatMessageProps {
   /** Unique message ID for tracking */
   id?: string;
+  /** Request ID for media caching */
+  requestId?: string;
   author: string;
   authorInitials: string;
   timestamp: string;
@@ -93,6 +96,7 @@ const STUCK_MESSAGE_THRESHOLD = 10000; // 10 seconds
 
 export function RightChatMessage({
   id,
+  requestId,
   author,
   authorInitials,
   timestamp,
@@ -313,7 +317,7 @@ export function RightChatMessage({
             )}
 
             {/* Screenshot thumbnail - only show when not processing */}
-            {isScreenshot && screenshotUrl && !imageError && !isProcessing && (
+            {isScreenshot && screenshotUrl && screenshotFileName && !imageError && !isProcessing && (
               <div
                 onClick={() => screenshotFileName && openMediaViewer(screenshotFileName)}
                 className="block hover:opacity-80 transition-opacity cursor-pointer"
@@ -327,16 +331,15 @@ export function RightChatMessage({
                 }}
                 aria-label="View screenshot in full screen"
               >
-                {/* Using <img> instead of Next Image to preserve authentication cookies */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={imageKey}
-                  src={`${screenshotUrl}?v=${imageKey}`}
+                {/* Use CachedImage for viewport-aware loading with caching */}
+                <CachedImage
+                  requestId={requestId || ''}
+                  filename={screenshotFileName}
+                  presignedUrl={`${screenshotUrl}?v=${imageKey}`}
                   alt="Screenshot"
                   className="rounded border border-white/20 cursor-pointer w-full h-auto shadow-sm max-w-md"
                   onLoad={handleImageLoadComplete}
                   onError={handleImageError}
-                  loading="lazy"
                 />
               </div>
             )}

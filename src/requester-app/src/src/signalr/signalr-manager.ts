@@ -133,6 +133,13 @@ class SignalRHubManager {
   }
 
   /**
+   * Get list of active subscription IDs (request IDs)
+   */
+  getActiveSubscriptionIds(): string[] {
+    return Array.from(this.subscriptions.keys());
+  }
+
+  /**
    * Set global event handlers
    */
   setGlobalHandlers(handlers: SignalREventHandlers): void {

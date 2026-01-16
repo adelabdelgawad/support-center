@@ -25,6 +25,12 @@ import { useGlobalPriorities, useGlobalStatuses, useGlobalTechnicians } from '@/
 import { useRequestTicket } from '@/lib/hooks/use-request-ticket';
 import { useChatMutations } from '@/lib/hooks/use-chat-mutations';
 import { checkMessagingPermission } from '@/lib/utils/messaging-permissions';
+// Cache integration
+import { MessageCache } from '@/lib/cache/message-cache';
+import { SyncEngine } from '@/lib/cache/sync-engine';
+import { rebuildCacheIfIncompatible } from '@/lib/cache/db';
+import { getMessagesWithHeaders } from '@/lib/api/chat-cache';
+import type { CachedMessage } from '@/lib/cache/schemas';
 
 // **LOCAL AUTH HELPER** - Workaround for import issues
 // Returns null during SSR and initial hydration to prevent mismatch
@@ -182,6 +188,112 @@ export function RequestDetailProvider({
       accessToken: null,
     });
   }, []);
+
+  // **CACHE INTEGRATION**
+  // Cache state for WhatsApp-style local sync
+  const [cacheInitialized, setCacheInitialized] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const cacheRef = useRef<{ cache: MessageCache | null; syncEngine: SyncEngine | null }>({
+    cache: null,
+    syncEngine: null,
+  });
+
+  // Initialize cache on mount (after we have currentUserId)
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const initCache = async () => {
+      try {
+        console.log('[Cache] Initializing for user:', currentUserId);
+
+        // T057: Check schema version and rebuild if incompatible
+        const wasRebuilt = await rebuildCacheIfIncompatible(currentUserId);
+        if (wasRebuilt) {
+          console.log('[Cache] Database was rebuilt due to schema version mismatch');
+        }
+
+        // Create cache instance
+        const cache = new MessageCache(currentUserId);
+
+        // T057, T059: Perform startup maintenance (cleanup expired cache, log stats)
+        const maintenanceResult = await cache.performStartupMaintenance();
+        if (maintenanceResult.expiredMessagesRemoved > 0) {
+          console.log(
+            `[Cache] Startup maintenance: removed ${maintenanceResult.expiredMessagesRemoved} expired messages`
+          );
+        }
+
+        // Create sync engine with fetch function
+        const syncEngine = new SyncEngine(cache, async (requestId, params) => {
+          // Fetch messages from backend via Next.js API route
+          const response = await getMessagesWithHeaders(requestId, params);
+          return response.data;
+        });
+
+        // Store refs
+        cacheRef.current = { cache, syncEngine };
+
+        // Load cached messages immediately (synchronously from IndexedDB)
+        const cached = await cache.getCachedMessages(initialTicket.id);
+        console.log('[Cache] Loaded', cached.length, 'cached messages');
+
+        setCacheInitialized(true);
+      } catch (error) {
+        console.error('[Cache] Initialization failed:', error);
+        setSyncError(error instanceof Error ? error.message : 'Cache initialization failed');
+      }
+    };
+
+    initCache();
+
+    // Cleanup on unmount
+    return () => {
+      cacheRef.current = { cache: null, syncEngine: null };
+    };
+  }, [currentUserId, initialTicket.id]);
+
+  // **DELTA SYNC** - Run after cache initialization
+  // Triggers background sync to fetch new messages since last checkpoint
+  useEffect(() => {
+    if (!cacheInitialized || !cacheRef.current.syncEngine) return;
+    if (!initialTicket?.id) return;
+
+    const syncEngine = cacheRef.current.syncEngine;
+
+    const runDeltaSync = async () => {
+      try {
+        console.log('[Cache] Starting delta sync for request:', initialTicket.id);
+        setIsSyncing(true);
+        setSyncError(null);
+
+        const result = await syncEngine.syncChat(initialTicket.id);
+
+        if (result.success) {
+          console.log(
+            '[Cache] Delta sync complete:',
+            result.messagesAdded,
+            'new messages,',
+            result.gapsDetected,
+            'gaps detected'
+          );
+
+          // If new messages were added, we could trigger a refresh here
+          // For now, SignalR will handle new messages in real-time
+        } else {
+          console.error('[Cache] Delta sync failed:', result.error);
+          setSyncError(result.error || 'Sync failed');
+        }
+      } catch (error) {
+        console.error('[Cache] Delta sync error:', error);
+        setSyncError(error instanceof Error ? error.message : 'Sync error');
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    runDeltaSync();
+  }, [cacheInitialized, initialTicket?.id]);
 
   // **CLIENT-SIDE MARK-AS-READ FALLBACK**
   // SSR mark-as-read can fail silently. This ensures messages are marked as read
@@ -670,6 +782,18 @@ export function RequestDetailProvider({
     sendChatMessageViaWebSocket: sendChatMessage,
     updateMessageStatus,
     onError: handleChatMutationError,
+
+    // Cache integration for offline support
+    messageCache: cacheRef.current.cache ? {
+      addMessage: (msg) => cacheRef.current.cache!.addMessage(msg),
+      getByTempId: (tempId) => cacheRef.current.cache!.getByTempId(tempId),
+      replaceOptimisticMessage: (tempId, realMsg) => cacheRef.current.cache!.replaceOptimisticMessage(tempId, realMsg),
+      updateMessage: (msg) => cacheRef.current.cache!.updateMessage(msg),
+    } : null,
+    syncEngine: cacheRef.current.syncEngine ? {
+      isOnline: true, // TODO: Add network status detection
+      queueOperation: (op) => cacheRef.current.syncEngine!.queueOperation(op as any),
+    } : null,
   });
 
   // **RETRY MESSAGE ACTION**
@@ -692,6 +816,7 @@ export function RequestDetailProvider({
       .filter(msg => msg.isScreenshot && msg.screenshotFileName)
       .map(msg => ({
         id: msg.id,
+        requestId: ticket?.id || '', // Add requestId for media caching (safe fallback)
         filename: msg.screenshotFileName!,
         url: `/api/screenshots/by-filename/${msg.screenshotFileName}`,
         timestamp: msg.createdAt,
@@ -703,7 +828,7 @@ export function RequestDetailProvider({
         sequenceNumber: msg.sequenceNumber,
       }))
       .sort((a, b) => a.sequenceNumber - b.sequenceNumber);
-  }, [messages]);
+  }, [messages, ticket?.id]);
 
   // Handler to open viewer at specific screenshot
   const openMediaViewer = useCallback((screenshotFilename: string) => {
@@ -823,6 +948,11 @@ export function RequestDetailProvider({
     // Scroll handler registration (for auto-scroll on new messages)
     registerScrollHandler,
     registerForceScrollHandler,
+
+    // Cache integration state
+    cacheInitialized,
+    isSyncing,
+    syncError,
   };
 
   return (

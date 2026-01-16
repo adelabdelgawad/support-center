@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { apiClient, getClientErrorMessage as getErrorMessage } from '@/lib/fetch/client';
 import type { ChatMessage, SenderInfo } from '@/lib/signalr/types';
 import type { PermissionResult } from '@/lib/utils/messaging-permissions';
+import type { CachedMessage } from '@/lib/cache/schemas';
 
 /**
  * Failed message info for retry support
@@ -59,6 +60,28 @@ export interface UseChatMutationsOptions {
   onMessageSent?: (message: ChatMessage) => void;
   onAttachmentsUploaded?: (response: AttachmentUploadResponse) => void;
   onError?: (error: Error) => void;
+
+  // Cache integration for offline support
+  messageCache?: {
+    addMessage: (message: CachedMessage) => Promise<void>;
+    getByTempId: (tempId: string) => Promise<CachedMessage | null>;
+    replaceOptimisticMessage: (tempId: string, realMessage: CachedMessage) => Promise<void>;
+    updateMessage: (message: CachedMessage) => Promise<void>;
+  } | null;
+  syncEngine?: {
+    isOnline: boolean;
+    queueOperation: (operation: {
+      type: 'send_message';
+      requestId: string;
+      payload: {
+        type: string;
+        content: string;
+        tempId: string;
+        isScreenshot?: boolean;
+      };
+      maxRetries?: number;
+    }) => Promise<void>;
+  } | null;
 }
 
 /**
@@ -80,6 +103,7 @@ function createOptimisticMessage(
   currentUser: UseChatMutationsOptions['currentUser']
 ): ChatMessage {
   const now = new Date().toISOString();
+  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const sender: SenderInfo | null = currentUser
     ? {
         id: String(currentUser.id),
@@ -90,7 +114,7 @@ function createOptimisticMessage(
     : null;
 
   return {
-    id: `optimistic-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: tempId,
     requestId,
     senderId: currentUser?.id ? String(currentUser.id) : '',
     sender,
@@ -103,6 +127,44 @@ function createOptimisticMessage(
     updatedAt: null,
     attachments: [],
     isRead: false,
+    tempId,
+    status: 'pending',
+  };
+}
+
+/**
+ * Create a cached message from optimistic message
+ */
+function createCachedMessage(
+  optimisticMessage: ChatMessage,
+  requestId: string
+): CachedMessage {
+  return {
+    id: optimisticMessage.id,
+    requestId,
+    sequenceNumber: optimisticMessage.sequenceNumber || Date.now(),
+    senderId: optimisticMessage.senderId,
+    sender: optimisticMessage.sender ? {
+      id: optimisticMessage.sender.id,
+      username: optimisticMessage.sender.username || '',
+      fullName: optimisticMessage.sender.fullName,
+      isTechnician: false,
+    } : null,
+    content: optimisticMessage.content,
+    createdAt: optimisticMessage.createdAt,
+    updatedAt: optimisticMessage.updatedAt || null,
+    isScreenshot: optimisticMessage.isScreenshot || false,
+    screenshotFileName: optimisticMessage.screenshotFileName || null,
+    fileName: null,
+    fileSize: null,
+    fileMimeType: null,
+    isReadByCurrentUser: false,
+    tempId: optimisticMessage.tempId,
+    clientTempId: optimisticMessage.tempId,
+    status: 'pending',
+    errorMessage: undefined,
+    _cachedAt: Date.now(),
+    _syncVersion: 1,
   };
 }
 
@@ -137,6 +199,8 @@ export function useChatMutations(options: UseChatMutationsOptions) {
     onMessageSent,
     onAttachmentsUploaded,
     onError,
+    messageCache,
+    syncEngine,
   } = options;
 
   const [state, setState] = useState<MutationState>({
@@ -204,6 +268,44 @@ export function useChatMutations(options: UseChatMutationsOptions) {
       let tempId: string | null = existingTempId || null;
 
       try {
+        // Check network status - queue if offline
+        if (syncEngine && !syncEngine.isOnline) {
+          console.log(`[useChatMutations] Offline - queuing message operation`);
+
+          // Generate tempId if not provided
+          if (!tempId) {
+            tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+          }
+
+          // Create optimistic message for UI
+          if (sendChatMessageViaWebSocket && currentUser) {
+            const wsUser = {
+              id: String(currentUser.id),
+              username: currentUser.username,
+              fullName: currentUser.fullName || null,
+              email: currentUser.email || null,
+            };
+            sendChatMessageViaWebSocket(content.trim(), wsUser);
+          }
+
+          // Queue for offline send
+          await syncEngine.queueOperation({
+            type: 'send_message',
+            requestId,
+            payload: {
+              type: 'send_message',
+              content: content.trim(),
+              tempId,
+              isScreenshot: false,
+            },
+            maxRetries: 5,
+          });
+
+          // Re-enable input immediately
+          setState((prev) => ({ ...prev, isSending: false }));
+          return;
+        }
+
         // Create optimistic message via SignalR if NOT a retry
         if (!existingTempId && sendChatMessageViaWebSocket && currentUser) {
           // Convert currentUser to match WebSocket signature (string IDs)
@@ -214,6 +316,18 @@ export function useChatMutations(options: UseChatMutationsOptions) {
             email: currentUser.email || null,
           };
           tempId = sendChatMessageViaWebSocket(content.trim(), wsUser);
+
+          // Add to cache if available (for offline persistence)
+          if (messageCache && tempId) {
+            try {
+              const optimisticMsg = createOptimisticMessage(requestId, content.trim(), currentUser);
+              const cachedMsg = createCachedMessage(optimisticMsg, requestId);
+              await messageCache.addMessage(cachedMsg);
+              console.log(`[useChatMutations] Optimistic message cached (tempId: ${tempId})`);
+            } catch (cacheError) {
+              console.error('[useChatMutations] Failed to cache optimistic message:', cacheError);
+            }
+          }
         } else if (existingTempId && updateMessageStatus) {
           // For retry: update status back to pending
           updateMessageStatus(existingTempId, 'pending');
@@ -253,6 +367,44 @@ export function useChatMutations(options: UseChatMutationsOptions) {
         const serverMessage = await response.json();
         console.log(`[useChatMutations] Message sent successfully (id: ${serverMessage.id})`);
 
+        // CRITICAL: Replace optimistic message with server message in cache
+        if (tempId && messageCache) {
+          try {
+            const cachedServerMessage: CachedMessage = {
+              id: serverMessage.id,
+              requestId: serverMessage.requestId || requestId,
+              sequenceNumber: serverMessage.sequenceNumber,
+              senderId: String(serverMessage.senderId),
+              sender: serverMessage.sender ? {
+                id: String(serverMessage.sender.id),
+                username: serverMessage.sender.username,
+                fullName: serverMessage.sender.fullName,
+                isTechnician: false,
+              } : null,
+              content: serverMessage.content,
+              createdAt: serverMessage.createdAt,
+              updatedAt: serverMessage.updatedAt || null,
+              isScreenshot: serverMessage.isScreenshot || false,
+              screenshotFileName: serverMessage.screenshotFileName || null,
+              fileName: serverMessage.fileName || null,
+              fileSize: serverMessage.fileSize || null,
+              fileMimeType: serverMessage.fileMimeType || null,
+              isReadByCurrentUser: serverMessage.isRead || false,
+              tempId: undefined,
+              clientTempId: undefined,
+              status: 'sent',
+              errorMessage: undefined,
+              _cachedAt: Date.now(),
+              _syncVersion: 1,
+            };
+
+            await messageCache.replaceOptimisticMessage(tempId, cachedServerMessage);
+            console.log(`[useChatMutations] Optimistic message replaced in cache`);
+          } catch (cacheError) {
+            console.error('[useChatMutations] Failed to replace message in cache:', cacheError);
+          }
+        }
+
         // CRITICAL: Update message status to 'sent' after HTTP success
         // This handles the case where SignalR broadcast fails or is delayed
         if (tempId && updateMessageStatus) {
@@ -284,6 +436,23 @@ export function useChatMutations(options: UseChatMutationsOptions) {
 
         // Mark message as failed in local state
         if (tempId) {
+          // Update cache to failed status
+          if (messageCache) {
+            try {
+              const cachedMsg = await messageCache.getByTempId(tempId);
+              if (cachedMsg) {
+                await messageCache.updateMessage({
+                  ...cachedMsg,
+                  status: 'failed',
+                  errorMessage: error.message,
+                });
+                console.log(`[useChatMutations] Message marked as failed in cache`);
+              }
+            } catch (cacheError) {
+              console.error('[useChatMutations] Failed to update message status in cache:', cacheError);
+            }
+          }
+
           // Track failed message for retry
           setState((prev) => {
             const newFailed = new Map(prev.failedMessages);
@@ -334,6 +503,8 @@ export function useChatMutations(options: UseChatMutationsOptions) {
       updateMessageStatus,
       onMessageSent,
       onError,
+      messageCache,
+      syncEngine,
     ]
   );
 

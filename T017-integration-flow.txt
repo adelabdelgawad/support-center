@@ -1,0 +1,123 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    T017: SignalR Cache Integration                          │
+│                    Real-time Message Caching Flow                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┐         ┌──────────────────┐         ┌──────────────┐
+│   SignalR    │         │  SignalR Manager │         │     UI       │
+│   Server     │         │  (This Task)     │         │  Components  │
+└──────┬───────┘         └────────┬─────────┘         └──────┬───────┘
+       │                          │                          │
+       │ 1. ReceiveMessage         │                          │
+       │    (WebSocket event)      │                          │
+       ├─────────────────────────>│                          │
+       │                          │                          │
+       │                          │ 2. routeToHandlers()     │
+       │                          ├─────────────────────────>│
+       │                          │    (Update React state)  │
+       │                          │                          │
+       │                          │ 3. toCachedMessage()     │
+       │                          │    (Convert format)      │
+       │                          │                          │
+       │                          │ 4. messageCache.add()    │
+       │                          ├─────────────────────────┐│
+       │                          │                          ││
+       │                          │                    ┌─────┴────────┐
+       │                          │                    │  IndexedDB   │
+       │                          │                    │  (Messages)  │
+       │                          │                    └──────┬───────┘
+       │                          │                           │
+       │                          │ 5. updateSyncState()      │
+       │                          │    (lastSyncedSequence)   │
+       │                          │                    ┌─────┴────────┐
+       │                          │                    │  IndexedDB   │
+       │                          │                    │ (Chat Meta)  │
+       │                          │                    └──────┬───────┘
+       │                          │                           │
+       │                          │ 6. Log success/error      │
+       │                          │                          │
+
+
+Key Features:
+───────────────────────────────────────────────────────────────────────────────
+
+✅ NON-BLOCKING: UI updates happen immediately, cache write is async
+✅ ERROR RESILIENT: Cache failures don't break real-time messaging
+✅ SYNC CHECKPOINT: Tracks lastSyncedSequence for future delta sync
+✅ AUTO-INITIALIZE: Creates ChatSyncState for first message in chat
+✅ CLEANUP: Clears messageCache reference on disconnect
+
+
+Data Structures:
+───────────────────────────────────────────────────────────────────────────────
+
+SignalR ChatMessage → CachedMessage
+├── id: string               → id: string
+├── requestId: string        → requestId: string
+├── sequenceNumber: number   → sequenceNumber: number
+├── senderId: string         → senderId: string
+├── sender: SenderInfo       → sender: { id, username, fullName, isTechnician }
+├── content: string          → content: string
+├── createdAt: string        → createdAt: string (ISO 8601)
+├── isRead: boolean          → isReadByCurrentUser: boolean
+├── status: 'sending'        → status: 'pending'
+│   'sent'          →        →        'sent'
+│   'failed'        →        →        'failed'
+└── [attachments, etc]       → [mapped fields]
+                            + _cachedAt: number
+                            + _syncVersion: number
+
+
+IndexedDB Schema:
+───────────────────────────────────────────────────────────────────────────────
+
+Database: support-center-{userId}
+
+Store: messages
+├── Key: id (string)
+├── Index: by_request → requestId
+├── Index: by_request_sequence → [requestId, sequenceNumber]
+└── Index: by_cached_at → _cachedAt
+
+Store: chat_meta
+├── Key: requestId (string)
+├── Value: {
+│     requestId: string
+│     lastSyncedSequence: number  ← Checkpoint for delta sync
+│     lastSyncedAt: number
+│     messageCount: number
+│     knownGaps: SequenceGap[]
+│     unreadCount: number
+│     lastReadSequence: number
+│     mediaSize: number
+│     lastAccessedAt: number
+│   }
+
+
+Integration with Future Tasks:
+───────────────────────────────────────────────────────────────────────────────
+
+T017 (Current) ✅    Write SignalR messages to cache
+                         ↓
+T018 (Backend)       Delta sync API endpoint
+GET /api/v1/chats/{requestId}/delta-sync?sinceSequence={n}
+                         ↓
+T019 (Frontend)      Read cache on page load
+If cache.hasMessages(requestId):
+  → Display cached messages immediately
+  → Request delta sync since cache.lastSyncedSequence
+                         ↓
+T020 (Frontend)      Gap detection & backfill
+If gap detected:
+  → Request range sync: /delta-sync?startSequence={n}&endSequence={m}
+
+
+Testing Checklist:
+───────────────────────────────────────────────────────────────────────────────
+
+□ Send/receive message via SignalR
+□ Verify message appears in IndexedDB (DevTools → Application → IndexedDB)
+□ Check chat_meta store shows updated lastSyncedSequence
+□ Refresh page and verify cache persists
+□ Test error handling: disable IndexedDB permissions, verify no crash
+□ Console log shows "💾 Message cached and sync state updated"

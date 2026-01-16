@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@tanstack/solid-virtual": "^3.13.18"
+  }
+}

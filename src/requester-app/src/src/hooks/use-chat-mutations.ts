@@ -20,6 +20,8 @@ import { RuntimeConfig } from '@/lib/runtime-config';
 import type { ChatMessage } from '@/types';
 import { logger } from '@/logging';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { messageCache } from '@/lib/message-cache';
+import type { OfflineQueueEntry } from '@/lib/message-cache';
 
 /**
  * Failed message info for retry support
@@ -203,6 +205,9 @@ export function useChatMutations(options: UseChatMutationsOptions) {
           newMap.delete(tempId!);
           return newMap;
         });
+
+        // Remove from offline queue in IndexedDB
+        await messageCache.removeFromOfflineQueue(tempId);
       }
 
       if (onMessageSent) {
@@ -233,6 +238,17 @@ export function useChatMutations(options: UseChatMutationsOptions) {
           });
           return newMap;
         });
+
+        // Add to offline queue in IndexedDB for persistence across app restarts
+        const offlineEntry: OfflineQueueEntry = {
+          tempId: tempId,
+          requestId: requestId,
+          content: content.trim(),
+          errorMessage: error.message,
+          timestamp: Date.now(),
+          retryCount: 0,
+        };
+        await messageCache.addToOfflineQueue(offlineEntry);
 
         // Update message status to 'failed' in UI
         if (updateMessageStatus) {

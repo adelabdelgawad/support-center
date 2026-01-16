@@ -347,6 +347,76 @@ class ChatService:
         return messages, total, oldest_sequence
 
     @staticmethod
+    @safe_database_query(operation_name="get_messages_delta_sync")
+    @log_database_operation("delta sync message retrieval", level="debug")
+    async def get_messages_delta_sync(
+        db: AsyncSession,
+        request_id: UUID,
+        current_user_id: Optional[int] = None,
+        since_sequence: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[ChatMessage], int, Optional[int], Optional[int]]:
+        """
+        Get messages for a request using delta sync (newer than since_sequence).
+
+        This is used for efficient synchronization - only fetch messages that
+        are newer than the client's last known sequence number.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+            current_user_id: Current user ID for per-user read state (optional)
+            since_sequence: Only get messages with sequence_number > this
+            limit: Maximum messages to return
+
+        Returns:
+            Tuple of (messages, total count, oldest_sequence, newest_sequence)
+        """
+        messages, total, oldest, newest = await ChatMessageRepository.find_by_request_id_delta_sync(
+            db,
+            request_id,
+            since_sequence=since_sequence,
+            limit=limit
+        )
+
+        return messages, total, oldest, newest
+
+    @staticmethod
+    @safe_database_query(operation_name="get_messages_range")
+    @log_database_operation("range query message retrieval", level="debug")
+    async def get_messages_range(
+        db: AsyncSession,
+        request_id: UUID,
+        current_user_id: Optional[int] = None,
+        start_sequence: int = 0,
+        end_sequence: int = 0,
+    ) -> Tuple[List[ChatMessage], int, Optional[int], Optional[int]]:
+        """
+        Get messages for a request using sequence range query.
+
+        This is used for gap filling - fetch messages within a specific
+        sequence range to fill missing data.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+            current_user_id: Current user ID for per-user read state (optional)
+            start_sequence: Start of range (inclusive)
+            end_sequence: End of range (inclusive)
+
+        Returns:
+            Tuple of (messages, total count, oldest_sequence, newest_sequence)
+        """
+        messages, total, oldest, newest = await ChatMessageRepository.find_by_request_id_range(
+            db,
+            request_id,
+            start_sequence=start_sequence,
+            end_sequence=end_sequence
+        )
+
+        return messages, total, oldest, newest
+
+    @staticmethod
     @transactional_database_operation(operation_name="mark_as_read")
     @log_database_operation("message mark as read", level="debug")
     async def mark_as_read(

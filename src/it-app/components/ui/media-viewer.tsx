@@ -13,6 +13,7 @@
  * - Thumbnail timeline at bottom
  * - Smooth transitions between images
  * - Mobile responsive
+ * - Cached media loading with IndexedDB
  */
 
 import * as React from 'react';
@@ -33,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatChatTimestamp } from '@/lib/utils/date-formatting';
 import { MediaViewerThumbnail } from '@/components/ui/media-viewer-thumbnail';
+import { CachedImage } from '@/components/ui/cached-image';
 import type { MediaViewerProps, ScreenshotItem } from '@/types/media-viewer';
 
 export function MediaViewer({
@@ -451,9 +453,11 @@ export function MediaViewer({
                 </div>
               ) : (
                 <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={currentScreenshot.url}
+                  {/* Use CachedImage for viewport-aware loading with caching */}
+                  <CachedImage
+                    requestId={currentScreenshot.requestId}
+                    filename={currentScreenshot.filename}
+                    presignedUrl={currentScreenshot.url}
                     alt={`Screenshot from ${currentScreenshot.sender.name}`}
                     className={cn(
                       // Larger image - account for header (64px) + thumbnail area (120px) + spacing
@@ -472,7 +476,6 @@ export function MediaViewer({
                     )}
                     onLoad={handleImageLoad}
                     onError={handleImageError}
-                    draggable={false}
                   />
                 </>
               )}

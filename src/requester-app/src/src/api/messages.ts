@@ -15,7 +15,10 @@
  * 1. Cursor-based (RECOMMENDED): Uses `limit` + optional `beforeSequence`
  *    - Initial load: limit=100 returns the latest 100 messages
  *    - Load more: limit=200&beforeSequence=X returns 200 older messages
- * 2. Offset-based (legacy): Uses `page` + `pageSize`
+ * 2. Delta sync (NEW): Uses `sinceSequence` for incremental updates
+ *    - Delta sync: sinceSequence=100 returns messages newer than sequence 100
+ *    - Range query: startSequence=100&endSequence=200 returns messages in range
+ * 3. Offset-based (legacy): Uses `page` + `pageSize`
  *
  * IMPORTANT: The endpoint uses path parameter for request_id, NOT query param.
  * Response is an array directly (not wrapped), with metadata in headers:
@@ -58,9 +61,15 @@ export interface GetMessagesResponse {
 export interface GetMessagesCursorParams {
   requestId: string;
   /** Number of messages to load (default: 100 for initial, 200 for load more) */
-  limit: number;
+  limit?: number;
   /** Load messages older than this sequence number (cursor from previous response) */
   beforeSequence?: number;
+  /** Load messages newer than this sequence number (for delta sync) */
+  sinceSequence?: number;
+  /** Load messages starting from this sequence number (for range queries) */
+  startSequence?: number;
+  /** Load messages up to this sequence number (for range queries) */
+  endSequence?: number;
 }
 
 export interface GetMessagesCursorResponse {
@@ -79,6 +88,7 @@ export interface GetMessagesCursorResponse {
  * Deterministic pagination that handles real-time updates correctly:
  * - Initial load: Returns the last 100 messages (newest)
  * - Load more: Returns 200 older messages using cursor
+ * - Delta sync: Returns new messages since last sequence
  *
  * @param params - Request ID and cursor pagination options
  * @param signal - Optional AbortSignal for cancelling the request
@@ -89,12 +99,28 @@ export async function getMessagesCursor(
   signal?: AbortSignal
 ): Promise<GetMessagesCursorResponse> {
   try {
-    const queryParams: Record<string, number> = {
-      limit: params.limit,
-    };
+    const queryParams: Record<string, number> = {};
+
+    // Only add limit if provided (it's now optional)
+    if (params.limit !== undefined) {
+      queryParams.limit = params.limit;
+    }
 
     if (params.beforeSequence !== undefined) {
       queryParams.before_sequence = params.beforeSequence;
+    }
+
+    // New delta sync parameters
+    if (params.sinceSequence !== undefined) {
+      queryParams.since_sequence = params.sinceSequence;
+    }
+
+    if (params.startSequence !== undefined) {
+      queryParams.start_sequence = params.startSequence;
+    }
+
+    if (params.endSequence !== undefined) {
+      queryParams.end_sequence = params.endSequence;
     }
 
     const response = await apiClient.get<ChatMessage[]>(

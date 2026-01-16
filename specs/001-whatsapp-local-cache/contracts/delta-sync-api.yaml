@@ -1,0 +1,269 @@
+openapi: 3.0.3
+info:
+  title: Chat Delta Sync API
+  description: |
+    Extended chat messages endpoint supporting delta synchronization.
+    This API enables efficient message syncing by allowing clients to fetch
+    only new messages since their last known sequence number.
+  version: 1.0.0
+
+servers:
+  - url: /api/v1
+    description: Backend API
+
+paths:
+  /chat/messages/request/{request_id}:
+    get:
+      operationId: getMessages
+      summary: Get chat messages with delta sync support
+      description: |
+        Retrieve messages for a support request with multiple pagination modes.
+
+        **Pagination Modes** (mutually exclusive):
+
+        1. **Delta Sync** - Get new messages since a known sequence
+           - Use: `limit` + `since_sequence`
+           - Returns: Messages with sequence > since_sequence
+           - Use case: Reconnection, periodic sync
+
+        2. **Range Query** - Get messages in a specific range
+           - Use: `start_sequence` + `end_sequence`
+           - Returns: Messages with sequence >= start AND <= end
+           - Use case: Gap filling
+
+        3. **Cursor Pagination** - Get older messages
+           - Use: `limit` + `before_sequence`
+           - Returns: Messages with sequence < before_sequence
+           - Use case: Load more history (existing behavior)
+
+        4. **Offset Pagination** - Legacy mode
+           - Use: `page` + `per_page`
+           - Returns: Paginated messages (newest first)
+
+      tags:
+        - Chat
+
+      parameters:
+        - name: request_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Service request UUID
+
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+          description: Maximum messages to return (cursor/delta modes)
+
+        - name: since_sequence
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+          description: |
+            **Delta Sync Mode**: Return messages with sequence > this value.
+            Use 0 to get all messages (same as initial load).
+
+        - name: before_sequence
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            **Cursor Mode**: Return messages with sequence < this value.
+            Used for loading older messages (infinite scroll).
+
+        - name: start_sequence
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            **Range Mode**: Start of sequence range (inclusive).
+            Must be used together with end_sequence.
+
+        - name: end_sequence
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+          description: |
+            **Range Mode**: End of sequence range (inclusive).
+            Must be used together with start_sequence.
+
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (legacy offset mode)
+
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Items per page (legacy offset mode)
+
+      responses:
+        '200':
+          description: Messages retrieved successfully
+          headers:
+            X-Total-Count:
+              schema:
+                type: string
+              description: Total number of messages in the chat
+            X-Oldest-Sequence:
+              schema:
+                type: string
+              description: Sequence of oldest message in response
+            X-Newest-Sequence:
+              schema:
+                type: string
+              description: Sequence of newest message in response
+            X-Has-More:
+              schema:
+                type: string
+                enum: ['true', 'false']
+              description: Whether older messages exist
+            X-Has-Newer:
+              schema:
+                type: string
+                enum: ['true', 'false']
+              description: Whether newer messages exist (range/delta modes)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessageRead'
+
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                mutuallyExclusive:
+                  summary: Mutually exclusive parameters
+                  value:
+                    detail: "Cannot combine since_sequence and before_sequence. Use only one pagination mode."
+                rangeMissing:
+                  summary: Incomplete range query
+                  value:
+                    detail: "Range query requires both start_sequence and end_sequence parameters."
+                rangeInvalid:
+                  summary: Invalid range
+                  value:
+                    detail: "start_sequence must be <= end_sequence."
+
+        '401':
+          description: Not authenticated
+
+        '403':
+          description: Not authorized to access this chat
+
+        '404':
+          description: Request not found
+
+components:
+  schemas:
+    ChatMessageRead:
+      type: object
+      required:
+        - id
+        - requestId
+        - sequenceNumber
+        - content
+        - createdAt
+        - isScreenshot
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Message unique identifier
+        requestId:
+          type: string
+          format: uuid
+          description: Parent service request
+        sequenceNumber:
+          type: integer
+          minimum: 1
+          description: Monotonic sequence number within request
+        senderId:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who sent the message
+        sender:
+          $ref: '#/components/schemas/SenderInfo'
+        content:
+          type: string
+          minLength: 1
+          maxLength: 10000
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        isScreenshot:
+          type: boolean
+        screenshotFileName:
+          type: string
+          nullable: true
+        fileName:
+          type: string
+          nullable: true
+        fileSize:
+          type: integer
+          nullable: true
+        fileMimeType:
+          type: string
+          nullable: true
+        isReadByCurrentUser:
+          type: boolean
+
+    SenderInfo:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        fullName:
+          type: string
+          nullable: true
+        isTechnician:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

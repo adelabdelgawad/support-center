@@ -60,6 +60,7 @@ export interface StorageKeys {
   theme_preference: ThemePreference;
   window_position: WindowPosition;
   feature_flags: FeatureFlags;
+  full_download_enabled: boolean; // T072: Persist "full download enabled" preference
 }
 
 /**

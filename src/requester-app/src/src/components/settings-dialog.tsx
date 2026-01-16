@@ -7,6 +7,7 @@
  * - Notification preferences (sound toggle, volume slider)
  * - Theme selection (light, dark, system)
  * - Language toggle (English/Arabic)
+ * - Cache settings (T063-T072): Storage usage, clear cache, download all chats
  * - Change tracking with confirmation dialogs
  * - Persistent footer with Save/Cancel buttons
  */
@@ -26,6 +27,7 @@ import {
   saveNotificationPreferences,
   type NotificationPreferences,
 } from "@/lib/notifications";
+import { CacheSettings } from "@/components/settings/cache-settings";
 import { X, User, Monitor, Moon, Sun, Languages, Bell, BellOff } from "lucide-solid";
 
 interface SettingsDialogProps {
@@ -560,6 +562,21 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   </span>
                 </button>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div class="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+            {/* Cache Settings (T063-T072) */}
+            <div class="space-y-4">
+              <h3 class="text-sm font-semibold text-foreground">
+                Cache & Storage
+              </h3>
+              <p class="text-xs text-muted-foreground">
+                Manage message cache and offline storage
+              </p>
+
+              <CacheSettings />
             </div>
 
             {/* App Version */}

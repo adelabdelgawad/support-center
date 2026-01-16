@@ -21,6 +21,42 @@ import type {
   TicketUpdateEvent,
   TaskStatusChangedEvent,
 } from './types';
+import { MessageCache } from '../cache/message-cache';
+import type { CachedMessage } from '../cache/schemas';
+import type { SyncEngine } from '../cache/sync-engine';
+
+/**
+ * Convert SignalR ChatMessage to CachedMessage format
+ */
+function toCachedMessage(message: ChatMessage): CachedMessage {
+  return {
+    id: message.id,
+    requestId: message.requestId,
+    sequenceNumber: message.sequenceNumber,
+    senderId: message.senderId,
+    sender: message.sender ? {
+      id: message.sender.id,
+      username: message.sender.username || '',
+      fullName: message.sender.fullName,
+      isTechnician: message.sender.role === 'AGENT' || message.sender.role === 'SUPERVISOR',
+    } : null,
+    content: message.content,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt || null,
+    isScreenshot: message.isScreenshot || false,
+    screenshotFileName: message.screenshotFileName || null,
+    fileName: message.fileName || null,
+    fileSize: message.fileSize || null,
+    fileMimeType: message.fileMimeType || null,
+    isReadByCurrentUser: message.isRead,
+    tempId: message.tempId,
+    clientTempId: message.clientTempId,
+    status: message.status === 'sending' ? 'pending' : (message.status === 'failed' ? 'failed' : 'sent'),
+    errorMessage: message.errorMessage,
+    _cachedAt: Date.now(),
+    _syncVersion: 1,
+  };
+}
 
 // Connection states
 export enum SignalRState {
@@ -97,6 +133,13 @@ class SignalRHubManager {
   // Remote access session tracking for auto-rejoin
   private currentRemoteSession: { sessionId: string; participantType: string } | null = null;
 
+  // Delta sync integration
+  private syncEngine: SyncEngine | null = null;
+  private activeChatId: string | null = null;
+
+  // Message cache for local storage
+  private messageCache: MessageCache | null = null;
+
   constructor(hubType: HubType) {
     this.hubType = hubType;
   }
@@ -169,6 +212,50 @@ class SignalRHubManager {
    */
   setGlobalHandlers(handlers: SignalREventHandlers): void {
     this.globalHandlers = handlers;
+  }
+
+  /**
+   * Set the sync engine for delta sync operations
+   * This enables automatic delta sync on reconnection
+   */
+  setSyncEngine(engine: SyncEngine | null): void {
+    this.syncEngine = engine;
+    console.log(`[SignalR:${this.hubType}] Sync engine ${engine ? 'registered' : 'unregistered'}`);
+  }
+
+  /**
+   * Set the active chat ID for delta sync on reconnection
+   * When SignalR reconnects, it will trigger delta sync for this chat
+   */
+  setActiveChat(requestId: string | null): void {
+    this.activeChatId = requestId;
+    console.log(`[SignalR:${this.hubType}] Active chat set to ${requestId?.substring(0, 8)}...`);
+  }
+
+  /**
+   * Get the currently active chat ID
+   */
+  getActiveChatId(): string | null {
+    return this.activeChatId;
+  }
+
+  /**
+   * Trigger delta sync for the active chat
+   * Called automatically on reconnection
+   */
+  private async triggerDeltaSync(): Promise<void> {
+    if (!this.syncEngine || !this.activeChatId) {
+      console.log(`[SignalR:${this.hubType}] Skipping delta sync: ${!this.syncEngine ? 'no sync engine' : 'no active chat'}`);
+      return;
+    }
+
+    try {
+      console.log(`[SignalR:${this.hubType}] Triggering delta sync for active chat ${this.activeChatId.substring(0, 8)}...`);
+      const result = await this.syncEngine.syncChat(this.activeChatId);
+      console.log(`[SignalR:${this.hubType}] Delta sync complete:`, result);
+    } catch (error) {
+      console.error(`[SignalR:${this.hubType}] Delta sync failed:`, error);
+    }
   }
 
   /**
@@ -259,6 +346,9 @@ class SignalRHubManager {
 
         this.userId = String(session.user.id);
 
+        // Initialize message cache
+        this.messageCache = new MessageCache(this.userId);
+
         const baseUrl = this.getBaseUrl();
         const hubUrl = `${baseUrl}/hubs/${this.hubType}`;
 
@@ -325,7 +415,7 @@ class SignalRHubManager {
     });
 
     // Reconnected
-    this.connection.onreconnected((connectionId) => {
+    this.connection.onreconnected(async (connectionId) => {
       this.state = SignalRState.CONNECTED;
       this.reconnectAttempts = 0;
       console.log(`%c[SignalR:${this.hubType}] Reconnected`, 'color: green; font-weight: bold');
@@ -333,6 +423,10 @@ class SignalRHubManager {
 
       // Rejoin all rooms after reconnect
       this.rejoinAllRooms();
+
+      // Trigger delta sync for active chat (if any)
+      // This ensures any messages missed during disconnection are fetched
+      await this.triggerDeltaSync();
     });
 
     // Closed
@@ -348,7 +442,7 @@ class SignalRHubManager {
       this.routeToHandlers(data.requestId, 'onInitialState', data);
     });
 
-    this.connection.on('ReceiveMessage', (message: ChatMessage) => {
+    this.connection.on('ReceiveMessage', async (message: ChatMessage) => {
       console.log('%c[SignalR:Manager] 📨 ReceiveMessage from WebSocket', 'color: #ff00ff; font-weight: bold', {
         requestId: message.requestId,
         messageId: message.id,
@@ -358,7 +452,38 @@ class SignalRHubManager {
         sequenceNumber: message.sequenceNumber,
         timestamp: new Date().toISOString(),
       });
+
+      // Route to UI handlers first
       this.routeToHandlers(message.requestId, 'onNewMessage', message);
+
+      // Write to cache (non-blocking)
+      if (this.messageCache) {
+        try {
+          const cachedMessage = toCachedMessage(message);
+          await this.messageCache.addMessage(cachedMessage);
+
+          // Update sync state checkpoint
+          const meta = await this.messageCache.getChatMeta(message.requestId);
+          if (meta) {
+            await this.messageCache.updateSyncState(message.requestId, {
+              lastSyncedSequence: Math.max(meta.lastSyncedSequence, message.sequenceNumber),
+              lastSyncedAt: Date.now(),
+            });
+          } else {
+            // First message for this chat - create sync state
+            await this.messageCache.updateSyncState(message.requestId, {
+              lastSyncedSequence: message.sequenceNumber,
+              lastSyncedAt: Date.now(),
+              messageCount: 1,
+              lastAccessedAt: Date.now(),
+            });
+          }
+
+          console.log('%c[SignalR:Manager] 💾 Message cached and sync state updated', 'color: #00cc00');
+        } catch (error) {
+          console.error('%c[SignalR:Manager] ❌ Failed to cache message:', 'color: #ff0000', error);
+        }
+      }
     });
 
     this.connection.on('TypingIndicator', (data: TypingIndicator) => {
@@ -458,6 +583,7 @@ class SignalRHubManager {
     this.state = SignalRState.DISCONNECTED;
     this.subscriptions.clear();
     this.userId = null;
+    this.messageCache = null;
   }
 
   /**

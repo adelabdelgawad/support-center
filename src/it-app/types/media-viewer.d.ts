@@ -6,6 +6,8 @@
 export interface ScreenshotItem {
   /** Unique message ID */
   id: string;
+  /** Request ID for media caching */
+  requestId: string;
   /** Screenshot filename for API requests */
   filename: string;
   /** Full URL for display (/api/screenshots/by-filename/...) */

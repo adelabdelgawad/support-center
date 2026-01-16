@@ -5,18 +5,20 @@
  * Individual thumbnail item for the media viewer timeline
  *
  * Features:
- * - Lazy-loaded thumbnail image
+ * - Viewport-aware lazy-loaded thumbnail image with caching
  * - Active state highlighting (border + scale)
  * - Sender initials badge overlay
  * - Click handler to jump to screenshot
  * - Hover effects
  * - Responsive sizing (desktop vs mobile)
+ * - Cached media loading with IndexedDB
  */
 
 import * as React from 'react';
 import { useState, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { ImageIcon } from 'lucide-react';
+import { CachedImage } from '@/components/ui/cached-image';
 import type { MediaViewerThumbnailProps } from '@/types/media-viewer';
 
 export const MediaViewerThumbnail = forwardRef<HTMLButtonElement, MediaViewerThumbnailProps>(
@@ -58,17 +60,11 @@ export const MediaViewerThumbnail = forwardRef<HTMLButtonElement, MediaViewerThu
       <div className="relative w-full h-full bg-black/40">
         {!imageError ? (
           <>
-            {/* Loading state */}
-            {!imageLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="size-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              </div>
-            )}
-
-            {/* Actual image */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={screenshot.url}
+            {/* Use CachedImage for viewport-aware loading with caching */}
+            <CachedImage
+              requestId={screenshot.requestId}
+              filename={screenshot.filename}
+              presignedUrl={screenshot.url}
               alt={`Thumbnail from ${screenshot.sender.name}`}
               className={cn(
                 'w-full h-full object-cover',
@@ -77,7 +73,7 @@ export const MediaViewerThumbnail = forwardRef<HTMLButtonElement, MediaViewerThu
               )}
               onLoad={handleImageLoad}
               onError={handleImageError}
-              loading="lazy"
+              rootMargin="100px" // Load thumbnails earlier for smoother UX
             />
           </>
         ) : (
