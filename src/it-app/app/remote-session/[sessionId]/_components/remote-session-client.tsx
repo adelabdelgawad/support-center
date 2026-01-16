@@ -18,7 +18,7 @@ import {
   ArrowLeft,
   RefreshCw,
 } from "lucide-react";
-import { useRemoteAccessSignaling } from "@/lib/signalr";
+import { useRemoteAccessSignaling, signalRRemoteAccess } from "@/lib/signalr";
 
 interface RemoteSessionClientProps {
   sessionId: string;
@@ -78,6 +78,13 @@ export default function RemoteSessionClient({
   const clipboardChannelRef = useRef<RTCDataChannel | null>(null);
   // Queue ICE candidates that arrive before remote description is set
   const pendingIceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+  // Disconnect grace period timeout
+  const disconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const WEBRTC_DISCONNECT_GRACE_PERIOD_MS = 5000; // 5 seconds
+
+  // ICE restart tracking
+  const iceRestartAttemptsRef = useRef(0);
+  const MAX_ICE_RESTART_ATTEMPTS = 3;
 
   // Toolbar auto-hide refs
   const toolbarHideTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -415,6 +422,9 @@ export default function RemoteSessionClient({
       await joinSession(sessionId, "agent");
       console.log("[RemoteSession] Joined session via SignalR");
 
+      // Track this session for auto-rejoin on SignalR reconnect
+      signalRRemoteAccess.setCurrentRemoteSession(sessionId, "agent");
+
       // Step 2.5: Wait for requester to accept and start WebRTC host
       // The requester has a 10-second auto-accept timer, so we wait for acceptance
       // before sending our offer to ensure their WebRTC host is ready
@@ -498,14 +508,32 @@ export default function RemoteSessionClient({
         // Map peer connection state to our connection state
         switch (newState) {
           case "connected":
+            // Clear disconnect timeout on successful connection
+            if (disconnectTimeoutRef.current) {
+              console.log("[RemoteSession] ✅ Connection recovered - clearing disconnect timeout");
+              clearTimeout(disconnectTimeoutRef.current);
+              disconnectTimeoutRef.current = null;
+            }
             setConnectionState("connected");
             break;
           case "disconnected":
-            // Disconnected could be temporary - don't immediately fail
-            // Only show disconnected UI if signaling is already complete
+            // Disconnected could be temporary - start grace period
             if (signalingCompleteRef.current) {
-              console.log("[RemoteSession] ⚠️ WebRTC disconnected (post-handshake) - may recover");
-              // Don't immediately show disconnected UI - ICE might recover
+              console.log("[RemoteSession] ⚠️ WebRTC disconnected - starting 5s grace period");
+
+              // Clear any existing timeout
+              if (disconnectTimeoutRef.current) {
+                clearTimeout(disconnectTimeoutRef.current);
+              }
+
+              // Start grace period - give ICE time to recover
+              disconnectTimeoutRef.current = setTimeout(() => {
+                const pc = peerConnectionRef.current;
+                if (pc && pc.connectionState === 'disconnected') {
+                  console.log("[RemoteSession] ❌ WebRTC did not recover after 5s - setting failed");
+                  setConnectionState("failed");
+                }
+              }, WEBRTC_DISCONNECT_GRACE_PERIOD_MS);
             } else {
               console.log("[RemoteSession] ⏳ WebRTC disconnected during setup - ignoring");
             }
@@ -535,12 +563,37 @@ export default function RemoteSessionClient({
         previousIceState = newIceState;
 
         if (newIceState === 'failed') {
-          console.error("[RemoteSession] ❌ ICE connection failed - check TURN server and firewall");
-          setConnectionState("failed");
+          // Attempt ICE restart before giving up
+          if (iceRestartAttemptsRef.current < MAX_ICE_RESTART_ATTEMPTS) {
+            iceRestartAttemptsRef.current++;
+            console.log(
+              `[RemoteSession] 🔄 ICE failed - attempting restart (${iceRestartAttemptsRef.current}/${MAX_ICE_RESTART_ATTEMPTS})`
+            );
+
+            // Trigger ICE restart by creating new offer with iceRestart: true
+            pc.createOffer({ iceRestart: true })
+              .then(offer => pc.setLocalDescription(offer))
+              .then(() => {
+                console.log("[RemoteSession] 📤 Sending ICE restart offer");
+                return sendSdpOffer(sessionId, {
+                  sdp: pc.localDescription!.sdp!,
+                  type: pc.localDescription!.type,
+                });
+              })
+              .catch(err => {
+                console.error("[RemoteSession] ❌ ICE restart failed:", err);
+                setConnectionState("failed");
+              });
+          } else {
+            console.error("[RemoteSession] ❌ ICE connection failed after max restart attempts");
+            setConnectionState("failed");
+          }
         } else if (newIceState === 'disconnected') {
           console.log("[RemoteSession] ⚠️ ICE disconnected (may recover)");
         } else if (newIceState === 'connected' || newIceState === 'completed') {
           console.log("[RemoteSession] ✅ ICE connected/completed");
+          // Reset restart counter on successful connection
+          iceRestartAttemptsRef.current = 0;
         }
       };
 
@@ -1021,6 +1074,9 @@ export default function RemoteSessionClient({
 
       // Leave session via SignalR
       await leaveSession(sessionId).catch(console.error);
+
+      // Clear tracked session for auto-rejoin
+      signalRRemoteAccess.clearCurrentRemoteSession();
     } catch (error) {
       console.error('[RemoteSession] Error ending session:', error);
     }
@@ -1058,6 +1114,12 @@ export default function RemoteSessionClient({
       reconnectTimerRef.current = null;
     }
 
+    // Clear disconnect grace period timeout
+    if (disconnectTimeoutRef.current) {
+      clearTimeout(disconnectTimeoutRef.current);
+      disconnectTimeoutRef.current = null;
+    }
+
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -1065,6 +1127,9 @@ export default function RemoteSessionClient({
 
     controlChannelRef.current = null;
     clipboardChannelRef.current = null;
+
+    // Clear tracked session for auto-rejoin
+    signalRRemoteAccess.clearCurrentRemoteSession();
   };
 
   // Session ended state

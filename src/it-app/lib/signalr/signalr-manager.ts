@@ -94,6 +94,9 @@ class SignalRHubManager {
   // Connection promise for awaiting
   private connectionPromise: Promise<void> | null = null;
 
+  // Remote access session tracking for auto-rejoin
+  private currentRemoteSession: { sessionId: string; participantType: string } | null = null;
+
   constructor(hubType: HubType) {
     this.hubType = hubType;
   }
@@ -537,17 +540,49 @@ class SignalRHubManager {
   }
 
   /**
-   * Rejoin all rooms after reconnection
+   * Set the current remote access session for auto-rejoin
+   */
+  setCurrentRemoteSession(sessionId: string, participantType: string): void {
+    this.currentRemoteSession = { sessionId, participantType };
+    console.log(`[SignalR:${this.hubType}] Tracking remote session ${sessionId} as ${participantType} for auto-rejoin`);
+  }
+
+  /**
+   * Clear the current remote access session
+   */
+  clearCurrentRemoteSession(): void {
+    if (this.currentRemoteSession) {
+      console.log(`[SignalR:${this.hubType}] Cleared remote session ${this.currentRemoteSession.sessionId}`);
+      this.currentRemoteSession = null;
+    }
+  }
+
+  /**
+   * Rejoin all rooms and remote sessions after reconnection
    */
   private rejoinAllRooms(): void {
-    if (!this.connection || this.subscriptions.size === 0) return;
+    if (!this.connection) return;
 
-    console.log(`[SignalR:${this.hubType}] Rejoining ${this.subscriptions.size} rooms...`);
+    // Rejoin chat rooms
+    if (this.subscriptions.size > 0) {
+      console.log(`[SignalR:${this.hubType}] Rejoining ${this.subscriptions.size} rooms...`);
+      for (const roomId of this.subscriptions.keys()) {
+        this.connection.invoke('JoinRoom', roomId).catch((error) => {
+          console.error(`[SignalR:${this.hubType}] Failed to rejoin room ${roomId}:`, error);
+        });
+      }
+    }
 
-    for (const roomId of this.subscriptions.keys()) {
-      this.connection.invoke('JoinRoom', roomId).catch((error) => {
-        console.error(`[SignalR:${this.hubType}] Failed to rejoin room ${roomId}:`, error);
-      });
+    // Rejoin remote access session (for remote-access hub type)
+    if (this.hubType === 'remote-access' && this.currentRemoteSession) {
+      console.log(
+        `[SignalR:${this.hubType}] Rejoining remote session ${this.currentRemoteSession.sessionId} as ${this.currentRemoteSession.participantType}`
+      );
+      this.connection
+        .invoke('JoinSession', this.currentRemoteSession.sessionId, this.currentRemoteSession.participantType)
+        .catch((error) => {
+          console.error(`[SignalR:${this.hubType}] Failed to rejoin remote session:`, error);
+        });
     }
   }
 

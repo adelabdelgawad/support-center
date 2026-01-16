@@ -45,8 +45,8 @@ public class RemoteAccessHub : Hub
         var userId = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
         _connectionTracker.RemoveConnection(Context.ConnectionId);
 
-        // Clean up session participation
-        CleanupParticipant(Context.ConnectionId);
+        // Clean up session participation and notify other party
+        await CleanupParticipant(Context.ConnectionId);
 
         if (exception != null)
         {
@@ -248,29 +248,48 @@ public class RemoteAccessHub : Hub
         _logger.LogInformation("UAC dismissed in session {SessionId}", sessionId);
     }
 
-    private void CleanupParticipant(string connectionId)
+    private async Task CleanupParticipant(string connectionId)
     {
+        // Track sessions that need ParticipantLeft notification (outside lock)
+        var notificationsToSend = new List<(string sessionId, string otherConnectionId, string userId)>();
+
         lock (_sessionLock)
         {
             var sessionsToRemove = new List<string>();
 
             foreach (var kvp in _sessions)
             {
+                var sessionId = kvp.Key;
                 var participants = kvp.Value;
+                string? otherConnectionId = null;
+                string? userId = null;
+
                 if (participants.AgentConnectionId == connectionId)
                 {
+                    // Agent disconnected - notify requester
+                    otherConnectionId = participants.RequesterConnectionId;
+                    userId = participants.AgentUserId ?? "unknown";
                     participants.AgentConnectionId = null;
                     participants.AgentUserId = null;
                 }
                 else if (participants.RequesterConnectionId == connectionId)
                 {
+                    // Requester disconnected - notify agent
+                    otherConnectionId = participants.AgentConnectionId;
+                    userId = participants.RequesterUserId ?? "unknown";
                     participants.RequesterConnectionId = null;
                     participants.RequesterUserId = null;
                 }
 
+                // Track notification to send outside lock
+                if (otherConnectionId != null)
+                {
+                    notificationsToSend.Add((sessionId, otherConnectionId, userId));
+                }
+
                 if (participants.AgentConnectionId == null && participants.RequesterConnectionId == null)
                 {
-                    sessionsToRemove.Add(kvp.Key);
+                    sessionsToRemove.Add(sessionId);
                 }
             }
 
@@ -278,6 +297,28 @@ public class RemoteAccessHub : Hub
             {
                 _sessions.Remove(sessionId);
                 _logger.LogDebug("Session {SessionId} removed (no participants)", sessionId);
+            }
+        }
+
+        // Send ParticipantLeft notifications OUTSIDE the lock to avoid deadlocks
+        foreach (var (sessionId, otherConnectionId, userId) in notificationsToSend)
+        {
+            try
+            {
+                await Clients.Client(otherConnectionId).SendAsync("ParticipantLeft", new
+                {
+                    sessionId,
+                    userId
+                });
+                _logger.LogInformation(
+                    "Notified connection {ConnectionId} that participant {UserId} left session {SessionId}",
+                    otherConnectionId, userId, sessionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to send ParticipantLeft to connection {ConnectionId} for session {SessionId}",
+                    otherConnectionId, sessionId);
             }
         }
     }

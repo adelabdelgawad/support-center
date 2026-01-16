@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -257,3 +257,69 @@ class RemoteAccessRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    @staticmethod
+    async def update_heartbeat(
+        db: AsyncSession,
+        session_id: UUID,
+    ) -> Optional[RemoteAccessSession]:
+        """Update session heartbeat timestamp.
+
+        Args:
+            db: Database session
+            session_id: Session to update
+
+        Returns:
+            Updated session or None if not found/not active
+        """
+        await db.execute(
+            update(RemoteAccessSession)
+            .where(
+                RemoteAccessSession.id == session_id,
+                RemoteAccessSession.status == "active",
+            )
+            .values(last_heartbeat=datetime.utcnow())
+        )
+        await db.flush()
+        return await RemoteAccessRepository.get_session_by_id(db, session_id)
+
+    @staticmethod
+    async def get_orphaned_sessions(
+        db: AsyncSession,
+        threshold: datetime,
+    ) -> List[RemoteAccessSession]:
+        """Get sessions that appear to be orphaned (no recent heartbeat).
+
+        A session is considered orphaned if:
+        1. Status is "active"
+        2. last_heartbeat is NULL and created_at < threshold (never received heartbeat)
+        3. OR last_heartbeat < threshold (stale heartbeat)
+
+        Args:
+            db: Database session
+            threshold: Sessions with heartbeat older than this are orphaned
+
+        Returns:
+            List of orphaned sessions
+        """
+        result = await db.execute(
+            select(RemoteAccessSession)
+            .where(
+                RemoteAccessSession.status == "active",
+                or_(
+                    # Never received heartbeat and old enough
+                    and_(
+                        RemoteAccessSession.last_heartbeat.is_(None),
+                        RemoteAccessSession.created_at < threshold,
+                    ),
+                    # Heartbeat is stale
+                    RemoteAccessSession.last_heartbeat < threshold,
+                ),
+            )
+            .options(
+                selectinload(RemoteAccessSession.agent),
+                selectinload(RemoteAccessSession.requester),
+                selectinload(RemoteAccessSession.request),
+            )
+        )
+        return list(result.scalars().all())

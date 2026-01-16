@@ -74,6 +74,10 @@ export class WebRTCHost {
   private signalRDisconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private static readonly SIGNALR_DISCONNECT_TIMEOUT_MS = 15000; // 15 seconds grace period
 
+  // Session heartbeat: periodic beacon to backend for orphan detection
+  private heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
+  private static readonly HEARTBEAT_INTERVAL_MS = 15000; // 15 seconds
+
   // Selected source from custom picker
   private selectedSource: SelectedSource | null = null;
 
@@ -112,6 +116,9 @@ export class WebRTCHost {
 
       // Step 3: Start UAC detection
       await this.startUACDetection();
+
+      // Step 4: Start heartbeat to keep session alive
+      this.startHeartbeat();
 
       logger.info('remote-support', 'Session started successfully', {
         sessionId: this.sessionId,
@@ -343,7 +350,7 @@ export class WebRTCHost {
         try {
           stream = await createTauriScreenStream({
             monitorId: this.selectedSource.id,
-            frameRate: 15,
+            frameRate: 24,
             profile: this.resolutionProfile,
           });
         } catch (tauriError) {
@@ -351,9 +358,10 @@ export class WebRTCHost {
           // Fallback to browser picker with profile resolution
           stream = await navigator.mediaDevices.getDisplayMedia({
             video: {
+              cursor: 'always',
               width: { ideal: profileConfig.width, max: 1920 },
               height: { ideal: profileConfig.height, max: 1080 },
-              frameRate: { ideal: 15, max: 24 },
+              frameRate: { ideal: 24, max: 30 },
             },
             audio: false,
           });
@@ -364,9 +372,10 @@ export class WebRTCHost {
         console.log("[WebRTCHost] Resolution profile:", this.resolutionProfile, `(${profileConfig.width}x${profileConfig.height})`);
         stream = await navigator.mediaDevices.getDisplayMedia({
           video: {
+            cursor: 'always',
             width: { ideal: profileConfig.width, max: 1920 },
             height: { ideal: profileConfig.height, max: 1080 },
-            frameRate: { ideal: 15, max: 24 },
+            frameRate: { ideal: 24, max: 30 },
           },
           audio: false,
         });
@@ -460,7 +469,7 @@ export class WebRTCHost {
               await track.applyConstraints({
                 width: { ideal: profileConfig.width, min: profileConfig.width },
                 height: { ideal: profileConfig.height, min: profileConfig.height },
-                frameRate: { ideal: 15, max: 15 },
+                frameRate: { ideal: 24, max: 30 },
               });
 
               const newSettings = track.getSettings();
@@ -472,6 +481,10 @@ export class WebRTCHost {
             } catch (error) {
               console.error(`[WebRTCHost] ❌ Failed to apply track constraints:`, error);
             }
+
+            // Set content hint to 'detail' for better text/UI clarity
+            (track as any).contentHint = 'detail';
+            console.log(`[WebRTCHost] ✅ Set contentHint='detail' for screen sharing`);
           }
 
           console.log(`[WebRTCHost] Adding track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
@@ -501,16 +514,17 @@ export class WebRTCHost {
           const params = sender.getParameters();
 
           // Determine bitrate based on resolution profile
-          // extreme (1920x1080): 20 Mbps for pristine quality
-          // standard (960x540): 8 Mbps for near-lossless quality
-          const maxBitrate = this.resolutionProfile === "extreme" ? 20000000 : 8000000;
+          // Screen content needs higher bitrate than video for sharp text/UI
+          // extreme (1920x1080): 35 Mbps for pristine quality
+          // standard (960x540): 12 Mbps for near-lossless quality
+          const maxBitrate = this.resolutionProfile === "extreme" ? 35000000 : 12000000;
 
           // Create encoding object with settings to prevent downscaling
           const encoding: RTCRtpEncodingParameters = {
             active: true,
             scaleResolutionDownBy: 1.0, // No downscaling
             maxBitrate: maxBitrate,
-            maxFramerate: 15,
+            maxFramerate: 30,
           };
 
           // Set encodings array with our configuration
@@ -604,7 +618,7 @@ export class WebRTCHost {
 
     const configuration: RTCConfiguration = {
       iceServers: iceServers,
-      iceTransportPolicy: 'relay',  // Force TURN for reliable NAT traversal
+      iceTransportPolicy: 'all',  // Prefer P2P (host/srflx) on LAN, fallback to TURN (relay)
       iceCandidatePoolSize: 10,
     };
 
@@ -1151,6 +1165,9 @@ export class WebRTCHost {
     // Clear SignalR disconnect grace period timeout
     this.clearSignalRDisconnectGracePeriod();
 
+    // Stop heartbeat
+    this.stopHeartbeat();
+
     // Stop UAC detection
     if (this.uacUnlisten) {
       console.log("[WebRTCHost] Cleaning up UAC detection");
@@ -1209,6 +1226,84 @@ export class WebRTCHost {
 
     // Clear pending ICE candidates
     this.pendingIceCandidates = [];
+  }
+
+  /**
+   * Start sending periodic heartbeat to backend
+   * Indicates session is still alive for orphan detection
+   */
+  private startHeartbeat(): void {
+    // Clear any existing interval
+    this.stopHeartbeat();
+
+    console.log("[WebRTCHost] 💓 Starting heartbeat (every 15s)");
+    logger.info('remote-support', 'Starting session heartbeat', {
+      sessionId: this.sessionId,
+      intervalMs: WebRTCHost.HEARTBEAT_INTERVAL_MS,
+    });
+
+    // Send initial heartbeat immediately
+    this.sendHeartbeat();
+
+    // Then send periodically
+    this.heartbeatIntervalId = setInterval(() => {
+      this.sendHeartbeat();
+    }, WebRTCHost.HEARTBEAT_INTERVAL_MS);
+  }
+
+  /**
+   * Stop sending heartbeat
+   */
+  private stopHeartbeat(): void {
+    if (this.heartbeatIntervalId) {
+      console.log("[WebRTCHost] 💔 Stopping heartbeat");
+      clearInterval(this.heartbeatIntervalId);
+      this.heartbeatIntervalId = null;
+    }
+  }
+
+  /**
+   * Send a single heartbeat ping to backend
+   */
+  private async sendHeartbeat(): Promise<void> {
+    try {
+      // Call backend heartbeat endpoint
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/v1/remote-access/${this.sessionId}/heartbeat`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        }
+      );
+
+      if (!response.ok) {
+        // Session may have ended or been cleaned up
+        if (response.status === 404 || response.status === 400) {
+          logger.warn('remote-support', 'Heartbeat failed - session no longer active', {
+            sessionId: this.sessionId,
+            status: response.status,
+          });
+          console.warn("[WebRTCHost] ⚠️ Heartbeat failed - session may have ended");
+          // Don't stop here - let other mechanisms handle session end
+        } else {
+          logger.error('remote-support', 'Heartbeat failed with error', {
+            sessionId: this.sessionId,
+            status: response.status,
+          });
+        }
+      } else {
+        logger.debug('remote-support', 'Heartbeat sent successfully', {
+          sessionId: this.sessionId,
+        });
+      }
+    } catch (error) {
+      // Network error or API unavailable - this is non-fatal
+      logger.warn('remote-support', 'Heartbeat request failed', {
+        sessionId: this.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      console.warn("[WebRTCHost] ⚠️ Heartbeat request failed:", error);
+    }
   }
 
   /**

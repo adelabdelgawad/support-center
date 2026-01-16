@@ -4202,6 +4202,11 @@ class RemoteAccessSession(TableModel, table=True):
         sa_column=Column(String(50), nullable=True),
         description="Why session ended: agent_disconnected, requester_disconnected, timeout, manual",
     )
+    last_heartbeat: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(DateTime, nullable=True),
+        description="Last heartbeat timestamp from client (for orphan detection)",
+    )
 
     # Relationships (for eager loading user/request context)
     request: "ServiceRequest" = Relationship(

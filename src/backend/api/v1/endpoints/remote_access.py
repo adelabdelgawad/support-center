@@ -57,6 +57,7 @@ from schemas.remote_access import (
     ToggleControlRequest,
 )
 from services.remote_access_service import RemoteAccessService
+from repositories.remote_access_repository import RemoteAccessRepository
 
 router = APIRouter()
 
@@ -564,3 +565,48 @@ async def get_active_session(
         end_reason=session.end_reason,
         is_active=session.status == "active",
     )
+
+
+@router.post("/remote-access/{session_id}/heartbeat")
+async def send_heartbeat(
+    session_id: UUID,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update session heartbeat timestamp.
+
+    HEARTBEAT ENDPOINT: Clients call this periodically (every 15s) to indicate
+    the session is still alive. Used for orphan detection.
+
+    Raises:
+        404: If session not found or not active
+        403: If user is not a participant
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Get session to verify user is participant
+    session = await RemoteAccessRepository.get_session_by_id(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Verify user is participant
+    if session.agent_id != current_user.id and session.requester_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Verify session is active
+    if session.status != "active":
+        raise HTTPException(status_code=400, detail="Session is not active")
+
+    # Update heartbeat
+    updated_session = await RemoteAccessRepository.update_heartbeat(db, session_id)
+    await db.commit()
+
+    if not updated_session:
+        raise HTTPException(status_code=404, detail="Session not found or not active")
+
+    logger.debug(f"[Backend] Heartbeat updated for session {session_id}")
+
+    return {"status": "ok", "last_heartbeat": updated_session.last_heartbeat}
