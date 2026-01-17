@@ -488,6 +488,72 @@ class SQLiteMessageCacheService {
   }
 
   /**
+   * Find missing sequence ranges for a chat
+   * Returns gaps in the message history that need to be synced
+   *
+   * Detects:
+   * 1. Gaps in consecutive sequences (e.g., [1,2,5,6] has gap [3,4])
+   * 2. Missing newer messages (local_max < backend_max)
+   * 3. Missing older messages (local_min > 1)
+   */
+  async findMissingSequenceRanges(requestId: string): Promise<{ fromSeq: number; toSeq: number }[]> {
+    try {
+      const db = await this.getDB();
+      const gaps: { fromSeq: number; toSeq: number }[] = [];
+
+      // Get sync metadata
+      const syncMeta = await this.getSyncMeta(requestId);
+      if (!syncMeta) return gaps;
+
+      // Get all sequence numbers
+      const rows = await db.select<Record<string, unknown>[]>(
+        `SELECT sequence_number FROM messages
+         WHERE request_id = ? AND sequence_number IS NOT NULL
+         ORDER BY sequence_number ASC`,
+        [requestId]
+      );
+
+      if (rows.length === 0) {
+        // No messages cached - need full history from 1 to backend_max
+        if (syncMeta.lastKnownBackendSeq) {
+          gaps.push({ fromSeq: 1, toSeq: syncMeta.lastKnownBackendSeq });
+        }
+        return gaps;
+      }
+
+      const sequences = rows.map((r) => r.sequence_number as number);
+      const minSeq = sequences[0];
+      const maxSeq = sequences[sequences.length - 1];
+
+      // Check 1: Missing older messages (gap before first message)
+      if (minSeq > 1) {
+        gaps.push({ fromSeq: 1, toSeq: minSeq - 1 });
+      }
+
+      // Check 2: Gaps in middle (consecutive sequence breaks)
+      for (let i = 1; i < sequences.length; i++) {
+        const prevSeq = sequences[i - 1];
+        const currSeq = sequences[i];
+
+        if (currSeq !== prevSeq + 1) {
+          // Gap detected
+          gaps.push({ fromSeq: prevSeq + 1, toSeq: currSeq - 1 });
+        }
+      }
+
+      // Check 3: Missing newer messages (gap after last message)
+      if (syncMeta.lastKnownBackendSeq && maxSeq < syncMeta.lastKnownBackendSeq) {
+        gaps.push({ fromSeq: maxSeq + 1, toSeq: syncMeta.lastKnownBackendSeq });
+      }
+
+      return gaps;
+    } catch (error) {
+      console.error("[SQLiteMessageCache] findMissingSequenceRanges error:", error);
+      return [];
+    }
+  }
+
+  /**
    * Mark all chats as UNKNOWN (called on connectivity restoration)
    */
   async markAllChatsUnknown(): Promise<void> {

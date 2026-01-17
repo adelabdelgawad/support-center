@@ -80,11 +80,12 @@ class ChatSyncService {
   }
 
   /**
-   * Resync a single chat
+   * Resync a single chat (INCREMENTAL - fetches only missing messages)
    *
    * Behavior:
-   * - Fetch messages using cursor pagination
-   * - Replace local cache
+   * - Detect missing sequence ranges
+   * - Fetch ONLY missing messages using cursor pagination
+   * - Merge with existing cache (preserves already-cached messages)
    * - Re-validate after sync
    * - Only clear OUT_OF_SYNC if validation passes
    */
@@ -99,14 +100,82 @@ class ChatSyncService {
     this.setSyncing(requestId, true);
 
     try {
-      console.log(`[ChatSyncService] Starting resync for ${requestId}`);
+      console.log(`[ChatSyncService] Starting incremental resync for ${requestId}`);
 
-      // Fetch messages using cursor pagination (latest 100 messages)
-      const response = await getMessagesCursor({ requestId, limit: 100 });
+      const syncMeta = await sqliteMessageCache.getSyncMeta(requestId);
+      if (!syncMeta) {
+        console.warn(`[ChatSyncService] No sync metadata found for ${requestId}`);
+        this.syncLocks.delete(requestId);
+        this.setSyncing(requestId, false);
+        return;
+      }
 
-      // Cache the messages
-      await sqliteMessageCache.cacheMessages(requestId, response.messages);
-      console.log(`[ChatSyncService] Cached ${response.messages.length} messages`);
+      let totalMessagesFetched = 0;
+
+      // Case 1: Need newer messages (most common after receiving notification)
+      if (syncMeta.localMaxSeq !== null &&
+          syncMeta.lastKnownBackendSeq !== null &&
+          syncMeta.localMaxSeq < syncMeta.lastKnownBackendSeq) {
+
+        const missingCount = syncMeta.lastKnownBackendSeq - syncMeta.localMaxSeq;
+        console.log(`[ChatSyncService] Fetching ${missingCount} newer messages (seq ${syncMeta.localMaxSeq + 1} to ${syncMeta.lastKnownBackendSeq})`);
+
+        // Fetch latest messages without cursor (gets newest first)
+        const response = await getMessagesCursor({
+          requestId,
+          limit: Math.min(missingCount + 10, 200), // buffer + cap at 200
+        });
+
+        // Filter to only messages we don't have
+        const newMessages = response.messages.filter(
+          m => m.sequenceNumber && m.sequenceNumber > syncMeta.localMaxSeq!
+        );
+
+        if (newMessages.length > 0) {
+          // Add messages individually to merge with cache (preserves existing messages)
+          for (const msg of newMessages) {
+            await sqliteMessageCache.addMessage(msg);
+          }
+          totalMessagesFetched += newMessages.length;
+          console.log(`[ChatSyncService] Fetched ${newMessages.length} newer messages`);
+        }
+      }
+
+      // Case 2: Need older messages or mid-gaps (gaps in history)
+      const gaps = await sqliteMessageCache.findMissingSequenceRanges(requestId);
+
+      if (gaps.length > 0) {
+        console.log(`[ChatSyncService] Found ${gaps.length} sequence gaps:`, gaps);
+
+        for (const gap of gaps) {
+          const gapSize = gap.toSeq - gap.fromSeq + 1;
+          console.log(`[ChatSyncService] Filling gap: seq ${gap.fromSeq} to ${gap.toSeq} (${gapSize} messages)`);
+
+          // Fetch using cursor (before_sequence = gap.toSeq + 1)
+          // This fetches messages older than gap.toSeq + 1
+          const response = await getMessagesCursor({
+            requestId,
+            limit: Math.min(gapSize + 20, 200), // buffer + cap
+            beforeSequence: gap.toSeq + 1,
+          });
+
+          // Filter to messages within the gap range
+          const gapMessages = response.messages.filter(
+            m => m.sequenceNumber && m.sequenceNumber >= gap.fromSeq && m.sequenceNumber <= gap.toSeq
+          );
+
+          if (gapMessages.length > 0) {
+            // Add messages individually to merge with cache
+            for (const msg of gapMessages) {
+              await sqliteMessageCache.addMessage(msg);
+            }
+            totalMessagesFetched += gapMessages.length;
+            console.log(`[ChatSyncService] Filled gap with ${gapMessages.length} messages`);
+          }
+        }
+      }
+
+      console.log(`[ChatSyncService] Incremental sync complete: fetched ${totalMessagesFetched} messages`);
 
       // Re-validate after sync
       const validation = await sqliteMessageCache.validateSequences(requestId);
@@ -117,7 +186,7 @@ class ChatSyncService {
         console.log(`[ChatSyncService] Resync complete, marked SYNCED`);
       } else {
         // Still out of sync (should be rare)
-        console.warn(`[ChatSyncService] Resync failed validation: ${validation.reason}`);
+        console.warn(`[ChatSyncService] Resync failed validation: ${validation.reason} - ${validation.details || ''}`);
         // Keep OUT_OF_SYNC state
       }
     } catch (error) {

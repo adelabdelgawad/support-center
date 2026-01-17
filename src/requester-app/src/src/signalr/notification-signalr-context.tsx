@@ -34,6 +34,7 @@ import { logger } from '@/logging';
 import { RuntimeConfig } from '@/lib/runtime-config';
 import { sessionPresence } from '@/services/session-presence';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { messageCacheBridge } from '@/lib/message-cache-bridge';
 
 // Notification data type
 interface NotificationData {
@@ -276,6 +277,17 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
           // Decision
           willSuppress: isOwnMessage || isViewingThisChat || !notificationsEnabled,
           suppressReason: isOwnMessage ? 'own_message' : isViewingThisChat ? 'viewing_chat' : !notificationsEnabled ? 'disabled' : 'none',
+        });
+
+        // CRITICAL: Cache message immediately to SQLite (persists to %APPDATA%)
+        // This ensures messages are cached even if chat is never opened
+        messageCacheBridge.addMessage(data.message).catch(error => {
+          console.error('[NotificationSignalR] Failed to cache incoming message:', error);
+          logger.error('cache', 'Failed to cache notification message', {
+            requestId: data.requestId,
+            messageId: data.message.id,
+            error: String(error)
+          });
         });
 
         // ALWAYS call registered handlers for cache updates, ticket list updates, etc.
