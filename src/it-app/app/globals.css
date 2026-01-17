@@ -47,6 +47,17 @@
 
 /* Office 365 / Fluent UI Design System - Light Theme */
 :root {
+  /* ServiceDesk Plus Color System */
+  --sdp-header-bg: #292929;
+  --sdp-header-fg: #ffffff;
+  --sdp-accent: #00a1b0;
+  --sdp-accent-hover: #008a98;
+  --sdp-content-bg: #f7f7f7;
+  --sdp-card-bg: #ffffff;
+  --sdp-admin-card-title: #00a1b0;
+  --sdp-admin-card-link: #666666;
+  --sdp-admin-card-link-hover: #00a1b0;
+
   /* Office 365 Border Radius */
   --radius: 4px;
 
