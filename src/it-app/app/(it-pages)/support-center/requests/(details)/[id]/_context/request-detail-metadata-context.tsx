@@ -265,7 +265,7 @@ export function RequestDetailMetadataProvider({
     notes,
     isLoading: notesLoading,
     addNote,
-  } = useRequestNotes(ticket.id, initialNotes);
+  } = useRequestNotes(ticket!.id, initialNotes);
 
   // **ASSIGNEES**
   const {

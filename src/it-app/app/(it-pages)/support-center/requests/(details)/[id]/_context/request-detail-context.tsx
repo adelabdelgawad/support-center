@@ -12,7 +12,7 @@
  * don't cause re-renders in components that only consume metadata.
  */
 
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, createContext, useState } from 'react';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/metadata';
 import type { ChatMessage, TaskStatusChangedEvent } from '@/lib/signalr/types';
@@ -75,7 +75,7 @@ export function RequestDetailProvider({
   subTasks: initialSubTasks,
 }: RequestDetailProviderProps) {
   // **SESSION STATE** - Hydration-safe: null initially, populated in useEffect
-  const [session, setSession] = useRef<{ user: any } | null>(null);
+  const [session, setSession] = useState<{ user: any } | null>(null);
 
   // Load session from cookie after mount (client-side only)
   useEffect(() => {
@@ -96,22 +96,22 @@ export function RequestDetailProvider({
       }
     };
 
-    session.current = getSessionFromCookie();
+    setSession(getSessionFromCookie());
   }, []);
 
   const currentUser = useMemo(() => {
-    return session.current?.user
+    return session?.user
       ? {
-          id: session.current.user.id,
-          username: session.current.user.username,
-          fullName: session.current.user.fullName || (session.current.user as any).full_name || null,
-          title: session.current.user.title,
-          email: session.current.user.email || null,
-          isTechnician: session.current.user.isTechnician || false,
-          userRoles: session.current.user.userRoles || [],
+          id: session.user.id,
+          username: session.user.username,
+          fullName: session.user.fullName || (session.user as any).full_name || null,
+          title: session.user.title,
+          email: session.user.email || null,
+          isTechnician: session.user.isTechnician || false,
+          userRoles: session.user.userRoles || [],
         }
       : undefined;
-  }, []);
+  }, [session]);
 
   // **SCROLL HANDLER REGISTRATION** - Shared between contexts
   const scrollHandlerRef = useRef<(() => void) | null>(null);
@@ -192,7 +192,7 @@ export function RequestDetailProvider({
         currentUserId={currentUserId ? String(currentUserId) : undefined}
         currentUserRoles={currentUser?.userRoles}
         isTechnician={currentUser?.isTechnician}
-        sessionUser={session.current?.user}
+        sessionUser={session?.user}
         subTasks={initialSubTasks}
       >
         <RequestDetailChatProvider
