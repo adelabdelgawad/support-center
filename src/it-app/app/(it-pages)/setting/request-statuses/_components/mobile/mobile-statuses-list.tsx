@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { RequestStatusResponse } from "@/types/request-statuses";
 import { MobileStatusCard } from "./mobile-status-card";
 import { MobileStatusActions } from "./mobile-status-actions";
-import ViewStatusSheet from "../modal/view-request-status-sheet";
+import { ViewStatusSheet } from "../modal";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle2, XCircle } from "lucide-react";

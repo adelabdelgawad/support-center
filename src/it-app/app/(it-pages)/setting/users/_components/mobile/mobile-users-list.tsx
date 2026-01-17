@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { UserWithRolesResponse } from "@/types/users.d";
 import { MobileUserCard } from "./mobile-user-card";
 import { MobileUserActions } from "./mobile-user-actions";
-import { ViewUserSheet } from "../modal/view-user-sheet";
+import { ViewUserSheet } from "../modal";
 import { useUsersTableActions } from "../table/users-table-actions";
 import { Button } from "@/components/ui/button";
 import { X, Trash2, CheckCircle2, UserCog } from "lucide-react";

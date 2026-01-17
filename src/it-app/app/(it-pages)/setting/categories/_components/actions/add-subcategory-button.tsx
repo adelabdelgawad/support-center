@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { AddSubcategorySheet } from "../modal/add-subcategory-sheet";
+import { AddSubcategorySheet } from "../modal";
 
 interface AddSubcategoryButtonProps {
   categoryId: number;

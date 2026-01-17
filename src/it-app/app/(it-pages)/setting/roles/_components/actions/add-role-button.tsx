@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { AddRoleSheet } from "../modal/add-role-sheet";
+import { AddRoleSheet } from "../modal";
 import { Plus } from "lucide-react";
 import { useRolesActions } from "@/app/(it-pages)/setting/roles/context/roles-actions-context";
 import { Button } from "@/components/ui/button";

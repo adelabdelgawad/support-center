@@ -8,9 +8,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { useState } from "react";
-import { EditRolePagesSheet } from "../modal/edit-role-pages-sheet";
-import { EditRoleSheet } from "../modal/edit-role-sheet";
-import { EditRoleUsersSheet } from "../modal/edit-role-users-sheet";
+import { EditRolePagesSheet } from "../modal";
+import { EditRoleSheet } from "../modal";
+import { EditRoleUsersSheet } from "../modal";
 import { useRolesActions } from "@/app/(it-pages)/setting/roles/context/roles-actions-context";
 import { getRolePages, fetchRoleUsers } from "@/lib/api/roles";
 import { toastError } from "@/lib/toast";

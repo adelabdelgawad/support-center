@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Building2 } from "lucide-react";
 import type { BusinessUnitResponse } from "@/types/business-units";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
-import AddBusinessUnitSheet from "../modal/add-business-unit-sheet";
+import { AddBusinessUnitSheet } from "../modal";
 
 interface AddBusinessUnitButtonProps {
   onAdd: () => void;

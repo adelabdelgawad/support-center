@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { RequestType } from "@/types/request-types";
 import { MobileTypeCard } from "./mobile-type-card";
 import { MobileTypeActions } from "./mobile-type-actions";
-import ViewTypeSheet from "../modal/view-request-type-sheet";
+import { ViewTypeSheet } from "../modal";
 import { useRequestTypesActions } from "../../context/request-types-actions-context";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle2, XCircle } from "lucide-react";

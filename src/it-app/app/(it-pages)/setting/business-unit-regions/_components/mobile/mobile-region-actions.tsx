@@ -3,9 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Edit, Eye, Building2 } from "lucide-react";
 import { useState } from "react";
-import EditRegionSheet from "../modal/edit-region-sheet";
-import ViewRegionSheet from "../modal/view-region-sheet";
-import { ManageBusinessUnitsSheet } from "../modal/manage-business-units-sheet";
+import { EditRegionSheet } from "../modal";
+import { ViewRegionSheet } from "../modal";
+import { ManageBusinessUnitsSheet } from "../modal";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 
 interface MobileRegionActionsProps {

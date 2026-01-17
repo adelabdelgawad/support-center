@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2, Users, Clock } from "lucide-react";
 import type { BusinessUnitResponse } from "@/types/business-units";
-import EditBusinessUnitSheet from "../modal/edit-business-unit-sheet";
-import ViewBusinessUnitSheet from "../modal/view-business-unit-sheet";
-import WorkingHoursSheet from "../modal/working-hours-sheet";
-import { ManageUsersSheet } from "../modal/manage-users-sheet";
+import { EditBusinessUnitSheet } from "../modal";
+import { ViewBusinessUnitSheet } from "../modal";
+import { WorkingHoursSheet } from "../modal";
+import { ManageUsersSheet } from "../modal";
 import { useBusinessUnitsActions } from "../../context/business-units-actions-context";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 

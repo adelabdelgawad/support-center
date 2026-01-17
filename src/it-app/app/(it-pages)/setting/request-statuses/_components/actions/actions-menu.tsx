@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
 import type { RequestStatusResponse } from "@/types/request-statuses";
-import EditStatusSheet from "../modal/edit-request-status-sheet";
-import ViewStatusSheet from "../modal/view-request-status-sheet";
+import { EditStatusSheet } from "../modal";
+import { ViewStatusSheet } from "../modal";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
 
 interface StatusActionsProps {

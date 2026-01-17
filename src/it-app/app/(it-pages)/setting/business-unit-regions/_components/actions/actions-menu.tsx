@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
-import EditRegionSheet from "../modal/edit-region-sheet";
-import ViewRegionSheet from "../modal/view-region-sheet";
+import { EditRegionSheet } from "../modal";
+import { ViewRegionSheet } from "../modal";
 import { useRegionsActions } from "../../context/regions-actions-context";
 
 interface RegionActionsProps {

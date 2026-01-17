@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import { useState } from "react";
-import EditTypeSheet from "../modal/edit-request-type-sheet";
+import { EditTypeSheet } from "../modal";
 import type { RequestType } from "@/types/request-types";
 
 interface MobileTypeActionsProps {

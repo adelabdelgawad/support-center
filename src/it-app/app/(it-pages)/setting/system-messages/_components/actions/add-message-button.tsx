@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import AddSystemMessageSheet from "../modal/add-system-message-sheet";
+import { AddSystemMessageSheet } from "../modal";
 import type { SystemMessageResponse } from "@/types/system-messages";
 
 interface AddMessageButtonProps {

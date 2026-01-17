@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 import { MobileRegionCard } from "./mobile-region-card";
 import { MobileRegionActions } from "./mobile-region-actions";
-import ViewRegionSheet from "../modal/view-region-sheet";
+import { ViewRegionSheet } from "../modal";
 import { useRegionsTableActions } from "../table/regions-table-actions";
 import { Button } from "@/components/ui/button";
 import { X, Trash2, CheckCircle2 } from "lucide-react";

@@ -7,8 +7,8 @@ import { createRequestStatusesTableColumns } from "./request-statuses-table-colu
 import { AddStatusButton } from "../actions/add-status-button";
 import { useRequestStatusesTableActions } from "./request-statuses-table-actions";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
-import EditStatusSheet from "../modal/edit-request-status-sheet";
-import ViewStatusSheet from "../modal/view-request-status-sheet";
+import { EditStatusSheet } from "../modal";
+import { ViewStatusSheet } from "../modal";
 import {
   AlertDialog,
   AlertDialogAction,

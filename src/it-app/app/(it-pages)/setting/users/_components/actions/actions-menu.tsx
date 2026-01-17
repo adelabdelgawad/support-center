@@ -3,9 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Edit, Eye, Building2 } from "lucide-react";
 import { useState } from "react";
-import { EditUserSheet } from "../modal/edit-user-sheet";
-import { ViewUserSheet } from "../modal/view-user-sheet";
-import { AssignBusinessUnitsSheet } from "../modal/assign-business-units-sheet";
+import { EditUserSheet } from "../modal";
+import { ViewUserSheet } from "../modal";
+import { AssignBusinessUnitsSheet } from "../modal";
 import type { UserWithRolesResponse } from "@/types/users";
 
 interface UserActionsProps {

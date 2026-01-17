@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import AddRequestTypeSheet from "../modal/add-request-type-sheet";
+import { AddRequestTypeSheet } from "../modal";
 import type { RequestType } from "@/types/request-types";
 
 interface AddTypeButtonProps {

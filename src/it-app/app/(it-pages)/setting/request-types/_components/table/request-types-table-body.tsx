@@ -7,8 +7,8 @@ import { createRequestTypesTableColumns } from "./request-types-table-columns";
 import { AddTypeButton } from "../actions/add-type-button";
 import { useRequestTypesTableActions } from "./request-types-table-actions";
 import { useRequestTypesActions } from "../../context/request-types-actions-context";
-import EditRequestTypeSheet from "../modal/edit-request-type-sheet";
-import ViewRequestTypeSheet from "../modal/view-request-type-sheet";
+import { EditRequestTypeSheet } from "../modal";
+import { ViewRequestTypeSheet } from "../modal";
 import {
   AlertDialog,
   AlertDialogAction,

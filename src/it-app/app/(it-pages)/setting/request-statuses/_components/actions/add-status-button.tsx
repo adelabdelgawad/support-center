@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import AddStatusSheet from "../modal/add-request-status-sheet";
+import { AddStatusSheet } from "../modal";
 import type { RequestStatusResponse } from "@/types/request-statuses";
 
 interface AddStatusButtonProps {

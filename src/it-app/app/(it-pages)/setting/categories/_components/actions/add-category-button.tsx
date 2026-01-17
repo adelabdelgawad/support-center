@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { AddCategorySheet } from "../modal/add-category-sheet";
+import { AddCategorySheet } from "../modal";
 import { useCategoriesActions } from "../../context/categories-actions-context";
 
 export function AddCategoryButton() {

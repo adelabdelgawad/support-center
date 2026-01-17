@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Eye, Pencil, Trash2, Building2 } from "lucide-react";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
-import EditRegionSheet from "../modal/edit-region-sheet";
-import ViewRegionSheet from "../modal/view-region-sheet";
-import { ManageBusinessUnitsSheet } from "../modal/manage-business-units-sheet";
+import { EditRegionSheet } from "../modal";
+import { ViewRegionSheet } from "../modal";
+import { ManageBusinessUnitsSheet } from "../modal";
 import { useRegionsActions } from "../../context/regions-actions-context";
 
 interface InlineActionsProps {

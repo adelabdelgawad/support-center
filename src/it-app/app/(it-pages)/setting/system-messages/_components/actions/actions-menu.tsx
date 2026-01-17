@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
 import type { SystemMessageResponse } from "@/types/system-messages";
-import EditSystemMessageSheet from "../modal/edit-system-message-sheet";
-import ViewSystemMessageSheet from "../modal/view-system-message-sheet";
+import { EditSystemMessageSheet } from "../modal";
+import { ViewSystemMessageSheet } from "../modal";
 import { useSystemMessagesActions } from "../../context/system-messages-actions-context";
 
 interface MessageActionsProps {

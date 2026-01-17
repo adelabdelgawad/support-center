@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import { useState } from "react";
-import { EditCategorySheet } from "../modal/edit-category-sheet";
+import { EditCategorySheet } from "../modal";
 import type { CategoryResponse } from "@/types/categories";
 
 interface CategoryActionsProps {

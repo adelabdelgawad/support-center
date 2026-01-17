@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
 import type { SystemEventResponse } from "@/types/system-events";
-import EditSystemEventSheet from "../modal/edit-system-event-sheet";
-import ViewSystemEventSheet from "../modal/view-system-event-sheet";
+import { EditSystemEventSheet } from "../modal";
+import { ViewSystemEventSheet } from "../modal";
 import { useSystemEventsActions } from "../../context/system-events-actions-context";
 
 interface EventActionsProps {

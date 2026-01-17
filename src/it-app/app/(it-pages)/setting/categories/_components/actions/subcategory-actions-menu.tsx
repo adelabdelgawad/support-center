@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import { useState } from "react";
-import { EditSubcategorySheet } from "../modal/edit-subcategory-sheet";
+import { EditSubcategorySheet } from "../modal";
 import type { CategoryResponse, SubcategoryResponse } from "@/types/categories";
 
 interface SubcategoryActionsProps {

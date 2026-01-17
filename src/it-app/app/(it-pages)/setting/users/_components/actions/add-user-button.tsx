@@ -3,7 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/lib/toast";
-import { AddUserSheet } from "../modal/add-user-sheet";
+import { AddUserSheet } from "../modal";
 import { createUser } from "@/lib/api/users";
 import { UserPlus } from "lucide-react";
 import type { UserCreate, UserWithRolesResponse } from "@/types/users";

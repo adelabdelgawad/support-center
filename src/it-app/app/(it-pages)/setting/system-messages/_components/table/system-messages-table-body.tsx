@@ -6,8 +6,8 @@ import type { SystemMessageResponse } from "@/types/system-messages";
 import { createSystemMessagesTableColumns } from "./system-messages-table-columns";
 import { AddMessageButton } from "../actions/add-message-button";
 import { useSystemMessagesActions } from "../../context/system-messages-actions-context";
-import EditSystemMessageSheet from "../modal/edit-system-message-sheet";
-import ViewSystemMessageSheet from "../modal/view-system-message-sheet";
+import { EditSystemMessageSheet } from "../modal";
+import { ViewSystemMessageSheet } from "../modal";
 import {
   AlertDialog,
   AlertDialogAction,

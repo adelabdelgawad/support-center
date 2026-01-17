@@ -3,9 +3,9 @@
 import { Button } from "@/components/ui/button";
 import { Edit, Eye, Users } from "lucide-react";
 import { useState } from "react";
-import EditBusinessUnitSheet from "../modal/edit-business-unit-sheet";
-import ViewBusinessUnitSheet from "../modal/view-business-unit-sheet";
-import { ManageUsersSheet } from "../modal/manage-users-sheet";
+import { EditBusinessUnitSheet } from "../modal";
+import { ViewBusinessUnitSheet } from "../modal";
+import { ManageUsersSheet } from "../modal";
 import type { BusinessUnitResponse } from "@/types/business-units";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 

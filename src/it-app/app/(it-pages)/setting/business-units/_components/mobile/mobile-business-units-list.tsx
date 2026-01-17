@@ -5,7 +5,7 @@ import type { BusinessUnitResponse } from "@/types/business-units";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 import { MobileBusinessUnitCard } from "./mobile-business-unit-card";
 import { MobileBusinessUnitActions } from "./mobile-business-unit-actions";
-import ViewBusinessUnitSheet from "../modal/view-business-unit-sheet";
+import { ViewBusinessUnitSheet } from "../modal";
 import { useBusinessUnitsTableActions } from "../table/business-units-table-actions";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle2, XCircle } from "lucide-react";

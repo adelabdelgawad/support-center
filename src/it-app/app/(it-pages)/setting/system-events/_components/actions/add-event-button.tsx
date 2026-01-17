@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import type { SystemEventResponse } from "@/types/system-events";
-import AddSystemEventSheet from "../modal/add-system-event-sheet";
+import { AddSystemEventSheet } from "../modal";
 
 interface AddEventButtonProps {
   onAdd: () => void;
