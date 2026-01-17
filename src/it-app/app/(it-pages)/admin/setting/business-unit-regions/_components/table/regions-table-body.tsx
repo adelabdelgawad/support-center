@@ -102,7 +102,6 @@ export function RegionsTableBody({
     () =>
       createRegionsTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
       }).map((column) => {
         // Special handling for actions column to include InlineActions
         if (column.id === "actions") {
@@ -132,7 +131,7 @@ export function RegionsTableBody({
         }
         return column;
       }),
-    [updatingIds, updateRegions, refetch, handleToggleWithUpdating]
+    [updatingIds, updateRegions, refetch]
   );
 
   // Memoize sorted data

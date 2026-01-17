@@ -1,9 +1,26 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { AdminSectionCard } from "@/components/admin/admin-section-card";
+import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import { ADMIN_SECTIONS } from "@/lib/config/admin-sections";
 import { Search } from "lucide-react";
+import {
+  Users,
+  Settings,
+  Building,
+  Settings2,
+  Activity,
+  type LucideIcon,
+} from "lucide-react";
+
+// Icon mapping
+const iconMap: Record<string, LucideIcon> = {
+  Users,
+  Settings,
+  Building,
+  Settings2,
+  Activity,
+};
 
 export function AdminHub() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,16 +46,6 @@ export function AdminHub() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-6 py-8">
-      {/* Header Section */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-foreground mb-2">
-          Admin Settings
-        </h1>
-        <p className="text-base text-muted-foreground">
-          Configure and manage your service desk settings
-        </p>
-      </div>
-
       {/* Search Bar */}
       <div className="mb-8">
         <div className="relative max-w-md">
@@ -53,12 +60,58 @@ export function AdminHub() {
         </div>
       </div>
 
-      {/* Admin Section Cards Grid */}
+      {/* Horizontal Group List */}
       {filteredSections.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {filteredSections.map((section) => (
-            <AdminSectionCard key={section.id} section={section} />
-          ))}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-6">
+          {filteredSections.map((section, index) => {
+            const Icon = iconMap[section.icon] || Settings;
+
+            return (
+              <React.Fragment key={section.id}>
+                {/* Separator between groups */}
+                {index > 0 && (
+                  <div className="hidden sm:block w-px h-8 bg-border" />
+                )}
+
+                {/* Group with Icon and Links */}
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  <div
+                    className="flex items-center justify-center w-14 h-14 rounded-lg shrink-0"
+                    style={{ backgroundColor: "var(--sdp-accent)" }}
+                  >
+                    <Icon className="w-8 h-8 text-white" />
+                  </div>
+
+                  {/* Group Header and Links */}
+                  <div>
+                    {/* Group Header */}
+                    <h3 className="font-semibold text-base text-foreground mb-3">
+                      {section.title}
+                    </h3>
+
+                    {/* Group Links - Vertical list within each group */}
+                    <ul className="space-y-1.5">
+                      {section.links.map((link) => (
+                        <li key={link.href}>
+                          <Link
+                            href={link.href}
+                            className="text-sm text-muted-foreground transition-colors hover:text-[var(--sdp-accent)] hover:underline inline-block"
+                          >
+                            {link.label}
+                          </Link>
+                          {/* Add separator between links in same group */}
+                          {link !== section.links[section.links.length - 1] && (
+                            <span className="mx-2 text-muted-foreground/40">|</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       ) : (
         /* No Results */

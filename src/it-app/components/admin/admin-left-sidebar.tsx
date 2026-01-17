@@ -90,7 +90,7 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
               <button
                 onClick={() => toggleSection(section.id)}
                 className={cn(
-                  "w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors",
+                  "w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors",
                   hasActiveLink && "bg-[var(--sdp-accent)]/10",
                   "hover:bg-accent"
                 )}
@@ -116,9 +116,9 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
                         <Link
                           href={link.href}
                           className={cn(
-                            "block px-8 py-1.5 text-sm transition-colors",
+                            "block px-8 py-2 text-sm font-medium transition-all duration-200 mx-2 rounded-md",
                             isActive
-                              ? "bg-[var(--sdp-accent)] text-primary-foreground font-medium"
+                              ? "bg-[var(--sdp-accent)] text-white shadow-sm"
                               : "text-muted-foreground hover:bg-accent hover:text-foreground"
                           )}
                         >

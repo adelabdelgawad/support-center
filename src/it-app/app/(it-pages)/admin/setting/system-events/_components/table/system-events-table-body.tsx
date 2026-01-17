@@ -174,7 +174,6 @@ export function SystemEventsTableBody({
     () =>
       createSystemEventsTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
       }).map((column) => {
         // Special handling for actions column to include InlineActions
         if (column.id === "actions") {
@@ -206,7 +205,7 @@ export function SystemEventsTableBody({
         }
         return column;
       }),
-    [updatingIds, updateEvents, refetch, handleToggleWithUpdating]
+    [updatingIds, updateEvents, refetch]
   );
 
   // Memoize sorted data

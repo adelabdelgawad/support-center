@@ -1,14 +1,12 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Loader2 } from "lucide-react";
 import type { BusinessUnitResponse } from "@/types/business-units";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 
 interface BusinessUnitsTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
   regions: BusinessUnitRegionResponse[];
 }
 
@@ -17,7 +15,6 @@ interface BusinessUnitsTableColumnsProps {
  */
 export function createBusinessUnitsTableColumns({
   updatingIds,
-  onToggleStatus,
   regions,
 }: BusinessUnitsTableColumnsProps): ColumnDef<BusinessUnitResponse>[] {
   // Create a region map for quick lookups
@@ -149,39 +146,6 @@ export function createBusinessUnitsTableColumns({
           </div>
         );
       },
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const unit = info.row.original;
-        const isRowUpdating = Boolean(unit.id && updatingIds.has(unit.id));
-        const isActive = info.getValue() as boolean;
-
-        return (
-          <div
-            className={`flex justify-center items-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={isActive}
-              onToggle={() => onToggleStatus(unit.id)}
-              title={isActive ? "Disable Business Unit" : "Enable Business Unit"}
-              description={
-                isActive
-                  ? `Are you sure you want to disable "${unit.name}"? This will make it inactive.`
-                  : `Are you sure you want to enable "${unit.name}"? This will make it active.`
-              }
-              disabled={isRowUpdating}
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

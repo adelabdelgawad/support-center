@@ -88,15 +88,16 @@ export function DataTable<TData>({
     <div className="flex flex-col h-full min-h-0">
       {renderToolbar && renderToolbar(table)}
 
-      <div className="flex-1 overflow-auto bg-background min-h-0 relative rounded-md border touch-pan-x touch-pan-y">
+      {/* ServiceDesk Plus Styled Table Container */}
+      <div className="flex-1 overflow-auto bg-card border border-border min-h-0 relative rounded-md touch-pan-x touch-pan-y">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/50">
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="align-middle font-semibold h-12"
+                    className="align-middle font-semibold text-xs uppercase tracking-wide text-muted-foreground h-11"
                   >
                     <div className="flex items-center justify-center h-full w-full">
                       {header.isPlaceholder
@@ -121,10 +122,10 @@ export function DataTable<TData>({
                   <TableRow
                     key={row.id}
                     data-state={isSelected ? "selected" : undefined}
-                    className="cursor-pointer"
+                    className="cursor-pointer border-l-2 border-l-transparent hover:border-l-[var(--sdp-accent)] hover:bg-muted/30"
                     onClick={(e) => {
                       const target = e.target as HTMLElement;
-                      if (target.closest('input[type="checkbox"]')) {
+                      if (target.closest('input[type="checkbox"]')') {
                         return;
                       }
                       row.toggleSelected();
@@ -133,7 +134,7 @@ export function DataTable<TData>({
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
                         key={cell.id}
-                        className="align-middle h-12"
+                        className="align-middle h-11"
                       >
                         <div className="flex items-center justify-center h-full w-full">
                           {flexRender(

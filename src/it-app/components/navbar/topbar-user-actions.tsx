@@ -4,6 +4,7 @@ import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserInfo } from "@/lib/types/auth";
 import UserAvatar from "./user-avatar";
+import { ThemeSwitcher } from "./theme-switcher";
 
 interface TopbarUserActionsProps {
   user: UserInfo;
@@ -33,6 +34,9 @@ export function TopbarUserActions({
           </span>
         )}
       </button>
+
+      {/* Theme Switcher */}
+      <ThemeSwitcher />
 
       {/* Admin Gear (only for technicians/admins) */}
       {(user.isTechnician || user.is_technician || user.isSuperAdmin || user.is_super_admin) && (

@@ -27,7 +27,8 @@ export function TopbarNavLinks({ className }: TopbarNavLinksProps) {
   return (
     <nav className={cn("flex items-center gap-1", className)}>
       {navLinks.map((link) => {
-        const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+        // Exact match only - no prefix matching to avoid parent links highlighting
+        const isActive = pathname === link.href;
         const Icon = link.icon;
 
         return (

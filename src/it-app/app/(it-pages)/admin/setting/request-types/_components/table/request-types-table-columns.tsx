@@ -1,14 +1,12 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, Pencil, Trash2 } from "lucide-react";
 import type { RequestType } from "@/types/request-types";
 
 interface RequestTypesTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
   onView: (type: RequestType) => void;
   onEdit: (type: RequestType) => void;
   onDelete: (type: RequestType) => void;
@@ -19,7 +17,6 @@ interface RequestTypesTableColumnsProps {
  */
 export function createRequestTypesTableColumns({
   updatingIds,
-  onToggleStatus,
   onView,
   onEdit,
   onDelete,
@@ -105,39 +102,6 @@ export function createRequestTypesTableColumns({
           </div>
         );
       },
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const type = info.row.original;
-        const isRowUpdating = Boolean(type.id && updatingIds.has(type.id));
-        const value = info.getValue() as boolean;
-
-        return (
-          <div
-            className={`flex justify-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={value}
-              onToggle={async () => onToggleStatus(type.id)}
-              title={value ? "Deactivate type" : "Activate type"}
-              description={
-                value
-                  ? `Type "${type.nameEn}" will be deactivated and hidden from selection.`
-                  : `Type "${type.nameEn}" will be activated and available for use.`
-              }
-              disabled={isRowUpdating}
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

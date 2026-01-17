@@ -1,7 +1,6 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Eye, Pencil, Trash2 } from "lucide-react";
@@ -9,7 +8,6 @@ import type { SystemMessageResponse } from "@/types/system-messages";
 
 interface SystemMessagesTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
   onView: (message: SystemMessageResponse) => void;
   onEdit: (message: SystemMessageResponse) => void;
   onDelete: (messageId: number) => void;
@@ -48,7 +46,6 @@ function truncateText(text: string, maxLength: number = 100): string {
  */
 export function createSystemMessagesTableColumns({
   updatingIds,
-  onToggleStatus,
   onView,
   onEdit,
   onDelete,
@@ -207,34 +204,6 @@ export function createSystemMessagesTableColumns({
         );
       },
       size: 200,
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const message = info.row.original;
-        const isRowUpdating = Boolean(message.id && updatingIds.has(message.id));
-
-        return (
-          <div
-            className={`flex justify-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={info.getValue() as boolean}
-              onToggle={async () => onToggleStatus(message.id)}
-              title={message.isActive ? "Deactivate message" : "Activate message"}
-              description={message.isActive ? "This message will be deactivated" : "This message will be activated"}
-              disabled={isRowUpdating}
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

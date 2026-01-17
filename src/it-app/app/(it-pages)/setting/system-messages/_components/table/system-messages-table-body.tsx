@@ -185,12 +185,11 @@ export function SystemMessagesTableBody({
     () =>
       createSystemMessagesTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
         onView: handleViewMessage,
         onEdit: handleEditMessage,
         onDelete: handleDeleteClick,
       }),
-    [updatingIds, handleToggleWithUpdating, handleViewMessage, handleEditMessage, handleDeleteClick]
+    [updatingIds, handleViewMessage, handleEditMessage, handleDeleteClick]
   );
 
   // Memoize sorted data

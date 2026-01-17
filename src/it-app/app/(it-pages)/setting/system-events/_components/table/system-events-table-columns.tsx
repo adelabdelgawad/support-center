@@ -1,14 +1,12 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import type { SystemEventResponse } from "@/types/system-events";
 
 interface SystemEventsTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
   locale?: string;
 }
 
@@ -26,7 +24,6 @@ function extractPlaceholders(template: string | null | undefined): string[] {
  */
 export function createSystemEventsTableColumns({
   updatingIds,
-  onToggleStatus,
   locale = 'en',
 }: SystemEventsTableColumnsProps): ColumnDef<SystemEventResponse>[] {
   return [
@@ -184,34 +181,6 @@ export function createSystemEventsTableColumns({
         );
       },
       size: 100,
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const event = info.row.original;
-        const isRowUpdating = Boolean(event.id && updatingIds.has(event.id));
-
-        return (
-          <div
-            className={`flex justify-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={info.getValue() as boolean}
-              onToggle={async () => onToggleStatus(event.id)}
-              title={event.isActive ? "Deactivate event" : "Activate event"}
-              description={event.isActive ? "This event will be deactivated" : "This event will be activated"}
-              disabled={isRowUpdating}
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

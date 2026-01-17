@@ -19,11 +19,16 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-muted active:bg-accent text-foreground border border-transparent",
         link: "text-primary underline-offset-4 hover:underline border border-transparent",
+        sdpAction:
+          "bg-[var(--sdp-accent)] text-white hover:bg-[var(--sdp-accent-hover)] border border-transparent shadow-sm",
+        sdpSecondary:
+          "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 shadow-sm",
       },
       size: {
         default: "h-8 px-3 py-1.5 rounded-fluent has-[>svg]:px-2.5",
         sm: "h-7 px-2.5 py-1 rounded-fluent-sm gap-1.5 text-xs has-[>svg]:px-2",
         lg: "h-10 px-5 py-2.5 rounded-fluent gap-3 has-[>svg]:px-4",
+        xs: "h-7 px-2 py-1 rounded-md text-xs font-medium has-[>svg]:px-1.5",
         icon: "size-8 rounded-fluent",
         "icon-sm": "size-7 rounded-fluent-sm",
         "icon-lg": "size-10 rounded-fluent",

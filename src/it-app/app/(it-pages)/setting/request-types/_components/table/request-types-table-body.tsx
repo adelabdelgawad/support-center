@@ -125,12 +125,11 @@ export function RequestTypesTableBody({
     () =>
       createRequestTypesTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
         onView: setViewingType,
         onEdit: setEditingType,
         onDelete: setDeletingType,
       }),
-    [updatingIds, handleToggleWithUpdating]
+    [updatingIds]
   );
 
   // Memoize sorted data

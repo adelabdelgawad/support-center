@@ -21,12 +21,12 @@ export const DynamicTableBar: React.FC<DynamicTableBarProps> = ({
   return (
     <div
       className={cn(
-        "border rounded-md px-4 py-3 transition-colors",
+        "border px-4 py-2 transition-colors",
         variant === "controller"
           ? hasSelection
             ? "bg-primary/10 border-primary/20"
-            : "bg-muted border-border"
-          : "bg-background border-border"
+            : "bg-muted/40 border-border"
+          : "bg-muted/40 border-border"
       )}
     >
       <div className="flex items-center justify-between gap-4">

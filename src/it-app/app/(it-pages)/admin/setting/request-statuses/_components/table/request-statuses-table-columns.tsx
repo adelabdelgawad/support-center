@@ -1,7 +1,6 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Lock, Eye, Pencil, Trash2 } from "lucide-react";
@@ -9,7 +8,6 @@ import type { RequestStatusResponse } from "@/types/request-statuses";
 
 interface RequestStatusesTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
   onToggleRequesterVisibility: (id: number, currentValue: boolean) => Promise<void>;
   onToggleCountAsSolved: (id: number, currentValue: boolean) => Promise<void>;
   onView: (status: RequestStatusResponse) => void;
@@ -22,7 +20,6 @@ interface RequestStatusesTableColumnsProps {
  */
 export function createRequestStatusesTableColumns({
   updatingIds,
-  onToggleStatus,
   onToggleRequesterVisibility,
   onToggleCountAsSolved,
   onView,
@@ -205,39 +202,6 @@ export function createRequestStatusesTableColumns({
       },
       enableSorting: false,
       size: 120,
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const status = info.row.original;
-        const isRowUpdating = Boolean(status.id && updatingIds.has(status.id));
-        const value = info.getValue() as boolean;
-
-        return (
-          <div
-            className={`flex justify-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={value}
-              onToggle={async () => onToggleStatus(status.id)}
-              title={value ? "Deactivate status" : "Activate status"}
-              description={
-                value
-                  ? `Status "${status.name}" will be deactivated and hidden from selection.`
-                  : `Status "${status.name}" will be activated and available for use.`
-              }
-              disabled={isRowUpdating}
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

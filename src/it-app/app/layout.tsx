@@ -1,13 +1,11 @@
 /**
  * Root layout component (server component).
  *
- * This layout remains a server component to support:
- * - Server-side authentication checks
- * - SSR benefits (no flash of unauthenticated content)
- * - Session fetching before hydration
- *
- * The only client provider (ClientAppWrapper) is used here to wrap children,
- * keeping the rest of the app tree as server components where possible.
+ * Performance optimizations inspired by network-manager:
+ * - Inline script prevents theme flash on hydration
+ * - Lightweight session check with redirect
+ * - Minimal client provider (only session + theme + SignalR)
+ * - All data fetched server-side and passed as props where possible
  */
 
 import type { Metadata } from "next";
@@ -20,9 +18,6 @@ import type { User } from "@/lib/auth/check-token";
 
 // Microsoft Fluent Design System Fonts
 // Fonts are configured via CSS in globals.css to use system fonts
-// (Segoe UI on Windows, San Francisco on macOS, Roboto on Linux)
-// See FLUENT_UI_FONTS.md for optional local font file setup
-
 export const metadata: Metadata = {
   title: {
     template: '%s | IT Support Center',
@@ -38,28 +33,29 @@ export const metadata: Metadata = {
  * Fetches the session on the server and passes it to ClientAppWrapper,
  * which is the only client component in the app tree.
  *
- * This pattern:
- * - Validates session on server (fast, no network latency)
- * - Redirects unauthenticated users to login (except on public pages)
- * - Passes valid session to client (no refetch on hydration)
- * - Keeps most of the app as server components (better for SSR)
- * - Provides session context to client components via useSession()
- * - Provides theme context via next-themes
+ * PERFORMANCE OPTIMIZATION:
+ * - Inline script sets dir/lang before React hydrates to prevent LTR/RTL flash
+ * - Suppress hydration warnings for next-themes class/style application
+ * - ClientAppWrapper has minimal surface area (session + theme + SignalR only)
+ * - Uses `disableTransitionOnChange` on ThemeProvider for performance
  */
 export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Get current pathname from proxy-set header
+  // Get language and direction from headers (like network-manager)
   const headersList = await headers();
+  const lang = headersList.get('x-language') || 'en';
+  const direction = headersList.get('x-direction') || 'ltr';
+
+  // Get pathname from proxy-set header
   const pathname = headersList.get("x-pathname") || "/";
 
   // Check if this is a public route (login, SSO, etc.)
   const isPublic = isPublicRoute(pathname);
 
   // Get session from cookies (lightweight check)
-  // The protected layout will do full validation for protected routes
   let session: User | null = null;
 
   try {
@@ -77,22 +73,32 @@ export default async function RootLayout({
   }
 
   // Enforce authentication for non-public routes
-  // Redirect to login if no valid session
   if (!isPublic && !session) {
     redirect("/login");
   }
 
   return (
     <html
-      lang="en"
-      data-arp=""
-      suppressHydrationWarning // Required for next-themes: prevents warning when theme class/style applied on client
+      lang={lang}
+      dir={direction}
+      suppressHydrationWarning
     >
+      <head>
+        {/* Inline script prevents LTR/RTL and theme flash on hydration */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            // Set initial direction and language before React hydrates
+            document.documentElement.dir = '${direction}';
+            document.documentElement.lang = '${lang}';
+          `,
+          }}
+        />
+      </head>
       <body className="antialiased" suppressHydrationWarning>
         {/*
           ClientAppWrapper is the main client provider for session and theme.
-          It receives the server-fetched session and provides it to
-          useSession() hooks in descendant client components.
+          Minimal surface area, receives server-fetched session.
         */}
         <ClientAppWrapper initialSession={session}>
           {children}

@@ -2,12 +2,15 @@
  * Admin Layout
  *
  * Layout for admin pages with:
- * - Left sidebar with admin navigation (ONLY on sub-pages, NOT on /admin hub)
- * - Breadcrumb navigation (NOT on /admin hub)
+ * - Left sidebar with admin navigation (hidden on /admin hub, visible on sub-pages)
+ * - Breadcrumb navigation (hidden on /admin hub)
  * - Admin access control
  *
  * NOTE: The horizontal topbar is provided by the parent (it-pages) layout.
  * This layout only handles the left sidebar and content area.
+ *
+ * HYDRATION: Always renders the same structure to avoid hydration mismatch.
+ * Sidebar visibility is controlled via CSS classes based on pathname.
  */
 
 import { redirect } from "next/navigation";
@@ -61,26 +64,26 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = headersList.get("x-pathname") || "/admin";
   const isAdminHub = pathname === "/admin" || pathname === "/admin/";
 
-  // On admin hub page: no sidebar, full width content
-  // On sub-pages: show sidebar and breadcrumb
-  if (isAdminHub) {
-    return (
-      <main className="flex-1 overflow-auto bg-muted/30 h-[calc(100svh-48px)]">
-        {children}
-      </main>
-    );
-  }
-
-  // Sub-page layout with sidebar and breadcrumb
   return (
     <div className="flex h-[calc(100svh-48px)]">
-      <AdminLeftSidebar />
+      {/* Left Sidebar - hidden on admin hub, visible on sub-pages */}
+      <AdminLeftSidebar className={isAdminHub ? "hidden" : ""} />
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-auto bg-muted/30">
-        <div className="container mx-auto px-6 py-4">
-          {/* Breadcrumb */}
-          <AdminBreadcrumb className="mb-4" />
+      <main className={cn(
+        "flex-1 overflow-auto bg-muted/30",
+        // On admin hub: full width, on sub-pages: normal width
+        isAdminHub && "w-full"
+      )}>
+        <div className={cn(
+          "container mx-auto px-6 py-4",
+          // On admin hub: use full width without extra padding constraints
+          isAdminHub && "px-6 py-0"
+        )}>
+          {/* Breadcrumb - hidden on admin hub */}
+          {!isAdminHub && (
+            <AdminBreadcrumb className="mb-4" />
+          )}
 
           {/* Page Content */}
           {children}
@@ -88,4 +91,9 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
       </main>
     </div>
   );
+}
+
+// Helper function for conditional className (like cn from utils)
+function cn(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(" ");
 }

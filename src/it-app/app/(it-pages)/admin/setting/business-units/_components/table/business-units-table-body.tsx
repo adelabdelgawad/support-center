@@ -107,7 +107,6 @@ export function BusinessUnitsTableBody({
     () =>
       createBusinessUnitsTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
         regions,
       }).map((column) => {
         // Special handling for actions column to include InlineActions
@@ -141,7 +140,7 @@ export function BusinessUnitsTableBody({
         }
         return column;
       }),
-    [updatingIds, updateBusinessUnits, refetch, handleToggleWithUpdating, regions]
+    [updatingIds, updateBusinessUnits, refetch, regions]
   );
 
   // Memoize sorted data

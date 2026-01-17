@@ -1,13 +1,11 @@
 "use client";
 
 import { ColumnDef } from "@tanstack/react-table";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Loader2 } from "lucide-react";
 import type { BusinessUnitRegionResponse } from "@/types/business-unit-regions";
 
 interface RegionsTableColumnsProps {
   updatingIds: Set<number>;
-  onToggleStatus: (id: number) => Promise<void>;
 }
 
 /**
@@ -15,7 +13,6 @@ interface RegionsTableColumnsProps {
  */
 export function createRegionsTableColumns({
   updatingIds,
-  onToggleStatus,
 }: RegionsTableColumnsProps): ColumnDef<BusinessUnitRegionResponse>[] {
   return [
     {
@@ -100,42 +97,6 @@ export function createRegionsTableColumns({
           </div>
         );
       },
-    },
-
-    {
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Status</div>,
-      cell: (info) => {
-        const region = info.row.original;
-        const isRowUpdating = region.id ? updatingIds.has(region.id) : false;
-        const isActive = info.getValue() as boolean;
-
-        return (
-          <div
-            className={`flex justify-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={isActive}
-              onToggle={async () => {
-                await onToggleStatus(region.id);
-              }}
-              title={isActive ? "Deactivate Region" : "Activate Region"}
-              description={
-                isActive
-                  ? `Are you sure you want to deactivate "${region.name}"? This will prevent it from being used in the system.`
-                  : `Are you sure you want to activate "${region.name}"? This will make it available for use in the system.`
-              }
-              disabled={isRowUpdating}
-              size="sm"
-            />
-          </div>
-        );
-      },
-      enableSorting: false,
-      size: 80,
     },
 
     {

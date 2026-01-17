@@ -169,14 +169,13 @@ export function RequestStatusesTableBody({
     () =>
       createRequestStatusesTableColumns({
         updatingIds,
-        onToggleStatus: handleToggleWithUpdating,
         onToggleRequesterVisibility: handleToggleRequesterVisibility,
         onToggleCountAsSolved: handleToggleCountAsSolved,
         onView: setViewingStatus,
         onEdit: setEditingStatus,
         onDelete: setDeletingStatus,
       }),
-    [updatingIds, handleToggleWithUpdating, handleToggleRequesterVisibility, handleToggleCountAsSolved]
+    [updatingIds, handleToggleRequesterVisibility, handleToggleCountAsSolved]
   );
 
   // Memoize sorted data

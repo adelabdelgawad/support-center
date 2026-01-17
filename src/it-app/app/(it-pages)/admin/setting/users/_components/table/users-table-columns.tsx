@@ -2,11 +2,8 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { StatusSwitch } from "@/components/ui/status-switch";
 import { Loader2, User as UserIcon } from "lucide-react";
 import type { UserWithRolesResponse } from "@/types/users.d";
-import { toggleUserStatus, toggleUserTechnicianStatus } from "@/lib/api/users";
-import { toastSuccess, toastError } from "@/lib/toast";
 
 interface UsersTableColumnsProps {
   updatingIds: Set<number>;
@@ -149,100 +146,6 @@ export function createUsersTableColumns({
           </div>
         );
       },
-    },
-
-    {
-      id: "isActive",
-      accessorKey: "isActive",
-      header: () => <div className="text-center">Active</div>,
-      cell: ({ row }) => {
-        const user = row.original;
-        const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-        const isRowUpdating = Boolean(user.id && updatingIds.has(userId));
-        return (
-          <div
-            className={`flex justify-center items-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={user.isActive}
-              onToggle={async () => {
-                if (!user.id) return;
-                markUpdating([userId]);
-                try {
-                  const updatedUser = await toggleUserStatus(user.id, !user.isActive);
-                  if (updateUsers) {
-                    await updateUsers([updatedUser]);
-                  }
-                  toastSuccess(`User ${!user.isActive ? "activated" : "deactivated"} successfully`);
-                } catch (error) {
-                  toastError("Failed to update user status");
-                  throw error;
-                } finally {
-                  clearUpdating([userId]);
-                }
-              }}
-              title={user.isActive ? "Deactivate User" : "Activate User"}
-              description={
-                user.isActive
-                  ? `Are you sure you want to deactivate ${user.username}? This will prevent them from accessing the system.`
-                  : `Are you sure you want to activate ${user.username}? This will allow them to access the system.`
-              }
-              size="sm"
-            />
-          </div>
-        );
-      },
-      enableHiding: true,
-    },
-
-    {
-      id: "isTechnician",
-      accessorKey: "isTechnician",
-      header: () => <div className="text-center">Technician</div>,
-      cell: ({ row }) => {
-        const user = row.original;
-        const userId = typeof user.id === 'string' ? parseInt(user.id, 10) : user.id;
-        const isRowUpdating = Boolean(user.id && updatingIds.has(userId));
-        return (
-          <div
-            className={`flex justify-center items-center ${
-              isRowUpdating ? "opacity-60 pointer-events-none" : ""
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <StatusSwitch
-              checked={user.isTechnician}
-              onToggle={async () => {
-                if (!user.id) return;
-                markUpdating([userId]);
-                try {
-                  const updatedUser = await toggleUserTechnicianStatus(user.id, !user.isTechnician);
-                  if (updateUsers) {
-                    await updateUsers([updatedUser]);
-                  }
-                  toastSuccess(`User ${!user.isTechnician ? "marked as technician" : "unmarked as technician"} successfully`);
-                } catch (error) {
-                  toastError("Failed to update technician status");
-                  throw error;
-                } finally {
-                  clearUpdating([userId]);
-                }
-              }}
-              title={user.isTechnician ? "Remove Technician Status" : "Mark as Technician"}
-              description={
-                user.isTechnician
-                  ? `Are you sure you want to remove technician status from ${user.username}?`
-                  : `Are you sure you want to mark ${user.username} as a technician?`
-              }
-              size="sm"
-            />
-          </div>
-        );
-      },
-      enableHiding: true,
     },
 
     {
