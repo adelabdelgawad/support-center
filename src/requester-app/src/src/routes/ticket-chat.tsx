@@ -23,6 +23,7 @@ import type { GetMessagesCursorResponse } from "@/api/messages";
 import { sendMessage as sendMessageApi, markMessagesAsRead, getMessagesCursor } from "@/api/messages";
 import { useRealTimeChatRoom } from "@/signalr";
 import { useChatMutations } from "@/hooks/use-chat-mutations";
+import { useChatSync } from "@/hooks/use-chat-sync";
 import { refreshUnreadCountFromAPI } from "@/lib/floating-icon-manager";
 import { messageCacheBridge } from "@/lib/message-cache-bridge";
 import { chatSyncService, isChatSyncing } from "@/lib/chat-sync-service";
@@ -492,6 +493,9 @@ function TicketChatPageInner() {
 
   // Fetch ticket details directly (will load if cache is empty)
   const ticketDetailQuery = useTicketDetail(ticketId);
+
+  // Chat sync hook for managing incremental sync and missing history detection
+  const chatSync = useChatSync(ticketId);
 
   // Use fetched data if available, otherwise fallback to cache
   const ticket = createMemo(() => {
@@ -1198,6 +1202,22 @@ function TicketChatPageInner() {
   const [loadingImages, setLoadingImages] = createSignal<Set<string>>(new Set());
   const [initialScrollDone, setInitialScrollDone] = createSignal(false);
 
+  // Chat view ready state - true when user can interact with chat
+  // Guards UI elements like resync button from showing during initialization
+  const chatViewReady = createMemo(() => {
+    // Requirements for chat view to be ready:
+    // 1. Container exists and mounted
+    if (!scrollContainerRef) return false;
+
+    // 2. Not in initial hydration state
+    if (isHydrating()) return false;
+
+    // 3. Initial scroll has been attempted/completed
+    if (!initialScrollDone()) return false;
+
+    return true;
+  });
+
   // NEW: Track if we've performed the ONE guaranteed initial scroll for this chat
   // This is a ref (not signal) because we don't need reactivity, just state tracking
   let hasPerformedInitialScroll = false;
@@ -1767,21 +1787,23 @@ function TicketChatPageInner() {
           <p class="text-xs text-white/70 truncate">Ticket #{ticketId().slice(0, 8)}</p>
         </div>
         <div class="flex items-center gap-2">
-          {/* Manual resync button - always available for user-triggered sync */}
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-8 w-8 text-white hover:bg-white/10"
-            onClick={() => chatSyncService.manualResync(ticketId())}
-            disabled={isChatSyncing(ticketId())}
-            title="Resync messages"
-          >
-            <Show when={isChatSyncing(ticketId())} fallback={
-              <RefreshCw class="h-4 w-4" />
-            }>
-              <RefreshCw class="h-4 w-4 animate-spin" />
-            </Show>
-          </Button>
+          {/* Manual resync button - only show when chat view is fully ready */}
+          <Show when={chatViewReady()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              class="h-8 w-8 text-white hover:bg-white/10"
+              onClick={() => chatSyncService.manualResync(ticketId())}
+              disabled={isChatSyncing(ticketId())}
+              title="Resync messages"
+            >
+              <Show when={isChatSyncing(ticketId())} fallback={
+                <RefreshCw class="h-4 w-4" />
+              }>
+                <RefreshCw class="h-4 w-4 animate-spin" />
+              </Show>
+            </Button>
+          </Show>
 
           {/* Connection status indicator - icon only, no text */}
           {/* During hydration, the main content area shows a prominent spinner */}
@@ -1837,7 +1859,17 @@ function TicketChatPageInner() {
           </div>
         </Show>
 
-        {/* Show messages if available, or loading spinner */}
+        {/* Show compact skeleton for missing older messages only (not full chat replacement) */}
+        <Show when={chatSync.hasMissingOlderMessages() && chatSync.isSyncing()}>
+          <div class="flex justify-center p-4">
+            <div class="text-xs text-muted-foreground flex items-center gap-2 animate-pulse">
+              <Spinner size="sm" />
+              <span>Loading older messages...</span>
+            </div>
+          </div>
+        </Show>
+
+        {/* Messages - render if available, otherwise show empty/loading state */}
         <div>
         <Show when={messages().length > 0} fallback={
           <Show when={isLoadingMessages()} fallback={
@@ -1848,7 +1880,7 @@ function TicketChatPageInner() {
               </p>
             </div>
           }>
-            {/* Skeleton placeholder for loading state - better perceived performance */}
+            {/* Full skeleton only for initial load with no cache */}
             <MessagesSkeleton />
           </Show>
         }>
