@@ -21,7 +21,7 @@ import { useRequestAssignees } from '@/lib/hooks/use-request-assignees';
 import { useGlobalPriorities, useGlobalStatuses, useGlobalTechnicians } from '@/lib/hooks/use-global-metadata';
 import { useRequestTicket } from '@/lib/hooks/use-request-ticket';
 
-interface RequestDetailMetadataContextType {
+export interface RequestDetailMetadataContextType {
   // Ticket data
   ticket: ServiceRequestDetail;
   technicians: Technician[];
@@ -58,8 +58,23 @@ interface RequestDetailMetadataContextType {
   isChatDisabled: boolean;
   chatDisabledReason: string | undefined;
 
+  // Messaging permission
+  messagingPermission: {
+    canMessage: boolean;
+    reason?: string;
+    isAssignee: boolean;
+    isRequester: boolean;
+  };
+
   // User info
   currentUserId?: string;
+  currentUser?: {
+    id: string;
+    username: string;
+    fullName?: string | null;
+    title?: string | null;
+    email?: string | null;
+  };
 
   // Sub-tasks
   initialSubTasks?: {
@@ -359,6 +374,7 @@ export function RequestDetailMetadataProvider({
       isChatDisabled: chatDisabledState.isDisabled,
       chatDisabledReason: chatDisabledState.reason,
       currentUserId,
+      currentUser,
       initialSubTasks,
       registerScrollHandler,
       registerForceScrollHandler,
@@ -392,6 +408,7 @@ export function RequestDetailMetadataProvider({
       canEditRequestDetails,
       chatDisabledState,
       currentUserId,
+      currentUser,
       initialSubTasks,
       registerScrollHandler,
       registerForceScrollHandler,

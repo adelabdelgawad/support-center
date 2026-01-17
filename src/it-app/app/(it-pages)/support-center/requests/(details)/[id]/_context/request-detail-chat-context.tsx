@@ -13,6 +13,7 @@ import { useSignalRChatRoom, useConnectionStatus } from '@/lib/signalr';
 import { useChatMutations } from '@/lib/hooks/use-chat-mutations';
 import type { ChatMessage } from '@/lib/signalr/types';
 import type { ScreenshotItem } from '@/types/media-viewer';
+import type { AttachmentUploadResponse, AttachmentUploadResult } from '@/lib/hooks/use-chat-mutations';
 import type { RequestDetailMetadataContextType } from './request-detail-metadata-context';
 
 // Helper function to generate initials
@@ -25,17 +26,17 @@ function getInitials(name: string | null | undefined): string {
   return name.substring(0, 2).toUpperCase();
 }
 
-interface RequestDetailChatContextType {
+export interface RequestDetailChatContextType {
   // Messages (WebSocket-managed)
   messages: ChatMessage[];
   messagesLoading: boolean;
 
   // Chat mutations
-  sendMessage: (content: string) => string | null;
-  sendAttachmentMessage: (files: File[]) => Promise<void>;
-  retryMessage: (tempId: string) => Promise<void>;
+  sendMessage: (content: string) => Promise<void>;
+  sendAttachmentMessage: (uploadResult: AttachmentUploadResult) => Promise<void>;
+  retryMessage: (tempId: string) => void;
   discardFailedMessage: (tempId: string) => void;
-  uploadAttachments: (files: File[]) => Promise<void>;
+  uploadAttachments: (files: File[]) => Promise<AttachmentUploadResponse | null>;
   sendingMessage: boolean;
   uploadingAttachment: boolean;
 
@@ -279,6 +280,8 @@ export function RequestDetailChatProvider({
         isAssignee: false,
         isRequester: false,
       },
+      chatNeedsReload,
+      dismissReloadWarning,
     }),
     [
       messages,
@@ -300,6 +303,8 @@ export function RequestDetailChatProvider({
       navigateMediaViewer,
       setMediaViewerIndex,
       messagingPermission,
+      chatNeedsReload,
+      dismissReloadWarning,
     ]
   );
 
