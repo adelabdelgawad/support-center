@@ -12,12 +12,13 @@
 import {
   createSignal,
   createEffect,
+  createMemo,
   onCleanup,
   type Accessor,
 } from "solid-js";
 import { chatSyncService, isChatSyncing } from "@/lib/chat-sync-service";
 import { sqliteMessageCache } from "@/lib/sqlite-message-cache";
-import type { ChatMessage, ChatSyncState } from "@/types";
+import type { ChatMessage, ChatSyncState, ChatSyncMeta } from "@/types";
 
 // Periodic revalidation interval (5 minutes)
 const REVALIDATION_INTERVAL_MS = 5 * 60 * 1000;
@@ -33,6 +34,8 @@ export interface UseChatSyncResult {
   cachedMessages: Accessor<ChatMessage[]>;
   /** Refresh cached messages from SQLite */
   refreshCachedMessages: () => Promise<void>;
+  /** Whether there are missing older messages (local_min_seq > 1) */
+  hasMissingOlderMessages: Accessor<boolean>;
 }
 
 /**
@@ -55,6 +58,17 @@ export interface UseChatSyncResult {
 export function useChatSync(requestId: Accessor<string | null>): UseChatSyncResult {
   const [syncState, setSyncState] = createSignal<ChatSyncState>("UNKNOWN");
   const [cachedMessages, setCachedMessages] = createSignal<ChatMessage[]>([]);
+  const [syncMeta, setSyncMeta] = createSignal<ChatSyncMeta | null>(null);
+
+  // Computed: whether there are missing older messages
+  const hasMissingOlderMessages = createMemo(() => {
+    const meta = syncMeta();
+    if (!meta) return false;
+
+    // Check if there are messages older than our cached range
+    // If local_min_seq > 1, it means messages 1 to (local_min_seq - 1) are missing
+    return (meta.localMinSeq !== null && meta.localMinSeq > 1);
+  });
 
   // Load cached messages and validate on mount/requestId change
   createEffect(() => {
@@ -66,16 +80,18 @@ export function useChatSync(requestId: Accessor<string | null>): UseChatSyncResu
       setCachedMessages(messages);
     });
 
-    // Get current sync state
+    // Get current sync state and metadata
     sqliteMessageCache.getSyncMeta(id).then((meta) => {
       setSyncState(meta?.syncState ?? "UNKNOWN");
+      setSyncMeta(meta);
     });
 
     // Run chat open validation (async)
     chatSyncService.onChatOpen(id).then(() => {
-      // Refresh sync state after validation
+      // Refresh sync state and metadata after validation
       sqliteMessageCache.getSyncMeta(id).then((meta) => {
         setSyncState(meta?.syncState ?? "UNKNOWN");
+        setSyncMeta(meta);
       });
       // Refresh cached messages if synced
       sqliteMessageCache.getCachedMessages(id).then((messages) => {
@@ -86,9 +102,10 @@ export function useChatSync(requestId: Accessor<string | null>): UseChatSyncResu
     // Set up periodic revalidation (every 5 minutes while chat is open)
     const intervalId = setInterval(() => {
       chatSyncService.periodicRevalidate(id).then(() => {
-        // Refresh sync state and messages after revalidation
+        // Refresh sync state, metadata, and messages after revalidation
         sqliteMessageCache.getSyncMeta(id).then((meta) => {
           setSyncState(meta?.syncState ?? "UNKNOWN");
+          setSyncMeta(meta);
         });
         sqliteMessageCache.getCachedMessages(id).then((messages) => {
           setCachedMessages(messages);
@@ -109,9 +126,10 @@ export function useChatSync(requestId: Accessor<string | null>): UseChatSyncResu
 
     await chatSyncService.manualResync(id);
 
-    // Refresh sync state and messages after manual resync
+    // Refresh sync state, metadata, and messages after manual resync
     const meta = await sqliteMessageCache.getSyncMeta(id);
     setSyncState(meta?.syncState ?? "UNKNOWN");
+    setSyncMeta(meta);
 
     const messages = await sqliteMessageCache.getCachedMessages(id);
     setCachedMessages(messages);
@@ -139,6 +157,7 @@ export function useChatSync(requestId: Accessor<string | null>): UseChatSyncResu
     manualResync,
     cachedMessages,
     refreshCachedMessages,
+    hasMissingOlderMessages,
   };
 }
 
