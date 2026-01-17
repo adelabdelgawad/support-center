@@ -290,13 +290,26 @@ export default function TicketsPage() {
       variant="single"
       filterBar={
         <>
-          {/* Search Input */}
-          <SearchInput
-            value={searchQuery()}
-            onSearch={setSearchQuery}
-            isLoading={isSearchLoading()}
-            class="mb-3"
-          />
+          {/* Search Input with Refresh Button */}
+          <div class="flex items-center gap-2 mb-3">
+            <SearchInput
+              value={searchQuery()}
+              onSearch={setSearchQuery}
+              isLoading={isSearchLoading()}
+              class="flex-1"
+            />
+            {/* Manual Refresh Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => ticketsQuery.refetch()}
+              disabled={ticketsQuery.isFetching}
+              title="Refresh tickets list"
+              class="shrink-0"
+            >
+              <RefreshCw class={`h-4 w-4 ${ticketsQuery.isFetching ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
 
           {/* Filter Bar - hide when search is active for cleaner UI */}
           <Show when={!isSearchActive() && requestStatuses().length > 0}>

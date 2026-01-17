@@ -35,6 +35,8 @@ import { RuntimeConfig } from '@/lib/runtime-config';
 import { sessionPresence } from '@/services/session-presence';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 import { messageCacheBridge } from '@/lib/message-cache-bridge';
+import { useQueryClient } from '@tanstack/solid-query';
+import { ticketKeys } from '@/queries';
 
 // Notification data type
 interface NotificationData {
@@ -90,6 +92,9 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
     nextRetryAt: null,
     countdownSeconds: 0,
   });
+
+  // TanStack Query client for cache invalidation
+  const queryClient = useQueryClient();
 
   // Connection retry tracking
   let isConnecting = false;
@@ -238,6 +243,12 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
 
         // Recover pending notifications after reconnection
         recoverPendingNotifications();
+
+        // CACHE SYNC: Invalidate tickets cache to refresh list after reconnection
+        // When SignalR reconnects after a disconnect, messages may have been missed.
+        // This ensures the tickets list shows accurate unread counts and latest messages.
+        console.log('[NotificationSignalR] Invalidating tickets cache after reconnection...');
+        queryClient.invalidateQueries({ queryKey: ticketKeys.allUserTickets() });
       },
       onError: (errorMsg: string) => {
         console.error('%c[NotificationSignalR] ERROR:', 'color: red; font-weight: bold', errorMsg);

@@ -405,11 +405,9 @@ class TicketCacheService {
 export const ticketCache = new TicketCacheService();
 
 // Preload cache on module load (non-blocking)
+// The preload is already async (IndexedDB), so no delay needed
 if (typeof window !== "undefined") {
-  // Preload after a short delay to not block initial render
-  setTimeout(() => {
-    ticketCache.preload().catch(console.error);
-  }, 100);
+  ticketCache.preload().catch(console.error);
 }
 
 export default ticketCache;

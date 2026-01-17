@@ -207,6 +207,24 @@ async def create_message(
                     f"Failed to send notification for message {message.id}: {notif_error}"
                 )
 
+            # Invalidate tickets list cache for all participants (new message affects list)
+            try:
+                from core.cache import cache
+
+                # Invalidate for requester
+                cache_key = f"tickets:user:{service_request.requester_id}:all"
+                await cache.delete(cache_key)
+                logger.debug(f"Invalidated tickets cache for requester {service_request.requester_id}")
+
+                # Invalidate for assigned technicians (if any)
+                if hasattr(service_request, 'assigned_users') and service_request.assigned_users:
+                    for assigned_user in service_request.assigned_users:
+                        tech_cache_key = f"tickets:user:{assigned_user.id}:all"
+                        await cache.delete(tech_cache_key)
+                        logger.debug(f"Invalidated tickets cache for technician {assigned_user.id}")
+            except Exception as cache_error:
+                logger.warning(f"Failed to invalidate tickets cache: {cache_error}")
+
         # Return the message_dict which includes clientTempId for optimistic UI matching
         return message_dict
     except ValueError as e:
@@ -528,6 +546,7 @@ async def get_chat_page_data(
 async def get_all_user_tickets(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    response: Response = None,
 ):
     """
     Get all tickets for the current user without any filtering.
@@ -542,8 +561,33 @@ async def get_all_user_tickets(
 
     Note: This endpoint is used by the React app only. The Next.js app continues
     to use the /page-data endpoint with server-side filtering.
+
+    Performance:
+    - Redis cached for 30 seconds per user
+    - Cache invalidated on ticket creation, message send, or status change
+    - HTTP Cache-Control header for browser/CDN caching
     """
+    from core.cache import cache
+
+    # Build cache key: tickets:user:{user_id}:all
+    cache_key = f"tickets:user:{current_user.id}:all"
+
     try:
+        # Try to get from Redis cache first
+        cached_data = await cache.get(cache_key)
+        if cached_data is not None:
+            logger.debug(f"Cache HIT for user {current_user.id} tickets list")
+
+            # Add cache headers for browser/CDN caching (30s with stale-while-revalidate)
+            if response:
+                response.headers["Cache-Control"] = "private, max-age=30, stale-while-revalidate=60"
+                response.headers["X-Cache-Status"] = "HIT"
+
+            # Return cached ChatPageResponse
+            return ChatPageResponse(**cached_data)
+
+        logger.debug(f"Cache MISS for user {current_user.id} tickets list - fetching from DB")
+
         # Call the same service method but without any filters
         # This ensures we get ALL tickets for the user
         page_data = await ChatService.get_chat_page_data(
@@ -552,6 +596,16 @@ async def get_all_user_tickets(
             status_filter=None,  # No status filter
             read_filter=None,    # No read filter
         )
+
+        # Cache the result for 30 seconds
+        # Note: We use model_dump() to convert Pydantic model to dict for JSON serialization
+        await cache.set(cache_key, page_data.model_dump(), ttl=30)
+
+        # Add cache headers
+        if response:
+            response.headers["Cache-Control"] = "private, max-age=30, stale-while-revalidate=60"
+            response.headers["X-Cache-Status"] = "MISS"
+
         return page_data
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

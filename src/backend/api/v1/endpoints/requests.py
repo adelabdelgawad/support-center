@@ -114,6 +114,15 @@ async def create_request(
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to broadcast new ticket via SignalR: {e}")
 
+    # Invalidate tickets list cache for requester (new ticket created)
+    try:
+        from core.cache import cache
+        cache_key = f"tickets:user:{current_user.id}:all"
+        await cache.delete(cache_key)
+        logger.debug(f"Invalidated tickets cache for user {current_user.id} after ticket creation")
+    except Exception as e:
+        logger.warning(f"Failed to invalidate tickets cache: {e}")
+
     return request
 
 

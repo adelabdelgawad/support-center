@@ -263,7 +263,7 @@ export function useAllUserTickets(filters?: Accessor<TicketFilterParams | undefi
     // INSTANT STARTUP: Use cached data for immediate render
     initialData: cachedData || undefined,
     initialDataUpdatedAt: cachedData ? Date.now() - 30 * 1000 : undefined, // Mark as slightly stale to trigger refetch
-    staleTime: 30 * 1000, // 30 seconds - balance between fresh data and performance
+    staleTime: 3 * 60 * 1000, // 3 minutes - improved performance with backend Redis caching
     gcTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: true,
     refetchOnMount: 'always', // Always check for updates but show cached data first
