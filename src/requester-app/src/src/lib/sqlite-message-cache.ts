@@ -18,6 +18,27 @@ import type { ChatMessage, ChatSyncState, ChatSyncMeta, SequenceValidationResult
 const DB_PATH = "sqlite:message_cache.db";
 const CACHE_EXPIRY_DAYS = 7;
 
+// Debug configuration
+const DEBUG_ENABLED = true;
+let operationCounter = 0;
+
+function debugLog(category: string, message: string, data?: any) {
+  if (!DEBUG_ENABLED) return;
+  const timestamp = new Date().toISOString().split('T')[1].slice(0, -1);
+  const prefix = `[SQLiteCache:${category}][${timestamp}]`;
+  if (data !== undefined) {
+    console.log(prefix, message, data);
+  } else {
+    console.log(prefix, message);
+  }
+}
+
+function getCallStack(): string {
+  const stack = new Error().stack || '';
+  const lines = stack.split('\n').slice(3, 6); // Skip Error, getCallStack, and caller
+  return lines.map(l => l.trim()).join(' <- ');
+}
+
 /**
  * Serialize a ChatMessage for SQLite storage
  * Converts objects to JSON strings for storage
@@ -77,6 +98,70 @@ class SQLiteMessageCacheService {
   private dbPromise: Promise<Database> | null = null;
   private initialized = false;
 
+  // Write queue to serialize all write operations and prevent race conditions
+  private writeQueue: Promise<void> = Promise.resolve();
+  private writeQueueDepth = 0;
+  private activeOperationId: number | null = null;
+
+  /**
+   * Eagerly initialize the database connection.
+   * Call this on app startup to avoid cold-start delays when opening chats.
+   *
+   * This moves the ~2-5 second database initialization from chat navigation
+   * (where it causes skeleton delays) to app startup (where loading is expected).
+   */
+  async init(): Promise<void> {
+    const startTime = Date.now();
+    debugLog('INIT', '🚀 Pre-warming SQLite database...');
+
+    try {
+      await this.getDB();
+      debugLog('INIT', `✅ SQLite ready in ${Date.now() - startTime}ms`);
+    } catch (error) {
+      // Log but don't throw - SQLite errors should not block app startup
+      debugLog('INIT', `⚠️ SQLite warmup failed: ${error}`);
+    }
+  }
+
+  /**
+   * Execute a write operation with a lock to prevent concurrent writes
+   * All write operations go through this queue to ensure serialization
+   */
+  private async withWriteLock<T>(operationName: string, operation: () => Promise<T>): Promise<T> {
+    const opId = ++operationCounter;
+    const startTime = Date.now();
+    this.writeQueueDepth++;
+
+    debugLog('QUEUE', `📥 Operation #${opId} "${operationName}" QUEUED (depth: ${this.writeQueueDepth})`, {
+      caller: getCallStack()
+    });
+
+    return new Promise((resolve, reject) => {
+      this.writeQueue = this.writeQueue
+        .then(async () => {
+          const waitTime = Date.now() - startTime;
+          this.activeOperationId = opId;
+          debugLog('QUEUE', `▶️ Operation #${opId} "${operationName}" STARTING (waited: ${waitTime}ms)`);
+
+          const execStart = Date.now();
+          try {
+            const result = await operation();
+            const execTime = Date.now() - execStart;
+            debugLog('QUEUE', `✅ Operation #${opId} "${operationName}" COMPLETE (exec: ${execTime}ms, total: ${Date.now() - startTime}ms)`);
+            return result;
+          } catch (error) {
+            debugLog('QUEUE', `❌ Operation #${opId} "${operationName}" FAILED`, error);
+            throw error;
+          } finally {
+            this.writeQueueDepth--;
+            this.activeOperationId = null;
+          }
+        })
+        .then(resolve)
+        .catch(reject);
+    });
+  }
+
   /**
    * Initialize SQLite database with schema
    */
@@ -89,6 +174,27 @@ class SQLiteMessageCacheService {
       try {
         const db = await Database.load(DB_PATH);
         this.db = db;
+
+        // DEBUG: Log database path and location
+        console.log(`[SQLiteMessageCache] Database path: ${DB_PATH}`);
+        console.log(`[SQLiteMessageCache] Expected location: %APPDATA%\\supportcenter.requester\\message_cache.db`);
+
+        // FIX: Disable WAL mode and use DELETE journal mode for immediate writes
+        // WAL mode buffers writes to a separate file and doesn't update the main .db file immediately
+        await db.execute(`PRAGMA journal_mode = DELETE`);
+        console.log("[SQLiteMessageCache] Set PRAGMA journal_mode = DELETE");
+
+        // FIX: Set PRAGMA synchronous = FULL to ensure writes are immediately flushed to disk
+        // This prevents data loss on app crash/close without requiring explicit transactions
+        // FULL mode syncs after every write operation (slower but guarantees persistence)
+        await db.execute(`PRAGMA synchronous = FULL`);
+        console.log("[SQLiteMessageCache] Set PRAGMA synchronous = FULL for immediate disk writes");
+
+        // Verify PRAGMA settings
+        const journalMode = await db.select<{ journal_mode: string }[]>(`PRAGMA journal_mode`);
+        const synchronous = await db.select<{ synchronous: number }[]>(`PRAGMA synchronous`);
+        console.log(`[SQLiteMessageCache] ✅ Verified journal_mode: ${journalMode[0]?.journal_mode}, synchronous: ${synchronous[0]?.synchronous} (2=FULL)`);
+
 
         // Create tables if not exist
         await db.execute(`
@@ -175,35 +281,218 @@ class SQLiteMessageCacheService {
    * Returns messages sorted by sequence number
    */
   async getCachedMessages(requestId: string): Promise<ChatMessage[]> {
+    const shortId = requestId.substring(0, 8);
+    debugLog('READ', `📖 getCachedMessages called for ${shortId}`, {
+      caller: getCallStack()
+    });
+
     try {
       const db = await this.getDB();
+
+      // First check total count
+      const countResult = await db.select<{ c: number }[]>(
+        `SELECT COUNT(*) as c FROM messages WHERE request_id = ?`, [requestId]
+      );
+      debugLog('READ', `🔢 Count query returned: ${countResult[0]?.c ?? 0} messages for ${shortId}`);
+
       const rows = await db.select<Record<string, unknown>[]>(
         `SELECT * FROM messages WHERE request_id = ? ORDER BY sequence_number ASC`,
         [requestId]
       );
+
+      debugLog('READ', `📚 SELECT query returned ${rows.length} rows for ${shortId}`);
+
+      if (rows.length > 0) {
+        const seqRange = `${rows[0].sequence_number} - ${rows[rows.length - 1].sequence_number}`;
+        debugLog('READ', `✅ Found messages: seq range ${seqRange}, first: ${String(rows[0].id).substring(0, 8)}, last: ${String(rows[rows.length - 1].id).substring(0, 8)}`);
+      } else {
+        debugLog('READ', `⚠️ NO messages found for ${shortId}`);
+
+        // Extra debug: check if ANY messages exist in database
+        const totalCount = await db.select<{ c: number }[]>(`SELECT COUNT(*) as c FROM messages`);
+        const allRequests = await db.select<{ request_id: string; cnt: number }[]>(
+          `SELECT request_id, COUNT(*) as cnt FROM messages GROUP BY request_id LIMIT 5`
+        );
+        debugLog('READ', `📊 Database state: ${totalCount[0]?.c ?? 0} total messages`, {
+          sampleRequests: allRequests.map(r => ({ id: r.request_id.substring(0, 8), count: r.cnt }))
+        });
+      }
+
       return rows.map(deserializeMessage);
     } catch (error) {
-      console.error("[SQLiteMessageCache] getCachedMessages error:", error);
+      debugLog('READ', `❌ getCachedMessages error`, error);
       return [];
     }
   }
 
   /**
    * Cache messages for a chat
-   * Replaces all existing messages for this chat
+   * Uses selective DELETE + INSERT OR REPLACE for atomic, safe updates
+   *
+   * NOTE: All writes go through withWriteLock() to prevent race conditions.
+   * PRAGMA synchronous = FULL ensures immediate disk persistence.
    */
   async cacheMessages(requestId: string, messages: ChatMessage[]): Promise<void> {
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      debugLog('WRITE', `⚠️ cacheMessages called with 0 messages for request ${requestId}`);
+      return;
+    }
 
-    try {
-      const db = await this.getDB();
+    const shortId = requestId.substring(0, 8);
+    debugLog('WRITE', `📝 cacheMessages called for ${shortId} with ${messages.length} messages`, {
+      caller: getCallStack()
+    });
 
-      // Delete existing messages for this chat
-      await db.execute(`DELETE FROM messages WHERE request_id = ?`, [requestId]);
+    return this.withWriteLock(`cacheMessages(${shortId})`, async () => {
+      try {
+        const db = await this.getDB();
 
-      // Insert new messages
-      for (const message of messages) {
+        // DEBUG: Check database size before write
+        const beforeCount = await db.select<{ total: number }[]>(`SELECT COUNT(*) as total FROM messages`);
+        const beforeForRequest = await db.select<{ c: number }[]>(
+          `SELECT COUNT(*) as c FROM messages WHERE request_id = ?`, [requestId]
+        );
+        debugLog('WRITE', `📊 Before: ${beforeCount[0]?.total ?? 0} total, ${beforeForRequest[0]?.c ?? 0} for this request`);
+
+        // DEBUG: Log message details
+        const seqRange = messages.length > 0
+          ? `${Math.min(...messages.map(m => m.sequenceNumber ?? 0))} - ${Math.max(...messages.map(m => m.sequenceNumber ?? 0))}`
+          : 'N/A';
+        debugLog('WRITE', `✍️ Writing ${messages.length} messages, seq range: ${seqRange}`);
+
+        // Get existing message IDs for this request
+        const existingIds = await db.select<{ id: string }[]>(
+          `SELECT id FROM messages WHERE request_id = ?`,
+          [requestId]
+        );
+        const existingIdSet = new Set(existingIds.map(r => r.id));
+        const newIdSet = new Set(messages.map(m => m.id));
+
+        debugLog('WRITE', `🔍 Existing IDs: ${existingIdSet.size}, New IDs: ${newIdSet.size}`);
+
+        // Delete only messages that are no longer in the new set (selective DELETE)
+        const idsToDelete = [...existingIdSet].filter(id => !newIdSet.has(id));
+        if (idsToDelete.length > 0) {
+          debugLog('WRITE', `🗑️ Deleting ${idsToDelete.length} obsolete messages`);
+          // Delete in batches to avoid SQL statement size limits
+          const batchSize = 100;
+          for (let i = 0; i < idsToDelete.length; i += batchSize) {
+            const batch = idsToDelete.slice(i, i + batchSize);
+            const placeholders = batch.map(() => '?').join(',');
+            await db.execute(
+              `DELETE FROM messages WHERE id IN (${placeholders})`,
+              batch
+            );
+          }
+        }
+
+        // INSERT OR REPLACE each message
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < messages.length; i++) {
+          const message = messages[i];
+          try {
+            const data = serializeMessage(message);
+
+            await db.execute(
+              `INSERT OR REPLACE INTO messages
+               (id, request_id, sender_id, sender_json, content, sequence_number,
+                is_screenshot, screenshot_file_name, is_read_by_current_user,
+                created_at, updated_at, status, temp_id, client_temp_id,
+                is_system_message, file_name, file_size, file_mime_type, cached_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                data.id, data.request_id, data.sender_id, data.sender_json,
+                data.content, data.sequence_number, data.is_screenshot,
+                data.screenshot_file_name, data.is_read_by_current_user,
+                data.created_at, data.updated_at, data.status, data.temp_id,
+                data.client_temp_id, data.is_system_message, data.file_name,
+                data.file_size, data.file_mime_type, data.cached_at
+              ]
+            );
+            successCount++;
+          } catch (insertError) {
+            failCount++;
+            debugLog('WRITE', `❌ Insert failed for message ${i + 1}/${messages.length}`, {
+              id: message.id,
+              seq: message.sequenceNumber,
+              error: insertError
+            });
+          }
+        }
+
+        debugLog('WRITE', `📝 Insert results: ${successCount} success, ${failCount} failed`);
+
+        // Verify and recalculate actual count from rows (not passed-in length)
+        const actualCount = await db.select<{ c: number }[]>(
+          `SELECT COUNT(*) as c FROM messages WHERE request_id = ?`,
+          [requestId]
+        );
+        const latestSequence = Math.max(...messages.map((m) => m.sequenceNumber ?? 0));
+
+        // Update chat metadata with actual verified count
+        await db.execute(
+          `INSERT OR REPLACE INTO chat_meta (request_id, latest_sequence, last_updated, message_count)
+           VALUES (?, ?, ?, ?)`,
+          [requestId, latestSequence, Date.now(), actualCount[0]?.c ?? 0]
+        );
+
+        // Update sync state's local sequences
+        await this.updateLocalSequences(requestId);
+
+        // DEBUG: Verify write succeeded by reading back
+        const afterCount = await db.select<{ total: number }[]>(`SELECT COUNT(*) as total FROM messages`);
+
+        // CRITICAL VERIFICATION: Read back what we just wrote
+        const verifyRead = await db.select<{ id: string; sequence_number: number }[]>(
+          `SELECT id, sequence_number FROM messages WHERE request_id = ? ORDER BY sequence_number ASC LIMIT 5`,
+          [requestId]
+        );
+
+        debugLog('WRITE', `✅ VERIFICATION AFTER WRITE:`, {
+          requestMessages: actualCount[0]?.c ?? 0,
+          totalInDb: afterCount[0]?.total ?? 0,
+          netChange: (afterCount[0]?.total ?? 0) - (beforeCount[0]?.total ?? 0),
+          firstFiveIds: verifyRead.map(r => ({ id: r.id.substring(0, 8), seq: r.sequence_number }))
+        });
+
+        // Extra verification: check if the data is actually readable
+        if (actualCount[0]?.c === 0 && messages.length > 0) {
+          debugLog('WRITE', `🚨 CRITICAL: Wrote ${messages.length} messages but verification shows 0!`);
+        }
+      } catch (error) {
+        debugLog('WRITE', `❌ cacheMessages error`, error);
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * Add a single message to the cache
+   *
+   * NOTE: All writes go through withWriteLock() to prevent race conditions.
+   * Message count is recalculated from actual rows, not incremented.
+   */
+  async addMessage(message: ChatMessage): Promise<void> {
+    const shortId = message.requestId.substring(0, 8);
+    const msgId = message.id.substring(0, 8);
+    debugLog('WRITE', `➕ addMessage called for ${shortId}, msg ${msgId}, seq ${message.sequenceNumber}`, {
+      caller: getCallStack()
+    });
+
+    return this.withWriteLock(`addMessage(${shortId}:${msgId})`, async () => {
+      try {
+        const db = await this.getDB();
         const data = serializeMessage(message);
+
+        // Check if message already exists
+        const existing = await db.select<{ id: string }[]>(
+          `SELECT id FROM messages WHERE id = ?`, [message.id]
+        );
+        debugLog('WRITE', `🔍 Message ${msgId} exists: ${existing.length > 0}`);
+
+        // INSERT OR REPLACE the message
         await db.execute(
           `INSERT OR REPLACE INTO messages
            (id, request_id, sender_id, sender_json, content, sequence_number,
@@ -220,96 +509,130 @@ class SQLiteMessageCacheService {
             data.file_size, data.file_mime_type, data.cached_at
           ]
         );
+
+        // Verify the message was written
+        const verify = await db.select<{ id: string }[]>(
+          `SELECT id FROM messages WHERE id = ?`, [message.id]
+        );
+        debugLog('WRITE', `✅ Message ${msgId} written, verify: ${verify.length > 0}`);
+
+        // Recalculate actual count from rows (not increment)
+        const countResult = await db.select<{ c: number }[]>(
+          `SELECT COUNT(*) as c FROM messages WHERE request_id = ?`,
+          [message.requestId]
+        );
+
+        // Get latest sequence from actual data
+        const maxSeqResult = await db.select<{ m: number | null }[]>(
+          `SELECT MAX(sequence_number) as m FROM messages WHERE request_id = ?`,
+          [message.requestId]
+        );
+
+        debugLog('WRITE', `📊 After addMessage: count=${countResult[0]?.c}, maxSeq=${maxSeqResult[0]?.m}`);
+
+        // Update metadata with actual values
+        await db.execute(
+          `INSERT OR REPLACE INTO chat_meta (request_id, latest_sequence, last_updated, message_count)
+           VALUES (?, ?, ?, ?)`,
+          [
+            message.requestId,
+            maxSeqResult[0]?.m ?? 0,
+            Date.now(),
+            countResult[0]?.c ?? 0
+          ]
+        );
+
+        // Update sync state's local sequences
+        await this.updateLocalSequences(message.requestId);
+      } catch (error) {
+        debugLog('WRITE', `❌ addMessage error`, error);
       }
-
-      // Update chat metadata
-      const latestSequence = Math.max(...messages.map((m) => m.sequenceNumber ?? 0));
-      await db.execute(
-        `INSERT OR REPLACE INTO chat_meta (request_id, latest_sequence, last_updated, message_count)
-         VALUES (?, ?, ?, ?)`,
-        [requestId, latestSequence, Date.now(), messages.length]
-      );
-
-      // Update sync state's local sequences
-      await this.updateLocalSequences(requestId);
-    } catch (error) {
-      console.error("[SQLiteMessageCache] cacheMessages error:", error);
-    }
-  }
-
-  /**
-   * Add a single message to the cache
-   */
-  async addMessage(message: ChatMessage): Promise<void> {
-    try {
-      const db = await this.getDB();
-      const data = serializeMessage(message);
-
-      await db.execute(
-        `INSERT OR REPLACE INTO messages
-         (id, request_id, sender_id, sender_json, content, sequence_number,
-          is_screenshot, screenshot_file_name, is_read_by_current_user,
-          created_at, updated_at, status, temp_id, client_temp_id,
-          is_system_message, file_name, file_size, file_mime_type, cached_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          data.id, data.request_id, data.sender_id, data.sender_json,
-          data.content, data.sequence_number, data.is_screenshot,
-          data.screenshot_file_name, data.is_read_by_current_user,
-          data.created_at, data.updated_at, data.status, data.temp_id,
-          data.client_temp_id, data.is_system_message, data.file_name,
-          data.file_size, data.file_mime_type, data.cached_at
-        ]
-      );
-
-      // Update chat metadata if this message is newer
-      const seqNum = message.sequenceNumber ?? 0;
-      await db.execute(
-        `INSERT INTO chat_meta (request_id, latest_sequence, last_updated, message_count)
-         VALUES (?, ?, ?, 1)
-         ON CONFLICT(request_id) DO UPDATE SET
-           latest_sequence = MAX(latest_sequence, excluded.latest_sequence),
-           last_updated = excluded.last_updated,
-           message_count = message_count + 1`,
-        [message.requestId, seqNum, Date.now()]
-      );
-
-      // Update sync state's local sequences
-      await this.updateLocalSequences(message.requestId);
-    } catch (error) {
-      console.error("[SQLiteMessageCache] addMessage error:", error);
-    }
+    });
   }
 
   /**
    * Replace an optimistic message with the real one
+   *
+   * NOTE: Uses write lock for serialization
    */
   async replaceOptimisticMessage(tempId: string, realMessage: ChatMessage): Promise<void> {
-    try {
-      const db = await this.getDB();
+    const shortTempId = tempId.substring(0, 8);
+    const shortRealId = realMessage.id.substring(0, 8);
+    debugLog('WRITE', `🔄 replaceOptimisticMessage: ${shortTempId} -> ${shortRealId}`);
 
-      // Delete optimistic message
-      await db.execute(`DELETE FROM messages WHERE id = ?`, [tempId]);
+    return this.withWriteLock(`replaceOptimistic(${shortTempId}->${shortRealId})`, async () => {
+      try {
+        const db = await this.getDB();
+        const data = serializeMessage(realMessage);
 
-      // Add real message
-      await this.addMessage(realMessage);
-    } catch (error) {
-      console.error("[SQLiteMessageCache] replaceOptimisticMessage error:", error);
-    }
+        // Delete optimistic message
+        await db.execute(`DELETE FROM messages WHERE id = ?`, [tempId]);
+
+        // Insert real message directly (not via addMessage to avoid nested lock)
+        await db.execute(
+          `INSERT OR REPLACE INTO messages
+           (id, request_id, sender_id, sender_json, content, sequence_number,
+            is_screenshot, screenshot_file_name, is_read_by_current_user,
+            created_at, updated_at, status, temp_id, client_temp_id,
+            is_system_message, file_name, file_size, file_mime_type, cached_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            data.id, data.request_id, data.sender_id, data.sender_json,
+            data.content, data.sequence_number, data.is_screenshot,
+            data.screenshot_file_name, data.is_read_by_current_user,
+            data.created_at, data.updated_at, data.status, data.temp_id,
+            data.client_temp_id, data.is_system_message, data.file_name,
+            data.file_size, data.file_mime_type, data.cached_at
+          ]
+        );
+
+        // Recalculate metadata
+        const countResult = await db.select<{ c: number }[]>(
+          `SELECT COUNT(*) as c FROM messages WHERE request_id = ?`,
+          [realMessage.requestId]
+        );
+        const maxSeqResult = await db.select<{ m: number | null }[]>(
+          `SELECT MAX(sequence_number) as m FROM messages WHERE request_id = ?`,
+          [realMessage.requestId]
+        );
+
+        await db.execute(
+          `INSERT OR REPLACE INTO chat_meta (request_id, latest_sequence, last_updated, message_count)
+           VALUES (?, ?, ?, ?)`,
+          [
+            realMessage.requestId,
+            maxSeqResult[0]?.m ?? 0,
+            Date.now(),
+            countResult[0]?.c ?? 0
+          ]
+        );
+
+        await this.updateLocalSequences(realMessage.requestId);
+      } catch (error) {
+        console.error("[SQLiteMessageCache] replaceOptimisticMessage error:", error);
+      }
+    });
   }
 
   /**
    * Clear cache for a specific chat
+   *
+   * NOTE: Uses write lock for serialization
    */
   async clearChat(requestId: string): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await db.execute(`DELETE FROM messages WHERE request_id = ?`, [requestId]);
-      await db.execute(`DELETE FROM chat_meta WHERE request_id = ?`, [requestId]);
-      await db.execute(`DELETE FROM chat_sync_state WHERE request_id = ?`, [requestId]);
-    } catch (error) {
-      console.error("[SQLiteMessageCache] clearChat error:", error);
-    }
+    const shortId = requestId.substring(0, 8);
+    debugLog('WRITE', `🗑️ clearChat called for ${shortId}`);
+
+    return this.withWriteLock(`clearChat(${shortId})`, async () => {
+      try {
+        const db = await this.getDB();
+        await db.execute(`DELETE FROM messages WHERE request_id = ?`, [requestId]);
+        await db.execute(`DELETE FROM chat_meta WHERE request_id = ?`, [requestId]);
+        await db.execute(`DELETE FROM chat_sync_state WHERE request_id = ?`, [requestId]);
+      } catch (error) {
+        console.error("[SQLiteMessageCache] clearChat error:", error);
+      }
+    });
   }
 
   // ==========================================================================
@@ -347,40 +670,48 @@ class SQLiteMessageCacheService {
 
   /**
    * Update sync state for a chat
+   *
+   * NOTE: Uses write lock for serialization
    */
   async updateSyncState(requestId: string, state: ChatSyncState): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await db.execute(
-        `INSERT INTO chat_sync_state (request_id, sync_state, last_validated_at)
-         VALUES (?, ?, ?)
-         ON CONFLICT(request_id) DO UPDATE SET
-           sync_state = excluded.sync_state,
-           last_validated_at = excluded.last_validated_at`,
-        [requestId, state, Date.now()]
-      );
-    } catch (error) {
-      console.error("[SQLiteMessageCache] updateSyncState error:", error);
-    }
+    return this.withWriteLock(`updateSyncState(${requestId.substring(0, 8)})`, async () => {
+      try {
+        const db = await this.getDB();
+        await db.execute(
+          `INSERT INTO chat_sync_state (request_id, sync_state, last_validated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(request_id) DO UPDATE SET
+             sync_state = excluded.sync_state,
+             last_validated_at = excluded.last_validated_at`,
+          [requestId, state, Date.now()]
+        );
+      } catch (error) {
+        console.error("[SQLiteMessageCache] updateSyncState error:", error);
+      }
+    });
   }
 
   /**
    * Update the expected backend sequence number for a chat
    * Called when ticket list is fetched with lastMessageSequence
+   *
+   * NOTE: Uses write lock for serialization
    */
   async updateBackendSequence(requestId: string, seq: number): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await db.execute(
-        `INSERT INTO chat_sync_state (request_id, last_known_backend_seq, sync_state, last_validated_at)
-         VALUES (?, ?, 'UNKNOWN', ?)
-         ON CONFLICT(request_id) DO UPDATE SET
-           last_known_backend_seq = excluded.last_known_backend_seq`,
-        [requestId, seq, Date.now()]
-      );
-    } catch (error) {
-      console.error("[SQLiteMessageCache] updateBackendSequence error:", error);
-    }
+    return this.withWriteLock(`updateBackendSeq(${requestId.substring(0, 8)})`, async () => {
+      try {
+        const db = await this.getDB();
+        await db.execute(
+          `INSERT INTO chat_sync_state (request_id, last_known_backend_seq, sync_state, last_validated_at)
+           VALUES (?, ?, 'UNKNOWN', ?)
+           ON CONFLICT(request_id) DO UPDATE SET
+             last_known_backend_seq = excluded.last_known_backend_seq`,
+          [requestId, seq, Date.now()]
+        );
+      } catch (error) {
+        console.error("[SQLiteMessageCache] updateBackendSequence error:", error);
+      }
+    });
   }
 
   /**
@@ -555,17 +886,22 @@ class SQLiteMessageCacheService {
 
   /**
    * Mark all chats as UNKNOWN (called on connectivity restoration)
+   *
+   * NOTE: Uses write lock for serialization
    */
   async markAllChatsUnknown(): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await db.execute(
-        `UPDATE chat_sync_state SET sync_state = 'UNKNOWN', last_validated_at = ?`,
-        [Date.now()]
-      );
-    } catch (error) {
-      console.error("[SQLiteMessageCache] markAllChatsUnknown error:", error);
-    }
+    debugLog('WRITE', `🔄 markAllChatsUnknown called`);
+    return this.withWriteLock(`markAllChatsUnknown`, async () => {
+      try {
+        const db = await this.getDB();
+        await db.execute(
+          `UPDATE chat_sync_state SET sync_state = 'UNKNOWN', last_validated_at = ?`,
+          [Date.now()]
+        );
+      } catch (error) {
+        console.error("[SQLiteMessageCache] markAllChatsUnknown error:", error);
+      }
+    });
   }
 
   /**
@@ -582,42 +918,52 @@ class SQLiteMessageCacheService {
 
   /**
    * Clear expired cache entries (older than 7 days)
+   *
+   * NOTE: Uses write lock for serialization
    */
   async cleanupExpiredCache(): Promise<void> {
-    try {
-      const db = await this.getDB();
-      const expiryTime = Date.now() - CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+    debugLog('MAINT', `🧹 cleanupExpiredCache called`);
+    return this.withWriteLock(`cleanupExpiredCache`, async () => {
+      try {
+        const db = await this.getDB();
+        const expiryTime = Date.now() - CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
-      // Delete expired messages
-      await db.execute(`DELETE FROM messages WHERE cached_at < ?`, [expiryTime]);
+        // Delete expired messages
+        await db.execute(`DELETE FROM messages WHERE cached_at < ?`, [expiryTime]);
 
-      // Delete expired metadata
-      await db.execute(`DELETE FROM chat_meta WHERE last_updated < ?`, [expiryTime]);
+        // Delete expired metadata
+        await db.execute(`DELETE FROM chat_meta WHERE last_updated < ?`, [expiryTime]);
 
-      // Delete sync state for chats with no messages
-      await db.execute(`
-        DELETE FROM chat_sync_state
-        WHERE request_id NOT IN (SELECT DISTINCT request_id FROM messages)
-      `);
+        // Delete sync state for chats with no messages
+        await db.execute(`
+          DELETE FROM chat_sync_state
+          WHERE request_id NOT IN (SELECT DISTINCT request_id FROM messages)
+        `);
 
-      console.log("[SQLiteMessageCache] Expired cache cleaned up");
-    } catch (error) {
-      console.error("[SQLiteMessageCache] cleanupExpiredCache error:", error);
-    }
+        console.log("[SQLiteMessageCache] Expired cache cleaned up");
+      } catch (error) {
+        console.error("[SQLiteMessageCache] cleanupExpiredCache error:", error);
+      }
+    });
   }
 
   /**
    * Clear all cached data
+   *
+   * NOTE: Uses write lock for serialization
    */
   async clearAll(): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await db.execute(`DELETE FROM messages`);
-      await db.execute(`DELETE FROM chat_meta`);
-      await db.execute(`DELETE FROM chat_sync_state`);
-    } catch (error) {
-      console.error("[SQLiteMessageCache] clearAll error:", error);
-    }
+    debugLog('MAINT', `🗑️ clearAll called`);
+    return this.withWriteLock(`clearAll`, async () => {
+      try {
+        const db = await this.getDB();
+        await db.execute(`DELETE FROM messages`);
+        await db.execute(`DELETE FROM chat_meta`);
+        await db.execute(`DELETE FROM chat_sync_state`);
+      } catch (error) {
+        console.error("[SQLiteMessageCache] clearAll error:", error);
+      }
+    });
   }
 
   /**
@@ -680,6 +1026,219 @@ if (typeof window !== "undefined") {
   setTimeout(() => {
     sqliteMessageCache.cleanupExpiredCache().catch(console.error);
   }, 5000);
+}
+
+// ============================================================================
+// DEBUG: Diagnostic Tools
+// ============================================================================
+
+/**
+ * Diagnostic function to check database status for a specific request
+ * Call from console: window.debugSQLiteCache("05ee64fc")
+ */
+export async function debugSQLiteCache(requestId: string): Promise<void> {
+  console.log("=".repeat(80));
+  console.log(`[SQLiteCache DEBUG] Checking cache for request: ${requestId}`);
+  console.log("=".repeat(80));
+
+  try {
+    const db = await sqliteMessageCache["getDB"]();
+
+    // 1. Check total messages in database
+    const totalRows = await db.select<{ count: number }[]>(
+      `SELECT COUNT(*) as count FROM messages`
+    );
+    console.log(`📊 Total messages in database: ${totalRows[0]?.count ?? 0}`);
+
+    // 2. Check messages for this specific request
+    const requestRows = await db.select<Record<string, unknown>[]>(
+      `SELECT * FROM messages WHERE request_id = ? ORDER BY sequence_number ASC`,
+      [requestId]
+    );
+    console.log(`📨 Messages for request ${requestId}: ${requestRows.length}`);
+
+    if (requestRows.length > 0) {
+      console.log(`   ├─ Sequence range: ${requestRows[0].sequence_number} - ${requestRows[requestRows.length - 1].sequence_number}`);
+      console.log(`   ├─ First message: ${requestRows[0].id}`);
+      console.log(`   ├─ Last message: ${requestRows[requestRows.length - 1].id}`);
+      console.log(`   └─ Cached at: ${new Date(requestRows[0].cached_at as number).toLocaleString()}`);
+    } else {
+      console.warn(`⚠️ NO cached messages found for request ${requestId}`);
+    }
+
+    // 3. Check metadata
+    const metaRows = await db.select<Record<string, unknown>[]>(
+      `SELECT * FROM chat_meta WHERE request_id = ?`,
+      [requestId]
+    );
+    if (metaRows.length > 0) {
+      console.log(`📋 Metadata found:`, metaRows[0]);
+    } else {
+      console.warn(`⚠️ NO metadata found for request ${requestId}`);
+    }
+
+    // 4. Check sync state
+    const syncRows = await db.select<Record<string, unknown>[]>(
+      `SELECT * FROM chat_sync_state WHERE request_id = ?`,
+      [requestId]
+    );
+    if (syncRows.length > 0) {
+      console.log(`🔄 Sync state:`, syncRows[0]);
+    }
+
+    // 5. List all requests in cache
+    const allRequests = await db.select<{ request_id: string; count: number }[]>(
+      `SELECT request_id, COUNT(*) as count FROM messages GROUP BY request_id`
+    );
+    console.log(`\n📁 All cached requests (${allRequests.length}):`);
+    allRequests.forEach((r, i) => {
+      const marker = r.request_id === requestId ? "👉" : "  ";
+      console.log(`   ${marker} ${i + 1}. ${r.request_id} (${r.count} messages)`);
+    });
+
+    console.log("=".repeat(80));
+  } catch (error) {
+    console.error("❌ Debug failed:", error);
+  }
+}
+
+/**
+ * Test persistence by writing and immediately reading back
+ * Call from console: window.testSQLitePersistence()
+ */
+export async function testSQLitePersistence(): Promise<void> {
+  console.log("=".repeat(80));
+  console.log("[SQLiteCache] 🧪 PERSISTENCE TEST STARTING");
+  console.log("=".repeat(80));
+
+  const testRequestId = `__test_${Date.now()}`;
+  const testMessageId = `__testmsg_${Date.now()}`;
+
+  try {
+    const db = await sqliteMessageCache["getDB"]();
+
+    // Step 1: Check initial state
+    const beforeCount = await db.select<{ c: number }[]>(`SELECT COUNT(*) as c FROM messages`);
+    console.log(`📊 Step 1: Before test - ${beforeCount[0]?.c ?? 0} total messages`);
+
+    // Step 2: Write a test message directly (bypassing the service)
+    console.log(`✍️ Step 2: Writing test message directly...`);
+    await db.execute(
+      `INSERT INTO messages (id, request_id, content, created_at, cached_at, sequence_number)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [testMessageId, testRequestId, 'Test message content', new Date().toISOString(), Date.now(), 1]
+    );
+
+    // Step 3: Immediately verify the write
+    const verifyDirect = await db.select<{ id: string }[]>(
+      `SELECT id FROM messages WHERE id = ?`, [testMessageId]
+    );
+    console.log(`✅ Step 3: Direct verification - Found: ${verifyDirect.length > 0}`);
+
+    // Step 4: Check via service method
+    const cachedMessages = await sqliteMessageCache.getCachedMessages(testRequestId);
+    console.log(`📖 Step 4: Service getCachedMessages returned: ${cachedMessages.length} messages`);
+
+    // Step 5: Check total count again
+    const afterCount = await db.select<{ c: number }[]>(`SELECT COUNT(*) as c FROM messages`);
+    console.log(`📊 Step 5: After test - ${afterCount[0]?.c ?? 0} total messages (delta: ${(afterCount[0]?.c ?? 0) - (beforeCount[0]?.c ?? 0)})`);
+
+    // Step 6: Cleanup test data
+    await db.execute(`DELETE FROM messages WHERE request_id = ?`, [testRequestId]);
+    console.log(`🗑️ Step 6: Cleaned up test data`);
+
+    // Step 7: Final verification
+    const finalCount = await db.select<{ c: number }[]>(`SELECT COUNT(*) as c FROM messages`);
+    console.log(`📊 Step 7: Final count - ${finalCount[0]?.c ?? 0} total messages`);
+
+    // Summary
+    console.log("=".repeat(80));
+    if (verifyDirect.length > 0 && cachedMessages.length > 0) {
+      console.log("✅ PERSISTENCE TEST PASSED - Writes are persisting correctly");
+    } else {
+      console.log("❌ PERSISTENCE TEST FAILED");
+      console.log(`   Direct write verified: ${verifyDirect.length > 0}`);
+      console.log(`   Service read success: ${cachedMessages.length > 0}`);
+    }
+    console.log("=".repeat(80));
+
+  } catch (error) {
+    console.error("❌ Persistence test failed with error:", error);
+  }
+}
+
+/**
+ * Get write queue status
+ * Call from console: window.getQueueStatus()
+ */
+export function getQueueStatus(): void {
+  const service = sqliteMessageCache as any;
+  console.log("=".repeat(60));
+  console.log("📋 Write Queue Status:");
+  console.log(`   Queue depth: ${service.writeQueueDepth}`);
+  console.log(`   Active operation: ${service.activeOperationId ?? 'none'}`);
+  console.log(`   Total operations: ${operationCounter}`);
+  console.log("=".repeat(60));
+}
+
+/**
+ * Force WAL checkpoint to flush all pending writes to the main database file
+ * This makes the .db file modified date update
+ * Call from console: window.forceCheckpoint()
+ */
+export async function forceCheckpoint(): Promise<void> {
+  try {
+    const db = await sqliteMessageCache["getDB"]();
+
+    console.log("[SQLiteCache] Forcing WAL checkpoint...");
+    await db.execute(`PRAGMA wal_checkpoint(FULL)`);
+    console.log("✅ Checkpoint complete - all writes flushed to main .db file");
+  } catch (error) {
+    console.error("❌ Checkpoint failed:", error);
+    console.log("Note: This is expected if database is not in WAL mode");
+  }
+}
+
+/**
+ * Show current PRAGMA settings
+ * Call from console: window.showPragmaSettings()
+ */
+export async function showPragmaSettings(): Promise<void> {
+  try {
+    const db = await sqliteMessageCache["getDB"]();
+
+    const journalMode = await db.select<{ journal_mode: string }[]>(`PRAGMA journal_mode`);
+    const synchronous = await db.select<{ synchronous: number }[]>(`PRAGMA synchronous`);
+    const walAutocheckpoint = await db.select<{ wal_autocheckpoint: number }[]>(`PRAGMA wal_autocheckpoint`);
+
+    console.log("=".repeat(60));
+    console.log("📋 SQLite PRAGMA Settings:");
+    console.log(`   journal_mode: ${journalMode[0]?.journal_mode} (want: DELETE)`);
+    console.log(`   synchronous: ${synchronous[0]?.synchronous} (want: 2=FULL)`);
+    console.log(`   wal_autocheckpoint: ${walAutocheckpoint[0]?.wal_autocheckpoint}`);
+    console.log("=".repeat(60));
+  } catch (error) {
+    console.error("❌ Failed to read PRAGMA settings:", error);
+  }
+}
+
+// Expose to window for console debugging
+if (typeof window !== "undefined") {
+  (window as any).debugSQLiteCache = debugSQLiteCache;
+  (window as any).forceCheckpoint = forceCheckpoint;
+  (window as any).showPragmaSettings = showPragmaSettings;
+  (window as any).testSQLitePersistence = testSQLitePersistence;
+  (window as any).getQueueStatus = getQueueStatus;
+  (window as any).sqliteMessageCache = sqliteMessageCache;
+  console.log("=".repeat(60));
+  console.log("💡 SQLite Cache Debug Tools Loaded!");
+  console.log("=".repeat(60));
+  console.log("   window.debugSQLiteCache('requestId') - Inspect cache for a ticket");
+  console.log("   window.testSQLitePersistence()       - Test write/read persistence");
+  console.log("   window.getQueueStatus()              - Show write queue status");
+  console.log("   window.showPragmaSettings()          - Show SQLite configuration");
+  console.log("   window.forceCheckpoint()             - Force write WAL to disk");
+  console.log("=".repeat(60));
 }
 
 export default sqliteMessageCache;

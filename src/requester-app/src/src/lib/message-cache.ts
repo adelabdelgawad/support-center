@@ -15,7 +15,7 @@
 import type { ChatMessage } from "@/types";
 
 const DB_NAME = "support-center-requester-cache";
-const DB_VERSION = 2; // Bumped to 2 to share schema with ticket-cache.ts
+const DB_VERSION = 5; // Bumped to 5 to resolve version conflict with existing DB
 const MESSAGES_STORE = "messages";
 const CHAT_META_STORE = "chat_meta";
 const CACHE_EXPIRY_DAYS = 7;

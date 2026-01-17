@@ -15,7 +15,7 @@
 import type { ChatPageResponse, ChatMessageListItem, RequestStatusCount } from "@/types";
 
 const DB_NAME = "support-center-requester-cache";
-const DB_VERSION = 2; // Increment to add tickets store
+const DB_VERSION = 5; // Bumped to 5 to resolve version conflict with existing DB
 const TICKETS_STORE = "tickets";
 const TICKET_META_STORE = "ticket_meta";
 const CACHE_EXPIRY_HOURS = 24;

@@ -11,11 +11,14 @@
 import { Show, createSignal, createEffect, onCleanup } from "solid-js";
 import { cn } from "@/lib/utils";
 import { preloadChatRoute } from "@/lib/route-preloader";
-import { usePrefetchMessages } from "@/queries";
+// REMOVED: usePrefetchMessages (fix-chat-navigation.md)
+// Message prefetch on hover violated the cache-first invariant by causing
+// HTTP fetches to /chat/messages while still on the tickets page.
+// Chat messages are now loaded ONLY when the chat route is mounted.
 import { useLanguage } from "@/context/language-context";
 import { parseLastMessage } from "@/lib/system-message";
 import { Badge } from "@/components/ui/badge";
-import type { TicketListItem, RequestStatus, RequestStatusCount } from "@/types";
+import type { TicketListItem, RequestStatusCount } from "@/types";
 
 interface ChatListItemProps {
   ticket: TicketListItem & { matchedMessageId?: string };
@@ -181,8 +184,10 @@ export function ChatListItem(props: ChatListItemProps) {
     return null;
   };
 
-  // Prefetch messages on hover for instant navigation
-  const prefetchMessages = usePrefetchMessages();
+  // REMOVED: Message prefetch on hover (fix-chat-navigation.md)
+  // This was causing HTTP fetches to /chat/messages while on tickets page.
+  // Now we only preload the route chunk, not the message data.
+  // Message loading happens exclusively when chat route mounts.
 
   // Track new message highlight
   const [isNewMessage, setIsNewMessage] = createSignal(false);
@@ -219,9 +224,10 @@ export function ChatListItem(props: ChatListItemProps) {
     <div
       onClick={() => props.onClick(props.ticket)}
       onMouseEnter={() => {
-        // Preload route chunk + prefetch messages for instant navigation
+        // Preload route chunk ONLY - NO message prefetch (fix-chat-navigation.md)
+        // Message data is loaded exclusively when chat route mounts.
+        // This preserves the cache-first invariant for tickets page.
         preloadChatRoute();
-        prefetchMessages(props.ticket.id);
       }}
       class={cn(
         "flex items-center py-3 px-4 cursor-pointer transition-all duration-200 hover:bg-secondary/50 relative",

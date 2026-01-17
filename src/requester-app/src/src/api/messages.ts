@@ -22,9 +22,22 @@
  * - X-Total-Count: Total messages in chat
  * - X-Oldest-Sequence: Cursor for next "load more" request
  * - X-Has-More: "true" if there are older messages
+ *
+ * ===========================================================================
+ * ROUTE CONTEXT GUARD (fix-chat-navigation.md)
+ * ===========================================================================
+ * Message fetch operations MUST only occur when:
+ * - The chat route is actively mounted
+ * - getGlobalChatRouteState() returns true
+ *
+ * Any fetch attempt from outside the chat route will be BLOCKED and logged.
+ * This prevents accidental over-fetching from tickets page lifecycle.
+ * ===========================================================================
  */
 
 import apiClient, { getErrorMessage } from "./client";
+import { deduplicatedFetch } from "@/lib/request-deduplicator";
+import { getGlobalChatRouteState } from "@/context/chat-route-context";
 import type { ChatMessage, CreateChatMessage } from "@/types";
 
 /**
@@ -61,6 +74,8 @@ export interface GetMessagesCursorParams {
   limit: number;
   /** Load messages older than this sequence number (cursor from previous response) */
   beforeSequence?: number;
+  /** Load messages created AFTER this message ID (for incremental sync) */
+  afterMessageId?: string;
 }
 
 export interface GetMessagesCursorResponse {
@@ -74,11 +89,83 @@ export interface GetMessagesCursorResponse {
 }
 
 /**
+ * Internal function that performs the actual API call.
+ * Used by the deduplicated wrapper.
+ *
+ * GUARD (fix-chat-navigation.md): Blocks fetch if not on chat route
+ */
+async function fetchMessagesCursor(
+  params: GetMessagesCursorParams,
+  signal?: AbortSignal
+): Promise<GetMessagesCursorResponse> {
+  // ===========================================================================
+  // INVARIANT CHECK: Block message fetches outside chat route
+  // ===========================================================================
+  const isChatRoute = getGlobalChatRouteState();
+  if (!isChatRoute) {
+    console.error(
+      `[INVARIANT VIOLATION] Chat message fetch attempted outside chat route!`,
+      `\n  requestId: ${params.requestId.substring(0, 8)}...`,
+      `\n  isChatRoute: ${isChatRoute}`,
+      `\n  Stack trace:`,
+      new Error().stack
+    );
+    // Return empty response instead of fetching
+    return {
+      messages: [],
+      total: 0,
+      oldestSequence: null,
+      hasMore: false,
+    };
+  }
+
+  console.log(`[messages.ts] ✅ fetchMessagesCursor allowed (on chat route) for ${params.requestId.substring(0, 8)}`);
+
+  const queryParams: Record<string, number | string> = {
+    limit: params.limit,
+  };
+
+  if (params.beforeSequence !== undefined) {
+    queryParams.before_sequence = params.beforeSequence;
+  }
+
+  // Support for incremental sync: fetch messages after a specific message ID
+  if (params.afterMessageId !== undefined) {
+    queryParams.after_message_id = params.afterMessageId;
+  }
+
+  const response = await apiClient.get<ChatMessage[]>(
+    `/chat/messages/request/${params.requestId}`,
+    {
+      params: queryParams,
+      signal,
+    }
+  );
+
+  // Parse headers for pagination metadata
+  const total = parseInt(response.headers["x-total-count"] || "0", 10);
+  const oldestSequenceStr = response.headers["x-oldest-sequence"];
+  const oldestSequence = oldestSequenceStr ? parseInt(oldestSequenceStr, 10) : null;
+  const hasMore = response.headers["x-has-more"] === "true";
+
+  return {
+    messages: response.data,
+    total,
+    oldestSequence,
+    hasMore,
+  };
+}
+
+/**
  * Get chat messages with cursor-based pagination (RECOMMENDED)
  *
  * Deterministic pagination that handles real-time updates correctly:
  * - Initial load: Returns the last 100 messages (newest)
  * - Load more: Returns 200 older messages using cursor
+ *
+ * Features request deduplication:
+ * - Identical concurrent requests return the same promise
+ * - Recent results are cached for 2 seconds to prevent re-fetching
  *
  * @param params - Request ID and cursor pagination options
  * @param signal - Optional AbortSignal for cancelling the request
@@ -88,35 +175,14 @@ export async function getMessagesCursor(
   params: GetMessagesCursorParams,
   signal?: AbortSignal
 ): Promise<GetMessagesCursorResponse> {
+  // Build deduplication key from request parameters
+  const dedupeKey = `messages:${params.requestId}:${params.limit}:${params.beforeSequence ?? "latest"}:${params.afterMessageId ?? "none"}`;
+
   try {
-    const queryParams: Record<string, number> = {
-      limit: params.limit,
-    };
-
-    if (params.beforeSequence !== undefined) {
-      queryParams.before_sequence = params.beforeSequence;
-    }
-
-    const response = await apiClient.get<ChatMessage[]>(
-      `/chat/messages/request/${params.requestId}`,
-      {
-        params: queryParams,
-        signal,
-      }
+    // Use deduplication wrapper to prevent concurrent identical requests
+    return await deduplicatedFetch(dedupeKey, () =>
+      fetchMessagesCursor(params, signal)
     );
-
-    // Parse headers for pagination metadata
-    const total = parseInt(response.headers["x-total-count"] || "0", 10);
-    const oldestSequenceStr = response.headers["x-oldest-sequence"];
-    const oldestSequence = oldestSequenceStr ? parseInt(oldestSequenceStr, 10) : null;
-    const hasMore = response.headers["x-has-more"] === "true";
-
-    return {
-      messages: response.data,
-      total,
-      oldestSequence,
-      hasMore,
-    };
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -142,6 +208,29 @@ export async function getMessages(
   params: GetMessagesParams,
   signal?: AbortSignal
 ): Promise<GetMessagesResponse> {
+  // ===========================================================================
+  // INVARIANT CHECK: Block message fetches outside chat route
+  // ===========================================================================
+  const isChatRoute = getGlobalChatRouteState();
+  if (!isChatRoute) {
+    console.error(
+      `[INVARIANT VIOLATION] Legacy getMessages() called outside chat route!`,
+      `\n  requestId: ${params.requestId.substring(0, 8)}...`,
+      `\n  isChatRoute: ${isChatRoute}`,
+      `\n  Stack trace:`,
+      new Error().stack
+    );
+    // Return empty response instead of fetching
+    return {
+      messages: [],
+      total: 0,
+      page: params.page || 1,
+      perPage: params.pageSize || 50,
+    };
+  }
+
+  console.log(`[messages.ts] ✅ getMessages allowed (on chat route) for ${params.requestId.substring(0, 8)}`);
+
   try {
     const page = params.page || 1;
     const perPage = params.pageSize || 50;

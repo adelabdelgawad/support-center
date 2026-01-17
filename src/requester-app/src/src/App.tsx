@@ -28,6 +28,7 @@ import { AppShellSkeleton } from "@/components/app-shell-skeleton";
 import { BannerOverlay } from "@/components/banner-overlay";
 import { listen } from "@tauri-apps/api/event";
 import { RuntimeConfig } from "@/lib/runtime-config";
+import { sqliteMessageCache } from "@/lib/sqlite-message-cache";
 import UpdateRequired from "@/components/UpdateRequired";
 import { logger } from "@/logging";
 
@@ -72,6 +73,12 @@ const App: ParentComponent<RouteSectionProps> = (props) => {
 
     // Mark RuntimeConfig as ready - this will trigger child component rendering
     setIsRuntimeConfigReady(true);
+
+    // Pre-warm SQLite database (non-blocking, parallel with auth refresh)
+    // This moves the ~2-5 second DB initialization from first chat open to app startup
+    sqliteMessageCache.init().catch((err) => {
+      console.warn('[App] SQLite warmup failed:', err);
+    });
 
     // Trigger background refresh of auth from persistent storage
     // This does NOT block - auth state is already available from sync cache

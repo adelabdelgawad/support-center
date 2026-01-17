@@ -11,6 +11,25 @@
  * - ['tickets', 'all-user-tickets'] - All tickets for the user (unfiltered)
  * - ['tickets', 'detail', ticketId] - Single ticket details
  * - ['messages', ticketId] - Chat messages for a ticket
+ *
+ * ===========================================================================
+ * RESPONSIBILITY BOUNDARY (fix-chat-navigation.md)
+ * ===========================================================================
+ *
+ * The useAllUserTickets() hook is used by the TICKETS PAGE only.
+ * It fetches ticket LIST metadata - NOT individual chat messages.
+ *
+ * CRITICAL: This module MUST NOT:
+ * - Call getMessagesCursor() or getMessages() for ticket list purposes
+ * - Call chatSyncService.updateBackendSequence() for multiple tickets
+ * - Invoke any chat sync operations from ticket list context
+ *
+ * Backend sequence updates happen ONLY in:
+ * - use-chat-sync.ts (when a specific chat is opened)
+ *
+ * This prevents the "SQLite write queue storm" that occurred when
+ * backend sequences were updated for ALL tickets on page load.
+ * ===========================================================================
  */
 
 import { createQuery, createMutation, useQueryClient, createInfiniteQuery } from "@tanstack/solid-query";
@@ -24,7 +43,7 @@ import {
 import { getMessages, getMessagesCursor } from "@/api/messages";
 import type { GetMessagesCursorResponse } from "@/api/messages";
 import { ticketCache } from "@/lib/ticket-cache";
-import { chatSyncService } from "@/lib/chat-sync-service";
+// NOTE: chatSyncService import REMOVED - backend sequences are now updated only in chat route
 import type {
   TicketFilterParams,
   ChatPageResponse,
@@ -232,15 +251,11 @@ export function useAllUserTickets(filters?: Accessor<TicketFilterParams | undefi
           console.warn("[useAllUserTickets] Failed to cache tickets:", err);
         });
 
-        // Update backend sequences for deterministic chat sync (fire-and-forget)
-        // This enables per-chat sequence validation without fetching messages
-        for (const ticket of data.chatMessages) {
-          if (ticket.lastMessageSequence !== undefined && ticket.lastMessageSequence !== null) {
-            chatSyncService.updateBackendSequence(ticket.id, ticket.lastMessageSequence).catch((err) => {
-              console.warn("[useAllUserTickets] Failed to update backend sequence:", err);
-            });
-          }
-        }
+        // NOTE: Backend sequence updates REMOVED from tickets page (fix-chat-navigation.md)
+        // Problem: Updating backendSeq for ALL tickets caused SQLite write queue storm
+        // (50 tickets × ~30ms each = 1.5s blocking navigation)
+        // Solution: backendSeq is now updated ONLY when a specific chat is opened
+        // The chat sync service validates sequences on-demand in onChatOpen()
       }
 
       return data;
@@ -672,21 +687,28 @@ export function useTicketFromCache(ticketId: Accessor<string>) {
 
 /**
  * Prefetch ticket messages
+ *
+ * @deprecated REMOVED in fix-chat-navigation.md
+ * This function was causing HTTP fetches to /chat/messages while on the tickets
+ * page (via ChatListItem hover). Message loading now happens ONLY when the chat
+ * route is mounted.
+ *
+ * If you're seeing this warning, you should NOT be using this function.
+ * The route-level guard in messages.ts will block the request anyway.
  */
 export function usePrefetchMessages() {
   const queryClient = useQueryClient();
 
   return (ticketId: string) => {
-    queryClient.prefetchQuery({
-      queryKey: [...messageKeys.list(ticketId), { page: 1, pageSize: 50 }],
-      queryFn: ({ signal }) =>
-        getMessages({
-          requestId: ticketId,
-          page: 1,
-          pageSize: 50,
-        }, signal), // Pass signal for request cancellation
-      staleTime: 10 * 1000,
-    });
+    // BLOCKED: Message prefetch is no longer allowed (fix-chat-navigation.md)
+    console.warn(
+      `[usePrefetchMessages] ⚠️ DEPRECATED - Message prefetch for ${ticketId.substring(0, 8)} blocked.`,
+      `\nMessage fetches are only allowed when chat route is mounted.`,
+      `\nThis function should be removed from all calling code.`
+    );
+
+    // DO NOT prefetch - this causes invariant violations
+    // The getMessages call will be blocked by the route guard anyway
   };
 }
 

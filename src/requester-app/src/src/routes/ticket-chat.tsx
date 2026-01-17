@@ -7,11 +7,12 @@
  * - File attachments and screenshot capture
  */
 
-import { createSignal, createEffect, createMemo, onCleanup, Show, For, createResource, untrack } from "solid-js";
+import { createSignal, createEffect, createMemo, onCleanup, onMount, Show, For, createResource, untrack } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import { useUser } from "@/stores";
 import { authStore } from "@/stores/auth-store";
 import { useLanguage } from "@/context/language-context";
+import { setGlobalChatRouteState } from "@/context/chat-route-context";
 import { useNotification } from "@/context/notification-context";
 import { useNotificationSignalR } from "@/signalr";
 // PHASE 3: Image providers are now lazy-loaded via LazyImageProviders wrapper
@@ -465,6 +466,25 @@ function TicketChatPageInner() {
 
   const ticketId = () => params.ticketId;
 
+  // ===========================================================================
+  // ROUTE CONTEXT GUARD (fix-chat-navigation.md)
+  // ===========================================================================
+  // Set global state IMMEDIATELY to indicate we're on the chat route.
+  // This MUST happen in the component body (not onMount) because:
+  // - Effects inside useChatSync run before onMount completes
+  // - If we wait for onMount, HTTP fetches would be blocked by the guard
+  //
+  // The state is set synchronously when the component is created, ensuring
+  // all downstream effects and hooks can perform message fetches.
+  // ===========================================================================
+  console.log(`[TicketChatPage] 🚀 COMPONENT CREATED - Setting global chat route state to TRUE`);
+  setGlobalChatRouteState(true);
+
+  onCleanup(() => {
+    console.log(`[TicketChatPage] 🔚 UNMOUNTING - Setting global chat route state to FALSE`);
+    setGlobalChatRouteState(false);
+  });
+
   /**
    * Get localized status name based on active language
    */
@@ -494,8 +514,9 @@ function TicketChatPageInner() {
   // Fetch ticket details directly (will load if cache is empty)
   const ticketDetailQuery = useTicketDetail(ticketId);
 
-  // Chat sync hook for managing incremental sync and missing history detection
-  const chatSync = useChatSync(ticketId);
+  // NOTE: chatSync is initialized AFTER realTimeChat below
+  // Per task spec (Phase 0): SignalR must be started BEFORE HTTP sync begins
+  // See "Chat sync hook" section below after realTimeChat definition
 
   // Use fetched data if available, otherwise fallback to cache
   const ticket = createMemo(() => {
@@ -574,6 +595,20 @@ function TicketChatPageInner() {
     onTaskStatusChanged: (data) => {
       handleTaskStatusChanged(data);
     },
+  });
+
+  // Chat sync hook for managing incremental sync and missing history detection
+  // Per DecoupleChatRendering.md:
+  // - Cached messages are rendered IMMEDIATELY from SQLite (non-blocking)
+  // - HTTP sync runs in BACKGROUND only - never blocks UI
+  // - SignalR is fire-and-forget (parallel) - does NOT block HTTP sync
+  //
+  // FIX (fix-chat-navigation.md): Pass lastMessageSequence from ticket cache
+  // Backend sequence is now updated ONLY when this specific chat opens,
+  // not for ALL tickets on tickets page load (which caused SQLite write storm)
+  const chatSync = useChatSync(ticketId, {
+    isSignalRConnected: () => realTimeChat.isConnected(),
+    ticketLastMessageSequence: () => cachedTicket()?.lastMessageSequence,
   });
 
   // Chat mutations hook for HTTP-based message sending
@@ -729,25 +764,61 @@ function TicketChatPageInner() {
   const [wsConnectedTime, setWsConnectedTime] = createSignal<number | null>(null);
   const [cacheLoadTime, setCacheLoadTime] = createSignal<number | null>(null);
 
-  // CACHE-FIRST: Load messages from IndexedDB immediately
-  // This provides instant rendering for previously visited chats
-  const [cachedMessagesResource] = createResource(
-    ticketId,
-    async (id) => {
-      try {
-        const cachedMessages = await messageCacheBridge.getCachedMessages(id);
+  // NON-BLOCKING CACHE STATE
+  // These signals allow immediate rendering while cache loads in background
+  // Per DecoupleChatRendering.md: "Cache-first rendering must NEVER depend on network availability"
+  const [cacheState, setCacheState] = createSignal<{
+    loaded: boolean;
+    messages: ChatMessage[];
+    total: number;
+  }>({ loaded: false, messages: [], total: 0 });
 
-        if (cachedMessages.length > 0) {
-          return { messages: cachedMessages, total: cachedMessages.length };
-        } else {
-          return null;
-        }
-      } catch (error) {
-        console.error(`[Chat] Cache load failed:`, error);
-        return null;
+  // Track timing for verification logging
+  const [routeMountTime] = createSignal(performance.now());
+
+  // NON-BLOCKING CACHE LOAD EFFECT
+  // CRITICAL: This is fire-and-forget - component renders IMMEDIATELY
+  // Per DecoupleChatRendering.md Rule 1: "Cache Is the UI Source of Truth"
+  createEffect(() => {
+    const id = ticketId();
+    if (!id) return;
+
+    const startTime = performance.now();
+
+    // PROOF LOG: Route mount time (before any async)
+    console.log(`[Chat:CacheFirst] 📍 ROUTE MOUNTED at ${startTime.toFixed(0)}ms`);
+
+    // Fire-and-forget cache read - does NOT block rendering
+    // This matches the pattern in use-chat-sync.ts (lines 117-120)
+    messageCacheBridge.getCachedMessages(id).then((cachedMessages) => {
+      const loadTime = performance.now();
+      const duration = loadTime - startTime;
+
+      // PROOF LOG: Cache render time
+      console.log(`[Chat:CacheFirst] 💾 CACHE LOADED in ${duration.toFixed(0)}ms, ${cachedMessages.length} messages`);
+
+      setCacheState({
+        loaded: true,
+        messages: cachedMessages,
+        total: cachedMessages.length,
+      });
+      setCacheLoadTime(loadTime);
+
+      // Populate messages signal if this is the first data source to arrive
+      // Use untrack to avoid dependency loop
+      const currentMsgs = untrack(() => messages());
+      if (currentMsgs.length === 0 && cachedMessages.length > 0) {
+        console.log(`[Chat:CacheFirst] ✅ RENDER FROM CACHE: ${cachedMessages.length} messages`);
+        setMessages(cachedMessages);
+
+        // Update latestSequence for optimistic messages
+        realTimeChat.updateLatestSequenceFromMessages(cachedMessages);
       }
-    }
-  );
+    }).catch((error) => {
+      console.error(`[Chat:CacheFirst] ❌ Cache load failed:`, error);
+      setCacheState({ loaded: true, messages: [], total: 0 });
+    });
+  });
 
   // DEDICATED SCROLL EFFECT: This effect is SEPARATE from data loading
   // It runs AFTER SolidJS has reconciled the DOM, ensuring scrollHeight is accurate
@@ -797,20 +868,41 @@ function TicketChatPageInner() {
   // Use cursor-based pagination query for initial load
   // NOTE: We only use this for initial load. "Load more" is handled separately
   // to properly manage scroll position and message merging
+  //
+  // OPTIMIZATION: Only fetch via HTTP if cache is empty.
+  // If cache has messages, the sync service handles incremental validation/fetching.
+  // This prevents redundant HTTP requests that cause screenshot re-fetches.
+  // CRITICAL: Do NOT wait for cache loading state - per Rule 3: HTTP sync is background-only
   const cachedMessagesQuery = useTicketMessagesCursor(ticketId, {
     initialLimit: INITIAL_LOAD_LIMIT,
     loadMoreLimit: LOAD_MORE_LIMIT,
-    enabled: () => true,
+    enabled: () => {
+      // CHANGED: Don't wait for cache loading state (REMOVED blocking dependency)
+      // Per DecoupleChatRendering.md Rule 3: HTTP sync is background-only and NEVER blocks UI
+      const cache = cacheState();
+
+      // If cache has loaded and has messages, skip HTTP
+      // The chat-sync-service handles background validation
+      if (cache.loaded && cache.messages.length > 0) {
+        return false;
+      }
+
+      // Allow HTTP fetch if:
+      // 1. Cache is still loading (will be handled by onSuccess merge)
+      // 2. Cache loaded but was empty (need data from HTTP)
+      return true;
+    },
     // Use cached messages as initialData for instant render
     get initialData() {
-      const cacheData = cachedMessagesResource();
-      if (!cacheData) return undefined;
+      const cache = cacheState();
+      if (!cache.loaded || cache.messages.length === 0) return undefined;
+
       // Convert cache format to cursor response format
       return {
-        messages: cacheData.messages,
-        total: cacheData.total,
-        oldestSequence: cacheData.messages[0]?.sequenceNumber ?? null,
-        hasMore: cacheData.total > cacheData.messages.length,
+        messages: cache.messages,
+        total: cache.total,
+        oldestSequence: cache.messages[0]?.sequenceNumber ?? null,
+        hasMore: cache.total > cache.messages.length,
       } as GetMessagesCursorResponse;
     }
   });
@@ -819,23 +911,25 @@ function TicketChatPageInner() {
   const [httpMessagesLoaded, setHttpMessagesLoaded] = createSignal(false);
 
   // SPLIT LOADING STATES:
-  // - isHydrating: waiting for ANY data (cache or HTTP) to render
-  // - isRealtimeConnecting: WebSocket connection status (non-blocking)
+  // - isHydrating: waiting for ANY data to render (should be minimal/instant)
+  // - Background states (HTTP, SignalR) are NON-BLOCKING per Rule 2 & 3
   const isHydrating = () => {
-    // If we have messages from any source, hydration is complete
+    // If we have ANY messages from ANY source, hydration is complete
     if (messages().length > 0) return false;
 
-    // If cache is loaded and has messages, hydration is complete
-    const cacheData = cachedMessagesResource();
-    if (cacheData && cacheData.messages && cacheData.messages.length > 0) {
-      return false;
-    }
+    // If cache has finished loading (even if empty), hydration is complete
+    // The component can render empty state immediately
+    if (cacheState().loaded) return false;
 
-    // If HTTP GET is loading and cache didn't provide data, we're hydrating
-    if (cachedMessagesQuery.isLoading) return true;
+    // CRITICAL: Don't block on:
+    // - HTTP query loading (Rule 3: HTTP sync is background-only)
+    // - SignalR connection (Rule 2: SignalR must never block rendering)
+    // - cachedMessagesQuery.isLoading (REMOVED dependency)
 
-    // Otherwise, hydration is complete (either cache miss or HTTP done)
-    return false;
+    // Only show hydrating state during the brief window before
+    // the fire-and-forget cache read has a chance to start
+    // This should be near-instant (< 16ms)
+    return true;
   };
 
   // Connection indicator based purely on SignalR state
@@ -850,7 +944,14 @@ function TicketChatPageInner() {
   };
 
   // Legacy compatibility: keep isLoadingMessages for backwards compatibility
-  const isLoadingMessages = isHydrating;
+  // More explicit about what triggers loading state
+  const isLoadingMessages = () => {
+    // Show skeleton only during the brief cache load window (< 50ms)
+    // Once cache loads (even if empty), don't show skeleton
+    if (cacheState().loaded) return false;
+    if (messages().length > 0) return false;
+    return true;
+  };
 
   // Reset state when ticket changes
   createEffect(() => {
@@ -887,37 +988,14 @@ function TicketChatPageInner() {
     }
   });
 
-  // Initialize messages from cache immediately, then from HTTP GET
+  // Initialize messages from HTTP GET and merge with cache
+  // NOTE: Cache population now happens in the fire-and-forget effect above
+  // This effect handles HTTP data integration only
   createEffect(() => {
     const id = ticketId();
-    const cacheData = cachedMessagesResource();
     const queryData = cachedMessagesQuery.data;
 
-    // PRIORITY 1: Show cached messages immediately (sub-10ms)
-    if (cacheData && cacheData.messages.length > 0 && messages().length === 0) {
-      setCacheLoadTime(performance.now());
-
-      setMessages(cacheData.messages);
-
-      // FIX: Update latestSequence from cached messages immediately
-      // This provides the earliest possible sequence initialization, ensuring
-      // optimistic messages get correct sequence even if sent before HTTP completes
-      realTimeChat.updateLatestSequenceFromMessages(cacheData.messages);
-
-      // Check if there are screenshot messages that need to load images
-      const hasScreenshots = cacheData.messages.some(msg => msg.isScreenshot && msg.screenshotFileName);
-
-      if (hasScreenshots) {
-        // Set a timeout fallback in case images take too long or fail to load
-        setTimeout(() => {
-          if (!hasPerformedInitialScroll) {
-            setLoadingImages(new Set()); // Clear stuck images to trigger reactive scroll effect
-          }
-        }, 500);
-      }
-    }
-
-    // PRIORITY 2: Update with fresh HTTP GET data and cache it
+    // Update with fresh HTTP GET data and cache it
     const fetchedMessages = queryData?.messages;
     if (queryData && fetchedMessages) {
       const isFirstLoad = !httpMessagesLoaded();
@@ -940,6 +1018,14 @@ function TicketChatPageInner() {
 
         if (isFirstLoad) {
           setHttpGetCompleteTime(completeTime);
+
+          // PROOF LOG: HTTP completes AFTER cache render
+          const cacheTime = cacheLoadTime();
+          if (cacheTime !== null) {
+            console.log(`[Chat:CacheFirst] ✅ HTTP COMPLETE at ${completeTime.toFixed(0)}ms (${(completeTime - cacheTime).toFixed(0)}ms AFTER cache render)`);
+          } else {
+            console.log(`[Chat:CacheFirst] ⚠️ HTTP COMPLETE at ${completeTime.toFixed(0)}ms (no cache - first load)`);
+          }
 
           // Update cursor pagination state from initial response
           if (queryData.oldestSequence !== null) {

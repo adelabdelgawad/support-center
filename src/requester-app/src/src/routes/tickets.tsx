@@ -34,6 +34,33 @@ import { requestNotificationPermission } from "@/lib/notifications";
 export default function TicketsPage() {
   console.log(`[TicketsPage] 🚀 COMPONENT MOUNTING at ${new Date().toISOString()}`);
 
+  // ===========================================================================
+  // TICKETS PAGE RESPONSIBILITY BOUNDARY (fix-chat-navigation.md)
+  // ===========================================================================
+  // This page is STRICTLY READ-ONLY with respect to chat data.
+  //
+  // ALLOWED on this page:
+  // ✅ Fetch ticket list metadata (via useAllUserTickets)
+  // ✅ Read unread counts from cache
+  // ✅ Read last message preview from cache
+  // ✅ Read cached message count metadata
+  // ✅ Update ticket cache (unread, lastMessage) via SignalR notifications
+  //
+  // FORBIDDEN on this page:
+  // ❌ NEVER fetch /chat/messages endpoint
+  // ❌ NEVER call cacheMessages or addMessage for HTTP-fetched messages
+  // ❌ NEVER call updateBackendSeq or updateBackendSequence
+  // ❌ NEVER invoke ChatSyncService.onChatOpen or resync
+  //
+  // The chat page (ticket-chat.tsx) is the ONLY place where:
+  // - Messages are HTTP-fetched
+  // - Messages are cached from HTTP responses
+  // - Backend sequence is updated
+  // - Chat sync validation occurs
+  // ===========================================================================
+  console.log(`[TicketsPage] ✅ Using cache-first mode - NO chat message fetches will occur`);
+  console.log(`[TicketsPage] 📍 Global chat route state: NOT SET (tickets page never enables chat route)`);
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
