@@ -1,81 +1,166 @@
 /**
- * Image Cache Context - Global blob URL cache for screenshots
+ * Image Cache Context - Persistent image caching with offline support
  *
- * Prevents re-fetching images by maintaining a persistent cache of blob URLs.
- * Blob URLs are NOT revoked when components unmount, allowing reuse across renders.
+ * Architecture:
+ * - SQLite → metadata & index only (no blobs, no base64)
+ * - Filesystem → actual image bytes (%APPDATA%/supportcenter.requester/images/)
  *
- * Benefits:
- * - Images fetched once and cached forever (until app restart)
- * - Components can remount without triggering re-fetch
- * - Memory efficient (blob URLs are just pointers)
+ * Features:
+ * - Cache-first loading (instant if cached on filesystem)
+ * - NOT_FOUND status tracking (prevents retry spam for 404s)
+ * - User-initiated retry for failed images
+ * - Automatic cleanup (7-day expiry)
  * - Works with authentication (fetches with Bearer token)
+ * - Backward-compatible migration from blob-based storage
+ *
+ * Status Flow:
+ * 1. Check SQLite metadata → if CACHED, load from filesystem and return blob URL
+ * 2. If NOT_FOUND/ERROR → return status for UI handling
+ * 3. If not cached → fetch from server
+ *    - On success → write to filesystem + store metadata in SQLite
+ *    - On 404/410 → mark NOT_FOUND in SQLite
+ *    - On error → mark ERROR in SQLite
  */
 
 import {
   createContext,
   useContext,
-  createSignal,
   createEffect,
   type ParentComponent,
-  type Accessor,
 } from "solid-js";
 import { authStore } from "@/stores";
 import { RuntimeConfig } from "@/lib/runtime-config";
 import { logger } from "@/logging";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { sqliteImageCache, type ImageCacheStatus } from "@/lib/sqlite-image-cache";
+
+// Re-export for consumers
+export type { ImageCacheStatus } from "@/lib/sqlite-image-cache";
+
+/**
+ * Result of getting an image URL
+ */
+export interface ImageFetchResult {
+  status: ImageCacheStatus | 'LOADING' | 'PENDING';
+  blobUrl: string | null;
+  errorMessage: string | null;
+}
 
 interface ImageCacheContextValue {
   /**
    * Get cached blob URL for a screenshot filename.
-   * If not cached, fetches image and caches it.
+   * If cached → returns immediately
+   * If NOT_FOUND/ERROR → returns status for UI handling
+   * If not cached → fetches, caches, and returns
+   *
+   * @param filename - Screenshot filename
+   * @param requestId - Request ID for cache association (optional, for cache organization)
    */
-  getImageUrl: (filename: string) => Promise<string>;
+  getImageUrl: (filename: string, requestId?: string) => Promise<ImageFetchResult>;
 
   /**
-   * Check if image is cached (synchronous)
+   * Check if image is cached (synchronous check of in-memory cache only)
    */
   isCached: (filename: string) => boolean;
 
   /**
+   * Retry fetching a failed image
+   * Clears the error status and re-attempts fetch
+   */
+  retryImage: (filename: string, requestId?: string) => Promise<ImageFetchResult>;
+
+  /**
    * Get cache stats (for debugging)
    */
-  getCacheStats: () => { size: number; filenames: string[] };
+  getCacheStats: () => Promise<{
+    totalImages: number;
+    cachedImages: number;
+    notFoundImages: number;
+    errorImages: number;
+    totalSizeMB: number;
+    blobUrlCount: number;
+    inflightCount: number;
+  }>;
 
   /**
    * Clear entire cache (called on logout)
    */
-  clearCache: () => void;
+  clearCache: () => Promise<void>;
 
   /**
    * Remove specific image from cache
    */
-  removeFromCache: (filename: string) => void;
+  removeFromCache: (filename: string) => Promise<void>;
 }
 
 const ImageCacheContext = createContext<ImageCacheContextValue>();
 
 /**
- * Global cache storage
- * Key: screenshot filename
- * Value: blob URL (blob:http://...)
+ * In-memory tracking for quick checks
+ * Maps filename to current status
  */
-const imageCache = new Map<string, string>();
+const statusCache = new Map<string, ImageCacheStatus>();
 
 /**
  * Track in-flight requests to prevent duplicate fetches
- * Key: screenshot filename
- * Value: Promise<string> (resolves to blob URL)
  */
-const inflightRequests = new Map<string, Promise<string>>();
+const inflightRequests = new Map<string, Promise<ImageFetchResult>>();
 
 /**
- * Fetch screenshot with authentication and create blob URL
+ * Placeholder SVGs for different states
  */
-async function fetchAndCacheImage(filename: string): Promise<string> {
-  // Check cache first
-  const cached = imageCache.get(filename);
-  if (cached) {
-    return cached;
+const EXPIRED_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
+    <rect width="200" height="150" fill="#f3f4f6"/>
+    <text x="100" y="75" text-anchor="middle" font-family="Arial" font-size="14" fill="#9ca3af">
+      Screenshot Expired
+    </text>
+  </svg>
+`);
+
+const ERROR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
+    <rect width="200" height="150" fill="#fee2e2"/>
+    <text x="100" y="75" text-anchor="middle" font-family="Arial" font-size="14" fill="#dc2626">
+      Failed to Load
+    </text>
+  </svg>
+`);
+
+/**
+ * Fetch and cache an image
+ */
+async function fetchAndCacheImage(filename: string, requestId: string): Promise<ImageFetchResult> {
+  // Check SQLite cache first
+  const cachedResult = await sqliteImageCache.getCachedImage(filename);
+
+  if (cachedResult) {
+    // Update in-memory status cache
+    statusCache.set(filename, cachedResult.status);
+
+    if (cachedResult.status === 'CACHED' && cachedResult.blobUrl) {
+      return {
+        status: 'CACHED',
+        blobUrl: cachedResult.blobUrl,
+        errorMessage: null,
+      };
+    }
+
+    if (cachedResult.status === 'NOT_FOUND') {
+      return {
+        status: 'NOT_FOUND',
+        blobUrl: EXPIRED_PLACEHOLDER,
+        errorMessage: cachedResult.errorMessage,
+      };
+    }
+
+    if (cachedResult.status === 'ERROR') {
+      return {
+        status: 'ERROR',
+        blobUrl: ERROR_PLACEHOLDER,
+        errorMessage: cachedResult.errorMessage,
+      };
+    }
   }
 
   // Check if already fetching
@@ -85,13 +170,12 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
   }
 
   // Create fetch promise
-  const fetchPromise = (async () => {
+  const fetchPromise = (async (): Promise<ImageFetchResult> => {
     try {
       const token = authStore.state.token;
       const apiUrl = RuntimeConfig.getServerAddress();
       const url = `${apiUrl}/screenshots/by-filename/${filename}`;
 
-      // Log image fetch attempt
       logger.info('image', 'Fetching screenshot', {
         filename,
         hasToken: !!token,
@@ -104,27 +188,24 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
         },
       });
 
-      // Handle 410 Gone (screenshot deleted/expired) gracefully
-      if (response.status === 410) {
-        console.warn(`[ImageCache] ⚠️ Screenshot expired or deleted: ${filename}`);
+      // Handle 404/410 Gone (screenshot deleted/expired)
+      if (response.status === 404 || response.status === 410) {
+        console.warn(`[ImageCache] Screenshot not found: ${filename} (${response.status})`);
 
-        // Log screenshot expiration
-        logger.warn('image', 'Screenshot expired or deleted', {
+        logger.warn('image', 'Screenshot not found', {
           filename,
-          statusCode: 410,
+          statusCode: response.status,
         });
-        // Return a data URL placeholder for expired screenshots
-        const PLACEHOLDER_SVG = 'data:image/svg+xml,' + encodeURIComponent(`
-          <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
-            <rect width="200" height="150" fill="#f3f4f6"/>
-            <text x="100" y="75" text-anchor="middle" font-family="Arial" font-size="14" fill="#9ca3af">
-              Screenshot Expired
-            </text>
-          </svg>
-        `);
-        // Cache the placeholder to avoid repeated 410 requests
-        imageCache.set(filename, PLACEHOLDER_SVG);
-        return PLACEHOLDER_SVG;
+
+        // Cache as NOT_FOUND to prevent repeated requests
+        await sqliteImageCache.markNotFound(filename, requestId);
+        statusCache.set(filename, 'NOT_FOUND');
+
+        return {
+          status: 'NOT_FOUND',
+          blobUrl: EXPIRED_PLACEHOLDER,
+          errorMessage: 'Screenshot not found on server',
+        };
       }
 
       if (!response.ok) {
@@ -132,39 +213,43 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
       }
 
       const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
 
-      // Cache the blob URL (NEVER revoke it - let it persist)
-      imageCache.set(filename, blobUrl);
+      // Cache to SQLite
+      await sqliteImageCache.cacheImage(filename, requestId, blob);
+      statusCache.set(filename, 'CACHED');
 
-      // Log successful image load
-      logger.info('image', 'Screenshot loaded successfully', {
+      // Get blob URL from cache (it creates one during cacheImage)
+      const result = await sqliteImageCache.getCachedImage(filename);
+
+      logger.info('image', 'Screenshot loaded and cached', {
         filename,
         size: blob.size,
       });
 
-      return blobUrl;
+      return {
+        status: 'CACHED',
+        blobUrl: result?.blobUrl ?? URL.createObjectURL(blob),
+        errorMessage: null,
+      };
     } catch (error) {
-      console.error(`[ImageCache] ❌ Fetch failed: ${filename}`, error);
+      console.error(`[ImageCache] Fetch failed: ${filename}`, error);
 
-      // Log image fetch failure
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
       logger.error('image', 'Screenshot fetch failed', {
         filename,
-        error: String(error),
-        errorType: error?.constructor?.name,
+        error: errorMessage,
       });
-      // Provide fallback placeholder for any fetch error
-      const ERROR_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150">
-          <rect width="200" height="150" fill="#fee2e2"/>
-          <text x="100" y="75" text-anchor="middle" font-family="Arial" font-size="14" fill="#dc2626">
-            Failed to Load
-          </text>
-        </svg>
-      `);
-      // Cache error placeholder to prevent retry storms
-      imageCache.set(filename, ERROR_PLACEHOLDER);
-      return ERROR_PLACEHOLDER;
+
+      // Cache as ERROR to prevent immediate retry spam
+      await sqliteImageCache.markError(filename, requestId, errorMessage);
+      statusCache.set(filename, 'ERROR');
+
+      return {
+        status: 'ERROR',
+        blobUrl: ERROR_PLACEHOLDER,
+        errorMessage,
+      };
     } finally {
       // Remove from inflight tracking
       inflightRequests.delete(filename);
@@ -178,37 +263,40 @@ async function fetchAndCacheImage(filename: string): Promise<string> {
 }
 
 export const ImageCacheProvider: ParentComponent = (props) => {
-  const getImageUrl = async (filename: string): Promise<string> => {
-    return fetchAndCacheImage(filename);
+  const getImageUrl = async (filename: string, requestId?: string): Promise<ImageFetchResult> => {
+    return fetchAndCacheImage(filename, requestId || 'unknown');
   };
 
   const isCached = (filename: string): boolean => {
-    return imageCache.has(filename);
+    return statusCache.get(filename) === 'CACHED';
   };
 
-  const getCacheStats = () => {
+  const retryImage = async (filename: string, requestId?: string): Promise<ImageFetchResult> => {
+    // Clear the error status to allow re-fetch
+    await sqliteImageCache.clearForRetry(filename);
+    statusCache.delete(filename);
+
+    // Re-fetch
+    return fetchAndCacheImage(filename, requestId || 'unknown');
+  };
+
+  const getCacheStats = async () => {
+    const stats = await sqliteImageCache.getStats();
     return {
-      size: imageCache.size,
-      filenames: Array.from(imageCache.keys()),
+      ...stats,
+      inflightCount: inflightRequests.size,
     };
   };
 
-  const clearCache = () => {
-    // Revoke all blob URLs to free memory
-    for (const blobUrl of imageCache.values()) {
-      URL.revokeObjectURL(blobUrl);
-    }
-
-    imageCache.clear();
+  const clearCache = async () => {
+    await sqliteImageCache.clearAll();
+    statusCache.clear();
     inflightRequests.clear();
   };
 
-  const removeFromCache = (filename: string) => {
-    const blobUrl = imageCache.get(filename);
-    if (blobUrl) {
-      URL.revokeObjectURL(blobUrl);
-      imageCache.delete(filename);
-    }
+  const removeFromCache = async (filename: string) => {
+    await sqliteImageCache.removeFromCache(filename);
+    statusCache.delete(filename);
   };
 
   // Clear cache when user logs out
@@ -216,14 +304,15 @@ export const ImageCacheProvider: ParentComponent = (props) => {
     const isAuthenticated = authStore.state.isAuthenticated;
 
     // When user becomes unauthenticated (logs out), clear the cache
-    if (!isAuthenticated && imageCache.size > 0) {
-      clearCache();
+    if (!isAuthenticated && statusCache.size > 0) {
+      clearCache().catch(console.error);
     }
   });
 
   const value: ImageCacheContextValue = {
     getImageUrl,
     isCached,
+    retryImage,
     getCacheStats,
     clearCache,
     removeFromCache,
@@ -245,4 +334,9 @@ export function useImageCache(): ImageCacheContextValue {
     throw new Error("useImageCache must be used within ImageCacheProvider");
   }
   return context;
+}
+
+// Initialize SQLite image cache on app startup
+if (typeof window !== "undefined") {
+  sqliteImageCache.init().catch(console.error);
 }

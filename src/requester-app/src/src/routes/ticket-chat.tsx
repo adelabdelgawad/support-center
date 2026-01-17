@@ -75,7 +75,7 @@ function MessagesSkeleton() {
 }
 import { formatDateTime, cn } from "@/lib/utils";
 import { preloadTicketsRoute } from "@/lib/route-preloader";
-import { ArrowLeft, Send, Wifi, WifiOff, Camera, X, Image, Clock, ArrowDown, FileText, Download, RefreshCw } from "lucide-solid";
+import { ArrowLeft, Send, Wifi, WifiOff, Camera, X, Image, Clock, ArrowDown, FileText, Download, RefreshCw, AlertCircle } from "lucide-solid";
 import type { ChatMessage } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
 import { RuntimeConfig } from "@/lib/runtime-config";
@@ -138,6 +138,24 @@ function MessageBubble(props: {
   const imageCache = useImageCache();
   const [imageError, setImageError] = createSignal(false);
 
+  // Track image retry count for re-fetching
+  const [imageRetryCount, setImageRetryCount] = createSignal(0);
+
+  // Track online status for retry button
+  const [isOnline, setIsOnline] = createSignal(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  // Listen for online/offline events
+  onMount(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    onCleanup(() => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    });
+  });
+
   // FIX: Preserve image dimensions to prevent layout shift on re-render
   // When the component re-renders due to message list changes, the image
   // may briefly lose its dimensions causing scroll position to jump
@@ -162,39 +180,67 @@ function MessageBubble(props: {
   const [hasNotifiedLoadStart, setHasNotifiedLoadStart] = createSignal(false);
 
   // Use createResource for reactive image loading with global cache
-  // This automatically handles loading/error states and caching
-  const [imageBlobUrl] = createResource(
+  // Now handles ImageFetchResult with status, blobUrl, and errorMessage
+  // Re-fetches when imageRetryCount changes (for retry functionality)
+  const [imageResult] = createResource(
     () => {
       // Only fetch if this is a screenshot with a filename
       if (props.message.isScreenshot && props.message.screenshotFileName) {
-        return props.message.screenshotFileName;
+        return {
+          filename: props.message.screenshotFileName,
+          requestId: props.message.requestId,
+          retryCount: imageRetryCount(),
+        };
       }
       return null;
     },
-    async (filename) => {
-      if (!filename) return null;
+    async (params) => {
+      if (!params) return null;
 
-      // Notify parent that image loading started (only once)
+      // Notify parent that image loading started (only once per initial load)
       if (!hasNotifiedLoadStart()) {
         props.onImageLoadStart?.(props.message.id);
         setHasNotifiedLoadStart(true);
       }
 
       try {
-        // Get image URL from cache (will fetch if not cached)
-        const blobUrl = await imageCache.getImageUrl(filename);
+        // Get image URL from cache - now returns ImageFetchResult
+        // Use retryImage if this is a retry attempt
+        const result = params.retryCount > 0
+          ? await imageCache.retryImage(params.filename, params.requestId)
+          : await imageCache.getImageUrl(params.filename, params.requestId);
 
-        // Notify parent that blob URL is ready (for image viewer)
-        props.onBlobUrlReady?.(props.message.id, blobUrl);
+        // Notify parent that blob URL is ready (for image viewer) if cached
+        if (result.status === 'CACHED' && result.blobUrl) {
+          props.onBlobUrlReady?.(props.message.id, result.blobUrl);
+        }
 
-        return blobUrl;
+        return result;
       } catch (error) {
-        console.error(`[MessageBubble] Failed to load image: ${filename}`, error);
+        console.error(`[MessageBubble] Failed to load image: ${params.filename}`, error);
         setImageError(true);
-        return null;
+        return {
+          status: 'ERROR' as const,
+          blobUrl: null,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        };
       }
     }
   );
+
+  // Handle image retry
+  const handleImageRetry = () => {
+    if (!isOnline()) return;
+    setImageError(false);
+    setImageRetryCount((c) => c + 1);
+  };
+
+  // Derived states for cleaner template
+  const isImageLoading = () => imageResult.loading;
+  const isImageCached = () => imageResult()?.status === 'CACHED' && imageResult()?.blobUrl;
+  const isImageNotFound = () => imageResult()?.status === 'NOT_FOUND';
+  const isImageError = () => imageResult()?.status === 'ERROR' || imageError();
+  const imageBlobUrl = () => imageResult()?.blobUrl;
 
   // Generate external URL for opening in new tab
   const externalUrl = () => {
@@ -292,17 +338,61 @@ function MessageBubble(props: {
             }}
             class="relative overflow-hidden rounded bg-muted"
           >
-            <Show when={imageBlobUrl() && !imageError()} fallback={
-              <Show when={!imageError()} fallback={
-                <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground w-full h-full">
-                  <Image class="h-5 w-5" />
-                </div>
-              }>
-                <div class="flex items-center justify-center w-full h-full">
-                  <Spinner size="sm" />
-                </div>
-              </Show>
-            }>
+            {/* Loading state */}
+            <Show when={isImageLoading()}>
+              <div class="flex items-center justify-center w-full h-full">
+                <Spinner size="sm" />
+              </div>
+            </Show>
+
+            {/* NOT_FOUND state - image doesn't exist on server */}
+            <Show when={!isImageLoading() && isImageNotFound()}>
+              <div class="flex flex-col items-center justify-center gap-2 w-full h-full p-2 bg-muted">
+                <Image class="h-5 w-5 text-muted-foreground" />
+                <span class="text-[10px] text-muted-foreground text-center">Image expired</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleImageRetry();
+                  }}
+                  disabled={!isOnline()}
+                  class="text-[10px] h-6 px-2 gap-1"
+                  title={isOnline() ? "Retry loading image" : "Offline - cannot retry"}
+                >
+                  <Show when={isOnline()} fallback={<><WifiOff class="h-3 w-3" />Offline</>}>
+                    <RefreshCw class="h-3 w-3" />Retry
+                  </Show>
+                </Button>
+              </div>
+            </Show>
+
+            {/* ERROR state - network or other error */}
+            <Show when={!isImageLoading() && !isImageNotFound() && isImageError()}>
+              <div class="flex flex-col items-center justify-center gap-2 w-full h-full p-2 bg-destructive/5">
+                <AlertCircle class="h-5 w-5 text-destructive" />
+                <span class="text-[10px] text-destructive text-center">Failed to load</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleImageRetry();
+                  }}
+                  disabled={!isOnline()}
+                  class="text-[10px] h-6 px-2 gap-1 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  title={isOnline() ? "Retry loading image" : "Offline - cannot retry"}
+                >
+                  <Show when={isOnline()} fallback={<><WifiOff class="h-3 w-3" />Offline</>}>
+                    <RefreshCw class="h-3 w-3" />Retry
+                  </Show>
+                </Button>
+              </div>
+            </Show>
+
+            {/* CACHED state - successfully loaded image */}
+            <Show when={!isImageLoading() && isImageCached()}>
               <Button
                 onClick={(e) => {
                   e.stopPropagation();

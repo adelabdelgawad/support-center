@@ -55,6 +55,9 @@ mod logging;
 // Data migration module (app data directory relocation)
 mod migration;
 
+// Image filesystem storage module
+mod image_storage;
+
 // ============================================================================
 // PERFORMANCE OPTIMIZATION: Screen Dimension Caching for Mouse Positioning
 // ============================================================================
@@ -1699,7 +1702,15 @@ pub fn run() {
             logging::log_get_total_size,
             logging::log_force_rotate,
             logging::log_clear_all,
-            logging::log_init
+            logging::log_init,
+            // Image storage commands
+            image_storage::image_storage_write,
+            image_storage::image_storage_read,
+            image_storage::image_storage_exists,
+            image_storage::image_storage_delete,
+            image_storage::image_storage_clear_all,
+            image_storage::image_storage_get_size,
+            image_storage::image_storage_get_directory
         ])
         // Handle window events - hide instead of close/minimize
         .on_window_event(|window, event| {
