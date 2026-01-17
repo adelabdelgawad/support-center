@@ -7,7 +7,7 @@ import { SheetSkeleton } from '@/components/ui/sheet-skeleton';
  * Add Request Status Sheet - Lazy loaded
  */
 export const AddRequestStatusSheet = dynamic(
-  () => import('./add-request-status-sheet'),
+  () => import('./add-request-status-sheet').then(mod => ({ default: mod.AddRequestStatusSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add Request Status" description="Loading form..." />,
@@ -18,7 +18,7 @@ export const AddRequestStatusSheet = dynamic(
  * Edit Request Status Sheet - Lazy loaded
  */
 export const EditRequestStatusSheet = dynamic(
-  () => import('./edit-request-status-sheet'),
+  () => import('./edit-request-status-sheet').then(mod => ({ default: mod.EditRequestStatusSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit Request Status" description="Loading..." />,
@@ -29,7 +29,7 @@ export const EditRequestStatusSheet = dynamic(
  * View Request Status Sheet - Lazy loaded
  */
 export const ViewRequestStatusSheet = dynamic(
-  () => import('./view-request-status-sheet'),
+  () => import('./view-request-status-sheet').then(mod => ({ default: mod.ViewRequestStatusSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Request Status Details" description="Loading..." />,

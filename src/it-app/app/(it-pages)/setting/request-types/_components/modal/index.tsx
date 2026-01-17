@@ -7,7 +7,7 @@ import { SheetSkeleton } from '@/components/ui/sheet-skeleton';
  * Add Request Type Sheet - Lazy loaded
  */
 export const AddRequestTypeSheet = dynamic(
-  () => import('./add-request-type-sheet'),
+  () => import('./add-request-type-sheet').then(mod => ({ default: mod.AddRequestTypeSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add Request Type" description="Loading form..." />,
@@ -18,7 +18,7 @@ export const AddRequestTypeSheet = dynamic(
  * Edit Request Type Sheet - Lazy loaded
  */
 export const EditRequestTypeSheet = dynamic(
-  () => import('./edit-request-type-sheet'),
+  () => import('./edit-request-type-sheet').then(mod => ({ default: mod.EditRequestTypeSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit Request Type" description="Loading..." />,
@@ -29,7 +29,7 @@ export const EditRequestTypeSheet = dynamic(
  * View Request Type Sheet - Lazy loaded
  */
 export const ViewRequestTypeSheet = dynamic(
-  () => import('./view-request-type-sheet'),
+  () => import('./view-request-type-sheet').then(mod => ({ default: mod.ViewRequestTypeSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Request Type Details" description="Loading..." />,

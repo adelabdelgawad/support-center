@@ -7,8 +7,8 @@ import { createRequestStatusesTableColumns } from "./request-statuses-table-colu
 import { AddStatusButton } from "../actions/add-status-button";
 import { useRequestStatusesTableActions } from "./request-statuses-table-actions";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
-import { EditStatusSheet } from "../modal";
-import { ViewStatusSheet } from "../modal";
+import { EditRequestStatusSheet } from "../modal";
+import { ViewRequestStatusSheet } from "../modal";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -227,7 +227,7 @@ export function RequestStatusesTableBody({
 
       {/* Modals */}
       {editingStatus && (
-        <EditStatusSheet
+        <EditRequestStatusSheet
           status={editingStatus}
           onOpenChange={(open) => {
             if (!open) {
@@ -239,7 +239,7 @@ export function RequestStatusesTableBody({
       )}
 
       {viewingStatus && (
-        <ViewStatusSheet
+        <ViewRequestStatusSheet
           status={viewingStatus}
           onOpenChange={(open) => !open && setViewingStatus(null)}
         />

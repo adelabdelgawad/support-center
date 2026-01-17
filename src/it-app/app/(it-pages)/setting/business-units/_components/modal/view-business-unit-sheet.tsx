@@ -32,7 +32,7 @@ const DAY_LABELS: Record<string, string> = {
   sunday: 'Sunday',
 };
 
-export default function ViewBusinessUnitSheet({
+export function ViewBusinessUnitSheet({
   unit,
   regions,
   onOpenChange,
@@ -194,3 +194,5 @@ export default function ViewBusinessUnitSheet({
     </Sheet>
   );
 }
+
+export default ViewBusinessUnitSheet;

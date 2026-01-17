@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { RequestType } from "@/types/request-types";
 import { MobileTypeCard } from "./mobile-type-card";
 import { MobileTypeActions } from "./mobile-type-actions";
-import { ViewTypeSheet } from "../modal";
+import { ViewRequestTypeSheet } from "../modal";
 import { useRequestTypesActions } from "../../context/request-types-actions-context";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle2, XCircle } from "lucide-react";
@@ -247,7 +247,7 @@ export function MobileTypesList({
 
       {/* View Type Sheet - opens on card click */}
       {viewingType && (
-        <ViewTypeSheet
+        <ViewRequestTypeSheet
           type={viewingType}
           onOpenChange={(open) => {
             if (!open) {

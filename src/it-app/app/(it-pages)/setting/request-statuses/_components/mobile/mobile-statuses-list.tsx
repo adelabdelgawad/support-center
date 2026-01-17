@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import type { RequestStatusResponse } from "@/types/request-statuses";
 import { MobileStatusCard } from "./mobile-status-card";
 import { MobileStatusActions } from "./mobile-status-actions";
-import { ViewStatusSheet } from "../modal";
+import { ViewRequestStatusSheet } from "../modal";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
 import { Button } from "@/components/ui/button";
 import { X, CheckCircle2, XCircle } from "lucide-react";
@@ -253,7 +253,7 @@ export function MobileStatusesList({
 
       {/* View Status Sheet - opens on card click */}
       {viewingStatus && (
-        <ViewStatusSheet
+        <ViewRequestStatusSheet
           status={viewingStatus}
           onOpenChange={(open) => {
             if (!open) {

@@ -7,7 +7,7 @@ import { SheetSkeleton } from '@/components/ui/sheet-skeleton';
  * Add User Sheet - Lazy loaded
  */
 export const AddUserSheet = dynamic(
-  () => import('./add-user-sheet'),
+  () => import('./add-user-sheet').then(mod => ({ default: mod.AddUserSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add User" description="Loading form..." />,
@@ -18,7 +18,7 @@ export const AddUserSheet = dynamic(
  * Edit User Sheet - Lazy loaded
  */
 export const EditUserSheet = dynamic(
-  () => import('./edit-user-sheet'),
+  () => import('./edit-user-sheet').then(mod => ({ default: mod.EditUserSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit User" description="Loading..." />,
@@ -29,7 +29,7 @@ export const EditUserSheet = dynamic(
  * View User Sheet - Lazy loaded
  */
 export const ViewUserSheet = dynamic(
-  () => import('./view-user-sheet'),
+  () => import('./view-user-sheet').then(mod => ({ default: mod.ViewUserSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="User Details" description="Loading..." />,
@@ -40,7 +40,7 @@ export const ViewUserSheet = dynamic(
  * Assign Business Units Sheet - Lazy loaded
  */
 export const AssignBusinessUnitsSheet = dynamic(
-  () => import('./assign-business-units-sheet'),
+  () => import('./assign-business-units-sheet').then(mod => ({ default: mod.AssignBusinessUnitsSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Assign Business Units" description="Loading..." />,

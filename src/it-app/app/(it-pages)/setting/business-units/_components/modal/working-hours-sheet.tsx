@@ -26,7 +26,7 @@ interface WorkingHoursSheetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function WorkingHoursSheet({
+export function WorkingHoursSheet({
   unit,
   onOpenChange,
 }: WorkingHoursSheetProps) {
@@ -241,3 +241,5 @@ export default function WorkingHoursSheet({
     </Sheet>
   );
 }
+
+export default WorkingHoursSheet;

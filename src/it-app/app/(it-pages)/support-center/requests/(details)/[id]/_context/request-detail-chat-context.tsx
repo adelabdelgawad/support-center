@@ -59,6 +59,10 @@ interface RequestDetailChatContextType {
     isAssignee: boolean;
     isRequester: boolean;
   };
+
+  // Chat reload warning
+  chatNeedsReload: boolean;
+  dismissReloadWarning: () => void;
 }
 
 const RequestDetailChatContext = createContext<RequestDetailChatContextType | undefined>(undefined);

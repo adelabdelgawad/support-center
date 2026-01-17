@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { AddStatusSheet } from "../modal";
+import { AddRequestStatusSheet } from "../modal";
 import type { RequestStatusResponse } from "@/types/request-statuses";
 
 interface AddStatusButtonProps {
@@ -29,7 +29,7 @@ export function AddStatusButton({ onAdd, addStatus }: AddStatusButtonProps) {
       </Button>
 
       {isOpen && (
-        <AddStatusSheet
+        <AddRequestStatusSheet
           open={isOpen}
           onOpenChange={handleOpenChange}
         />

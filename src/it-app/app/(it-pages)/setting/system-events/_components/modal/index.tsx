@@ -7,7 +7,7 @@ import { SheetSkeleton } from '@/components/ui/sheet-skeleton';
  * Add System Event Sheet - Lazy loaded
  */
 export const AddSystemEventSheet = dynamic(
-  () => import('./add-system-event-sheet'),
+  () => import('./add-system-event-sheet').then(mod => ({ default: mod.AddSystemEventSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add System Event" description="Loading form..." />,
@@ -18,7 +18,7 @@ export const AddSystemEventSheet = dynamic(
  * Edit System Event Sheet - Lazy loaded
  */
 export const EditSystemEventSheet = dynamic(
-  () => import('./edit-system-event-sheet'),
+  () => import('./edit-system-event-sheet').then(mod => ({ default: mod.EditSystemEventSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit System Event" description="Loading..." />,
@@ -29,7 +29,7 @@ export const EditSystemEventSheet = dynamic(
  * View System Event Sheet - Lazy loaded
  */
 export const ViewSystemEventSheet = dynamic(
-  () => import('./view-system-event-sheet'),
+  () => import('./view-system-event-sheet').then(mod => ({ default: mod.ViewSystemEventSheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="System Event Details" description="Loading..." />,

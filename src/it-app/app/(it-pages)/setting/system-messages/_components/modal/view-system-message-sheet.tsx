@@ -26,7 +26,7 @@ function extractPlaceholders(template: string | null | undefined): string[] {
   return matches ? matches.map(m => m.slice(1, -1)) : [];
 }
 
-export default function ViewSystemMessageSheet({
+export function ViewSystemMessageSheet({
   message,
   onOpenChange,
 }: ViewSystemMessageSheetProps) {
@@ -117,3 +117,5 @@ export default function ViewSystemMessageSheet({
     </Sheet>
   );
 }
+
+export default ViewSystemMessageSheet;

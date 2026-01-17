@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import { useState } from "react";
-import { EditTypeSheet } from "../modal";
+import { EditRequestTypeSheet } from "../modal";
 import type { RequestType } from "@/types/request-types";
 
 interface MobileTypeActionsProps {
@@ -50,7 +50,7 @@ export function MobileTypeActions({
 
       {/* Edit Sheet */}
       {editingType && (
-        <EditTypeSheet
+        <EditRequestTypeSheet
           type={editingType}
           onOpenChange={(open) => {
             if (!open) {

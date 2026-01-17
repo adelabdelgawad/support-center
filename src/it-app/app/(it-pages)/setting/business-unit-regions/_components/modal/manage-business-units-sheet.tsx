@@ -262,3 +262,5 @@ export function ManageBusinessUnitsSheet({
     </Sheet>
   );
 }
+
+export default ManageBusinessUnitsSheet;

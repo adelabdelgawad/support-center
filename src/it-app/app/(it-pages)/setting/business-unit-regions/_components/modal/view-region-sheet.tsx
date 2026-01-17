@@ -17,7 +17,7 @@ interface ViewRegionSheetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function ViewRegionSheet({ region, onOpenChange }: ViewRegionSheetProps) {
+export function ViewRegionSheet({ region, onOpenChange }: ViewRegionSheetProps) {
   return (
     <Sheet open={true} onOpenChange={onOpenChange}>
       <SheetContent>
@@ -87,3 +87,5 @@ export default function ViewRegionSheet({ region, onOpenChange }: ViewRegionShee
     </Sheet>
   );
 }
+
+export default ViewRegionSheet;

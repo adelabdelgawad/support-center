@@ -7,7 +7,7 @@ import { SheetSkeleton } from '@/components/ui/sheet-skeleton';
  * Add Category Sheet - Lazy loaded
  */
 export const AddCategorySheet = dynamic(
-  () => import('./add-category-sheet'),
+  () => import('./add-category-sheet').then(mod => ({ default: mod.AddCategorySheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add Category" description="Loading form..." />,
@@ -18,7 +18,7 @@ export const AddCategorySheet = dynamic(
  * Edit Category Sheet - Lazy loaded
  */
 export const EditCategorySheet = dynamic(
-  () => import('./edit-category-sheet'),
+  () => import('./edit-category-sheet').then(mod => ({ default: mod.EditCategorySheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit Category" description="Loading..." />,
@@ -29,7 +29,7 @@ export const EditCategorySheet = dynamic(
  * Add Subcategory Sheet - Lazy loaded
  */
 export const AddSubcategorySheet = dynamic(
-  () => import('./add-subcategory-sheet'),
+  () => import('./add-subcategory-sheet').then(mod => ({ default: mod.AddSubcategorySheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Add Subcategory" description="Loading form..." />,
@@ -40,7 +40,7 @@ export const AddSubcategorySheet = dynamic(
  * Edit Subcategory Sheet - Lazy loaded
  */
 export const EditSubcategorySheet = dynamic(
-  () => import('./edit-subcategory-sheet'),
+  () => import('./edit-subcategory-sheet').then(mod => ({ default: mod.EditSubcategorySheet })),
   {
     ssr: false,
     loading: () => <SheetSkeleton title="Edit Subcategory" description="Loading..." />,

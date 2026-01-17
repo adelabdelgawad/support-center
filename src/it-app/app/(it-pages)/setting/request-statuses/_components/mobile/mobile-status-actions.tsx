@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit } from "lucide-react";
 import { useState } from "react";
-import { EditStatusSheet } from "../modal";
+import { EditRequestStatusSheet } from "../modal";
 import type { RequestStatusResponse } from "@/types/request-statuses";
 
 interface MobileStatusActionsProps {
@@ -53,7 +53,7 @@ export function MobileStatusActions({
 
       {/* Edit Sheet */}
       {editingStatus && (
-        <EditStatusSheet
+        <EditRequestStatusSheet
           status={editingStatus}
           onOpenChange={(open) => {
             if (!open) {

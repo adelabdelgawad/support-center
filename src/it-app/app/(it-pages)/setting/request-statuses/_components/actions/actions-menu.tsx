@@ -18,8 +18,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Eye, Pencil, Trash2 } from "lucide-react";
 import type { RequestStatusResponse } from "@/types/request-statuses";
-import { EditStatusSheet } from "../modal";
-import { ViewStatusSheet } from "../modal";
+import { EditRequestStatusSheet } from "../modal";
+import { ViewRequestStatusSheet } from "../modal";
 import { useRequestStatusesActions } from "../../context/request-statuses-actions-context";
 
 interface StatusActionsProps {
@@ -81,7 +81,7 @@ export function StatusActions({
 
       {/* Modals */}
       {editingStatus && (
-        <EditStatusSheet
+        <EditRequestStatusSheet
           status={editingStatus}
           onOpenChange={(open) => {
             if (!open) {
@@ -93,7 +93,7 @@ export function StatusActions({
       )}
 
       {viewingStatus && (
-        <ViewStatusSheet
+        <ViewRequestStatusSheet
           status={viewingStatus}
           onOpenChange={(open) => !open && setViewingStatus(null)}
         />

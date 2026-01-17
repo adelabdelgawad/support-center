@@ -17,7 +17,7 @@ interface ViewSystemEventSheetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function ViewSystemEventSheet({
+export function ViewSystemEventSheet({
   event,
   onOpenChange,
 }: ViewSystemEventSheetProps) {
@@ -174,3 +174,5 @@ export default function ViewSystemEventSheet({
     </Sheet>
   );
 }
+
+export default ViewSystemEventSheet;

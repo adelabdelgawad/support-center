@@ -35,7 +35,7 @@ interface EditBusinessUnitSheetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export default function EditBusinessUnitSheet({
+export function EditBusinessUnitSheet({
   unit,
   regions,
   onOpenChange,
@@ -336,3 +336,5 @@ export default function EditBusinessUnitSheet({
     </Sheet>
   );
 }
+
+export default EditBusinessUnitSheet;

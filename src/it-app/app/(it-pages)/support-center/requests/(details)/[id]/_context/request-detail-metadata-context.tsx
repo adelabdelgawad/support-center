@@ -46,7 +46,7 @@ interface RequestDetailMetadataContextType {
   canTakeRequest: boolean;
 
   // Ticket mutations
-  updateTicketStatus: (statusId: number) => Promise<void>;
+  updateTicketStatus: (statusId: number, resolution?: string) => Promise<void>;
   updateTicketPriority: (priorityId: number) => Promise<void>;
   updatingTicket: boolean;
   isUpdatingStatus: boolean;
@@ -57,6 +57,9 @@ interface RequestDetailMetadataContextType {
   canEditRequestDetails: boolean;
   isChatDisabled: boolean;
   chatDisabledReason: string | undefined;
+
+  // User info
+  currentUserId?: string;
 
   // Sub-tasks
   initialSubTasks?: {
@@ -355,6 +358,7 @@ export function RequestDetailMetadataProvider({
       canEditRequestDetails,
       isChatDisabled: chatDisabledState.isDisabled,
       chatDisabledReason: chatDisabledState.reason,
+      currentUserId,
       initialSubTasks,
       registerScrollHandler,
       registerForceScrollHandler,
@@ -387,6 +391,7 @@ export function RequestDetailMetadataProvider({
       canUpdateStatus,
       canEditRequestDetails,
       chatDisabledState,
+      currentUserId,
       initialSubTasks,
       registerScrollHandler,
       registerForceScrollHandler,

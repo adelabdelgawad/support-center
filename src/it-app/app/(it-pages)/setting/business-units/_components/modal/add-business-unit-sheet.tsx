@@ -34,7 +34,7 @@ interface AddBusinessUnitSheetProps {
   regions: BusinessUnitRegionResponse[];
 }
 
-export default function AddBusinessUnitSheet({
+export function AddBusinessUnitSheet({
   open = true,
   onOpenChange,
   regions,
@@ -327,3 +327,5 @@ export default function AddBusinessUnitSheet({
     </Sheet>
   );
 }
+
+export default AddBusinessUnitSheet;
