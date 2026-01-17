@@ -31,7 +31,7 @@ import Link from "next/link";
 import { DateRangePicker } from "@/components/reports/date-range-picker";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { ExportButton } from "@/components/reports/export-button";
-import { TrendLineChart, DistributionPieChart, DistributionBarChart } from "@/components/charts";
+import { LazyTrendLineChart, LazyDistributionPieChart, LazyDistributionBarChart } from "@/components/charts/lazy-charts";
 import { formatDate } from "@/lib/utils/date-formatting";
 
 import type {
@@ -123,9 +123,9 @@ function DistributionChart({
       </CardHeader>
       <CardContent>
         {chartType === "pie" ? (
-          <DistributionPieChart data={items} height={300} />
+          <LazyDistributionPieChart data={items} height={300} />
         ) : (
-          <DistributionBarChart data={items} height={300} />
+          <LazyDistributionBarChart data={items} height={300} />
         )}
       </CardContent>
     </Card>
@@ -343,7 +343,7 @@ export function ReportsDashboardClient({ initialData }: ReportsDashboardClientPr
                   <CardDescription>Daily ticket creation over time</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <TrendLineChart
+                  <LazyTrendLineChart
                     data={data.ticketVolumeTrend}
                     dataKeys={[
                       { key: 'value', name: 'Tickets', color: '#3b82f6' },
@@ -362,7 +362,7 @@ export function ReportsDashboardClient({ initialData }: ReportsDashboardClientPr
                   <CardDescription>Daily SLA compliance rate (%)</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <TrendLineChart
+                  <LazyTrendLineChart
                     data={data.slaComplianceTrend}
                     dataKeys={[
                       { key: 'value', name: 'Compliance %', color: '#22c55e' },

@@ -9,8 +9,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Download, FileText, FileSpreadsheet } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 interface ExportButtonProps {
   reportTitle: string;
@@ -35,6 +33,10 @@ export function ExportButton({
 
     setIsExporting(true);
     try {
+      // Lazy load jsPDF and autoTable only when needed (~90KB savings)
+      const { jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
       const doc = new jsPDF();
 
       // Add title

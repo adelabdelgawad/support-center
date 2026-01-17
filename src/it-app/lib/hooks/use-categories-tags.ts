@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import useSWR from 'swr';
+import { cacheKeys } from '@/lib/swr/cache-keys';
 
 /**
- * Hook for fetching categories with subcategories
- * SIMPLIFIED: No SWR - uses simple state with initial data support
+ * Hook for fetching categories with subcategories using SWR
  * Used in the request details sidebar for category/subcategory selection
+ *
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation
+ * - Optimistic UI updates via mutate()
  */
 
 interface Subcategory {
@@ -33,8 +38,8 @@ interface CategoriesResponse {
   total: number;
 }
 
-async function fetchCategories(): Promise<Category[]> {
-  const response = await fetch('/api/categories?include_subcategories=true', {
+const fetcher = async (url: string): Promise<Category[]> => {
+  const response = await fetch(url, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -46,56 +51,28 @@ async function fetchCategories(): Promise<Category[]> {
 
   const data: CategoriesResponse = await response.json();
   return data.categories || [];
-}
+};
 
 /**
- * Hook to fetch all categories with subcategories
+ * Hook to fetch all categories with subcategories using SWR
  *
  * @param initialData - Initial categories data from server (for SSR)
  * @returns Categories data and loading state
  */
 export function useCategories(initialData?: Category[]) {
-  const [categories, setCategories] = useState<Category[]>(initialData ?? []);
-  const [isLoading, setIsLoading] = useState(!initialData);
-  const [error, setError] = useState<Error | undefined>(undefined);
-
-  useEffect(() => {
-    // Skip fetch if we have initial data
-    if (initialData?.length) {
-      setIsLoading(false);
-      return;
+  const { data, error, isLoading, mutate } = useSWR<Category[]>(
+    cacheKeys.globalCategories,
+    fetcher,
+    {
+      fallbackData: initialData,
+      revalidateOnMount: !initialData,
+      revalidateOnFocus: false,
+      dedupingInterval: 5000, // Deduplicate requests within 5 seconds
     }
-
-    const doFetch = async () => {
-      try {
-        const data = await fetchCategories();
-        setCategories(data);
-        setError(undefined);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch categories'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    doFetch();
-  }, [initialData]);
-
-  const mutate = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await fetchCategories();
-      setCategories(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch categories'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  );
 
   return {
-    categories,
+    categories: data ?? [],
     isLoading,
     error,
     mutate,

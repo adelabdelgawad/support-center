@@ -20,7 +20,6 @@ import { mutate } from 'swr';
 import { useSignalRChatRoom, useSignalR, useConnectionStatus } from '@/lib/signalr';
 import { useRequestNotes } from '@/lib/hooks/use-request-notes';
 import { useRequestAssignees, type Assignee } from '@/lib/hooks/use-request-assignees';
-import { useTechnicians } from '@/lib/hooks/use-technicians';
 import { useGlobalPriorities, useGlobalStatuses, useGlobalTechnicians } from '@/lib/hooks/use-global-metadata';
 import { useRequestTicket } from '@/lib/hooks/use-request-ticket';
 import { useChatMutations } from '@/lib/hooks/use-chat-mutations';
@@ -253,11 +252,9 @@ export function RequestDetailProvider({
   // Pass SSR data as initialData to prevent race condition on first render
   // This ensures statuses/priorities/technicians are available immediately
   // without waiting for client-side revalidation
-  const { technicians: techniciansData } = useGlobalTechnicians(initialTechnicians);
+  const { technicians: techniciansData, getTechnicianById: getTechnicianByIdRaw } = useGlobalTechnicians(initialTechnicians);
   const { priorities: prioritiesData } = useGlobalPriorities(priorities);
   const { statuses: statusesData } = useGlobalStatuses(statuses);
-
-  const { getTechnicianById: getTechnicianByIdRaw } = useTechnicians(techniciansData);
 
   // Wrapper to convert Technician to TechnicianInfo
   const getTechnicianById = useCallback((userId: string) => {

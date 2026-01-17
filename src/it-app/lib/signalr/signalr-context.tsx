@@ -22,6 +22,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useMemo,
 } from 'react';
 import { SessionContext } from '@/components/auth/client-app-wrapper';
 import {
@@ -236,8 +237,8 @@ export function SignalRProvider({ children }: SignalRProviderProps) {
     signalRManager.chat.markMessagesAsRead(requestId, messageIds);
   }, []);
 
-  // Context value
-  const value: SignalRContextValue = {
+  // Context value - memoized to prevent unnecessary re-renders
+  const value: SignalRContextValue = useMemo(() => ({
     state,
     isConnected: state === SignalRState.CONNECTED,
     reconnecting: state === SignalRState.RECONNECTING,
@@ -251,7 +252,19 @@ export function SignalRProvider({ children }: SignalRProviderProps) {
     sendTypingIndicator,
     markMessagesAsRead,
     activeSubscriptions,
-  };
+  }), [
+    state,
+    reconnectAttempt,
+    error,
+    connect,
+    disconnect,
+    subscribeToChat,
+    unsubscribeFromChat,
+    sendMessage,
+    sendTypingIndicator,
+    markMessagesAsRead,
+    activeSubscriptions,
+  ]);
 
   return (
     <SignalRContext.Provider value={value}>
