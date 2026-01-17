@@ -24,7 +24,8 @@ import { sendMessage as sendMessageApi, markMessagesAsRead, getMessagesCursor } 
 import { useRealTimeChatRoom } from "@/signalr";
 import { useChatMutations } from "@/hooks/use-chat-mutations";
 import { refreshUnreadCountFromAPI } from "@/lib/floating-icon-manager";
-import { messageCache } from "@/lib/message-cache";
+import { messageCacheBridge } from "@/lib/message-cache-bridge";
+import { chatSyncService, isChatSyncing } from "@/lib/chat-sync-service";
 import { ImageViewer } from "@/components/image-viewer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,7 +73,7 @@ function MessagesSkeleton() {
 }
 import { formatDateTime, cn } from "@/lib/utils";
 import { preloadTicketsRoute } from "@/lib/route-preloader";
-import { ArrowLeft, Send, Wifi, WifiOff, Camera, X, Image, Clock, ArrowDown, FileText, Download } from "lucide-solid";
+import { ArrowLeft, Send, Wifi, WifiOff, Camera, X, Image, Clock, ArrowDown, FileText, Download, RefreshCw } from "lucide-solid";
 import type { ChatMessage } from "@/types";
 import { invoke } from "@tauri-apps/api/core";
 import { RuntimeConfig } from "@/lib/runtime-config";
@@ -730,7 +731,7 @@ function TicketChatPageInner() {
     ticketId,
     async (id) => {
       try {
-        const cachedMessages = await messageCache.getCachedMessages(id);
+        const cachedMessages = await messageCacheBridge.getCachedMessages(id);
 
         if (cachedMessages.length > 0) {
           return { messages: cachedMessages, total: cachedMessages.length };
@@ -1007,7 +1008,7 @@ function TicketChatPageInner() {
           realTimeChat.updateLatestSequenceFromMessages(fetchedMessages);
 
           // CACHE WRITE: Save fresh messages to IndexedDB for next visit
-          messageCache.cacheMessages(id, fetchedMessages).catch((err) =>
+          messageCacheBridge.cacheMessages(id, fetchedMessages).catch((err) =>
             console.warn('[Chat] Failed to cache messages:', err)
           );
 
@@ -1346,7 +1347,7 @@ function TicketChatPageInner() {
 
         // Update cache with all messages
         const allMessages = untrack(() => messages());
-        messageCache.cacheMessages(id, allMessages).catch((err) =>
+        messageCacheBridge.cacheMessages(id, allMessages).catch((err) =>
           console.warn('Failed to update message cache:', err)
         );
       }
@@ -1471,14 +1472,14 @@ function TicketChatPageInner() {
 
     // Cache the message to IndexedDB (fire-and-forget)
     if (message.clientTempId && isOptimisticReplacement) {
-      messageCache.replaceOptimisticMessage(message.clientTempId, {
+      messageCacheBridge.replaceOptimisticMessage(message.clientTempId, {
         ...message,
         status: 'sent'
       }).catch(() => {});
     } else {
       // Check for duplicate before caching
       if (!messages().some(m => m.id === message.id)) {
-        messageCache.addMessage({ ...message, status: 'sent' }).catch(() => {});
+        messageCacheBridge.addMessage({ ...message, status: 'sent' }).catch(() => {});
       }
     }
 
@@ -1766,6 +1767,22 @@ function TicketChatPageInner() {
           <p class="text-xs text-white/70 truncate">Ticket #{ticketId().slice(0, 8)}</p>
         </div>
         <div class="flex items-center gap-2">
+          {/* Manual resync button - always available for user-triggered sync */}
+          <Button
+            variant="ghost"
+            size="icon"
+            class="h-8 w-8 text-white hover:bg-white/10"
+            onClick={() => chatSyncService.manualResync(ticketId())}
+            disabled={isChatSyncing(ticketId())}
+            title="Resync messages"
+          >
+            <Show when={isChatSyncing(ticketId())} fallback={
+              <RefreshCw class="h-4 w-4" />
+            }>
+              <RefreshCw class="h-4 w-4 animate-spin" />
+            </Show>
+          </Button>
+
           {/* Connection status indicator - icon only, no text */}
           {/* During hydration, the main content area shows a prominent spinner */}
           {/* Hide for solved tickets (no WebSocket connection needed) */}

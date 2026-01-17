@@ -616,6 +616,7 @@ class ChatService:
                     created_at=request.created_at.isoformat() + "Z",
                     last_message=last_message_text,
                     last_message_at=last_msg_at,
+                    last_message_sequence=last_msg.sequence_number if last_msg else None,
                     unread_count=unread_for_request,
                 )
             )

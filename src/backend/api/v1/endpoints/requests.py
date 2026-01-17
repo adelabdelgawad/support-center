@@ -293,6 +293,7 @@ async def get_technician_views(
                 content=last_msg.content,
                 sender_name=last_msg.sender.full_name if last_msg.sender else None,
                 created_at=last_msg.created_at,
+                sequence_number=last_msg.sequence_number,
             )
 
         # Build item

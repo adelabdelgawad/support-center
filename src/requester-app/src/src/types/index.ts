@@ -319,8 +319,43 @@ export interface ChatMessageListItem {
   technicianName?: string;
   lastMessage?: string;
   lastMessageAt?: string;
+  lastMessageSequence?: number; // For deterministic chat sync validation
   createdAt?: string; // Ticket creation date
   unreadCount: number;
+}
+
+// ============================================================================
+// Chat Sync State Types (Deterministic Sync)
+// ============================================================================
+
+/**
+ * Sync state for a chat
+ * - UNKNOWN: Local data not yet validated (default)
+ * - SYNCED: Local messages validated and trusted
+ * - OUT_OF_SYNC: Proven missing or incomplete message data
+ */
+export type ChatSyncState = 'UNKNOWN' | 'SYNCED' | 'OUT_OF_SYNC';
+
+/**
+ * Sync metadata stored per chat in SQLite
+ */
+export interface ChatSyncMeta {
+  requestId: string;
+  localMinSeq: number | null;
+  localMaxSeq: number | null;
+  lastKnownBackendSeq: number | null;
+  syncState: ChatSyncState;
+  lastValidatedAt: number;
+  messageCount: number;
+}
+
+/**
+ * Validation result from sequence checking
+ */
+export interface SequenceValidationResult {
+  valid: boolean;
+  reason: 'validated' | 'backend_seq_unknown' | 'gap_detected' | 'sequence_mismatch' | 'no_messages';
+  details?: string;
 }
 
 /**

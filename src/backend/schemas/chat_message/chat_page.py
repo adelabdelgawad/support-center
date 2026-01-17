@@ -70,6 +70,9 @@ class ChatRequestListItem(HTTPSchemaModel):
     last_message_at: Optional[str] = Field(
         None, description="Last message timestamp (ISO format)"
     )
+    last_message_sequence: Optional[int] = Field(
+        None, description="Sequence number of the last message (for deterministic chat sync)"
+    )
     unread_count: int = Field(
         default=0, ge=0, description="Number of unread messages"
     )

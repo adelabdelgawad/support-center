@@ -1625,6 +1625,8 @@ pub fn run() {
         }))
         // Register the store plugin for persistent storage
         .plugin(tauri_plugin_store::Builder::new().build())
+        // Register the SQL plugin for SQLite message caching
+        .plugin(tauri_plugin_sql::Builder::default().build())
         // Register the HTTP plugin for bypassing WebView2 CORS
         .plugin(tauri_plugin_http::init())
         // Register the notification plugin

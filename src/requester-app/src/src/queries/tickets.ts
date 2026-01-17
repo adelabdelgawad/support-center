@@ -24,6 +24,7 @@ import {
 import { getMessages, getMessagesCursor } from "@/api/messages";
 import type { GetMessagesCursorResponse } from "@/api/messages";
 import { ticketCache } from "@/lib/ticket-cache";
+import { chatSyncService } from "@/lib/chat-sync-service";
 import type {
   TicketFilterParams,
   ChatPageResponse,
@@ -230,6 +231,16 @@ export function useAllUserTickets(filters?: Accessor<TicketFilterParams | undefi
         ticketCache.cacheTickets(data).catch((err) => {
           console.warn("[useAllUserTickets] Failed to cache tickets:", err);
         });
+
+        // Update backend sequences for deterministic chat sync (fire-and-forget)
+        // This enables per-chat sequence validation without fetching messages
+        for (const ticket of data.chatMessages) {
+          if (ticket.lastMessageSequence !== undefined && ticket.lastMessageSequence !== null) {
+            chatSyncService.updateBackendSequence(ticket.id, ticket.lastMessageSequence).catch((err) => {
+              console.warn("[useAllUserTickets] Failed to update backend sequence:", err);
+            });
+          }
+        }
       }
 
       return data;

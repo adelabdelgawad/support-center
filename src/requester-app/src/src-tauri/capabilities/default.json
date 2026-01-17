@@ -28,6 +28,11 @@
     "store:allow-length",
     "store:allow-load",
     "store:allow-save",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-close",
     "shell:allow-open",
     {
       "identifier": "http:default",

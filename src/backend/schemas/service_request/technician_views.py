@@ -40,6 +40,7 @@ class LastMessageInfo(HTTPSchemaModel):
     content: str
     sender_name: Optional[str] = None
     created_at: datetime
+    sequence_number: int  # For deterministic chat sync validation
 
 
 class BusinessUnitInfo(HTTPSchemaModel):

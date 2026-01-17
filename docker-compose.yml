@@ -71,6 +71,9 @@ services:
     image: minio/minio:latest
     container_name: supportcenter-minio
     command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # Expose for local development (backend runs on host)
+      - "9001:9001"  # Console for administration
     env_file:
       - docker/env/.env.minio
     volumes:
