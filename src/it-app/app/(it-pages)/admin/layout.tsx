@@ -2,18 +2,20 @@
  * Admin Layout
  *
  * Layout for admin pages with:
- * - Horizontal topbar with admin-specific navigation
- * - Left sidebar with admin navigation
- * - Breadcrumb navigation
+ * - Left sidebar with admin navigation (ONLY on sub-pages, NOT on /admin hub)
+ * - Breadcrumb navigation (NOT on /admin hub)
  * - Admin access control
+ *
+ * NOTE: The horizontal topbar is provided by the parent (it-pages) layout.
+ * This layout only handles the left sidebar and content area.
  */
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { AdminLeftSidebar } from "@/components/admin/admin-left-sidebar";
 import { AdminBreadcrumb } from "@/components/admin/admin-breadcrumb";
-import { HorizontalTopbar } from "@/components/navbar/horizontal-topbar";
 import { ReactNode } from "react";
+import { headers } from "next/headers";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -54,26 +56,36 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     redirect('/unauthorized?reason=not_admin');
   }
 
+  // Check if we're on the admin hub page (/admin) or a sub-page
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "/admin";
+  const isAdminHub = pathname === "/admin" || pathname === "/admin/";
+
+  // On admin hub page: no sidebar, full width content
+  // On sub-pages: show sidebar and breadcrumb
+  if (isAdminHub) {
+    return (
+      <main className="flex-1 overflow-auto bg-muted/30 h-[calc(100svh-48px)]">
+        {children}
+      </main>
+    );
+  }
+
+  // Sub-page layout with sidebar and breadcrumb
   return (
-    <div className="h-svh flex flex-col">
-      {/* Horizontal Topbar */}
-      <HorizontalTopbar user={user} />
+    <div className="flex h-[calc(100svh-48px)]">
+      <AdminLeftSidebar />
 
-      {/* Admin Content Area with Left Sidebar */}
-      <div className="flex flex-1 overflow-hidden">
-        <AdminLeftSidebar />
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-auto bg-muted/30">
+        <div className="container mx-auto px-6 py-4">
+          {/* Breadcrumb */}
+          <AdminBreadcrumb className="mb-4" />
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-auto bg-[var(--sdp-content-bg)]">
-          <div className="container mx-auto px-6 py-4">
-            {/* Breadcrumb */}
-            <AdminBreadcrumb className="mb-4" />
-
-            {/* Page Content */}
-            {children}
-          </div>
-        </main>
-      </div>
+          {/* Page Content */}
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

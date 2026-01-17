@@ -32,31 +32,36 @@ export function AdminSectionCard({ section, className }: AdminSectionCardProps) 
   return (
     <div
       className={cn(
-        "bg-[var(--sdp-card-bg)] rounded-lg border border-gray-200 p-4",
-        "hover:shadow-md transition-shadow",
+        "group bg-card rounded-xl border border-border p-5",
+        "hover:border-[var(--sdp-accent)] hover:shadow-lg",
+        "transition-all duration-200",
         className
       )}
     >
-      {/* Card Header */}
-      <div className="flex items-center gap-3 mb-3">
+      {/* Card Header with Icon */}
+      <div className="flex items-start gap-4 mb-4">
         <div
-          className="flex items-center justify-center w-10 h-10 rounded-md"
+          className="flex items-center justify-center w-12 h-12 rounded-lg shrink-0"
           style={{ backgroundColor: "var(--sdp-accent)" }}
         >
-          <Icon className="w-5 h-5 text-white" />
+          <Icon className="w-6 h-6 text-white" />
         </div>
-        <h3
-          className="font-semibold"
-          style={{ color: "var(--sdp-admin-card-title)" }}
-        >
-          {section.title}
-        </h3>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold text-base text-foreground leading-tight">
+            {section.title}
+          </h3>
+        </div>
       </div>
 
       {/* Card Description */}
       {section.description && (
-        <p className="text-sm text-gray-600 mb-3">{section.description}</p>
+        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+          {section.description}
+        </p>
       )}
+
+      {/* Divider */}
+      <div className="border-t border-border mb-4" />
 
       {/* Card Links */}
       <ul className="space-y-1">
@@ -64,21 +69,9 @@ export function AdminSectionCard({ section, className }: AdminSectionCardProps) 
           <li key={link.href}>
             <Link
               href={link.href}
-              className={cn(
-                "text-sm transition-colors",
-                "hover:underline",
-                "style-[var(--sdp-admin-card-link)]",
-                "hover:style-[var(--sdp-admin-card-link-hover)]"
-              )}
-              style={{ color: "var(--sdp-admin-card-link)" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = "var(--sdp-admin-card-link-hover)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = "var(--sdp-admin-card-link)";
-              }}
+              className="flex items-center text-sm text-muted-foreground transition-colors hover:text-[var(--sdp-accent)] hover:underline py-1"
             >
-              {link.label}
+              <span className="truncate">{link.label}</span>
             </Link>
           </li>
         ))}

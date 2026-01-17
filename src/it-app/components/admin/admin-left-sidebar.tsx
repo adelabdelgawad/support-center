@@ -59,21 +59,21 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
   return (
     <aside
       className={cn(
-        "w-60 bg-white border-r border-gray-200 flex flex-col",
+        "w-60 bg-card border-r border-border flex flex-col",
         "overflow-hidden",
         className
       )}
     >
       {/* Search Box */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-border">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search settings..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--sdp-accent)] focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 text-sm border border-input bg-background rounded-md focus:outline-none focus:ring-2 focus:ring-[var(--sdp-accent)] focus:border-transparent text-foreground placeholder:text-muted-foreground"
           />
         </div>
       </div>
@@ -92,16 +92,16 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-2 text-sm font-medium transition-colors",
                   hasActiveLink && "bg-[var(--sdp-accent)]/10",
-                  "hover:bg-gray-100"
+                  "hover:bg-accent"
                 )}
               >
                 <span className={cn(hasActiveLink && "text-[var(--sdp-accent)]")}>
                   {section.title}
                 </span>
                 {isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 )}
               </button>
 
@@ -118,8 +118,8 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
                           className={cn(
                             "block px-8 py-1.5 text-sm transition-colors",
                             isActive
-                              ? "bg-[var(--sdp-accent)] text-white font-medium"
-                              : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                              ? "bg-[var(--sdp-accent)] text-primary-foreground font-medium"
+                              : "text-muted-foreground hover:bg-accent hover:text-foreground"
                           )}
                         >
                           {link.label}
