@@ -1,60 +1,53 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { apiClient } from '@/lib/fetch/client';
+import useSWR, { mutate as globalMutate } from 'swr';
+import { useCallback, useMemo } from 'react';
+import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { Priority, RequestStatus } from '@/types/metadata';
 import type { Technician } from '@/types/metadata';
 
 /**
- * Hook to fetch and cache priorities globally
+ * SWR fetcher for API calls
+ */
+const fetcher = async (url: string): Promise<any> => {
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}`);
+  }
+
+  return response.json();
+};
+
+/**
+ * Hook to fetch and cache priorities globally using SWR
  *
- * SIMPLIFIED: No localStorage - uses simple state with backend response
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation
+ * - Optimistic UI updates via mutate()
  *
  * @param initialData - Initial priorities data from server (for SSR)
  * @returns Priorities data and loading state
  */
 export function useGlobalPriorities(initialData?: Priority[]) {
-  const [priorities, setPriorities] = useState<Priority[]>(initialData || []);
-  const [isLoading, setIsLoading] = useState(!initialData?.length);
-  const [error, setError] = useState<Error | undefined>(undefined);
-
-  // Fetch fresh data on mount (only if no initialData)
-  useEffect(() => {
-    // Skip fetch if we have fresh SSR data
-    if (initialData?.length) {
-      return;
+  const { data, error, isLoading, mutate } = useSWR<Priority[]>(
+    cacheKeys.globalPriorities,
+    fetcher,
+    {
+      fallbackData: initialData,
+      revalidateOnMount: !initialData?.length,
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // Deduplicate requests within 1 minute
     }
-
-    const fetchPriorities = async () => {
-      try {
-        const data = await apiClient.get<Priority[]>('/api/priorities');
-        setPriorities(data);
-        setError(undefined);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch priorities'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPriorities();
-  }, [initialData]);
-
-  const mutate = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.get<Priority[]>('/api/priorities');
-      setPriorities(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch priorities'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  );
 
   return {
-    priorities,
+    priorities: data ?? [],
     isLoading,
     error,
     mutate,
@@ -62,53 +55,30 @@ export function useGlobalPriorities(initialData?: Priority[]) {
 }
 
 /**
- * Hook to fetch and cache request statuses globally
+ * Hook to fetch and cache request statuses globally using SWR
  *
- * SIMPLIFIED: No localStorage - uses simple state with backend response
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation
+ * - Optimistic UI updates via mutate()
  *
  * @param initialData - Initial statuses data from server (for SSR)
  * @returns Statuses data and loading state
  */
 export function useGlobalStatuses(initialData?: RequestStatus[]) {
-  const [statuses, setStatuses] = useState<RequestStatus[]>(initialData || []);
-  const [isLoading, setIsLoading] = useState(!initialData?.length);
-  const [error, setError] = useState<Error | undefined>(undefined);
-
-  useEffect(() => {
-    if (initialData?.length) {
-      return;
+  const { data, error, isLoading, mutate } = useSWR<RequestStatus[]>(
+    cacheKeys.globalStatuses,
+    fetcher,
+    {
+      fallbackData: initialData,
+      revalidateOnMount: !initialData?.length,
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // Deduplicate requests within 1 minute
     }
-
-    const fetchStatuses = async () => {
-      try {
-        const data = await apiClient.get<RequestStatus[]>('/api/metadata/statuses');
-        setStatuses(data);
-        setError(undefined);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch statuses'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchStatuses();
-  }, [initialData]);
-
-  const mutate = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.get<RequestStatus[]>('/api/metadata/statuses');
-      setStatuses(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch statuses'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  );
 
   return {
-    statuses,
+    statuses: data ?? [],
     isLoading,
     error,
     mutate,
@@ -116,37 +86,29 @@ export function useGlobalStatuses(initialData?: RequestStatus[]) {
 }
 
 /**
- * Hook to fetch and cache technicians globally
+ * Hook to fetch and cache technicians globally using SWR
  *
- * SIMPLIFIED: No localStorage - uses simple state with backend response
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation
+ * - Helper functions for technician lookups
  *
  * @param initialData - Initial technicians data from server (for SSR)
  * @returns Technicians data with helper functions
  */
 export function useGlobalTechnicians(initialData?: Technician[]) {
-  const [technicians, setTechnicians] = useState<Technician[]>(initialData || []);
-  const [isLoading, setIsLoading] = useState(!initialData?.length);
-  const [error, setError] = useState<Error | undefined>(undefined);
-
-  useEffect(() => {
-    if (initialData?.length) {
-      return;
+  const { data, error, isLoading, mutate } = useSWR<Technician[]>(
+    cacheKeys.globalTechnicians,
+    fetcher,
+    {
+      fallbackData: initialData,
+      revalidateOnMount: !initialData?.length,
+      revalidateOnFocus: false,
+      dedupingInterval: 60000, // Deduplicate requests within 1 minute
     }
+  );
 
-    const fetchTechnicians = async () => {
-      try {
-        const data = await apiClient.get<Technician[]>('/api/technicians');
-        setTechnicians(data);
-        setError(undefined);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchTechnicians();
-  }, [initialData]);
+  const technicians = data ?? [];
 
   /**
    * Get a technician by their user ID (UUID string)
@@ -182,22 +144,11 @@ export function useGlobalTechnicians(initialData?: Technician[]) {
   }, [technicians]);
 
   /**
-   * Force refresh the technicians data
+   * Force refresh the technicians data (alias for mutate)
    */
   const refresh = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await apiClient.get<Technician[]>('/api/technicians');
-      setTechnicians(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch technicians'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const mutate = refresh;
+    await mutate();
+  }, [mutate]);
 
   return {
     technicians,
@@ -217,25 +168,15 @@ export function useGlobalTechnicians(initialData?: Technician[]) {
  * Useful for admin panels or when metadata is updated
  */
 export function useRefreshGlobalMetadata() {
-  const refresh = async (mutateCallbacks?: {
-    priorities?: () => Promise<any>;
-    statuses?: () => Promise<any>;
-    technicians?: () => Promise<any>;
-  }) => {
-    const promises = [];
-
-    if (mutateCallbacks?.priorities) {
-      promises.push(mutateCallbacks.priorities());
-    }
-    if (mutateCallbacks?.statuses) {
-      promises.push(mutateCallbacks.statuses());
-    }
-    if (mutateCallbacks?.technicians) {
-      promises.push(mutateCallbacks.technicians());
-    }
-
-    await Promise.all(promises);
-  };
+  const refresh = useCallback(async () => {
+    // Use SWR's global mutate to refresh all metadata keys at once
+    await Promise.all([
+      globalMutate(cacheKeys.globalPriorities),
+      globalMutate(cacheKeys.globalStatuses),
+      globalMutate(cacheKeys.globalTechnicians),
+      globalMutate(cacheKeys.globalCategories),
+    ]);
+  }, []);
 
   return { refresh };
 }

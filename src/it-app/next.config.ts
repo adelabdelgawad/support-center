@@ -36,6 +36,22 @@ const nextConfig: NextConfig = {
     ];
   },
 
+  // Redirects for old admin routes to new /admin structure
+  async redirects() {
+    return [
+      {
+        source: "/setting/:path*",
+        destination: "/admin/setting/:path*",
+        permanent: true,
+      },
+      {
+        source: "/management/:path*",
+        destination: "/admin/management/:path*",
+        permanent: true,
+      },
+    ];
+  },
+
   // Headers for CORS and security
   async headers() {
     // SECURITY: Never fall back to "*" for CORS origin

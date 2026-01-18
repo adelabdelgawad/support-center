@@ -47,6 +47,17 @@
 
 /* Office 365 / Fluent UI Design System - Light Theme */
 :root {
+  /* ServiceDesk Plus Color System */
+  --sdp-header-bg: #ffffff;
+  --sdp-header-fg: #323130;
+  --sdp-accent: #00a1b0;
+  --sdp-accent-hover: #008a98;
+  --sdp-content-bg: #f7f7f7;
+  --sdp-card-bg: #ffffff;
+  --sdp-admin-card-title: #00a1b0;
+  --sdp-admin-card-link: #666666;
+  --sdp-admin-card-link-hover: #00a1b0;
+
   /* Office 365 Border Radius */
   --radius: 4px;
 
@@ -124,6 +135,17 @@
 
 /* Office 365 / Fluent UI Design System - Dark Theme */
 .dark {
+  /* ServiceDesk Plus Color System - Dark Theme */
+  --sdp-header-bg: #1f1f1f;
+  --sdp-header-fg: #ffffff;
+  --sdp-accent: #00d4ff;
+  --sdp-accent-hover: #00b8e6;
+  --sdp-content-bg: #1f1f1f;
+  --sdp-card-bg: #292929;
+  --sdp-admin-card-title: #00d4ff;
+  --sdp-admin-card-link: #a0a0a0;
+  --sdp-admin-card-link-hover: #00d4ff;
+
   /* Office 365 Neutral Colors (Dark) */
   --background: #1f1f1f;
   --foreground: #ffffff;

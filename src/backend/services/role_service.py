@@ -166,11 +166,21 @@ class RoleService:
         result = await db.execute(stmt)
         roles = result.scalars().all()
 
-        # Build response with page paths and user counts
+        # Build response using already-loaded relationships (no N+1 queries)
         role_items = []
         for role in roles:
-            pages = await role.get_pages(include_inactive=False)
-            users = await role.get_users(include_inactive=True)
+            # Extract active page paths from eagerly-loaded relationships
+            page_paths = [
+                perm.page.path
+                for perm in role.page_permissions
+                if perm.is_active and perm.page and perm.page.is_active and perm.page.path
+            ]
+
+            # Count users from eagerly-loaded relationships (include all users)
+            total_users = len([
+                ur for ur in role.user_roles
+                if ur.user is not None
+            ])
 
             role_items.append(
                 RoleWithPagesAndUsers(
@@ -182,8 +192,8 @@ class RoleService:
                     updated_at=role.updated_at,
                     created_by=role.created_by,
                     updated_by=role.updated_by,
-                    page_paths=[page.path for page in pages if page.path],
-                    total_users=len(users),
+                    page_paths=page_paths,
+                    total_users=total_users,
                 )
             )
 

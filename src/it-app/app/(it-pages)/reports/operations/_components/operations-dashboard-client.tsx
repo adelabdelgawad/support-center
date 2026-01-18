@@ -9,7 +9,7 @@ import { AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { DateRangePicker } from '@/components/reports/date-range-picker';
 import { ReportFilters } from '@/components/reports/report-filters';
 import { ExportButton } from '@/components/reports/export-button';
-import { TrendLineChart, DistributionBarChart, DistributionPieChart } from '@/components/charts';
+import { LazyTrendLineChart, LazyDistributionBarChart, LazyDistributionPieChart } from '@/components/charts/lazy-charts';
 import { getOperationsDashboard } from '@/lib/api/reports';
 import { DateRangePreset, VolumeReportData } from '@/types/reports';
 import { formatDate } from '@/lib/utils/date-formatting';
@@ -250,7 +250,7 @@ export default function OperationsDashboardClient({ initialData }: OperationsDas
             </CardHeader>
             <CardContent>
               {data.volumeTrend && data.volumeTrend.length > 0 ? (
-                <TrendLineChart
+                <LazyTrendLineChart
                   data={data.volumeTrend.map((item) => ({
                     date: item.date,
                     created: item.createdCount,
@@ -278,7 +278,7 @@ export default function OperationsDashboardClient({ initialData }: OperationsDas
               </CardHeader>
               <CardContent>
                 {data.dayOfWeekDistribution && data.dayOfWeekDistribution.length > 0 ? (
-                  <DistributionBarChart
+                  <LazyDistributionBarChart
                     data={data.dayOfWeekDistribution}
                     height={300}
                   />
@@ -296,7 +296,7 @@ export default function OperationsDashboardClient({ initialData }: OperationsDas
               </CardHeader>
               <CardContent>
                 {data.hourlyDistribution && data.hourlyDistribution.length > 0 ? (
-                  <DistributionBarChart
+                  <LazyDistributionBarChart
                     data={data.hourlyDistribution.filter((item) => {
                       const hour = parseInt(item.label.split(':')[0]);
                       return hour >= 6 && hour <= 20;

@@ -4,28 +4,33 @@
  * Layout for technician users
  * Provides navigation and authentication
  *
- * PERFORMANCE OPTIMIZATION (Phase 2.1):
- * - Layout renders IMMEDIATELY without blocking network calls
+ * UI TRANSFORMATION (ServiceDesk Plus):
+ * - Uses horizontal top navigation instead of vertical sidebar
+ * - Dark header with teal accent colors
+ * - Admin hub accessible via gear icon for technicians
+ *
+ * HYDRATION FIX: Adopts network_manager's server-first pattern
+ * - Server computes navigation state before rendering
+ * - Client receives exact state as props (no mismatches)
+ * - Clear hydration boundary with isHydrated flag
+ *
+ * PERFORMANCE: Layout renders immediately without blocking network calls
  * - Navigation is read from cookie (instant, no API call)
- * - Fresh navigation is fetched in background via SWR
+ * - Fresh navigation is available via server props
  * - Only redirects to login if session cookie is missing (fast check)
  *
- * NOTE: Access control is enforced by backend via role dependencies
- * If non-technician accesses this route, backend will return 403 Forbidden
+ * NOTE: Admin routes (/admin/*) use their own layout with left sidebar
+ * This layout handles main app pages (support-center, reports, etc.)
  */
 
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
 import { NavigationProvider } from "@/components/navbar/navigation-provider";
-import { SidebarNavWrapper } from "@/components/navbar/sidebar-nav-wrapper";
-import { ChildrenTabsWrapper } from "@/components/navbar/children-tabs-wrapper";
-import { PageRedirectWrapper } from "@/components/navbar/page-redirect-wrapper";
 import { NavigationProgressProvider } from "@/lib/context/navigation-progress-context";
 import {
   getNavigationCookieName,
   parseNavigationCookie,
 } from "@/lib/utils/navigation-cookies";
 import { serverFetch } from "@/lib/api/server-fetch";
+import { HorizontalTopbar } from "@/components/navbar/horizontal-topbar";
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -35,74 +40,6 @@ import type { Page } from "@/types/pages";
 
 interface SupportCenterLayoutProps {
   children: ReactNode;
-}
-
-// NavItem structure for pre-built navigation
-interface NavItem {
-  id: string;
-  title: string;
-  path: string | null;
-  icon: string | null;
-  children: NavItem[];
-  isParent: boolean;
-}
-
-// Build navigation structure from pages (server-side)
-function buildServerNavigation(pages: Page[]): NavItem[] {
-  const navigation: NavItem[] = [];
-
-  // Filter active pages excluding Profile
-  const activePages = pages.filter((page) => {
-    const isActive = (page as any).isActive ?? (page as any).is_active ?? true;
-    return isActive && page.title !== "Profile";
-  });
-
-  // Helper to get parent ID (handles both camelCase and snake_case)
-  const getParentId = (page: Page): string | null => {
-    const parentId = (page as any).parentId ?? page.parent_id;
-    return parentId != null ? String(parentId) : null;
-  };
-
-  // Get root pages (pages without parent)
-  const rootPages = activePages.filter((page) => {
-    const parentId = getParentId(page);
-    return !parentId;
-  });
-
-  rootPages.forEach((rootPage) => {
-    const rootId = String(rootPage.id);
-    const children = activePages.filter((page) => {
-      const parentId = getParentId(page);
-      return parentId === rootId;
-    });
-
-    const navItem: NavItem = {
-      id: rootPage.id.toString(),
-      title: rootPage.title,
-      path: rootPage.path
-        ? rootPage.path.startsWith("/")
-          ? rootPage.path
-          : "/" + rootPage.path
-        : null,
-      icon: rootPage.icon || null,
-      children: children.map((child) => ({
-        id: child.id.toString(),
-        title: child.title,
-        path: child.path
-          ? child.path.startsWith("/")
-            ? child.path
-            : "/" + child.path
-          : null,
-        icon: child.icon || null,
-        children: [],
-        isParent: false,
-      })),
-      isParent: children.length > 0,
-    };
-    navigation.push(navItem);
-  });
-
-  return navigation;
 }
 
 // Server-side function to get current user from cookie (FAST - no network call)
@@ -184,49 +121,19 @@ export default async function SupportCenterLayout({ children }: SupportCenterLay
 
   // PERFORMANCE: Get cached navigation from cookie (instant, no API call)
   // This enables server-side rendering of navigation
-  // Fresh data is fetched in background via SWR
   const cachedPages = await getCachedNavigation(user.id);
-
-  // Pre-build navigation structure on server for instant render
-  const serverNavigation = buildServerNavigation(cachedPages);
 
   return (
     <div className="h-svh flex flex-col overflow-hidden">
       <NavigationProgressProvider>
-        <NavigationProvider userId={user.id} initialPages={cachedPages}>
-          <SidebarProvider className="flex-1 min-h-0">
-            {/* Handle auto-redirect for parent pages without paths */}
-            <PageRedirectWrapper />
+        <NavigationProvider userId={user.id} initialPages={cachedPages} serverPathname={pathname}>
+          {/* Horizontal Top Navigation Bar */}
+          <HorizontalTopbar user={user} />
 
-            {/* Vertical Sidebar Navigation (uses pre-built structure immediately) */}
-            <SidebarNavWrapper
-              user={user}
-              serverPathname={pathname}
-              serverNavigation={serverNavigation}
-            />
-
-            {/* Main Content Area with Sidebar Inset */}
-            <SidebarInset className="flex flex-col min-h-0 overflow-x-hidden">
-              {/* Header with Trigger and Children Tabs */}
-              <header className="flex shrink-0 items-center gap-2 border-b bg-background">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  {/* SidebarTrigger: Opens mobile drawer on < lg, toggles sidebar on >= lg */}
-                  <SidebarTrigger />
-                  <Separator orientation="vertical" className="h-6 hidden lg:block" />
-                </div>
-
-                {/* Children Tab Navigation (uses cached data immediately) */}
-                <ChildrenTabsWrapper
-                  serverPathname={pathname}
-                />
-              </header>
-
-              {/* Page Content */}
-              <main className="flex flex-1 min-h-0 flex-col overflow-x-hidden">
-                <NuqsAdapter>{children}</NuqsAdapter>
-              </main>
-            </SidebarInset>
-          </SidebarProvider>
+          {/* Main Content Area */}
+          <main className="flex-1 overflow-auto bg-[var(--sdp-content-bg)]">
+            <NuqsAdapter>{children}</NuqsAdapter>
+          </main>
         </NavigationProvider>
       </NavigationProgressProvider>
     </div>

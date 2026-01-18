@@ -316,8 +316,7 @@ class RequestStatusService:
                 status.updated_by = updated_by
 
         await db.commit()
-        for status in statuses:
-            await db.refresh(status)
+        # No need for N+1 refresh loop - objects are already in memory with latest state
 
         return statuses
 
@@ -417,28 +416,22 @@ class RequestStatusService:
         Returns:
             Request status summary
         """
-        # Get counts
-        total_stmt = select(func.count(RequestStatus.id))
-        readonly_stmt = select(func.count(RequestStatus.id)).where(
-            RequestStatus.readonly == True
-        )
-        active_stmt = select(func.count(RequestStatus.id)).where(
-            RequestStatus.is_active == True
-        )
-        inactive_stmt = select(func.count(RequestStatus.id)).where(
-            RequestStatus.is_active == False
+        # Get all counts in a single query for performance
+        count_stmt = select(
+            func.count(RequestStatus.id).label("total"),
+            func.count(case((RequestStatus.readonly == True, 1))).label("readonly"),
+            func.count(case((RequestStatus.is_active == True, 1))).label("active"),
+            func.count(case((RequestStatus.is_active == False, 1))).label("inactive"),
         )
 
-        total_result = await db.execute(total_stmt)
-        readonly_result = await db.execute(readonly_stmt)
-        active_result = await db.execute(active_stmt)
-        inactive_result = await db.execute(inactive_stmt)
+        count_result = await db.execute(count_stmt)
+        counts = count_result.one()
 
         summary = RequestStatusSummary(
-            total_statuses=total_result.scalar(),
-            readonly_statuses=readonly_result.scalar(),
-            active_statuses=active_result.scalar(),
-            inactive_statuses=inactive_result.scalar(),
+            total_statuses=counts.total,
+            readonly_statuses=counts.readonly,
+            active_statuses=counts.active,
+            inactive_statuses=counts.inactive,
         )
 
         return summary

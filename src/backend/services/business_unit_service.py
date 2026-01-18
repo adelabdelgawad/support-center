@@ -279,8 +279,7 @@ class BusinessUnitService:
             bu.updated_by = updated_by
 
         await db.commit()
-        for bu in business_units:
-            await db.refresh(bu)
+        # No need for N+1 refresh loop - objects are already in memory with latest state
 
         return business_units
 

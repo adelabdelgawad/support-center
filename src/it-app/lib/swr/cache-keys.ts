@@ -45,15 +45,19 @@ export const cacheKeys = {
   userPages: (userId: string) => `/api/users/${userId}/pages`,
 
   // Business unit counts
-  businessUnitCounts: '/api/requests/business-unit-counts',
+  businessUnitCounts: (view: string) => `/api/requests/business-unit-counts?view=${view}`,
 
   // View counts for sidebar (independent of current view/page)
   viewCounts: '/api/requests/view-counts',
+
+  // Ticket type counts (global, not filtered by view)
+  ticketTypeCounts: '/api/requests/ticket-type-counts',
 
   // Metadata keys (global, cached across all ticket views)
   globalPriorities: '/api/priorities',
   globalStatuses: '/api/metadata/statuses',
   globalTechnicians: '/api/technicians',
+  globalCategories: '/api/categories?include_subcategories=true',
 
   // Legacy metadata keys (for backward compatibility)
   priorities: '/api/metadata/priorities',

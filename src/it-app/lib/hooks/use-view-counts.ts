@@ -1,11 +1,17 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import useSWR from 'swr';
+import { useCallback } from 'react';
+import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { ViewCounts } from '@/types/requests-list';
+import { mutate } from 'swr';
 
 /**
- * Dedicated hook for view counts in the sidebar
- * SIMPLIFIED: No SWR - uses simple state with auto-refresh interval
+ * Dedicated hook for view counts in the sidebar using SWR
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation every 30 seconds
+ * - Optimistic UI updates via mutate()
  */
 
 async function fetchViewCounts(): Promise<ViewCounts> {
@@ -25,63 +31,19 @@ async function fetchViewCounts(): Promise<ViewCounts> {
 }
 
 export function useViewCounts(initialCounts?: ViewCounts) {
-  // Simple state for counts
-  const [counts, setCounts] = useState<ViewCounts | undefined>(initialCounts);
-  const [isLoading, setIsLoading] = useState(!initialCounts);
-  const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<Error | undefined>(undefined);
-
-  // Track if component is mounted to prevent state updates after unmount
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    // Skip initial fetch if we have initial data
-    if (initialCounts) {
-      setIsLoading(false);
+  const { data, error, isLoading, isValidating, mutate: swrMutate } = useSWR<ViewCounts>(
+    cacheKeys.viewCounts,
+    fetchViewCounts,
+    {
+      fallbackData: initialCounts,
+      revalidateOnMount: !initialCounts,
+      revalidateOnFocus: false,
+      refreshInterval: 30000, // 30 seconds
+      dedupingInterval: 10000, // Deduplicate requests within 10 seconds
     }
+  );
 
-    const doFetch = async () => {
-      if (!isMountedRef.current) return;
-
-      setIsValidating(true);
-      try {
-        const data = await fetchViewCounts();
-        if (isMountedRef.current) {
-          setCounts(data);
-          setError(undefined);
-        }
-      } catch (err) {
-        if (isMountedRef.current) {
-          setError(err instanceof Error ? err : new Error('Failed to fetch view counts'));
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setIsLoading(false);
-          setIsValidating(false);
-        }
-      }
-    };
-
-    // Only fetch on mount if no initial data
-    if (!initialCounts) {
-      doFetch();
-    }
-
-    // Set up interval for auto-refresh
-    const intervalId = setInterval(doFetch, 30000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [initialCounts]);
+  const counts = data;
 
   // Explicit flag for whether counts are ready (not undefined)
   const isCountsReady = counts !== undefined;
@@ -91,53 +53,45 @@ export function useViewCounts(initialCounts?: ViewCounts) {
    * @param updates - Partial updates to apply to counts
    */
   const updateCountsOptimistically = useCallback(async (updates: Partial<ViewCounts>) => {
-    setCounts((currentCounts) => {
+    // Use SWR's mutate with optimistic update
+    swrMutate((currentCounts) => {
       if (!currentCounts) return currentCounts;
       return { ...currentCounts, ...updates };
-    });
-  }, []);
+    }, false); // false = don't revalidate immediately
+  }, [swrMutate]);
 
   /**
    * Decrement a specific view count (e.g., when a ticket moves to another view)
    */
   const decrementCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
-    setCounts((currentCounts) => {
+    swrMutate((currentCounts) => {
       if (!currentCounts) return currentCounts;
       return {
         ...currentCounts,
         [view]: Math.max(0, currentCounts[view] - amount),
       };
-    });
-  }, []);
+    }, false);
+  }, [swrMutate]);
 
   /**
    * Increment a specific view count
    */
   const incrementCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
-    setCounts((currentCounts) => {
+    swrMutate((currentCounts) => {
       if (!currentCounts) return currentCounts;
       return {
         ...currentCounts,
         [view]: currentCounts[view] + amount,
       };
-    });
-  }, []);
+    }, false);
+  }, [swrMutate]);
 
   /**
    * Force refresh counts from server
    */
   const refreshCounts = useCallback(async () => {
-    setIsValidating(true);
-    try {
-      const data = await fetchViewCounts();
-      setCounts(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch view counts'));
-    } finally {
-      setIsValidating(false);
-    }
-  }, []);
+    await swrMutate();
+  }, [swrMutate]);
 
   // For compatibility with SWR-like API
   const mutate = refreshCounts;

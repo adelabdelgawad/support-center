@@ -752,7 +752,7 @@ class SchedulerService:
 
         await db.commit()
 
-        logger.info(f"Instance {instance_id} acquired leader lock")
+        logger.debug(f"Instance {instance_id} acquired leader lock")
         return True
 
     async def update_instance_heartbeat(

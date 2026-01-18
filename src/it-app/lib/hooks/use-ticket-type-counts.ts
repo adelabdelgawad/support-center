@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import useSWR from 'swr';
+import { useCallback } from 'react';
+import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { TicketTypeCounts } from '@/types/requests-list';
 
 /**
- * Hook to fetch global ticket type counts (not filtered by view)
- * SIMPLIFIED: No SWR - uses simple state with auto-refresh interval
- * Auto-refreshes every 10 seconds
+ * Hook to fetch global ticket type counts (not filtered by view) using SWR
+ * SWR provides:
+ * - Automatic caching and deduplication
+ * - Background revalidation every 10 seconds
+ * - Optimistic UI updates via mutate()
  */
 
 const fetchCounts = async (): Promise<TicketTypeCounts> => {
@@ -22,67 +26,21 @@ const fetchCounts = async (): Promise<TicketTypeCounts> => {
 };
 
 export function useTicketTypeCounts() {
-  const [counts, setCounts] = useState<TicketTypeCounts | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<Error | undefined>(undefined);
+  const { data, error, isLoading, isValidating, mutate } = useSWR<TicketTypeCounts>(
+    cacheKeys.ticketTypeCounts,
+    fetchCounts,
+    {
+      revalidateOnFocus: false,
+      refreshInterval: 10000, // 10 seconds
+      dedupingInterval: 5000, // Deduplicate requests within 5 seconds
+    }
+  );
 
-  // Track if component is mounted
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  // Fetch data on mount and set up auto-refresh
-  useEffect(() => {
-    const doFetch = async () => {
-      if (!isMountedRef.current) return;
-
-      setIsValidating(true);
-      try {
-        const data = await fetchCounts();
-        if (isMountedRef.current) {
-          setCounts(data);
-          setError(undefined);
-        }
-      } catch (err) {
-        if (isMountedRef.current) {
-          setError(err instanceof Error ? err : new Error('Failed to fetch ticket type counts'));
-        }
-      } finally {
-        if (isMountedRef.current) {
-          setIsLoading(false);
-          setIsValidating(false);
-        }
-      }
-    };
-
-    doFetch();
-
-    // Auto-refresh every 10 seconds
-    const intervalId = setInterval(doFetch, 10000);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, []);
+  const counts = data;
 
   const refresh = useCallback(async () => {
-    setIsValidating(true);
-    try {
-      const data = await fetchCounts();
-      setCounts(data);
-      setError(undefined);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch ticket type counts'));
-    } finally {
-      setIsValidating(false);
-    }
-  }, []);
+    await mutate();
+  }, [mutate]);
 
   return {
     counts,

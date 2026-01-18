@@ -220,37 +220,18 @@ export function TicketDetailClient() {
 
   /**
    * Handle reply submission with optional staged attachments
-   * Implements WhatsApp-like flow: upload attachments first, then create messages for each
+   * Implements WhatsApp-like flow: upload attachments first then send text message
+   * Note: uploadAttachments handles creating messages for each uploaded file internally
    */
   const handleReplySubmit = async (replyText: string, attachments?: File[]) => {
     if (sendingMessage || uploadingAttachment) return;
 
     try {
-      // If there are attachments, upload them first then create messages
+      // If there are attachments, upload them first
       if (attachments && attachments.length > 0) {
         try {
-          const uploadResult = await uploadAttachments(attachments);
-
-          // If upload was successful, create chat messages for each uploaded file
-          if (uploadResult && uploadResult.results) {
-            for (const result of uploadResult.results) {
-              if (result.success) {
-                try {
-                  await sendAttachmentMessage(result);
-                } catch (msgErr) {
-                  console.error('Failed to create message for attachment:', result.filename, msgErr);
-                  toast.error(`Failed to send ${result.filename}`, {
-                    description: 'The file was uploaded but message creation failed.',
-                  });
-                }
-              } else {
-                console.error('Upload failed for:', result.filename, result.error);
-                toast.error(`Failed to upload ${result.filename}`, {
-                  description: result.error || 'Upload failed.',
-                });
-              }
-            }
-          }
+          await uploadAttachments(attachments);
+          // Messages are created internally by the context provider
         } catch (err: any) {
           console.error('Failed to upload attachments:', err);
 
