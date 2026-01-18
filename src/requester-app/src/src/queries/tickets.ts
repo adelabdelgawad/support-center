@@ -202,8 +202,29 @@ export const messageKeys = {
  * @returns Filtered ticket page data
  */
 export function useAllUserTickets(filters?: Accessor<TicketFilterParams | undefined>) {
-  // Get cached data synchronously for instant render (ONLY for first app startup)
-  const cachedData = ticketCache.getCachedTicketsSync();
+  const queryClient = useQueryClient();
+
+  // PRIORITY 1: Check TanStack Query cache (has fresh data from updateTicketInCache)
+  // This cache is updated SYNCHRONOUSLY when messages are sent/received
+  const existingCacheData = queryClient.getQueryData<ChatPageResponse>(
+    ticketKeys.allUserTickets()
+  );
+
+  // PRIORITY 2: Fall back to IndexedDB for cold start (first app launch)
+  // IndexedDB is only needed when TanStack Query cache is empty
+  const indexedDBData = existingCacheData ? null : ticketCache.getCachedTicketsSync();
+
+  // Use whichever is available (TanStack Query cache preferred)
+  const cachedData = existingCacheData || indexedDBData;
+
+  // Debug logging to verify cache source
+  if (existingCacheData) {
+    console.log('[useAllUserTickets] Using TanStack Query cache (fresh data from navigation)');
+  } else if (indexedDBData) {
+    console.log('[useAllUserTickets] Using IndexedDB cache (cold start)');
+  } else {
+    console.log('[useAllUserTickets] No cached data, will fetch from server');
+  }
 
   // Fetch all tickets (without filters)
   const query = createQuery(() => ({
@@ -447,8 +468,9 @@ export function useTicketMessagesCursor(
         }, signal),
       enabled: enabled() && !!ticketId(),
       initialData: initialData || undefined,
-      staleTime: 30 * 1000,
+      staleTime: 0, // Always consider data stale to trigger revalidation on mount
       gcTime: 5 * 60 * 1000,
+      refetchOnMount: 'always', // Force refetch every time chat page mounts
       refetchOnWindowFocus: false,
       placeholderData: (previousData) => previousData,
       retry: 2,

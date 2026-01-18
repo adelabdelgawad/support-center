@@ -12,7 +12,6 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@kobalte/core": "^0.13.11",
     "@microsoft/signalr": "^10.0.0",
     "@solidjs/router": "^0.13.0",
     "@tanstack/solid-query": "^5.59.0",

@@ -20,6 +20,8 @@ import { RuntimeConfig } from '@/lib/runtime-config';
 import type { ChatMessage } from '@/types';
 import { logger } from '@/logging';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import { useUpdateTicketInCache } from '@/queries/tickets';
+import { messageCacheBridge } from '@/lib/message-cache-bridge';
 
 /**
  * Failed message info for retry support
@@ -75,6 +77,9 @@ export function useChatMutations(options: UseChatMutationsOptions) {
   const [isSending, setIsSending] = createSignal(false);
   const [lastError, setLastError] = createSignal<Error | null>(null);
   const [failedMessages, setFailedMessages] = createSignal<Map<string, FailedMessageInfo>>(new Map());
+
+  // Get ticket cache update function to sync ticket list after message send
+  const updateTicketInCache = useUpdateTicketInCache();
 
   /**
    * Check if user can send messages
@@ -195,6 +200,23 @@ export function useChatMutations(options: UseChatMutationsOptions) {
         console.log(`[useChatMutations] Updating optimistic message status to 'sent'`);
         updateMessageStatus(tempId, 'sent');
       }
+
+      // Update ticket list cache with new last message
+      updateTicketInCache(requestId, {
+        lastMessage: serverMessage.content || '',
+        lastMessageAt: serverMessage.createdAt,
+      });
+
+      // CRITICAL: Cache the sent message to SQLite immediately after HTTP success
+      // This ensures the message persists even if user navigates away before
+      // SignalR broadcast arrives (race condition fix)
+      messageCacheBridge.addMessage({
+        ...serverMessage,
+        requestId: serverMessage.requestId || requestId, // Ensure requestId is set
+        status: 'sent',
+      } as ChatMessage).catch((err) => {
+        console.warn('[useChatMutations] Cache write failed (non-critical):', err);
+      });
 
       // Clear from failed messages if this was a retry
       if (tempId) {

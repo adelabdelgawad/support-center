@@ -19,9 +19,10 @@ import { useNotificationSignalR } from "@/signalr";
 import { useImageViewer } from "@/context/image-viewer-context";
 import { useImageCache } from "@/context/image-cache-context";
 import { LazyImageProviders } from "@/context/lazy-image-providers";
-import { useUpdateTicketInCache, useTicketFromCache, useTicketDetail, useTicketMessagesCursor } from "@/queries";
+import { useUpdateTicketInCache, useTicketFromCache, useTicketDetail, useTicketMessagesCursor, messageKeys } from "@/queries";
 import type { GetMessagesCursorResponse } from "@/api/messages";
 import { sendMessage as sendMessageApi, markMessagesAsRead, getMessagesCursor } from "@/api/messages";
+import { useQueryClient } from "@tanstack/solid-query";
 import { useRealTimeChatRoom } from "@/signalr";
 import { useChatMutations } from "@/hooks/use-chat-mutations";
 import { useChatSync } from "@/hooks/use-chat-sync";
@@ -597,6 +598,20 @@ function TicketChatPageInner() {
 
   // Cache updaters
   const updateTicketInCache = useUpdateTicketInCache();
+
+  // Query client for cache invalidation
+  const queryClient = useQueryClient();
+
+  // Invalidate message cache on mount to ensure fresh data when reopening chat
+  // This forces a refetch even if TanStack Query cache exists, solving the issue
+  // where messages sent/received during last session don't show up on reopen
+  onMount(() => {
+    const id = ticketId();
+    if (id) {
+      console.log('[TicketChat] Invalidating message cache on mount to fetch latest messages');
+      queryClient.invalidateQueries({ queryKey: messageKeys.list(id) });
+    }
+  });
 
   // Get ticket from cache for immediate display
   const cachedTicket = useTicketFromCache(ticketId);

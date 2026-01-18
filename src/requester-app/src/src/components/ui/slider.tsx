@@ -1,92 +1,142 @@
-import type { JSX, ValidComponent } from "solid-js"
-import { splitProps } from "solid-js"
-
-import type { PolymorphicProps } from "@kobalte/core/polymorphic"
-import * as SliderPrimitive from "@kobalte/core/slider"
+import type { JSX, Accessor } from "solid-js"
+import { splitProps, createSignal, createEffect, on } from "solid-js"
 
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
-type SliderRootProps<T extends ValidComponent = "div"> = SliderPrimitive.SliderRootProps<T> & {
-  class?: string | undefined
+type SliderRootProps = {
+  value?: number[]
+  defaultValue?: number[]
+  onChange?: (value: number[]) => void
+  onChangeEnd?: (value: number[]) => void
+  minValue?: number
+  maxValue?: number
+  step?: number
+  disabled?: boolean
+  class?: string
+  children?: JSX.Element
+  "aria-label"?: string
+  "aria-labelledby"?: string
 }
 
-const Slider = <T extends ValidComponent = "div">(
-  props: PolymorphicProps<T, SliderRootProps<T>>
-) => {
-  const [local, others] = splitProps(props as SliderRootProps, ["class"])
+const Slider = (props: SliderRootProps) => {
+  const [local, others] = splitProps(props, [
+    "value",
+    "defaultValue",
+    "onChange",
+    "onChangeEnd",
+    "minValue",
+    "maxValue",
+    "step",
+    "disabled",
+    "class",
+    "children",
+    "aria-label",
+    "aria-labelledby"
+  ])
+
+  const currentValue = () => local.value?.[0] ?? local.defaultValue?.[0] ?? 0
+
+  const handleInput = (e: InputEvent) => {
+    const target = e.target as HTMLInputElement
+    const newValue = parseFloat(target.value)
+    local.onChange?.([newValue])
+  }
+
+  const handleChange = (e: Event) => {
+    const target = e.target as HTMLInputElement
+    const newValue = parseFloat(target.value)
+    local.onChangeEnd?.([newValue])
+  }
+
   return (
-    <SliderPrimitive.Root
+    <div
       class={cn("relative flex w-full touch-none select-none flex-col items-center", local.class)}
+      data-disabled={local.disabled ? "" : undefined}
       {...others}
-    />
+    >
+      <input
+        type="range"
+        min={local.minValue ?? 0}
+        max={local.maxValue ?? 100}
+        step={local.step ?? 1}
+        value={currentValue()}
+        onInput={handleInput}
+        onChange={handleChange}
+        disabled={local.disabled}
+        aria-label={local["aria-label"]}
+        aria-labelledby={local["aria-labelledby"]}
+        class="sr-only"
+      />
+      {local.children}
+    </div>
   )
 }
 
-type SliderTrackProps<T extends ValidComponent = "div"> = SliderPrimitive.SliderTrackProps<T> & {
-  class?: string | undefined
-}
-
-const SliderTrack = <T extends ValidComponent = "div">(
-  props: PolymorphicProps<T, SliderTrackProps<T>>
-) => {
-  const [local, others] = splitProps(props as SliderTrackProps, ["class"])
-  return (
-    <SliderPrimitive.Track
-      class={cn("relative h-2 w-full grow rounded-full bg-secondary", local.class)}
-      {...others}
-    />
-  )
-}
-
-type SliderFillProps<T extends ValidComponent = "div"> = SliderPrimitive.SliderFillProps<T> & {
-  class?: string | undefined
-}
-
-const SliderFill = <T extends ValidComponent = "div">(
-  props: PolymorphicProps<T, SliderFillProps<T>>
-) => {
-  const [local, others] = splitProps(props as SliderFillProps, ["class"])
-  return (
-    <SliderPrimitive.Fill
-      class={cn("absolute h-full rounded-full bg-primary", local.class)}
-      {...others}
-    />
-  )
-}
-
-type SliderThumbProps<T extends ValidComponent = "span"> = SliderPrimitive.SliderThumbProps<T> & {
-  class?: string | undefined
+type SliderTrackProps = {
+  class?: string
   children?: JSX.Element
 }
 
-const SliderThumb = <T extends ValidComponent = "span">(
-  props: PolymorphicProps<T, SliderThumbProps<T>>
-) => {
-  const [local, others] = splitProps(props as SliderThumbProps, ["class", "children"])
+const SliderTrack = (props: SliderTrackProps) => {
+  const [local, others] = splitProps(props, ["class", "children"])
   return (
-    <SliderPrimitive.Thumb
-      class={cn(
-        "top-[-6px] block size-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-        local.class
-      )}
+    <div
+      class={cn("relative h-2 w-full grow rounded-full bg-secondary", local.class)}
       {...others}
     >
-      <SliderPrimitive.Input />
-    </SliderPrimitive.Thumb>
+      {local.children}
+    </div>
   )
 }
 
-const SliderLabel = <T extends ValidComponent = "label">(
-  props: PolymorphicProps<T, SliderPrimitive.SliderLabelProps<T>>
-) => {
-  return <SliderPrimitive.Label as={Label} {...props} />
+type SliderFillProps = {
+  class?: string
 }
 
-const SliderValueLabel = <T extends ValidComponent = "label">(
-  props: PolymorphicProps<T, SliderPrimitive.SliderValueLabelProps<T>>
-) => {
-  return <SliderPrimitive.ValueLabel as={Label} {...props} />
+const SliderFill = (props: SliderFillProps) => {
+  const [local, others] = splitProps(props, ["class"])
+  return (
+    <div
+      class={cn("absolute h-full rounded-full bg-primary", local.class)}
+      style={{ width: "var(--slider-fill-width, 0%)" }}
+      {...others}
+    />
+  )
+}
+
+type SliderThumbProps = {
+  class?: string
+  children?: JSX.Element
+}
+
+const SliderThumb = (props: SliderThumbProps) => {
+  const [local, others] = splitProps(props, ["class", "children"])
+  return (
+    <div
+      class={cn(
+        "absolute top-[-6px] block size-5 rounded-full border-2 border-primary bg-background ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+        local.class
+      )}
+      style={{ left: "var(--slider-thumb-position, 0%)", transform: "translateX(-50%)" }}
+      {...others}
+    >
+      {local.children}
+    </div>
+  )
+}
+
+type SliderLabelProps = {
+  class?: string
+  children?: JSX.Element
+}
+
+const SliderLabel = (props: SliderLabelProps) => {
+  return <Label {...props} />
+}
+
+const SliderValueLabel = (props: SliderLabelProps) => {
+  return <Label {...props} />
 }
 
 export { Slider, SliderTrack, SliderFill, SliderThumb, SliderLabel, SliderValueLabel }

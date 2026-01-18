@@ -1,8 +1,7 @@
-import type { JSX, ValidComponent } from "solid-js"
+import type { JSX, ValidComponent, ComponentProps } from "solid-js"
 import { splitProps } from "solid-js"
+import { Dynamic } from "solid-js/web"
 
-import * as ButtonPrimitive from "@kobalte/core/button"
-import type { PolymorphicProps } from "@kobalte/core/polymorphic"
 import type { VariantProps } from "class-variance-authority"
 import { cva } from "class-variance-authority"
 
@@ -34,15 +33,20 @@ const buttonVariants = cva(
   }
 )
 
-type ButtonProps<T extends ValidComponent = "button"> = ButtonPrimitive.ButtonRootProps<T> &
-  VariantProps<typeof buttonVariants> & { class?: string | undefined; children?: JSX.Element }
+type ButtonProps<T extends ValidComponent = "button"> = ComponentProps<T> &
+  VariantProps<typeof buttonVariants> & {
+    class?: string | undefined
+    children?: JSX.Element
+    as?: T
+  }
 
 const Button = <T extends ValidComponent = "button">(
-  props: PolymorphicProps<T, ButtonProps<T>>
+  props: ButtonProps<T>
 ) => {
-  const [local, others] = splitProps(props as ButtonProps, ["variant", "size", "class"])
+  const [local, others] = splitProps(props as ButtonProps, ["variant", "size", "class", "as"])
   return (
-    <ButtonPrimitive.Root
+    <Dynamic
+      component={local.as || "button"}
       class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}
       {...others}
     />
