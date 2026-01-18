@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,17 @@ interface AdminBreadcrumbProps {
 
 export function AdminBreadcrumb({ className }: AdminBreadcrumbProps) {
   const pathname = usePathname();
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Set hydrated state after mount to avoid hydration mismatch
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Don't render until hydrated to avoid mismatch
+  if (!isHydrated) {
+    return null;
+  }
 
   // Don't show breadcrumb on admin hub home page
   if (pathname === "/admin" || pathname === "/admin/") {

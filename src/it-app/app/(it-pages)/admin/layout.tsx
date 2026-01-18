@@ -1,21 +1,17 @@
 /**
- * Admin Layout
+ * Admin Hub Layout
  *
- * Layout for admin pages with:
- * - Left sidebar with admin navigation (ONLY on sub-pages, NOT on /admin hub)
- * - Breadcrumb navigation (NOT on /admin hub)
+ * Simple layout for the /admin hub page.
+ * - No sidebar (full-width content)
  * - Admin access control
  *
- * NOTE: The horizontal topbar is provided by the parent (it-pages) layout.
- * This layout only handles the left sidebar and content area.
+ * NOTE: Admin sub-pages use (admin-pages) layout with sidebar.
+ * The horizontal topbar is provided by the parent (it-pages) layout.
  */
 
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { AdminLeftSidebar } from "@/components/admin/admin-left-sidebar";
-import { AdminBreadcrumb } from "@/components/admin/admin-breadcrumb";
 import { ReactNode } from "react";
-import { headers } from "next/headers";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -56,36 +52,10 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
     redirect('/unauthorized?reason=not_admin');
   }
 
-  // Check if we're on the admin hub page (/admin) or a sub-page
-  const headersList = await headers();
-  const pathname = headersList.get("x-pathname") || "/admin";
-  const isAdminHub = pathname === "/admin" || pathname === "/admin/";
-
-  // On admin hub page: no sidebar, full width content
-  // On sub-pages: show sidebar and breadcrumb
-  if (isAdminHub) {
-    return (
-      <main className="flex-1 overflow-auto bg-muted/30 h-[calc(100svh-48px)]">
-        {children}
-      </main>
-    );
-  }
-
-  // Sub-page layout with sidebar and breadcrumb
+  // Simple layout - full width content, no sidebar
   return (
-    <div className="flex h-[calc(100svh-48px)]">
-      <AdminLeftSidebar />
-
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-auto bg-muted/30">
-        <div className="container mx-auto px-6 py-4">
-          {/* Breadcrumb */}
-          <AdminBreadcrumb className="mb-4" />
-
-          {/* Page Content */}
-          {children}
-        </div>
-      </main>
-    </div>
+    <main className="flex-1 overflow-auto bg-muted/30 h-[calc(100svh-64px)]">
+      {children}
+    </main>
   );
 }

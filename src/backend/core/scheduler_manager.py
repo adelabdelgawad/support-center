@@ -370,7 +370,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
     Args:
         job_id: Scheduled job ID (UUID string)
     """
-    logger.info(f"Dispatching job {job_id} to Celery")
+    logger.debug(f"Dispatching job {job_id} to Celery")
 
     from tasks.scheduler_tasks import execute_scheduled_job
     from models.database_models import ScheduledJobExecution
@@ -412,7 +412,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
         queue=job.task_function.queue or "celery",
     )
 
-    logger.info(f"Job {job_id} dispatched as execution {execution.id}")
+    logger.debug(f"Job {job_id} dispatched as execution {execution.id}")
 
 
 # Global scheduler manager instance

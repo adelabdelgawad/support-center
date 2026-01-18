@@ -18,7 +18,7 @@ import type {
 } from '@/types/requests-list';
 import type { TechnicianViewsResponse } from '@/types/requests-list';
 
-interface RequestsListDataContextType {
+export interface RequestsListDataContextType {
   // Ticket data
   tickets: RequestListItem[];
   filterCounts: TicketTypeCounts;

@@ -13,35 +13,24 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
-  console.log("[API Route] ========================================");
-  console.log("[API Route] POST /api/remote-access/start-by-user");
-  console.log("[API Route] ========================================");
-
   try {
     const { userId } = await params;
-    console.log("[API Route] User ID:", userId);
 
     if (!userId) {
-      console.error("[API Route] ❌ Missing userId in path");
       return NextResponse.json(
         { error: "Missing userId" },
         { status: 400 }
       );
     }
 
-    console.log("[API Route] Calling backend: /remote-access/start-by-user/", userId);
-
     const response = await makeAuthenticatedRequest(
       "POST",
       `/remote-access/start-by-user/${userId}`
     );
 
-    console.log("[API Route] ✅ Session created:", response);
-
     return NextResponse.json(response, { status: 201 });
   } catch (error: any) {
-    console.error("[API Route] ❌ Error:", error.message);
-    console.error("[API Route] Error response:", error.response?.data);
+    console.error("Remote access start-by-user error:", error.message);
 
     const status = error.status;
     const detail = error.response?.data?.detail || error.message || "Failed to start remote access";

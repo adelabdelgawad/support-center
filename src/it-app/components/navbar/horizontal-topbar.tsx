@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * Horizontal Top Navigation Bar
+ *
+ * THEME-AWARE: Uses CSS variables for consistent theming across light/dark modes
+ * - Header background: --sdp-header-bg (dark gray)
+ * - Header foreground: --sdp-header-fg (white)
+ * - Border: --border (adaptive based on theme)
+ */
+
 import { cn } from "@/lib/utils";
 import { UserInfo } from "@/lib/types/auth";
 import { TopbarNavLinks } from "./topbar-nav-links";
@@ -20,24 +29,21 @@ export function HorizontalTopbar({
     <header
       className={cn(
         "flex items-center justify-between px-4 bg-[var(--sdp-header-bg)] text-[var(--sdp-header-fg)]",
-        "border-b border-gray-700",
+        "border-b border-[var(--border)]",
         className
       )}
       style={{
-        height: "48px",
-        minHeight: "48px",
+        height: "64px",
+        minHeight: "64px",
       }}
     >
       {/* Logo/Brand */}
       <div className="flex items-center gap-6">
         <Link
-          href="/support-center"
-          className="flex items-center gap-2 font-semibold text-lg"
+          href="/"
+          className="flex items-center gap-2 font-semibold text-lg hover:opacity-80 transition-opacity"
         >
-          <div className="flex items-center justify-center w-8 h-8 rounded bg-[var(--sdp-accent)]">
-            <span className="text-white font-bold text-sm">SD</span>
-          </div>
-          <span className="hidden sm:inline">ServiceDesk</span>
+          <span>Support Center</span>
         </Link>
 
         {/* Navigation Links */}

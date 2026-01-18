@@ -1,20 +1,27 @@
 "use client";
 
+/**
+ * Topbar Navigation Links
+ *
+ * THEME-AWARE: Uses CSS variables for consistent theming across light/dark modes
+ * - Hover states use --popover/10 for semi-transparent backgrounds
+ * - Active states use --primary/10 for accent color
+ * - Text colors adapt using --muted-foreground and --foreground
+ */
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Ticket, BarChart } from "lucide-react";
 
 interface NavLink {
   label: string;
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
 }
 
 const navLinks: NavLink[] = [
-  { label: "Home", href: "/support-center", icon: Home },
-  { label: "Requests", href: "/support-center/requests", icon: Ticket },
-  { label: "Reports", href: "/reports", icon: BarChart },
+  { label: "Home", href: "/" },
+  { label: "Requests", href: "/support-center/requests" },
+  { label: "Reports", href: "/reports" },
 ];
 
 interface TopbarNavLinksProps {
@@ -27,8 +34,15 @@ export function TopbarNavLinks({ className }: TopbarNavLinksProps) {
   return (
     <nav className={cn("flex items-center gap-1", className)}>
       {navLinks.map((link) => {
-        const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
-        const Icon = link.icon;
+        // Special handling for Home link
+        let isActive = false;
+        if (link.href === "/") {
+          // Home is active on "/" or "/support-center" (but not sub-paths)
+          isActive = pathname === "/" || pathname === "/support-center";
+        } else {
+          // Other links: exact match or starts with href + "/"
+          isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+        }
 
         return (
           <Link
@@ -36,13 +50,12 @@ export function TopbarNavLinks({ className }: TopbarNavLinksProps) {
             href={link.href}
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              "hover:bg-white/10",
+              "hover:bg-[var(--popover)]/10",
               isActive
-                ? "bg-white/10 text-white"
-                : "text-gray-300 hover:text-white"
+                ? "bg-[var(--primary)]/10 text-[var(--primary)]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             )}
           >
-            <Icon className="w-4 h-4" />
             <span>{link.label}</span>
           </Link>
         );

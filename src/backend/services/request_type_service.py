@@ -11,7 +11,7 @@ from core.decorators import (
 )
 from models import RequestType
 from schemas.request_type import RequestTypeCreate, RequestTypeUpdate
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -46,21 +46,30 @@ class RequestTypeService:
         # Base query
         stmt = select(RequestType).order_by(RequestType.id)
 
-        # Apply filters
+        # Build count query with all counts in single query
+        count_stmt = select(
+            func.count(RequestType.id).label("total"),
+            func.count(case((RequestType.is_active == True, 1))).label("active_count"),
+            func.count(case((RequestType.is_active == False, 1))).label("inactive_count"),
+        )
+
+        # Apply filters to both queries
         if is_active is not None:
             stmt = stmt.where(RequestType.is_active == is_active)
+            count_stmt = count_stmt.where(RequestType.is_active == is_active)
 
         if name:
             # Search in both English and Arabic names
-            stmt = stmt.where(
-                (RequestType.name_en.ilike(f"%{name}%")) |
-                (RequestType.name_ar.ilike(f"%{name}%"))
-            )
+            name_filter = (RequestType.name_en.ilike(f"%{name}%")) | (RequestType.name_ar.ilike(f"%{name}%"))
+            stmt = stmt.where(name_filter)
+            count_stmt = count_stmt.where(name_filter)
 
-        # Get total count for pagination
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total_result = await db.execute(count_stmt)
-        total = total_result.scalar() or 0
+        # Get all counts in a single query
+        count_result = await db.execute(count_stmt)
+        counts = count_result.one()
+        total = counts.total or 0
+        active_count = counts.active_count or 0
+        inactive_count = counts.inactive_count or 0
 
         # Apply pagination
         offset = (page - 1) * per_page
@@ -68,17 +77,6 @@ class RequestTypeService:
 
         result = await db.execute(stmt)
         request_types = result.scalars().all()
-
-        # Get counts
-        active_count_result = await db.execute(
-            select(func.count()).where(RequestType.is_active == True)
-        )
-        active_count = active_count_result.scalar() or 0
-
-        inactive_count_result = await db.execute(
-            select(func.count()).where(RequestType.is_active == False)
-        )
-        inactive_count = inactive_count_result.scalar() or 0
 
         return {
             "types": list(request_types),
@@ -226,14 +224,9 @@ class RequestTypeService:
             request_type.is_active = is_active
 
         await db.commit()
+        # No need for N+1 refresh loop - objects are already in memory with latest state
 
-        # Refresh all
-        updated = []
-        for request_type in request_types:
-            await db.refresh(request_type)
-            updated.append(request_type)
-
-        return updated
+        return request_types
 
     @staticmethod
     @safe_database_query("is_request_type_in_use", default_return=False)

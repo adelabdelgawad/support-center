@@ -5,7 +5,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 interface UserData {
   id: string;

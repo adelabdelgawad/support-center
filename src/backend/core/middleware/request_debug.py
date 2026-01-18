@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger = logging.getLogger("request_debug")
+logger.setLevel(logging.DEBUG)
 
 
 class RequestDebugMiddleware(BaseHTTPMiddleware):

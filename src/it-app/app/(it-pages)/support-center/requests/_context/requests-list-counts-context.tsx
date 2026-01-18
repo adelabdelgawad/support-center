@@ -15,7 +15,7 @@ import { useAllBusinessUnits } from '@/lib/hooks/use-business-unit-counts';
 import type { ViewCounts, ViewItem } from '@/types/requests-list';
 import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-actions';
 
-interface RequestsListCountsContextType {
+export interface RequestsListCountsContextType {
   // Counts data
   counts: ViewCounts;
   viewItems: ViewItem[];

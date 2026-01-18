@@ -1,9 +1,18 @@
 "use client";
 
+/**
+ * Topbar User Actions
+ *
+ * THEME-AWARE: Uses CSS variables and Tailwind dark: variants for consistent theming
+ * - Hover states use --popover/10 for semi-transparent backgrounds
+ * - Text colors adapt to light/dark mode
+ */
+
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserInfo } from "@/lib/types/auth";
 import UserAvatar from "./user-avatar";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 interface TopbarUserActionsProps {
   user: UserInfo;
@@ -22,24 +31,28 @@ export function TopbarUserActions({
       <button
         className={cn(
           "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-          "hover:bg-white/10 text-gray-300 hover:text-white"
+          "hover:bg-[var(--popover)]/10",
+          "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
         )}
         title="Notifications"
       >
         <Bell className="w-5 h-5" />
         {notificationCount > 0 && (
           <span className="absolute top-1 right-1 flex items-center justify-center">
-            <span className="w-2 h-2 bg-red-500 rounded-full" />
+            <span className="w-2 h-2 bg-[var(--destructive)] rounded-full" />
           </span>
         )}
       </button>
 
+      {/* Theme Switcher */}
+      <ThemeSwitcher />
+
       {/* Admin Gear (only for technicians/admins) */}
-      {(user.isTechnician || user.is_technician || user.isSuperAdmin || user.is_super_admin) && (
-        <div className="flex items-center justify-center w-9 h-9 rounded-md transition-colors hover:bg-white/10 text-gray-300 hover:text-white">
-          <a href="/admin" title="Admin Settings">
+      {(user.isTechnician || user.isSuperAdmin) && (
+        <div className="flex items-center justify-center w-9 h-9 rounded-md transition-colors hover:bg-[var(--popover)]/10 text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          <a href="/admin" title="Admin Settings" className="flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15-.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
           </a>

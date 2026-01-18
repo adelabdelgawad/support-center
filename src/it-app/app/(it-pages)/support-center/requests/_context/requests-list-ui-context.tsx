@@ -30,7 +30,7 @@ const viewDisplayNames: Record<ViewType, string> = {
   in_progress: 'In progress',
 };
 
-interface RequestsListUIContextType {
+export interface RequestsListUIContextType {
   // View settings
   activeView: ViewType;
   activeViewDisplayName: string;

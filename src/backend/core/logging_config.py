@@ -123,6 +123,11 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
         session_logger.addHandler(session_handler)
         session_logger.setLevel(getattr(logging, config.level.upper()))
 
+        # Configure APScheduler logger to DEBUG level to reduce verbosity
+        apscheduler_logger = logging.getLogger("apscheduler.executors.default")
+        apscheduler_logger.setLevel(logging.DEBUG)
+        apscheduler_logger.addHandler(app_handler)
+
         # Database log
         db_log_file = Path(config.log_dir) / "database.log"
         db_handler = logging.handlers.RotatingFileHandler(

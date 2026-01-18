@@ -204,8 +204,8 @@ export function RequestDetailMetadataProvider({
     isUpdating: updatingTicket,
     isUpdatingStatus,
     isUpdatingPriority,
-    updateStatus: updateTicketStatus,
-    updatePriority: updateTicketPriority,
+    updateStatus: updateStatusRaw,
+    updatePriority: updatePriorityRaw,
     mutate: mutateTicket,
   } = useRequestTicket({
     requestId: initialTicket.id,
@@ -215,14 +215,34 @@ export function RequestDetailMetadataProvider({
     onError: handleTicketError,
   });
 
+  // Wrapper functions to match interface signatures
+  const updateTicketStatus = useCallback(
+    async (statusId: number, resolution?: string) => {
+      await updateStatusRaw(statusId, resolution);
+    },
+    [updateStatusRaw]
+  );
+
+  const updateTicketPriority = useCallback(
+    async (priorityId: number) => {
+      await updatePriorityRaw(priorityId);
+    },
+    [updatePriorityRaw]
+  );
+
   // CRITICAL FIX: Use refs to access current values in WebSocket callbacks
-  const mutateTicketRef = useRef(mutateTicket);
+  // Wrapper for mutateTicket that returns Promise<void>
+  const mutateTicketWrapper = useCallback(async () => {
+    await mutateTicket();
+  }, [mutateTicket]);
+
+  const mutateTicketRef = useRef<(() => Promise<void>) | null>(null);
   const statusesDataRef = useRef(statusesData);
 
   // Keep refs in sync with current values
   useEffect(() => {
-    mutateTicketRef.current = mutateTicket;
-  }, [mutateTicket]);
+    mutateTicketRef.current = mutateTicketWrapper;
+  }, [mutateTicketWrapper]);
 
   useEffect(() => {
     statusesDataRef.current = statusesData;
@@ -264,8 +284,16 @@ export function RequestDetailMetadataProvider({
   const {
     notes,
     isLoading: notesLoading,
-    addNote,
+    addNote: addNoteRaw,
   } = useRequestNotes(ticket!.id, initialNotes);
+
+  // Wrapper function to match interface signature
+  const addNote = useCallback(
+    async (content: string) => {
+      await addNoteRaw(content);
+    },
+    [addNoteRaw]
+  );
 
   // **ASSIGNEES**
   const {
@@ -278,7 +306,7 @@ export function RequestDetailMetadataProvider({
     canAddAssignees,
     canRemoveAssignees,
     canTakeRequest,
-  } = useRequestAssignees(ticket.id, initialAssignees, {
+  } = useRequestAssignees(ticket!.id, initialAssignees, {
     getTechnicianById,
     onError: handleAssigneeError,
     onAssigneeAdded: handleAssigneeAdded,
@@ -286,7 +314,7 @@ export function RequestDetailMetadataProvider({
     currentUserId,
     currentUserRoles,
     isTechnician,
-    countAsSolved: ticket.status?.countAsSolved === true,
+    countAsSolved: ticket!.status?.countAsSolved === true,
   });
 
   // Wrapper functions for context API
@@ -307,28 +335,28 @@ export function RequestDetailMetadataProvider({
   // **STATUS UPDATE PERMISSION CHECK**
   const canUpdateStatus = useMemo(() => {
     if (!currentUserId) return false;
-    if (ticket.status?.countAsSolved === true) return false;
+    if (ticket!.status?.countAsSolved === true) return false;
     if (sessionUser?.isSuperAdmin === true) return true;
     return isTechnician === true;
-  }, [currentUserId, sessionUser, isTechnician, ticket.status?.countAsSolved]);
+  }, [currentUserId, sessionUser, isTechnician, ticket!.status?.countAsSolved]);
 
   // **REQUEST DETAILS EDIT PERMISSION CHECK**
   const canEditRequestDetails = useMemo(() => {
     if (!currentUserId) return false;
-    if (ticket.status?.countAsSolved === true) return false;
+    if (ticket!.status?.countAsSolved === true) return false;
     if (sessionUser?.isSuperAdmin === true) return true;
     if (assignees.some((a) => String(a.userId) === String(currentUserId))) return true;
     if (currentUserRoles) {
-      const isSenior = currentUserRoles.some((r: { name?: string }) => r?.name === 'Senior');
-      const isSupervisor = currentUserRoles.some((r: { name?: string }) => r?.name === 'Supervisor');
+      const isSenior = currentUserRoles.some((r) => r === 'Senior');
+      const isSupervisor = currentUserRoles.some((r) => r === 'Supervisor');
       return isSenior || isSupervisor;
     }
     return false;
-  }, [currentUserId, sessionUser, currentUserRoles, assignees, ticket.status?.countAsSolved]);
+  }, [currentUserId, sessionUser, currentUserRoles, assignees, ticket!.status?.countAsSolved]);
 
   // **CHAT DISABLED CHECK**
   const chatDisabledState = useMemo(() => {
-    const status = ticket.status;
+    const status = ticket!.status;
     const isDisabled = status?.countAsSolved === true;
     let reason: string | undefined;
     if (isDisabled) {
@@ -337,7 +365,7 @@ export function RequestDetailMetadataProvider({
       reason = `This ticket is ${displayName}. Chat is disabled for ${displayName.toLowerCase()} tickets.`;
     }
     return { isDisabled, reason };
-  }, [ticket.status]);
+  }, [ticket!.status]);
 
   // **TAKE REQUEST ACTION**
   const takeRequest = async () => {
@@ -345,9 +373,69 @@ export function RequestDetailMetadataProvider({
     await takeRequestSWR(currentUser);
   };
 
+  // **MESSAGING PERMISSION CHECK**
+  const messagingPermission = useMemo(() => {
+    if (!currentUserId) {
+      return {
+        canMessage: false,
+        reason: 'Not authenticated',
+        isAssignee: false,
+        isRequester: false,
+      };
+    }
+
+    const isAssignee = assignees.some((a) => String(a.userId) === String(currentUserId));
+    const isRequester = String(ticket!.requesterId) === String(currentUserId);
+
+    // Check if chat is disabled due to solved status
+    if (chatDisabledState.isDisabled) {
+      return {
+        canMessage: false,
+        reason: chatDisabledState.reason,
+        isAssignee,
+        isRequester,
+      };
+    }
+
+    // Super admin can always message
+    if (sessionUser?.isSuperAdmin === true) {
+      return {
+        canMessage: true,
+        isAssignee,
+        isRequester,
+      };
+    }
+
+    // Requester can message their own ticket
+    if (isRequester) {
+      return {
+        canMessage: true,
+        isAssignee,
+        isRequester,
+      };
+    }
+
+    // Assignee can message
+    if (isAssignee) {
+      return {
+        canMessage: true,
+        isAssignee,
+        isRequester,
+      };
+    }
+
+    // Others cannot message
+    return {
+      canMessage: false,
+      reason: 'You must be assigned to this ticket to send messages',
+      isAssignee,
+      isRequester,
+    };
+  }, [currentUserId, assignees, ticket!.requesterId, chatDisabledState, sessionUser]);
+
   const value: RequestDetailMetadataContextType = useMemo(
     () => ({
-      ticket,
+      ticket: ticket!,
       technicians: techniciansData,
       priorities: prioritiesData,
       statuses: statusesData,
@@ -373,6 +461,7 @@ export function RequestDetailMetadataProvider({
       canEditRequestDetails,
       isChatDisabled: chatDisabledState.isDisabled,
       chatDisabledReason: chatDisabledState.reason,
+      messagingPermission,
       currentUserId,
       currentUser,
       initialSubTasks,
@@ -407,6 +496,7 @@ export function RequestDetailMetadataProvider({
       canUpdateStatus,
       canEditRequestDetails,
       chatDisabledState,
+      messagingPermission,
       currentUserId,
       currentUser,
       initialSubTasks,

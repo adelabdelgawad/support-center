@@ -236,7 +236,7 @@ export function DashboardClient({ user, stats }: DashboardClientProps) {
 
           {/* Settings (Admin only) */}
           {isSuperAdmin && (
-            <Link href="/setting/users">
+            <Link href="/admin/setting/users">
               <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                 <CardHeader>
                   <div className="flex items-center gap-3">

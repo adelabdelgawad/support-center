@@ -30,52 +30,31 @@ export function AdminSectionCard({ section, className }: AdminSectionCardProps) 
   const Icon = iconMap[section.icon] || Settings;
 
   return (
-    <div
-      className={cn(
-        "group bg-card rounded-xl border border-border p-5",
-        "hover:border-[var(--sdp-accent)] hover:shadow-lg",
-        "transition-all duration-200",
-        className
-      )}
-    >
-      {/* Card Header with Icon */}
-      <div className="flex items-start gap-4 mb-4">
-        <div
-          className="flex items-center justify-center w-12 h-12 rounded-lg shrink-0"
-          style={{ backgroundColor: "var(--sdp-accent)" }}
-        >
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-base text-foreground leading-tight">
-            {section.title}
-          </h3>
-        </div>
+    <div className={cn("mb-6", className)}>
+      {/* Section Title with Icon */}
+      <div className="flex items-center gap-2 mb-6">
+        <Icon className="w-8 h-8 text-[var(--sdp-accent)]" />
+        <h3 className="font-semibold text-xl text-foreground">
+          {section.title}
+        </h3>
       </div>
 
-      {/* Card Description */}
-      {section.description && (
-        <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-          {section.description}
-        </p>
-      )}
-
-      {/* Divider */}
-      <div className="border-t border-border mb-4" />
-
-      {/* Card Links */}
-      <ul className="space-y-1">
-        {section.links.map((link) => (
-          <li key={link.href}>
+      {/* Horizontal Links with Pipe Separators */}
+      <div className="flex items-center flex-wrap gap-2 text-sm">
+        {section.links.map((link, index) => (
+          <div key={link.href} className="flex items-center gap-2">
             <Link
               href={link.href}
-              className="flex items-center text-sm text-muted-foreground transition-colors hover:text-[var(--sdp-accent)] hover:underline py-1"
+              className="text-muted-foreground transition-colors hover:text-[var(--sdp-accent)] hover:underline"
             >
-              <span className="truncate">{link.label}</span>
+              {link.label}
             </Link>
-          </li>
+            {index < section.links.length - 1 && (
+              <span className="text-muted-foreground">|</span>
+            )}
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

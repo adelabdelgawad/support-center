@@ -9,10 +9,14 @@
  * - Dark header with teal accent colors
  * - Admin hub accessible via gear icon for technicians
  *
- * PERFORMANCE OPTIMIZATION (Phase 2.1):
- * - Layout renders IMMEDIATELY without blocking network calls
+ * HYDRATION FIX: Adopts network_manager's server-first pattern
+ * - Server computes navigation state before rendering
+ * - Client receives exact state as props (no mismatches)
+ * - Clear hydration boundary with isHydrated flag
+ *
+ * PERFORMANCE: Layout renders immediately without blocking network calls
  * - Navigation is read from cookie (instant, no API call)
- * - Fresh navigation is fetched in background via SWR
+ * - Fresh navigation is available via server props
  * - Only redirects to login if session cookie is missing (fast check)
  *
  * NOTE: Admin routes (/admin/*) use their own layout with left sidebar
@@ -20,7 +24,6 @@
  */
 
 import { NavigationProvider } from "@/components/navbar/navigation-provider";
-import { PageRedirectWrapper } from "@/components/navbar/page-redirect-wrapper";
 import { NavigationProgressProvider } from "@/lib/context/navigation-progress-context";
 import {
   getNavigationCookieName,
@@ -118,16 +121,12 @@ export default async function SupportCenterLayout({ children }: SupportCenterLay
 
   // PERFORMANCE: Get cached navigation from cookie (instant, no API call)
   // This enables server-side rendering of navigation
-  // Fresh data is fetched in background via SWR
   const cachedPages = await getCachedNavigation(user.id);
 
   return (
     <div className="h-svh flex flex-col overflow-hidden">
       <NavigationProgressProvider>
-        <NavigationProvider userId={user.id} initialPages={cachedPages}>
-          {/* Handle auto-redirect for parent pages without paths */}
-          <PageRedirectWrapper />
-
+        <NavigationProvider userId={user.id} initialPages={cachedPages} serverPathname={pathname}>
           {/* Horizontal Top Navigation Bar */}
           <HorizontalTopbar user={user} />
 

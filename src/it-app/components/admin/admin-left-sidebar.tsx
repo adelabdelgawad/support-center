@@ -1,20 +1,53 @@
 "use client";
 
-import { useState, useMemo } from "react";
+/**
+ * Admin Left Sidebar
+ *
+ * HYDRATION FIX: Adopts network_manager's server-first pattern
+ * - Server computes navigation state before rendering
+ * - Client receives exact state as props (no mismatches)
+ * - Clear hydration boundary with isHydrated flag
+ */
+
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { ADMIN_SECTIONS, findSectionByHref } from "@/lib/config/admin-sections";
+import { findSectionByHref, calculateExpandedSections } from "@/lib/utils/admin-navigation-utils";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
+import type { AdminSection } from "@/lib/utils/admin-navigation-utils";
 
 interface AdminLeftSidebarProps {
   className?: string;
+  // Server-provided props for hydration-safe rendering
+  serverNavigation?: AdminSection[];
+  serverExpandedSections?: Set<string>;
+  serverActiveLink?: string | null;
+  serverPathname?: string;
 }
 
-export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
+export function AdminLeftSidebar({
+  className,
+  serverNavigation,
+  serverExpandedSections = new Set(),
+  serverActiveLink = null,
+  serverPathname = "/admin",
+}: AdminLeftSidebarProps) {
   const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Initialize with server-provided state
+  const [navigation] = useState<AdminSection[]>(serverNavigation || []);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(serverExpandedSections);
+
+  // HYDRATION FIX: Use server pathname before hydration, client pathname after
+  const currentPathname = isHydrated ? pathname : serverPathname;
+
+  // Set hydrated state after mount to avoid hydration mismatch
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   // Toggle section expansion
   const toggleSection = (sectionId: string) => {
@@ -29,23 +62,23 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
     });
   };
 
-  // Auto-expand section containing current path
-  useMemo(() => {
-    const currentSection = findSectionByHref(pathname);
-    if (currentSection && !expandedSections.has(currentSection.id)) {
-      setExpandedSections((prev) => new Set(prev).add(currentSection.id));
-    }
-  }, [pathname]);
+  // Update expanded sections when pathname changes (only after hydration)
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const newExpandedSections = calculateExpandedSections(navigation, pathname);
+    setExpandedSections(newExpandedSections);
+  }, [pathname, isHydrated, navigation]);
 
   // Filter sections based on search query
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) {
-      return ADMIN_SECTIONS;
+      return navigation;
     }
 
     const query = searchQuery.toLowerCase();
 
-    return ADMIN_SECTIONS
+    return navigation
       .map((section) => ({
         ...section,
         links: section.links.filter((link) =>
@@ -54,7 +87,7 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
         ),
       }))
       .filter((section) => section.links.length > 0);
-  }, [searchQuery]);
+  }, [searchQuery, navigation]);
 
   return (
     <aside
@@ -82,7 +115,8 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
       <nav className="flex-1 overflow-y-auto py-2">
         {filteredSections.map((section) => {
           const isExpanded = expandedSections.has(section.id) || searchQuery.trim() !== "";
-          const hasActiveLink = section.links.some((link) => link.href === pathname);
+          // HYDRATION FIX: Active state works on server AND client
+          const hasActiveLink = section.links.some((link) => link.href === currentPathname);
 
           return (
             <div key={section.id} className="mb-1">
@@ -109,16 +143,17 @@ export function AdminLeftSidebar({ className }: AdminLeftSidebarProps) {
               {isExpanded && (
                 <ul className="mt-1 space-y-0.5">
                   {section.links.map((link) => {
-                    const isActive = link.href === pathname;
+                    // HYDRATION FIX: Active state works on server AND client
+                    const isActive = link.href === currentPathname;
 
                     return (
                       <li key={link.href}>
                         <Link
                           href={link.href}
                           className={cn(
-                            "block px-8 py-1.5 text-sm transition-colors",
+                            "block px-8 py-1.5 text-sm transition-colors rounded-md mx-2",
                             isActive
-                              ? "bg-[var(--sdp-accent)] text-primary-foreground font-medium"
+                              ? "bg-[var(--sdp-accent)]/20 text-[var(--sdp-accent)] font-medium"
                               : "text-muted-foreground hover:bg-accent hover:text-foreground"
                           )}
                         >

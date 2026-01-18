@@ -22,7 +22,7 @@ export const LazyDistributionBarChart = dynamic(
   () => import('./distribution-bar-chart').then(mod => ({ default: mod.DistributionBarChart })),
   {
     ssr: false,
-    loading: ({ height }) => <ChartSkeleton height={height} />,
+    loading: () => <ChartSkeleton />,
   }
 );
 
@@ -31,7 +31,7 @@ export const LazyDistributionPieChart = dynamic(
   () => import('./distribution-pie-chart').then(mod => ({ default: mod.DistributionPieChart })),
   {
     ssr: false,
-    loading: ({ height }) => <ChartSkeleton height={height} />,
+    loading: () => <ChartSkeleton />,
   }
 );
 
@@ -40,6 +40,6 @@ export const LazyTrendLineChart = dynamic(
   () => import('./trend-line-chart').then(mod => ({ default: mod.TrendLineChart })),
   {
     ssr: false,
-    loading: ({ height }) => <ChartSkeleton height={height} />,
+    loading: () => <ChartSkeleton />,
   }
 );

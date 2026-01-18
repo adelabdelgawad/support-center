@@ -3,14 +3,13 @@
 /**
  * Navigation Provider
  *
- * Wraps the navigation components with SWR-based data fetching.
- * Renders immediately with cached navigation, fetches fresh data in background.
+ * HYDRATION FIX: Adopts network_manager's server-first pattern
+ * - Server provides initial data via props
+ * - No immediate fetch on mount when server data is available
+ * - Clear hydration boundary with isHydrated flag
  *
- * This is the key component for instant layout rendering:
- * - On first render: uses cached navigation from localStorage (instant)
- * - Background: fetches fresh navigation via SWR
- * - On success: updates cache and re-renders with fresh data
- * - On auth error: allows normal error handling (redirect to login)
+ * Wraps the navigation components with data fetching.
+ * Renders immediately with server-provided navigation, fetches fresh data in background.
  */
 
 import React, { createContext, useContext, useMemo } from 'react';
@@ -23,6 +22,7 @@ interface NavigationContextType {
   isValidating: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
+  isHydrated: boolean;
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
@@ -39,21 +39,28 @@ interface NavigationProviderProps {
   initialPages?: Page[];
 
   /**
+   * Server pathname (for hydration-safe active state)
+   */
+  serverPathname?: string;
+
+  /**
    * Children to render
    */
   children: React.ReactNode;
 }
 
 /**
- * Provides navigation context with SWR-based fetching and caching
+ * Provides navigation context with server-first fetching
  */
 export function NavigationProvider({
   userId,
   initialPages,
+  serverPathname,
   children,
 }: NavigationProviderProps) {
-  const { pages, isLoading, isValidating, error, refresh } = useNavigation(userId, {
+  const { pages, isLoading, isValidating, error, refresh, isHydrated } = useNavigation(userId, {
     initialPages,
+    serverPathname,
   });
 
   const contextValue = useMemo<NavigationContextType>(
@@ -63,8 +70,9 @@ export function NavigationProvider({
       isValidating,
       error,
       refresh,
+      isHydrated,
     }),
-    [pages, isLoading, isValidating, error, refresh]
+    [pages, isLoading, isValidating, error, refresh, isHydrated]
   );
 
   return (
@@ -94,10 +102,11 @@ interface NavigationDataProps {
     pages: Page[];
     isLoading: boolean;
     isValidating: boolean;
+    isHydrated: boolean;
   }) => React.ReactNode;
 }
 
 export function NavigationData({ children }: NavigationDataProps) {
-  const { pages, isLoading, isValidating } = useNavigationContext();
-  return <>{children({ pages, isLoading, isValidating })}</>;
+  const { pages, isLoading, isValidating, isHydrated } = useNavigationContext();
+  return <>{children({ pages, isLoading, isValidating, isHydrated })}</>;
 }

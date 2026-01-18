@@ -15,16 +15,11 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const queryString = searchParams.toString();
 
-    // Debug logging (remove in production)
-    console.log('[API Route] Users with roles - Query params:', queryString);
-
     // Call backend API with authentication
     const response = await makeAuthenticatedRequest<unknown>(
       'GET',
       `/users/with-roles/?${queryString}`
     );
-
-    console.log('[API Route] Users with roles - Response count:', (response as any)?.total || 0);
 
     return NextResponse.json(response);
   } catch (error) {
