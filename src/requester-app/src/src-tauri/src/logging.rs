@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
 use serde::{Deserialize, Serialize};
+use crate::debug_eprintln;
 
 // ============================================================================
 // CONSTANTS
@@ -216,7 +217,7 @@ fn rotate_if_needed(app: &AppHandle) -> Result<(), String> {
         fs::rename(&current_path, &archive_path)
             .map_err(|e| format!("Failed to archive log file: {}", e))?;
 
-        eprintln!("[logging] Rotated log file to: {}", archive_name);
+        debug_eprintln!("[logging] Rotated log file to: {}", archive_name);
 
         // Enforce max file count
         enforce_max_files(&logs_dir)?;
@@ -237,9 +238,9 @@ fn enforce_max_files(logs_dir: &PathBuf) -> Result<(), String> {
         for file_info in files.iter().take(to_delete) {
             let file_path = logs_dir.join(&file_info.name);
             if let Err(e) = fs::remove_file(&file_path) {
-                eprintln!("[logging] Failed to delete old log file {}: {}", file_info.name, e);
+                debug_eprintln!("[logging] Failed to delete old log file {}: {}", file_info.name, e);
             } else {
-                eprintln!("[logging] Deleted old log file: {}", file_info.name);
+                debug_eprintln!("[logging] Deleted old log file: {}", file_info.name);
             }
         }
     }
@@ -413,7 +414,7 @@ pub fn log_clear_all(app: AppHandle) -> Result<(), String> {
             let path = entry.path();
             if path.is_file() {
                 if let Err(e) = fs::remove_file(&path) {
-                    eprintln!("[logging] Failed to delete log file: {}", e);
+                    debug_eprintln!("[logging] Failed to delete log file: {}", e);
                 }
             }
         }
@@ -448,6 +449,6 @@ pub fn log_init(
 
     write_log_entry(&app, &entry)?;
 
-    eprintln!("[logging] Session logging initialized");
+    debug_eprintln!("[logging] Session logging initialized");
     Ok(())
 }

@@ -1,6 +1,6 @@
 [package]
-name = "requester-desktop-solidjs"
-version = "1.0.3"
+name = "supportcenterjs"
+version = "0.0.1"
 edition = "2021"
 
 [lib]

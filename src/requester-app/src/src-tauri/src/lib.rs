@@ -58,6 +58,9 @@ mod migration;
 // Image filesystem storage module
 mod image_storage;
 
+// Debug logging macros (compile to no-ops in release builds)
+mod debug_macros;
+
 // ============================================================================
 // PERFORMANCE OPTIMIZATION: Screen Dimension Caching for Mouse Positioning
 // ============================================================================
@@ -84,7 +87,7 @@ fn get_screen_dims_for_mouse() -> (i32, i32) {
         unsafe {
             let w = GetSystemMetrics(SM_CXSCREEN);
             let h = GetSystemMetrics(SM_CYSCREEN);
-            eprintln!("[get_screen_dims_for_mouse] Screen dimensions: {}x{}", w, h);
+            debug_eprintln!("[get_screen_dims_for_mouse] Screen dimensions: {}x{}", w, h);
             (w, h)
         }
     })
@@ -236,12 +239,12 @@ async fn download_installer(url: String, target_version: String) -> Result<Strin
     use tokio::io::AsyncWriteExt;
     use std::path::PathBuf;
 
-    eprintln!("[update] Starting download from: {}", url);
-    eprintln!("[update] Target version: {}", target_version);
+    debug_eprintln!("[update] Starting download from: {}", url);
+    debug_eprintln!("[update] Target version: {}", target_version);
 
     // SECURITY: Validate URL is from a trusted host
     if !is_trusted_download_url(&url) {
-        eprintln!("[update] SECURITY: Rejected download from untrusted host: {}", url);
+        debug_eprintln!("[update] SECURITY: Rejected download from untrusted host: {}", url);
         return Err(format!(
             "Security error: Downloads only allowed from trusted hosts: {:?}",
             TRUSTED_DOWNLOAD_HOSTS
@@ -253,7 +256,7 @@ async fn download_installer(url: String, target_version: String) -> Result<Strin
     let filename = format!("it-support-center-{}-setup.exe", target_version);
     let download_path: PathBuf = temp_dir.join(&filename);
 
-    eprintln!("[update] Download path: {:?}", download_path);
+    debug_eprintln!("[update] Download path: {:?}", download_path);
 
     // Download the file using reqwest (blocking for simplicity)
     // Note: For production, consider using async download with progress
@@ -271,7 +274,7 @@ async fn download_installer(url: String, target_version: String) -> Result<Strin
         return Err("Downloaded file is empty".to_string());
     }
 
-    eprintln!("[update] Downloaded {} bytes", bytes.len());
+    debug_eprintln!("[update] Downloaded {} bytes", bytes.len());
 
     // Write to temp file
     let mut file = tokio::fs::File::create(&download_path).await
@@ -291,7 +294,7 @@ async fn download_installer(url: String, target_version: String) -> Result<Strin
         return Err("Downloaded file is empty after write".to_string());
     }
 
-    eprintln!("[update] Successfully downloaded {} bytes to {:?}", metadata.len(), download_path);
+    debug_eprintln!("[update] Successfully downloaded {} bytes to {:?}", metadata.len(), download_path);
 
     Ok(download_path.to_string_lossy().to_string())
 }
@@ -306,8 +309,8 @@ async fn execute_installer_and_exit(
 ) -> Result<(), String> {
     use std::process::Command;
 
-    eprintln!("[update] Preparing to execute installer: {}", installer_path);
-    eprintln!("[update] Silent args: {}", silent_args);
+    debug_eprintln!("[update] Preparing to execute installer: {}", installer_path);
+    debug_eprintln!("[update] Silent args: {}", silent_args);
 
     // Verify installer file exists
     if !std::path::Path::new(&installer_path).exists() {
@@ -326,12 +329,12 @@ async fn execute_installer_and_exit(
             cmd.arg(arg);
         }
 
-        eprintln!("[update] Spawning installer: {} {}", installer_path, silent_args);
+        debug_eprintln!("[update] Spawning installer: {} {}", installer_path, silent_args);
 
         // Spawn the installer (detached, won't block)
         match cmd.spawn() {
             Ok(_) => {
-                eprintln!("[update] Installer spawned successfully");
+                debug_eprintln!("[update] Installer spawned successfully");
             }
             Err(e) => {
                 return Err(format!("Failed to spawn installer: {}", e));
@@ -342,14 +345,14 @@ async fn execute_installer_and_exit(
     #[cfg(not(target_os = "windows"))]
     {
         // NSIS installation not supported on this platform
-        eprintln!("[update] NSIS installation not supported on this platform");
+        debug_eprintln!("[update] NSIS installation not supported on this platform");
         return Err("NSIS installation is only supported on Windows".to_string());
     }
 
     // Brief delay to ensure installer process starts
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
-    eprintln!("[update] Exiting app for update...");
+    debug_eprintln!("[update] Exiting app for update...");
 
     // Exit the app - installer will continue running
     app.exit(0);
@@ -567,21 +570,34 @@ fn get_local_ip() -> Result<String, String> {
 
 /// Get server configuration unlock key from environment variable
 /// This key is used to unlock server configuration settings in the login UI
+///
+/// Key resolution order:
+/// 1. Runtime environment variable (SERVER_CONFIG_UNLOCK_KEY or VITE_SERVER_CONFIG_UNLOCK_KEY)
+/// 2. Compile-time environment variable (embedded at build time)
 #[tauri::command]
 fn get_server_config_unlock_key() -> Result<String, String> {
-    // Try multiple environment variable names
-    let key = env::var("SERVER_CONFIG_UNLOCK_KEY")
-        .or_else(|_| env::var("VITE_SERVER_CONFIG_UNLOCK_KEY"))
-        .map_err(|_| {
-            eprintln!("[get_server_config_unlock_key] Failed to read unlock key from environment");
-            eprintln!("[get_server_config_unlock_key] Tried: SERVER_CONFIG_UNLOCK_KEY, VITE_SERVER_CONFIG_UNLOCK_KEY");
-            eprintln!("[get_server_config_unlock_key] Available env vars: {:?}",
-                env::vars().filter(|(k, _)| k.contains("SERVER") || k.contains("UNLOCK")).collect::<Vec<_>>());
-            "Server configuration unlock key not found in environment".to_string()
-        })?;
+    // Try runtime environment variables first
+    if let Ok(key) = env::var("SERVER_CONFIG_UNLOCK_KEY") {
+        debug_eprintln!("[get_server_config_unlock_key] Found runtime SERVER_CONFIG_UNLOCK_KEY");
+        return Ok(key);
+    }
+    if let Ok(key) = env::var("VITE_SERVER_CONFIG_UNLOCK_KEY") {
+        debug_eprintln!("[get_server_config_unlock_key] Found runtime VITE_SERVER_CONFIG_UNLOCK_KEY");
+        return Ok(key);
+    }
 
-    eprintln!("[get_server_config_unlock_key] Successfully read unlock key (length: {})", key.len());
-    Ok(key)
+    // Fall back to compile-time embedded key (set during build)
+    // Build with: SERVER_CONFIG_UNLOCK_KEY=yourkey npm run tauri:build
+    let compile_time_key = option_env!("SERVER_CONFIG_UNLOCK_KEY");
+    if let Some(key) = compile_time_key {
+        if !key.is_empty() {
+            debug_eprintln!("[get_server_config_unlock_key] Using compile-time embedded key");
+            return Ok(key.to_string());
+        }
+    }
+
+    debug_eprintln!("[get_server_config_unlock_key] No unlock key found");
+    Err("Server configuration unlock key not configured".to_string())
 }
 
 /// Capture desktop screenshot with instant, professional screen capture
@@ -939,19 +955,22 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
 
         let t4 = Instant::now();
 
-        // Log timing breakdown (only occasionally)
-        static FRAME_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let frame_num = FRAME_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if frame_num % 30 == 0 {
-            eprintln!(
-                "[capture_monitor_stream] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms",
-                frame_num,
-                t1.duration_since(t0).as_millis(),
-                t2.duration_since(t1).as_millis(),
-                t3.duration_since(t2).as_millis(),
-                t4.duration_since(t3).as_millis(),
-                t4.duration_since(t0).as_millis()
-            );
+        // Log timing breakdown (only occasionally, debug builds only)
+        #[cfg(debug_assertions)]
+        {
+            static FRAME_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let frame_num = FRAME_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if frame_num % 30 == 0 {
+                eprintln!(
+                    "[capture_monitor_stream] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms",
+                    frame_num,
+                    t1.duration_since(t0).as_millis(),
+                    t2.duration_since(t1).as_millis(),
+                    t3.duration_since(t2).as_millis(),
+                    t4.duration_since(t3).as_millis(),
+                    t4.duration_since(t0).as_millis()
+                );
+            }
         }
 
         Ok::<String, String>(general_purpose::STANDARD.encode(&jpeg_data))
@@ -1041,20 +1060,23 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
 
         let t4 = Instant::now();
 
-        // Log timing breakdown (only occasionally)
-        static FRAME_COUNT_EXTREME: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let frame_num = FRAME_COUNT_EXTREME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if frame_num % 30 == 0 {
-            eprintln!(
-                "[capture_monitor_stream_extreme] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms, size={}KB",
-                frame_num,
-                t1.duration_since(t0).as_millis(),
-                t2.duration_since(t1).as_millis(),
-                t3.duration_since(t2).as_millis(),
-                t4.duration_since(t3).as_millis(),
-                t4.duration_since(t0).as_millis(),
-                jpeg_data.len() / 1024
-            );
+        // Log timing breakdown (only occasionally, debug builds only)
+        #[cfg(debug_assertions)]
+        {
+            static FRAME_COUNT_EXTREME: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let frame_num = FRAME_COUNT_EXTREME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if frame_num % 30 == 0 {
+                eprintln!(
+                    "[capture_monitor_stream_extreme] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms, size={}KB",
+                    frame_num,
+                    t1.duration_since(t0).as_millis(),
+                    t2.duration_since(t1).as_millis(),
+                    t3.duration_since(t2).as_millis(),
+                    t4.duration_since(t3).as_millis(),
+                    t4.duration_since(t0).as_millis(),
+                    jpeg_data.len() / 1024
+                );
+            }
         }
 
         Ok::<String, String>(general_purpose::STANDARD.encode(&jpeg_data))
@@ -1425,7 +1447,7 @@ fn disable_autostart() -> Result<autostart::AutostartEnableResult, String> {
 /// Safe to call multiple times (idempotent).
 #[tauri::command]
 fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEnableResult, String> {
-    eprintln!("[autostart] mark_profile_setup_complete called");
+    debug_eprintln!("[autostart] mark_profile_setup_complete called");
 
     // Check if already configured to avoid redundant operations
     let already_configured = storage::get_value(&app, storage::KEY_AUTOSTART_CONFIGURED)
@@ -1435,7 +1457,7 @@ fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEna
         .unwrap_or(false);
 
     if already_configured {
-        eprintln!("[autostart] Auto-start already configured, checking status...");
+        debug_eprintln!("[autostart] Auto-start already configured, checking status...");
         let status = autostart::check_autostart_status()?;
         return Ok(autostart::AutostartEnableResult {
             success: status.enabled,
@@ -1451,7 +1473,7 @@ fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEna
 
     // Mark profile setup as complete
     if let Err(e) = storage::set_value(&app, storage::KEY_PROFILE_SETUP_COMPLETED, serde_json::Value::Bool(true)) {
-        eprintln!("[autostart] Warning: Failed to persist profile_setup_completed flag: {}", e);
+        debug_eprintln!("[autostart] Warning: Failed to persist profile_setup_completed flag: {}", e);
         // Continue anyway - this is non-critical
     }
 
@@ -1461,7 +1483,7 @@ fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEna
     // If successful, mark as configured to avoid redundant registry operations
     if result.success {
         if let Err(e) = storage::set_value(&app, storage::KEY_AUTOSTART_CONFIGURED, serde_json::Value::Bool(true)) {
-            eprintln!("[autostart] Warning: Failed to persist autostart_configured flag: {}", e);
+            debug_eprintln!("[autostart] Warning: Failed to persist autostart_configured flag: {}", e);
             // Continue anyway - worst case we'll try again next launch
         }
     }
@@ -1566,32 +1588,34 @@ fn auth_storage_delete(app: AppHandle, key: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Load .env file - try multiple locations
-    println!("[Tauri] Loading .env file...");
-
-    // Try different paths where .env might be located
-    let env_loaded = dotenvy::dotenv().is_ok()
+    // Try to load .env file from various locations (works in both debug and release)
+    // This supports local testing with release builds - just place .env next to the exe
+    // In production deployments, environment variables should be set externally
+    // Note: dotenvy silently does nothing if .env doesn't exist (no error/warning)
+    let _env_loaded = dotenvy::dotenv().is_ok()
         || dotenvy::from_filename("../.env").is_ok()
         || dotenvy::from_filename("../../.env").is_ok()
         || dotenvy::from_filename("../src/.env").is_ok();
 
-    if env_loaded {
-        println!("[Tauri] ✅ .env file loaded successfully");
-        println!("[Tauri] SERVER_CONFIG_UNLOCK_KEY present: {}",
-            env::var("SERVER_CONFIG_UNLOCK_KEY").is_ok());
-    } else {
-        eprintln!("[Tauri] ⚠️  Warning: Could not load .env file from any location");
-        eprintln!("[Tauri] Searched: .env, ../.env, ../../.env, ../src/.env");
+    // Only log .env loading status in debug builds (no console output in production)
+    #[cfg(debug_assertions)]
+    {
+        if _env_loaded {
+            eprintln!("[Tauri] .env file loaded successfully");
+            eprintln!("[Tauri] SERVER_CONFIG_UNLOCK_KEY present: {}",
+                env::var("SERVER_CONFIG_UNLOCK_KEY").is_ok());
+        } else {
+            eprintln!("[Tauri] Note: No .env file found");
+        }
     }
-
 
     let builder = tauri::Builder::default()
         // Register the single-instance plugin (MUST be first to prevent duplicate launches)
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             // This callback runs in the EXISTING instance when a second instance is launched
-            eprintln!("[Single Instance] Second instance detected");
-            eprintln!("[Single Instance] Args: {:?}", args);
-            eprintln!("[Single Instance] CWD: {:?}", cwd);
+            debug_eprintln!("[Single Instance] Second instance detected");
+            debug_eprintln!("[Single Instance] Args: {:?}", args);
+            debug_eprintln!("[Single Instance] CWD: {:?}", cwd);
 
             // Emit event with arguments (for deep-link handling if needed)
             if !args.is_empty() {
@@ -1621,9 +1645,9 @@ pub fn run() {
                 let _ = main_window.set_always_on_top(true);
                 let _ = main_window.set_focus();
 
-                eprintln!("[Single Instance] Main window focused");
+                debug_eprintln!("[Single Instance] Main window focused");
             } else {
-                eprintln!("[Single Instance] Warning: Main window not found");
+                debug_eprintln!("[Single Instance] Warning: Main window not found");
             }
         }))
         // Register the store plugin for persistent storage
@@ -1735,35 +1759,35 @@ pub fn run() {
         // Setup floating icon functionality
         .setup(|app| {
             // Migrate app data from old directory to new location (if needed)
-            println!("[App] Checking for app data migration...");
+            debug_println!("[App] Checking for app data migration...");
             match migration::migrate_app_data(&app.handle()) {
                 Ok(result) => {
                     if result.migrated {
-                        println!("[App] ✅ Migration completed: {}", result.reason);
-                        println!("[App]    Files copied: {}", result.files_copied);
+                        debug_println!("[App] Migration completed: {}", result.reason);
+                        debug_println!("[App]    Files copied: {}", result.files_copied);
                         if let Some(old_path) = &result.old_path {
-                            println!("[App]    Old path: {}", old_path);
+                            debug_println!("[App]    Old path: {}", old_path);
                         }
                         if let Some(new_path) = &result.new_path {
-                            println!("[App]    New path: {}", new_path);
+                            debug_println!("[App]    New path: {}", new_path);
                         }
                     } else {
-                        println!("[App] Migration not needed: {}", result.reason);
+                        debug_println!("[App] Migration not needed: {}", result.reason);
                     }
                 }
                 Err(e) => {
-                    eprintln!("[App] ⚠️  Warning: Migration failed: {}", e);
-                    eprintln!("[App] App will continue, but data may need manual migration.");
+                    debug_eprintln!("[App] Warning: Migration failed: {}", e);
+                    debug_eprintln!("[App] App will continue, but data may need manual migration.");
                 }
             }
 
             // Initialize persistent storage with defaults from .env
-            println!("[App] Initializing persistent storage...");
+            debug_println!("[App] Initializing persistent storage...");
             if let Err(e) = storage::init_store_with_defaults(&app.handle()) {
-                eprintln!("[App] Warning: Failed to initialize storage: {}", e);
-                eprintln!("[App] App will continue, but settings may not persist.");
+                debug_eprintln!("[App] Warning: Failed to initialize storage: {}", e);
+                debug_eprintln!("[App] App will continue, but settings may not persist.");
             } else {
-                println!("[App] Storage initialized successfully");
+                debug_println!("[App] Storage initialized successfully");
             }
 
             // Setup floating icon click listener

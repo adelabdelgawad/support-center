@@ -18,6 +18,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use std::path::PathBuf;
 use base64::{Engine as _, engine::general_purpose};
+use crate::debug_eprintln;
 
 /// Get the images directory path
 /// Creates the directory if it doesn't exist
@@ -74,7 +75,7 @@ pub async fn image_storage_write(
     file.sync_all().await
         .map_err(|e| format!("Failed to sync image file: {}", e))?;
 
-    eprintln!("[image_storage] Wrote {} bytes to {:?}", bytes.len(), file_path);
+    debug_eprintln!("[image_storage] Wrote {} bytes to {:?}", bytes.len(), file_path);
 
     Ok(safe_filename)
 }
@@ -146,7 +147,7 @@ pub async fn image_storage_delete(
     if file_path.exists() {
         fs::remove_file(&file_path).await
             .map_err(|e| format!("Failed to delete image file: {}", e))?;
-        eprintln!("[image_storage] Deleted {:?}", file_path);
+        debug_eprintln!("[image_storage] Deleted {:?}", file_path);
     }
 
     Ok(())
@@ -166,14 +167,14 @@ pub async fn image_storage_clear_all(app: AppHandle) -> Result<u32, String> {
         let path = entry.path();
         if path.is_file() {
             if let Err(e) = fs::remove_file(&path).await {
-                eprintln!("[image_storage] Warning: Failed to delete {:?}: {}", path, e);
+                debug_eprintln!("[image_storage] Warning: Failed to delete {:?}: {}", path, e);
             } else {
                 count += 1;
             }
         }
     }
 
-    eprintln!("[image_storage] Cleared {} images from cache", count);
+    debug_eprintln!("[image_storage] Cleared {} images from cache", count);
     Ok(count)
 }
 

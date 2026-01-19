@@ -156,7 +156,20 @@ export interface TransformedTicketPageData {
  * Transform raw API response to UI-friendly format
  */
 function transformTicketPageData(response: ChatPageResponse): TransformedTicketPageData {
-  const ticketListItems = response.chatMessages.map(convertToTicketListItem);
+  // Defensive check: ensure chatMessages exists and is an array
+  const chatMessages = response?.chatMessages;
+  if (!chatMessages || !Array.isArray(chatMessages)) {
+    console.warn('[transformTicketPageData] Invalid response: chatMessages is', chatMessages);
+    return {
+      ticketListItems: [],
+      requestStatuses: response?.requestStatus || [],
+      totalCount: 0,
+      filteredTotalCount: 0,
+      unreadCount: 0,
+    };
+  }
+
+  const ticketListItems = chatMessages.map(convertToTicketListItem);
   const sortedTickets = sortTicketsByTime(ticketListItems);
 
   const unreadCount = sortedTickets.reduce(

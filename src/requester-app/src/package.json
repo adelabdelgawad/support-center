@@ -1,7 +1,7 @@
 {
-  "name": "requester-desktop-solid",
+  "name": "supportcenter",
   "private": true,
-  "version": "1.0.3",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -12,6 +12,8 @@
 //! - If entry missing → create it
 //! - If entry exists with incorrect value → log warning (do NOT overwrite)
 
+use crate::debug_eprintln;
+
 /// App identifier used as the registry value name
 const APP_ID: &str = "supportcenter.requester";
 
@@ -229,7 +231,7 @@ mod windows_impl {
 
         // Case 1: Already correctly enabled
         if status.enabled {
-            eprintln!("[autostart] Already enabled and correctly configured");
+            debug_eprintln!("[autostart] Already enabled and correctly configured");
             return Ok(AutostartEnableResult {
                 success: true,
                 enabled: true,
@@ -240,10 +242,10 @@ mod windows_impl {
 
         // Case 2: Entry exists but with wrong value - DO NOT overwrite
         if status.has_mismatch {
-            eprintln!("[autostart] WARNING: Registry entry exists with different value");
-            eprintln!("[autostart] Current: {:?}", status.current_value);
-            eprintln!("[autostart] Expected: {}", status.expected_value);
-            eprintln!("[autostart] NOT overwriting to prevent conflicts");
+            debug_eprintln!("[autostart] WARNING: Registry entry exists with different value");
+            debug_eprintln!("[autostart] Current: {:?}", status.current_value);
+            debug_eprintln!("[autostart] Expected: {}", status.expected_value);
+            debug_eprintln!("[autostart] NOT overwriting to prevent conflicts");
             return Ok(AutostartEnableResult {
                 success: false,
                 enabled: false,
@@ -257,7 +259,7 @@ mod windows_impl {
         }
 
         // Case 3: Entry doesn't exist - create it
-        eprintln!("[autostart] Creating new registry entry");
+        debug_eprintln!("[autostart] Creating new registry entry");
 
         unsafe {
             let subkey_wide = to_wide_string(REGISTRY_SUBKEY);
@@ -309,9 +311,9 @@ mod windows_impl {
                 });
             }
 
-            eprintln!("[autostart] Successfully created registry entry");
-            eprintln!("[autostart] Key: HKCU\\{}", REGISTRY_SUBKEY);
-            eprintln!("[autostart] Value: {} = {}", APP_ID, status.expected_value);
+            debug_eprintln!("[autostart] Successfully created registry entry");
+            debug_eprintln!("[autostart] Key: HKCU\\{}", REGISTRY_SUBKEY);
+            debug_eprintln!("[autostart] Value: {} = {}", APP_ID, status.expected_value);
 
             Ok(AutostartEnableResult {
                 success: true,
@@ -371,7 +373,7 @@ mod windows_impl {
                 });
             }
 
-            eprintln!("[autostart] Successfully removed registry entry");
+            debug_eprintln!("[autostart] Successfully removed registry entry");
 
             Ok(AutostartEnableResult {
                 success: true,

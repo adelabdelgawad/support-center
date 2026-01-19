@@ -15,6 +15,7 @@
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
+use crate::debug_println;
 
 // ============================================================================
 // CONSTANTS
@@ -54,7 +55,7 @@ pub struct MigrationResult {
 }
 
 pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
-    println!("[Migration] Starting app data migration check...");
+    debug_println!("[Migration] Starting app data migration check...");
 
     // Get the new app data directory (current location)
     let new_app_data = app
@@ -66,9 +67,9 @@ pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
     let old_app_data = get_old_app_data_dir()
         .ok_or_else(|| "Failed to determine old app data directory".to_string())?;
 
-    println!("[Migration] Checking paths:");
-    println!("  Old: {}", old_app_data.display());
-    println!("  New: {}", new_app_data.display());
+    debug_println!("[Migration] Checking paths:");
+    debug_println!("  Old: {}", old_app_data.display());
+    debug_println!("  New: {}", new_app_data.display());
 
     // Check if migration is needed
     let old_exists = old_app_data.exists();
@@ -76,7 +77,7 @@ pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
 
     // Case 1: Old doesn't exist - no migration needed (fresh install)
     if !old_exists {
-        println!("[Migration] Old directory doesn't exist - no migration needed (fresh install)");
+        debug_println!("[Migration] Old directory doesn't exist - no migration needed (fresh install)");
         return Ok(MigrationResult {
             migrated: false,
             reason: "Fresh installation - old directory does not exist".to_string(),
@@ -88,7 +89,7 @@ pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
 
     // Case 2: Both exist - migration already completed previously
     if old_exists && new_exists {
-        println!("[Migration] Both directories exist - migration already completed");
+        debug_println!("[Migration] Both directories exist - migration already completed");
         return Ok(MigrationResult {
             migrated: false,
             reason: "Migration already completed in previous run".to_string(),
@@ -99,7 +100,7 @@ pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
     }
 
     // Case 3: Old exists, new doesn't - perform migration
-    println!("[Migration] Old directory exists, new doesn't - performing migration...");
+    debug_println!("[Migration] Old directory exists, new doesn't - performing migration...");
 
     // Create new directory
     fs::create_dir_all(&new_app_data)
@@ -109,9 +110,9 @@ pub fn migrate_app_data(app: &AppHandle) -> Result<MigrationResult, String> {
     let files_copied = copy_directory_contents(&old_app_data, &new_app_data)
         .map_err(|e| format!("Failed to copy directory contents: {}", e))?;
 
-    println!("[Migration] ✅ Migration completed successfully!");
-    println!("  Files copied: {}", files_copied);
-    println!("  Old directory preserved at: {}", old_app_data.display());
+    debug_println!("[Migration] Migration completed successfully!");
+    debug_println!("  Files copied: {}", files_copied);
+    debug_println!("  Old directory preserved at: {}", old_app_data.display());
 
     Ok(MigrationResult {
         migrated: true,
@@ -165,12 +166,12 @@ fn copy_directory_contents(src: &PathBuf, dst: &PathBuf) -> Result<usize, std::i
 
         if path.is_dir() {
             // Recursively copy subdirectory
-            println!("[Migration]   Copying directory: {}", file_name.to_string_lossy());
+            debug_println!("[Migration]   Copying directory: {}", file_name.to_string_lossy());
             fs::create_dir_all(&dest_path)?;
             files_copied += copy_directory_contents(&path, &dest_path)?;
         } else {
             // Copy file
-            println!("[Migration]   Copying file: {}", file_name.to_string_lossy());
+            debug_println!("[Migration]   Copying file: {}", file_name.to_string_lossy());
             fs::copy(&path, &dest_path)?;
             files_copied += 1;
         }

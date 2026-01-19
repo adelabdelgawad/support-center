@@ -12,6 +12,7 @@ use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 use serde_json::Value;
 use std::sync::Arc;
+use crate::debug_println;
 
 // ============================================================================
 // STORAGE KEYS (Centralized)
@@ -151,7 +152,7 @@ pub fn init_store_with_defaults(app: &AppHandle) -> Result<(), String> {
 
     // Only initialize if theme preference doesn't exist (indicates first launch)
     if !store.has(KEY_THEME_PREFERENCE) {
-        println!("[Storage] First launch detected - initializing defaults");
+        debug_println!("[Storage] First launch detected - initializing defaults");
 
         // NOTE: server_address (API_URL) is no longer stored here
         // RuntimeConfig now handles backend URL selection dynamically via network detection
@@ -163,12 +164,12 @@ pub fn init_store_with_defaults(app: &AppHandle) -> Result<(), String> {
         // Save defaults
         store.save().map_err(|e| format!("Failed to save default values: {}", e))?;
 
-        println!("[Storage] Defaults initialized:");
-        println!("  - theme_preference: system");
-        println!("  - feature_flags: {{}}");
-        println!("  - server_address: (dynamic via RuntimeConfig network detection)");
+        debug_println!("[Storage] Defaults initialized:");
+        debug_println!("  - theme_preference: system");
+        debug_println!("  - feature_flags: {{}}");
+        debug_println!("  - server_address: (dynamic via RuntimeConfig network detection)");
     } else {
-        println!("[Storage] Using existing stored configuration");
+        debug_println!("[Storage] Using existing stored configuration");
     }
 
     Ok(())
@@ -199,7 +200,7 @@ pub fn migrate_from_local_storage(app: &AppHandle, local_storage_data: Value) ->
 
         if migrated_count > 0 {
             store.save().map_err(|e| format!("Failed to save migrated data: {}", e))?;
-            println!("[Storage] Migrated {} keys from localStorage", migrated_count);
+            debug_println!("[Storage] Migrated {} keys from localStorage", migrated_count);
         }
 
         Ok(())
