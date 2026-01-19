@@ -74,8 +74,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
+        # Note: No explicit close() needed - async context manager handles it
 
 
 async def get_websocket_session() -> AsyncGenerator[AsyncSession, None]:
@@ -106,8 +105,7 @@ async def get_websocket_session() -> AsyncGenerator[AsyncSession, None]:
             except Exception:
                 pass  # Session might already be invalid
             raise
-        finally:
-            await session.close()
+        # Note: No explicit close() needed - async context manager handles it
 
 
 @asynccontextmanager
@@ -133,8 +131,7 @@ async def get_cleanup_session() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
+        # Note: No explicit close() needed - async context manager handles it
 
 
 def is_session_valid(session: AsyncSession) -> bool:

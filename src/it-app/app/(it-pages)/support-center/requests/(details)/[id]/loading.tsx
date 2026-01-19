@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function RequestDetailsLoading() {
   return (
-    <div className="absolute inset-0 flex flex-col bg-background">
+    <div className="absolute inset-0 flex flex-col bg-background" suppressHydrationWarning>
       {/* Top Navigation Bar */}
       <div className="border-b border-border bg-card shrink-0">
         {/* Mobile Navigation */}

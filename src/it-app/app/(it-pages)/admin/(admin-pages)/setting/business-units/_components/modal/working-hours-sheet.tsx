@@ -23,11 +23,13 @@ import type { BusinessUnitResponse, WorkingHours } from '@/types/business-units'
 
 interface WorkingHoursSheetProps {
   unit: BusinessUnitResponse;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
 export function WorkingHoursSheet({
   unit,
+  open = false,
   onOpenChange,
 }: WorkingHoursSheetProps) {
   const { updateBusinessUnitsOptimistic } = useBusinessUnitsActions();

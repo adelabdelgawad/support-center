@@ -29,6 +29,7 @@ import { z } from "zod";
 import type { SubcategoryCreateRequest } from "@/types/categories";
 
 interface AddSubcategorySheetProps {
+  open?: boolean;
   categoryId: number;
   onOpenChange: (open: boolean) => void;
   onAdd?: () => void;
@@ -56,6 +57,7 @@ const createSubcategorySchema = z.object({
 type CreateSubcategoryFormData = z.infer<typeof createSubcategorySchema>;
 
 export function AddSubcategorySheet({
+  open = false,
   categoryId,
   onOpenChange,
   onAdd,

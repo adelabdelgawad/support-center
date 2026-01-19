@@ -9,6 +9,8 @@ import logging
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from core.config import settings
+
 
 class DebugLoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -23,6 +25,8 @@ class DebugLoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # SECURITY: Only log in debug mode
+        if not settings.api.debug:
+            return await call_next(request)
 
         logger = logging.getLogger("debug")
 
@@ -35,16 +39,16 @@ class DebugLoggingMiddleware(BaseHTTPMiddleware):
                 safe_headers[key] = value
 
         # Log request details (with sanitized headers)
-        logger.info(f"🔍 Request: {request.method} {request.url.path}")
-        logger.info(f"   Origin: {request.headers.get('origin', 'NONE')}")
-        logger.info(f"   Host: {request.headers.get('host', 'NONE')}")
-        logger.info(f"   User-Agent: {request.headers.get('user-agent', 'NONE')}")
-        logger.info(f"   Content-Type: {request.headers.get('content-type', 'NONE')}")
-        logger.info(f"   Headers: {safe_headers}")
+        logger.debug(f"🔍 Request: {request.method} {request.url.path}")
+        logger.debug(f"   Origin: {request.headers.get('origin', 'NONE')}")
+        logger.debug(f"   Host: {request.headers.get('host', 'NONE')}")
+        logger.debug(f"   User-Agent: {request.headers.get('user-agent', 'NONE')}")
+        logger.debug(f"   Content-Type: {request.headers.get('content-type', 'NONE')}")
+        logger.debug(f"   Headers: {safe_headers}")
 
         try:
             response = await call_next(request)
-            logger.info(f"   ✅ Response: {response.status_code}")
+            logger.debug(f"   ✅ Response: {response.status_code}")
             return response
         except Exception as e:
             logger.error(f"   ❌ Error: {str(e)}", exc_info=True)

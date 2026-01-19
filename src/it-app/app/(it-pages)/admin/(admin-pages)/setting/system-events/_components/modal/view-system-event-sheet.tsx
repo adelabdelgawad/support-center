@@ -14,11 +14,13 @@ import { Badge } from '@/components/ui/badge';
 
 interface ViewSystemEventSheetProps {
   event: SystemEventResponse;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
 export function ViewSystemEventSheet({
   event,
+  open = false,
   onOpenChange,
 }: ViewSystemEventSheetProps) {
   return (

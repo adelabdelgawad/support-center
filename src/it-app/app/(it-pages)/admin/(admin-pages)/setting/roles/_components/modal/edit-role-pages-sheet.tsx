@@ -26,8 +26,8 @@ interface EditRolePagesSheetProps {
   currentPages: PageRoleResponse[];  // Pages currently assigned to role
   availablePages: PageResponse[];  // All available pages
   onMutate?: (updatedRole: RoleResponse) => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type PageOptionType = {
@@ -55,8 +55,8 @@ export function EditRolePagesSheet({
   currentPages,
   availablePages,
   onMutate,
-  open,
-  onOpenChange,
+  open = false,
+  onOpenChange = () => {},
 }: EditRolePagesSheetProps) {
   const [isSaving, setIsSaving] = useState(false);
 

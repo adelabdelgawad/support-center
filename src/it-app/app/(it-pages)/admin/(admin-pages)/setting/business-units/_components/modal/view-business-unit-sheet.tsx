@@ -19,6 +19,7 @@ import type { WorkingHours } from '@/types/business-units';
 interface ViewBusinessUnitSheetProps {
   unit: BusinessUnitResponse;
   regions: BusinessUnitRegionResponse[];
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -35,6 +36,7 @@ const DAY_LABELS: Record<string, string> = {
 export function ViewBusinessUnitSheet({
   unit,
   regions,
+  open = false,
   onOpenChange,
 }: ViewBusinessUnitSheetProps) {
   const getRegionName = (regionId?: number | null) => {

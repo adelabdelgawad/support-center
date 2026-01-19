@@ -124,7 +124,7 @@ export default async function SupportCenterLayout({ children }: SupportCenterLay
   const cachedPages = await getCachedNavigation(user.id);
 
   return (
-    <div className="h-svh flex flex-col overflow-hidden">
+    <div className="h-svh flex flex-col overflow-hidden" suppressHydrationWarning>
       <NavigationProgressProvider>
         <NavigationProvider userId={user.id} initialPages={cachedPages} serverPathname={pathname}>
           {/* Horizontal Top Navigation Bar */}

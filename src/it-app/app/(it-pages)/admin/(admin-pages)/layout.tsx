@@ -71,7 +71,7 @@ export default async function AdminPagesLayout({ children }: AdminPagesLayoutPro
 
   // Layout with sidebar for all admin sub-pages
   return (
-    <div className="flex h-[calc(100svh-64px)]">
+    <div className="flex h-[calc(100svh-64px)]" suppressHydrationWarning>
       <AdminLeftSidebar
         serverNavigation={navigation}
         serverExpandedSections={expandedSections}

@@ -32,12 +32,14 @@ import type { BusinessUnitRegionResponse } from '@/types/business-unit-regions';
 interface EditBusinessUnitSheetProps {
   unit: BusinessUnitResponse;
   regions: BusinessUnitRegionResponse[];
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
 export function EditBusinessUnitSheet({
   unit,
   regions,
+  open = false,
   onOpenChange,
 }: EditBusinessUnitSheetProps) {
   const { updateBusinessUnitsOptimistic } = useBusinessUnitsActions();

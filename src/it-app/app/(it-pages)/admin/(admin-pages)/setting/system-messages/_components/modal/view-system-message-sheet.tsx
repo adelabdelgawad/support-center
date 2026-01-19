@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 
 interface ViewSystemMessageSheetProps {
   message: SystemMessageResponse;
+  open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
@@ -28,6 +29,7 @@ function extractPlaceholders(template: string | null | undefined): string[] {
 
 export function ViewSystemMessageSheet({
   message,
+  open = false,
   onOpenChange,
 }: ViewSystemMessageSheetProps) {
   const placeholdersEn = extractPlaceholders(message.templateEn);

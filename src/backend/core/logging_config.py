@@ -128,6 +128,11 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
         apscheduler_logger.setLevel(logging.DEBUG)
         apscheduler_logger.addHandler(app_handler)
 
+        # Configure httpx logger to WARNING level to reduce verbosity
+        httpx_logger = logging.getLogger("httpx")
+        httpx_logger.setLevel(logging.WARNING)
+        httpx_logger.addHandler(app_handler)
+
         # Database log
         db_log_file = Path(config.log_dir) / "database.log"
         db_handler = logging.handlers.RotatingFileHandler(

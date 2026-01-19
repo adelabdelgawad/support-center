@@ -13,6 +13,8 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from core.config import settings
+
 logger = logging.getLogger("request_debug")
 logger.setLevel(logging.DEBUG)
 
@@ -27,9 +29,13 @@ class RequestDebugMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable):
         """Process the request and log detailed debugging info."""
+        # Skip processing if request debugging is disabled
+        if not settings.logging.enable_request_debug:
+            return await call_next(request)
+
         try:
             # Log basic request info
-            logger.info(
+            logger.debug(
                 f"📥 Incoming request: {request.method} {request.url.path} "
                 f"from {request.client.host if request.client else 'unknown'}:{request.client.port if request.client else 'unknown'}"
             )
@@ -52,7 +58,7 @@ class RequestDebugMiddleware(BaseHTTPMiddleware):
             # Process request
             response = await call_next(request)
 
-            logger.info(f"✅ Response: {response.status_code} for {request.method} {request.url.path}")
+            logger.debug(f"✅ Response: {response.status_code} for {request.method} {request.url.path}")
             return response
 
         except Exception as e:
@@ -78,8 +84,13 @@ class RawRequestLogger:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         """Intercept ASGI calls to log raw request data."""
+        # Skip processing if raw request logging is disabled
+        if not settings.logging.enable_raw_request_logging:
+            await self.app(scope, receive, send)
+            return
+
         if scope["type"] == "http":
-            logger.info(
+            logger.debug(
                 f"🔍 [RAW] HTTP connection from {scope.get('client', ['unknown', 0])[0]}:{scope.get('client', ['unknown', 0])[1]}"
             )
             logger.debug(f"   [RAW] Method: {scope.get('method', 'unknown')}")
@@ -123,7 +134,7 @@ class RawRequestLogger:
 
             try:
                 await self.app(scope, logging_receive, send)
-                logger.info(f"✅ [RAW] Request completed successfully")
+                logger.debug(f"✅ [RAW] Request completed successfully")
             except Exception as e:
                 logger.error(f"❌ [RAW] Request failed: {type(e).__name__}: {str(e)}")
                 logger.error(f"   [RAW] Traceback: {traceback.format_exc()}")

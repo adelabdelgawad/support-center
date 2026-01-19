@@ -34,8 +34,8 @@ interface EditRoleUsersSheetProps {
   availableUsers: AuthUserResponse[];  // All available users
   onMutate?: (updatedRole: RoleResponse) => void;
   onSuccess?: () => void;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 const CustomUserOption = (props: OptionProps<UserOptionType, true>) => {
@@ -57,8 +57,8 @@ export function EditRoleUsersSheet({
   availableUsers,
   onMutate,
   onSuccess,
-  open,
-  onOpenChange,
+  open = false,
+  onOpenChange = () => {},
 }: EditRoleUsersSheetProps) {
   const roleId = role.id;
   const [isSaving, setIsSaving] = useState(false);

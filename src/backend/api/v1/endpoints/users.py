@@ -798,7 +798,7 @@ async def get_user_pages(
     logger = logging.getLogger(__name__)
 
     # DEBUG: Log the user_id being requested
-    logger.info(f"[DEBUG] Loading navigation for user_id={user_id}")
+    logger.debug(f"Loading navigation for user_id={user_id}")
 
     # Fetch user to verify existence
     user_query = select(User).where(User.id == user_id)
@@ -806,19 +806,19 @@ async def get_user_pages(
     user = user_result.scalar_one_or_none()
 
     if not user:
-        logger.warning(f"[DEBUG] User not found: user_id={user_id}")
+        logger.debug(f"User not found: user_id={user_id}")
         raise HTTPException(status_code=404, detail="User not found")
 
     # DEBUG: Log user info
-    logger.info(f"[DEBUG] User found: username={user.username}, is_super_admin={user.is_super_admin}")
+    logger.debug(f"User found: username={user.username}, is_super_admin={user.is_super_admin}")
 
     # If user is super admin, return all active pages
     if user.is_super_admin:
         pages_query = select(Page).where(Page.is_active == True).order_by(Page.id)
         pages_result = await db.execute(pages_query)
         pages = pages_result.scalars().all()
-        logger.info(f"[DEBUG] Super admin - loaded {len(pages)} pages")
-        logger.info(f"[DEBUG] Super admin page IDs: {[p.id for p in pages]}")
+        logger.debug(f"Super admin - loaded {len(pages)} pages")
+        logger.debug(f"Super admin page IDs: {[p.id for p in pages]}")
         return pages
 
     # Get user's role IDs
@@ -827,10 +827,10 @@ async def get_user_pages(
     role_ids = [row[0] for row in user_roles_result.all()]
 
     # DEBUG: Log user roles
-    logger.info(f"[DEBUG] User role_ids: {role_ids}")
+    logger.debug(f"User role_ids: {role_ids}")
 
     if not role_ids:
-        logger.warning(f"[DEBUG] User has no roles assigned - returning empty pages list")
+        logger.debug(f"User has no roles assigned - returning empty pages list")
         return []
 
     # Get pages accessible through user's roles
@@ -844,10 +844,10 @@ async def get_user_pages(
     page_ids = [row[0] for row in page_roles_result.all()]
 
     # DEBUG: Log page IDs found
-    logger.info(f"[DEBUG] Page IDs found for user's roles: {page_ids}")
+    logger.debug(f"Page IDs found for user's roles: {page_ids}")
 
     if not page_ids:
-        logger.warning(f"[DEBUG] No page permissions found for user's roles - returning empty pages list")
+        logger.debug(f"No page permissions found for user's roles - returning empty pages list")
         return []
 
     # Fetch the actual pages user has direct access to
@@ -861,8 +861,8 @@ async def get_user_pages(
     pages = list(pages_result.scalars().all())
 
     # DEBUG: Log direct pages
-    logger.info(f"[DEBUG] Direct pages from permissions: {len(pages)}")
-    logger.info(f"[DEBUG] Direct page IDs: {[p.id for p in pages]}")
+    logger.debug(f"Direct pages from permissions: {len(pages)}")
+    logger.debug(f"Direct page IDs: {[p.id for p in pages]}")
 
     # AUTO-INCLUDE PARENT PAGES
     # Automatically fetch all parent pages for proper navigation hierarchy
@@ -876,7 +876,7 @@ async def get_user_pages(
 
     # Recursively fetch parent pages up the hierarchy
     while parent_ids_to_fetch:
-        logger.info(f"[DEBUG] Fetching parent pages: {parent_ids_to_fetch}")
+        logger.debug(f"Fetching parent pages: {parent_ids_to_fetch}")
 
         parent_pages_query = (
             select(Page)
@@ -891,7 +891,7 @@ async def get_user_pages(
         for parent_page in parent_pages:
             if parent_page.id not in pages_dict:
                 pages_dict[parent_page.id] = parent_page
-                logger.info(f"[DEBUG] Auto-included parent: {parent_page.id} ({parent_page.title})")
+                logger.debug(f"Auto-included parent: {parent_page.id} ({parent_page.title})")
 
                 # Check if this parent also has a parent
                 if parent_page.parent_id and parent_page.parent_id not in pages_dict:
@@ -904,13 +904,13 @@ async def get_user_pages(
     final_pages = list(pages_dict.values())
 
     # DEBUG: Log final result
-    logger.info(f"[DEBUG] Returning {len(final_pages)} pages (including auto-added parents)")
-    logger.info(f"[DEBUG] Final page IDs: {[p.id for p in final_pages]}")
-    logger.info(f"[DEBUG] Final page titles: {[p.title for p in final_pages]}")
+    logger.debug(f"Returning {len(final_pages)} pages (including auto-added parents)")
+    logger.debug(f"Final page IDs: {[p.id for p in final_pages]}")
+    logger.debug(f"Final page titles: {[p.title for p in final_pages]}")
 
     # DEBUG: Log full page details
     for page in final_pages:
-        logger.info(f"[DEBUG] Page {page.id}: path={page.path}, title={page.title}, icon={page.icon}, parent_id={page.parent_id}, is_active={page.is_active}")
+        logger.debug(f"Page {page.id}: path={page.path}, title={page.title}, icon={page.icon}, parent_id={page.parent_id}, is_active={page.is_active}")
 
     return final_pages
 
