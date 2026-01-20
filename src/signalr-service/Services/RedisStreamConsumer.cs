@@ -316,6 +316,10 @@ public class RedisStreamConsumer : BackgroundService
                     await BroadcastTicketUpdateAsync(scope, streamEvent, cancellationToken);
                     return true;
 
+                case "ticket_list_update":
+                    await BroadcastUserTicketListUpdateAsync(scope, streamEvent, cancellationToken);
+                    return true;
+
                 case "notification":
                     await BroadcastNotificationAsync(scope, streamEvent, cancellationToken);
                     return true;
@@ -338,6 +342,105 @@ public class RedisStreamConsumer : BackgroundService
     }
 
     /// <summary>
+    /// Converts JsonElement values to primitives for SignalR transmission.
+    /// When deserializing from Redis, Dictionary<string, object> values become JsonElement.
+    /// SignalR can't serialize JsonElement correctly, so we extract primitive values.
+    /// </summary>
+    private static object ConvertJsonElementToObject(object value)
+    {
+        if (value is JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind switch
+            {
+                JsonValueKind.String => jsonElement.GetString() ?? string.Empty,
+                JsonValueKind.Number => jsonElement.TryGetInt64(out var l) ? l : jsonElement.GetDouble(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null => null,
+                JsonValueKind.Array => jsonElement.EnumerateArray().Select(ConvertJsonElementToObject).ToArray(),
+                JsonValueKind.Object => jsonElement.EnumerateObject()
+                    .ToDictionary(prop => prop.Name, prop => ConvertJsonElementToObject(prop.Value)),
+                _ => value
+            };
+        }
+        return value;
+    }
+
+    /// <summary>
+    /// Converts a dictionary with JsonElement values to one with primitive values.
+    /// </summary>
+    private static Dictionary<string, object> ConvertPayloadDictionary(Dictionary<string, object> payload)
+    {
+        return payload.ToDictionary(
+            kvp => kvp.Key,
+            kvp => ConvertJsonElementToObject(kvp.Value)
+        );
+    }
+
+    /// <summary>
+    /// Safely gets a string value from a payload, handling JsonElement values.
+    /// </summary>
+    private static string? GetPayloadString(Dictionary<string, object> payload, string key)
+    {
+        if (payload.TryGetValue(key, out var value))
+        {
+            var converted = ConvertJsonElementToObject(value);
+            return converted?.ToString();
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Safely gets an int value from a payload, handling JsonElement values.
+    /// </summary>
+    private static int GetPayloadInt(Dictionary<string, object> payload, string key, int defaultValue = 0)
+    {
+        if (payload.TryGetValue(key, out var value))
+        {
+            var converted = ConvertJsonElementToObject(value);
+            if (converted is long l) return (int)l;
+            if (converted is double d) return (int)d;
+            if (converted is int i) return i;
+        }
+        return defaultValue;
+    }
+
+    /// <summary>
+    /// Safely gets a bool value from a payload, handling JsonElement values.
+    /// </summary>
+    private static bool GetPayloadBool(Dictionary<string, object> payload, string key, bool defaultValue = false)
+    {
+        if (payload.TryGetValue(key, out var value))
+        {
+            var converted = ConvertJsonElementToObject(value);
+            if (converted is bool b) return b;
+        }
+        return defaultValue;
+    }
+
+    /// <summary>
+    /// Safely gets a SenderInfo from a payload, handling JsonElement nested objects.
+    /// </summary>
+    private static SenderInfo? GetPayloadSenderInfo(Dictionary<string, object> payload, string key)
+    {
+        if (payload.TryGetValue(key, out var value))
+        {
+            var converted = ConvertJsonElementToObject(value);
+            if (converted is Dictionary<string, object> senderDict)
+            {
+                return new SenderInfo
+                {
+                    Id = GetPayloadString(senderDict, "id") ?? string.Empty,
+                    Username = GetPayloadString(senderDict, "username") ?? string.Empty,
+                    FullName = GetPayloadString(senderDict, "fullName"),
+                    Email = GetPayloadString(senderDict, "email")
+                };
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
     /// Broadcast chat message to ChatHub.
     /// </summary>
     private async Task BroadcastChatMessageAsync(IServiceScope scope, StreamEvent streamEvent, CancellationToken cancellationToken)
@@ -345,8 +448,24 @@ public class RedisStreamConsumer : BackgroundService
         var chatHub = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
         var roomName = $"request:{streamEvent.RoomId}";
 
-        var payload = JsonSerializer.Deserialize<ChatMessagePayload>(JsonSerializer.Serialize(streamEvent.Payload));
-        if (payload == null) return;
+        // Convert JsonElement values to primitives for SignalR transmission
+        var payload = new ChatMessagePayload
+        {
+            Id = GetPayloadString(streamEvent.Payload, "id") ?? string.Empty,
+            RequestId = GetPayloadString(streamEvent.Payload, "requestId") ?? streamEvent.RoomId,
+            SenderId = GetPayloadString(streamEvent.Payload, "senderId"),
+            Sender = GetPayloadSenderInfo(streamEvent.Payload, "sender"),
+            Content = GetPayloadString(streamEvent.Payload, "content") ?? string.Empty,
+            SequenceNumber = GetPayloadInt(streamEvent.Payload, "sequenceNumber"),
+            IsScreenshot = GetPayloadBool(streamEvent.Payload, "isScreenshot"),
+            ScreenshotFileName = GetPayloadString(streamEvent.Payload, "screenshotFileName"),
+            IsRead = GetPayloadBool(streamEvent.Payload, "isRead"),
+            CreatedAt = GetPayloadString(streamEvent.Payload, "createdAt") ?? DateTime.UtcNow.ToString("O"),
+            UpdatedAt = GetPayloadString(streamEvent.Payload, "updatedAt"),
+            ClientTempId = GetPayloadString(streamEvent.Payload, "clientTempId")
+        };
+
+        if (string.IsNullOrEmpty(payload.Id)) return;
 
         // CRITICAL FIX: Send message payload directly, not wrapped in { eventId, requestId, message }
         // Clients expect ReceiveMessage to receive ChatMessage directly
@@ -428,6 +547,32 @@ public class RedisStreamConsumer : BackgroundService
     }
 
     /// <summary>
+    /// Broadcast user ticket list update to TicketHub.
+    /// Used to notify users subscribed to their ticket list when tickets change.
+    /// </summary>
+    private async Task BroadcastUserTicketListUpdateAsync(IServiceScope scope, StreamEvent streamEvent, CancellationToken cancellationToken)
+    {
+        var ticketHub = scope.ServiceProvider.GetRequiredService<IHubContext<TicketHub>>();
+
+        // RoomId is already in format "user-tickets:{userId}" from Python backend
+        var groupName = streamEvent.RoomId;
+
+        // Convert JsonElement values to primitives for SignalR transmission
+        var payload = ConvertPayloadDictionary(streamEvent.Payload);
+
+        await ticketHub.Clients.Group(groupName).SendAsync("TicketListUpdated", new
+        {
+            eventId = streamEvent.EventId,
+            updateType = GetPayloadString(streamEvent.Payload, "update_type") ?? "unknown",
+            requestId = GetPayloadString(streamEvent.Payload, "request_id"),
+            data = payload
+        }, cancellationToken);
+
+        _logger.LogInformation("Broadcast ticket list update to group {GroupName}, updateType: {UpdateType}",
+            groupName, GetPayloadString(streamEvent.Payload, "update_type") ?? "unknown");
+    }
+
+    /// <summary>
     /// Broadcast notification to NotificationHub and ChatHub.
     /// </summary>
     private async Task BroadcastNotificationAsync(IServiceScope scope, StreamEvent streamEvent, CancellationToken cancellationToken)
@@ -435,7 +580,8 @@ public class RedisStreamConsumer : BackgroundService
         var notificationHub = scope.ServiceProvider.GetRequiredService<IHubContext<NotificationHub>>();
         var chatHub = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 
-        var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
+        // Convert JsonElement values to primitives for SignalR transmission
+        var payload = ConvertPayloadDictionary(streamEvent.Payload);
 
         // BUGFIX: Send to specific user groups on BOTH hubs (like HTTP controller does)
         // streamEvent.RoomId contains the target user's ID
@@ -449,7 +595,7 @@ public class RedisStreamConsumer : BackgroundService
         );
 
         _logger.LogInformation("Broadcast notification type: {NotificationType}, user: {UserId}",
-            payload?.GetValueOrDefault("type", "unknown"), streamEvent.RoomId);
+            GetPayloadString(streamEvent.Payload, "type") ?? "unknown", streamEvent.RoomId);
     }
 
     /// <summary>
@@ -467,9 +613,9 @@ public class RedisStreamConsumer : BackgroundService
             _ => "RemoteAccessEvent"
         };
 
-        // CRITICAL FIX: Send payload directly, not wrapped in { eventId, data }
-        // Clients expect event data directly (sessionId, agentId, etc.)
-        var payload = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(streamEvent.Payload));
+        // CRITICAL FIX: Convert JsonElement values to primitives for SignalR transmission
+        // Clients expect event data directly (sessionId, agentId, etc.) not nested JsonElement objects
+        var payload = ConvertPayloadDictionary(streamEvent.Payload);
 
         // BUGFIX: Send to specific user groups instead of broadcasting to all clients
         // streamEvent.RoomId contains the requester's user ID for remote session events
@@ -483,7 +629,7 @@ public class RedisStreamConsumer : BackgroundService
         );
 
         _logger.LogInformation("Broadcast remote access event: {EventType}, sessionId: {SessionId}, user: {UserId}",
-            streamEvent.EventType, payload?.GetValueOrDefault("sessionId", "unknown"), streamEvent.RoomId);
+            streamEvent.EventType, GetPayloadString(streamEvent.Payload, "sessionId") ?? "unknown", streamEvent.RoomId);
     }
 
     /// <summary>

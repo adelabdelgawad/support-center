@@ -15,7 +15,7 @@ import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/m
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
 import type { Category } from '@/lib/hooks/use-categories-tags';
-import type { TaskStatusChangedEvent } from '@/lib/signalr/types';
+import type { TaskStatusChangedEvent, TicketUpdateEvent } from '@/lib/signalr/types';
 import { useRequestNotes } from '@/lib/hooks/use-request-notes';
 import { useRequestAssignees } from '@/lib/hooks/use-request-assignees';
 import { useGlobalPriorities, useGlobalStatuses, useGlobalTechnicians } from '@/lib/hooks/use-global-metadata';
@@ -90,6 +90,10 @@ export interface RequestDetailMetadataContextType {
   // Refs for external access (used by chat context)
   mutateTicketRef: React.MutableRefObject<(() => Promise<void>) | null>;
   statusesDataRef: React.MutableRefObject<RequestStatus[]>;
+
+  // SignalR event handlers for real-time updates
+  handleTicketUpdateEvent: (event: TicketUpdateEvent) => Promise<void>;
+  handleTaskStatusChangedEvent: (event: TaskStatusChangedEvent) => Promise<void>;
 }
 
 const RequestDetailMetadataContext = createContext<RequestDetailMetadataContextType | undefined>(undefined);
@@ -285,6 +289,7 @@ export function RequestDetailMetadataProvider({
     notes,
     isLoading: notesLoading,
     addNote: addNoteRaw,
+    mutate: mutateNotes,
   } = useRequestNotes(ticket!.id, initialNotes);
 
   // Wrapper function to match interface signature
@@ -306,6 +311,7 @@ export function RequestDetailMetadataProvider({
     canAddAssignees,
     canRemoveAssignees,
     canTakeRequest,
+    refresh: refreshAssignees,
   } = useRequestAssignees(ticket!.id, initialAssignees, {
     getTechnicianById,
     onError: handleAssigneeError,
@@ -372,6 +378,38 @@ export function RequestDetailMetadataProvider({
     if (!currentUser) throw new Error('Not authenticated');
     await takeRequestSWR(currentUser);
   };
+
+  // **SIGNALR EVENT HANDLERS FOR REAL-TIME UPDATES**
+  // These will be passed to chat context to trigger revalidation
+
+  // Handler for TicketUpdateEvent (assignment changes, status changes, etc.)
+  const handleTicketUpdateEvent = useCallback(async (event: TicketUpdateEvent) => {
+    console.log('[MetadataContext] TicketUpdateEvent received:', event);
+
+    // Refresh assignees when assignment changes
+    if (event.eventType === 'assignment') {
+      console.log('[MetadataContext] Assignment changed - refreshing assignees');
+      await refreshAssignees();
+    }
+
+    // Refresh ticket for status/priority changes
+    if (event.eventType === 'status_change' || event.eventType === 'priority_change') {
+      console.log('[MetadataContext] Status/priority changed - refreshing ticket');
+      await mutateTicket();
+    }
+
+    // Refresh notes when note is added
+    if (event.eventType === 'note_added') {
+      console.log('[MetadataContext] Note added - refreshing notes');
+      await mutateNotes();
+    }
+  }, [refreshAssignees, mutateTicket, mutateNotes]);
+
+  // Handler for TaskStatusChangedEvent
+  const handleTaskStatusChangedEvent = useCallback(async (event: TaskStatusChangedEvent) => {
+    console.log('[MetadataContext] TaskStatusChangedEvent received:', event);
+    await mutateTicket();
+  }, [mutateTicket]);
 
   // **MESSAGING PERMISSION CHECK**
   const messagingPermission = useMemo(() => {
@@ -469,6 +507,8 @@ export function RequestDetailMetadataProvider({
       registerForceScrollHandler,
       mutateTicketRef,
       statusesDataRef,
+      handleTicketUpdateEvent,
+      handleTaskStatusChangedEvent,
     }),
     [
       ticket,
@@ -504,6 +544,8 @@ export function RequestDetailMetadataProvider({
       registerForceScrollHandler,
       mutateTicketRef,
       statusesDataRef,
+      handleTicketUpdateEvent,
+      handleTaskStatusChangedEvent,
     ]
   );
 

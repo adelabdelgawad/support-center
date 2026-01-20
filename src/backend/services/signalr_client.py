@@ -246,6 +246,43 @@ class SignalRClient:
         await cls._publish_event(event_type, request_id, payload)
 
     @classmethod
+    async def broadcast_user_ticket_update(
+        cls,
+        user_ids: List[str],
+        request_id: str,
+        update_type: str,
+        update_data: Dict[str, Any],
+    ):
+        """
+        Broadcast ticket update to users' ticket list views.
+
+        This notifies users subscribed to their ticket list (via SubscribeToUserTickets)
+        so they can refresh their list view when tickets they're involved with change.
+
+        Args:
+            user_ids: List of user IDs to notify (requester, assignees)
+            request_id: Service request UUID
+            update_type: Type of update (e.g., "status_changed", "assigned")
+            update_data: Update data dict
+        """
+        if not user_ids:
+            return
+
+        payload = {
+            "request_id": request_id,
+            "update_type": update_type,
+            **update_data,
+        }
+
+        # Send to each user's ticket list group
+        for user_id in user_ids:
+            await cls._publish_event(
+                EventType.TICKET_LIST_UPDATE,
+                f"user-tickets:{user_id}",  # Room ID matches TicketHub group name
+                payload,
+            )
+
+    @classmethod
     async def broadcast_task_status_changed(
         cls,
         request_id: str,
@@ -459,15 +496,20 @@ class SignalRClient:
         requester_id: str,
         session: Dict[str, Any],
     ):
-        """Notify requester to reconnect to session."""
+        """Notify requester to reconnect to session.
+
+        Passes through full session data including agentId, agentName, mode, etc.
+        This allows the requester-app to display proper UI for reconnection.
+        """
+        payload = {
+            "requester_id": requester_id,
+            "reconnect": True,
+            **session,  # Include all session data (sessionId, agentId, agentName, mode, etc.)
+        }
         await cls._publish_event(
             EventType.REMOTE_SESSION_END,  # Reuse event type for simplicity
             requester_id,
-            {
-                "session_id": session.get("session_id", ""),
-                "requester_id": requester_id,
-                "reconnect": True,
-            },
+            payload,
         )
 
     @classmethod

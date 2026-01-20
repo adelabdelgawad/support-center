@@ -32,7 +32,14 @@ public class ChatHub : Hub
         }
 
         _connectionTracker.AddConnection(userId, Context.ConnectionId);
-        _logger.LogInformation("ChatHub: User {UserId} connected with {ConnectionId}", userId, Context.ConnectionId);
+
+        // Add user to their personal user:{userId} group for direct notifications
+        // This matches NotificationHub's notifications:{userId} pattern
+        var userGroup = GetUserGroup(userId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, userGroup);
+
+        _logger.LogInformation("ChatHub: User {UserId} connected with {ConnectionId}, added to group {Group}",
+            userId, Context.ConnectionId, userGroup);
 
         await base.OnConnectedAsync();
     }
@@ -40,6 +47,11 @@ public class ChatHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
+        var userGroup = GetUserGroup(userId);
+
+        // Remove from user group
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, userGroup);
+
         _connectionTracker.RemoveConnection(Context.ConnectionId);
 
         if (exception != null)
@@ -53,6 +65,11 @@ public class ChatHub : Hub
 
         await base.OnDisconnectedAsync(exception);
     }
+
+    /// <summary>
+    /// Get the user-specific group name for this user.
+    /// </summary>
+    private static string GetUserGroup(string userId) => $"user:{userId}";
 
     /// <summary>
     /// Join a chat room (subscribe to a request's messages).

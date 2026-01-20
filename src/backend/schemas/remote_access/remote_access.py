@@ -21,6 +21,7 @@ EndReason = Literal[
     "requester_disconnected",
     "timeout",
     "manual",
+    "replaced_by_new_request",  # Session superseded by new request
 ]
 
 

@@ -20,6 +20,7 @@ import type {
   ReadStatusUpdate,
   TicketUpdateEvent,
   TaskStatusChangedEvent,
+  TicketListUpdateEvent,
 } from './types';
 
 // Connection states
@@ -70,6 +71,11 @@ export interface SignalREventHandlers {
   onError?: (error: string) => void;
 }
 
+// Handler type for user ticket list events
+export interface UserTicketListHandlers {
+  onTicketListUpdated?: (data: TicketListUpdateEvent) => void;
+}
+
 /**
  * SignalR Hub Connection Manager
  *
@@ -96,6 +102,10 @@ class SignalRHubManager {
 
   // Remote access session tracking for auto-rejoin
   private currentRemoteSession: { sessionId: string; participantType: string } | null = null;
+
+  // User ticket list subscriptions: subscriptionId -> handlers
+  private userTicketListSubscriptions: Map<string, UserTicketListHandlers> = new Map();
+  private isUserTicketListSubscribed = false;
 
   constructor(hubType: HubType) {
     this.hubType = hubType;
@@ -389,6 +399,26 @@ class SignalRHubManager {
       }
     });
 
+    // User ticket list update handler (for ticket list page real-time updates)
+    this.connection.on('TicketListUpdated', (data: TicketListUpdateEvent) => {
+      console.log(`[SignalR:${this.hubType}] TicketListUpdated`, {
+        updateType: data.updateType,
+        requestId: data.requestId,
+      });
+      this.routeToUserTicketListHandlers(data);
+    });
+
+    // User ticket list subscription confirmations
+    this.connection.on('UserTicketsSubscribed', () => {
+      console.log(`[SignalR:${this.hubType}] User tickets subscribed confirmation`);
+      this.isUserTicketListSubscribed = true;
+    });
+
+    this.connection.on('UserTicketsUnsubscribed', () => {
+      console.log(`[SignalR:${this.hubType}] User tickets unsubscribed confirmation`);
+      this.isUserTicketListSubscribed = false;
+    });
+
     // Room join/leave confirmations from server
     this.connection.on('RoomJoined', (requestId: string) => {
       console.log(`[SignalR:${this.hubType}] Room joined confirmation for ${requestId?.substring(0, 8)}...`);
@@ -447,6 +477,27 @@ class SignalRHubManager {
   }
 
   /**
+   * Route message to user ticket list handlers
+   */
+  private routeToUserTicketListHandlers(data: TicketListUpdateEvent): void {
+    if (this.userTicketListSubscriptions.size === 0) {
+      console.warn(`[SignalR:${this.hubType}] TicketListUpdated received but no handlers registered`);
+      return;
+    }
+
+    this.userTicketListSubscriptions.forEach((handlers, subscriptionId) => {
+      if (handlers.onTicketListUpdated) {
+        try {
+          handlers.onTicketListUpdated(data);
+          console.log(`[SignalR:${this.hubType}] User ticket list handler ${subscriptionId} executed`);
+        } catch (error) {
+          console.error(`[SignalR:${this.hubType}] User ticket list handler error:`, error);
+        }
+      }
+    });
+  }
+
+  /**
    * Disconnect from the hub
    */
   disconnect(): void {
@@ -457,6 +508,8 @@ class SignalRHubManager {
 
     this.state = SignalRState.DISCONNECTED;
     this.subscriptions.clear();
+    this.userTicketListSubscriptions.clear();
+    this.isUserTicketListSubscribed = false;
     this.userId = null;
   }
 
@@ -540,6 +593,58 @@ class SignalRHubManager {
   }
 
   /**
+   * Subscribe to user's ticket list updates
+   * Returns a subscription ID for later unsubscription
+   */
+  async subscribeToUserTicketList(handlers: UserTicketListHandlers): Promise<string> {
+    console.log(`[SignalR:${this.hubType}] Subscribing to user ticket list updates`);
+
+    // Connect if not already connected
+    if (!this.isConnected()) {
+      await this.connect();
+    }
+
+    // Generate subscription ID
+    const subscriptionId = `user_tickets_${++this.subscriptionIdCounter}_${Date.now()}`;
+
+    // Add handlers
+    this.userTicketListSubscriptions.set(subscriptionId, handlers);
+
+    // Subscribe on server (only if this is the first subscription)
+    if (!this.isUserTicketListSubscribed && this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
+      try {
+        await this.connection.invoke('SubscribeToUserTickets');
+        console.log(`[SignalR:${this.hubType}] Successfully subscribed to user ticket list on server`);
+      } catch (error) {
+        console.error(`[SignalR:${this.hubType}] Failed to subscribe to user tickets:`, error);
+      }
+    }
+
+    return subscriptionId;
+  }
+
+  /**
+   * Unsubscribe from user's ticket list updates
+   */
+  unsubscribeFromUserTicketList(subscriptionId?: string): void {
+    if (subscriptionId) {
+      this.userTicketListSubscriptions.delete(subscriptionId);
+    } else {
+      this.userTicketListSubscriptions.clear();
+    }
+
+    // If no handlers left, unsubscribe on server
+    if (this.userTicketListSubscriptions.size === 0 && this.isUserTicketListSubscribed) {
+      if (this.isConnected() && this.connection) {
+        this.connection.invoke('UnsubscribeFromUserTickets').catch((error) => {
+          console.error(`[SignalR:${this.hubType}] Failed to unsubscribe from user tickets:`, error);
+        });
+      }
+      this.isUserTicketListSubscribed = false;
+    }
+  }
+
+  /**
    * Set the current remote access session for auto-rejoin
    */
   setCurrentRemoteSession(sessionId: string, participantType: string): void {
@@ -582,6 +687,20 @@ class SignalRHubManager {
         .invoke('JoinSession', this.currentRemoteSession.sessionId, this.currentRemoteSession.participantType)
         .catch((error) => {
           console.error(`[SignalR:${this.hubType}] Failed to rejoin remote session:`, error);
+        });
+    }
+
+    // Rejoin user ticket list subscription (for ticket hub type)
+    if (this.hubType === 'ticket' && this.userTicketListSubscriptions.size > 0) {
+      console.log(`[SignalR:${this.hubType}] Resubscribing to user ticket list...`);
+      this.connection
+        .invoke('SubscribeToUserTickets')
+        .then(() => {
+          this.isUserTicketListSubscribed = true;
+          console.log(`[SignalR:${this.hubType}] Successfully resubscribed to user ticket list`);
+        })
+        .catch((error) => {
+          console.error(`[SignalR:${this.hubType}] Failed to resubscribe to user ticket list:`, error);
         });
     }
   }

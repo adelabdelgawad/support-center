@@ -81,6 +81,17 @@ export interface TaskStatusChangedEvent {
   };
 }
 
+// Ticket list update event (for user's ticket list view)
+export interface TicketListUpdateEvent {
+  eventId: string;
+  updateType: string;
+  requestId: string;
+  data: {
+    updatedFields?: string[];
+    [key: string]: unknown;
+  };
+}
+
 // Remote access events
 export interface RemoteAccessEvent {
   sessionId: string;

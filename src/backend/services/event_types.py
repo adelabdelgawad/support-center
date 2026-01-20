@@ -28,6 +28,7 @@ class EventType(str, Enum):
     STATUS_CHANGE = "status_change"  # Ticket status updated - NOT coalesced
     ASSIGNMENT_CHANGE = "assignment_change"  # Ticket assigned/reassigned - NOT coalesced
     NOTIFICATION = "notification"  # Generic notification - NOT coalesced
+    TICKET_LIST_UPDATE = "ticket_list_update"  # User ticket list update - NOT coalesced
 
     # Remote access events (events:remote stream)
     REMOTE_SESSION_START = "remote_session_start"  # Remote access initiated - NOT coalesced
@@ -64,7 +65,7 @@ class EventType(str, Enum):
         """
         if event_type in (cls.CHAT_MESSAGE, cls.TYPING_START, cls.TYPING_STOP, cls.READ_RECEIPT):
             return "events:chat"
-        elif event_type in (cls.STATUS_CHANGE, cls.ASSIGNMENT_CHANGE, cls.NOTIFICATION):
+        elif event_type in (cls.STATUS_CHANGE, cls.ASSIGNMENT_CHANGE, cls.NOTIFICATION, cls.TICKET_LIST_UPDATE):
             return "events:ticket"
         elif event_type in (cls.REMOTE_SESSION_START, cls.REMOTE_SESSION_END):
             return "events:remote"

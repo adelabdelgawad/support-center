@@ -242,6 +242,8 @@ async def start_remote_access_by_user(
     """
     Start remote access directly by user ID (from Active Sessions).
 
+    AUTO-TERMINATES any existing active session for the requester.
+
     Used when initiating remote access from the Active Sessions management page.
     Finds the user's most recent open request and starts remote access for it.
 
@@ -276,22 +278,6 @@ async def start_remote_access_by_user(
 
     logger.info(f"User {user_id_str} is online via SignalR")
 
-    # IDEMPOTENCY: Check for existing active session with this agent + requester
-    from repositories.remote_access_repository import RemoteAccessRepository
-    existing_active_session = await RemoteAccessRepository.get_active_session_for_pair(
-        db=db,
-        agent_id=current_user.id,
-        requester_id=user_id
-    )
-
-    if existing_active_session:
-        logger.info(f"[Backend] ⚠️ Active session already exists: {existing_active_session.id}")
-        session_dict = RemoteAccessSessionRead.model_validate(existing_active_session).model_dump(by_alias=True)
-        from datetime import datetime, timezone
-        server_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session_dict['serverTime'] = server_now.isoformat() + 'Z'
-        return session_dict
-
     # Find user's most recent open (unsolved) request
     stmt = (
         select(ServiceRequest)
@@ -324,6 +310,27 @@ async def start_remote_access_by_user(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Check if user is blocked
+        if user.is_blocked:
+            raise HTTPException(
+                status_code=403,
+                detail=user.block_message or "User account is blocked"
+            )
+
+        # Auto-terminate existing session before creating
+        from services.remote_access_service import RemoteAccessService
+
+        terminated_session = await RemoteAccessService.terminate_active_session_for_requester(
+            db=db,
+            requester_id=user_id,
+        )
+
+        if terminated_session:
+            logger.info(
+                f"Auto-terminated session {terminated_session.id} "
+                f"(old agent: {terminated_session.agent_id})"
+            )
+
         # Create session without request
         from repositories.remote_access_repository import RemoteAccessRepository
 
@@ -333,6 +340,8 @@ async def start_remote_access_by_user(
             agent_id=current_user.id,
             requester_id=user_id,
         )
+
+        await db.commit()  # CRITICAL: Commit transaction
 
         logger.info(f"Created direct remote access session {session.id}")
 

@@ -34,6 +34,7 @@ export type {
   ReadStatusUpdate,
   TicketUpdateEvent,
   TaskStatusChangedEvent,
+  TicketListUpdateEvent,
   RemoteAccessEvent,
   NotificationEvent,
 } from './types';
@@ -50,6 +51,7 @@ export {
   type ChatRoomHandlers,
   type SignalREventHandlers,
   type InitialStateData,
+  type UserTicketListHandlers,
 } from './signalr-manager';
 
 // SignalR Context (React)
@@ -84,3 +86,10 @@ export {
   type RemoteAccessSignalingHandlers,
   type UseRemoteAccessSignalingResult,
 } from './use-remote-access-signaling';
+
+// Ticket List Real-Time Updates Hook
+export {
+  useSignalRTicketList,
+  type UseSignalRTicketListOptions,
+  type UseSignalRTicketListResult,
+} from './use-signalr-ticket-list';

@@ -15,6 +15,7 @@ import type { ChatMessage } from '@/lib/signalr/types';
 import type { ScreenshotItem } from '@/types/media-viewer';
 import type { AttachmentUploadResponse, AttachmentUploadResult } from '@/lib/hooks/use-chat-mutations';
 import type { RequestDetailMetadataContextType } from './request-detail-metadata-context';
+import type { TicketUpdateEvent, TaskStatusChangedEvent } from '@/lib/signalr/types';
 
 // Helper function to generate initials
 function getInitials(name: string | null | undefined): string {
@@ -83,6 +84,8 @@ interface RequestDetailChatProviderProps {
   ticketSolved: boolean;
   scrollHandlerRef: React.MutableRefObject<(() => void) | null>;
   forceScrollHandlerRef: React.MutableRefObject<(() => void) | null>;
+  onTicketUpdate?: (event: TicketUpdateEvent) => Promise<void>;
+  onTaskStatusChanged?: (event: TaskStatusChangedEvent) => Promise<void>;
 }
 
 export function RequestDetailChatProvider({
@@ -95,6 +98,8 @@ export function RequestDetailChatProvider({
   ticketSolved,
   scrollHandlerRef,
   forceScrollHandlerRef,
+  onTicketUpdate,
+  onTaskStatusChanged,
 }: RequestDetailChatProviderProps) {
   // **WEBSOCKET CALLBACKS** - Memoized to prevent unnecessary re-renders
   const handleNewMessage = useCallback((message: any) => {
@@ -105,11 +110,21 @@ export function RequestDetailChatProvider({
     console.log('[ChatContext] ReadStatusUpdate received:', data);
   }, []);
 
-  // CRITICAL FIX: Use refs to access current values to keep callback stable
-  const handleTaskStatusChanged = useCallback(async (event: any) => {
-    // Metadata updates handled by parent context via its own refs
-    console.log('[ChatContext] TaskStatusChanged received:', event);
-  }, []);
+  // Handler for TicketUpdateEvent - delegates to metadata context
+  const handleTicketUpdate = useCallback(async (event: TicketUpdateEvent) => {
+    console.log('[ChatContext] TicketUpdateEvent received, delegating to metadata context:', event);
+    if (onTicketUpdate) {
+      await onTicketUpdate(event);
+    }
+  }, [onTicketUpdate]);
+
+  // Handler for TaskStatusChanged - delegates to metadata context
+  const handleTaskStatusChanged = useCallback(async (event: TaskStatusChangedEvent) => {
+    console.log('[ChatContext] TaskStatusChangedEvent received, delegating to metadata context:', event);
+    if (onTaskStatusChanged) {
+      await onTaskStatusChanged(event);
+    }
+  }, [onTaskStatusChanged]);
 
   // Memoized callback for onNewMessage to prevent infinite re-subscription loops
   const handleNewMessageWithScroll = useCallback((message: any) => {
@@ -129,10 +144,11 @@ export function RequestDetailChatProvider({
     sendTypingIndicator,
     markAsRead,
   } = useSignalRChatRoom(requestId, {
-    enabled: !ticketSolved, // Skip SignalR for solved tickets
+    enabled: true, // Always receive messages, even for solved tickets (sending blocked by backend & UI)
     initialMessages,
     onNewMessage: handleNewMessageWithScroll,
     onReadStatusUpdate: handleReadStatusUpdate,
+    onTicketUpdate: handleTicketUpdate,
     onTaskStatusChanged: handleTaskStatusChanged,
   });
 

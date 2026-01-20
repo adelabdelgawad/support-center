@@ -4200,7 +4200,7 @@ class RemoteAccessSession(TableModel, table=True):
     end_reason: Optional[str] = Field(
         default=None,
         sa_column=Column(String(50), nullable=True),
-        description="Why session ended: agent_disconnected, requester_disconnected, timeout, manual",
+        description="Why session ended: agent_disconnected, requester_disconnected, timeout, manual, replaced_by_new_request",
     )
     last_heartbeat: Optional[datetime] = Field(
         default=None,

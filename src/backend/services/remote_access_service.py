@@ -67,7 +67,7 @@ class RemoteAccessService:
 
     @staticmethod
     @log_database_operation("request_remote_access")
-    @transactional_database_operation
+    @transactional_database_operation  # CRITICAL: Ensures atomic end+create
     @critical_database_operation()
     async def request_remote_access(
         db: AsyncSession,
@@ -78,8 +78,8 @@ class RemoteAccessService:
         """
         Agent requests remote access to requester's screen.
 
+        AUTO-TERMINATES any existing active session for the requester.
         Creates minimal session record and sends WebSocket notification.
-        No status management - session is ephemeral.
 
         Args:
             db: Database session
@@ -117,6 +117,19 @@ class RemoteAccessService:
             raise ValueError("Cannot start remote access - requester is not online")
 
         logger.info(f"Requester {requester_id_str} is online via SignalR")
+
+        # Auto-terminate existing active session for this requester
+        terminated_session = await RemoteAccessService.terminate_active_session_for_requester(
+            db=db,
+            requester_id=request.requester_id,
+        )
+
+        if terminated_session:
+            logger.info(
+                f"Auto-terminated session {terminated_session.id} "
+                f"(old agent: {terminated_session.agent_id}) "
+                f"before creating new one for agent {agent_id}"
+            )
 
         # Create minimal session record (just for ID mapping and history)
         session = await RemoteAccessRepository.create_session(
@@ -164,6 +177,67 @@ class RemoteAccessService:
             logger.warning(f"Failed to notify remote session via SignalR: {e}")
 
         return session
+
+    @staticmethod
+    @log_database_operation("terminate_active_session_for_requester")
+    async def terminate_active_session_for_requester(
+        db: AsyncSession,
+        requester_id: UUID,
+    ) -> Optional[RemoteAccessSession]:
+        """
+        Terminate any active session for the requester (ANY agent).
+
+        This implements the "last agent wins" policy - when a new agent
+        connects to a requester, any existing session is terminated.
+
+        Does NOT commit - should be called within a transaction.
+
+        Args:
+            db: Database session
+            requester_id: Requester user ID
+
+        Returns:
+            Terminated session if found, None otherwise
+        """
+        # Find ANY active session for this requester (regardless of agent)
+        existing_session = await RemoteAccessRepository.get_active_session_for_user(
+            db=db,
+            user_id=requester_id,
+        )
+
+        if not existing_session:
+            return None
+
+        logger.info(
+            f"Auto-terminating existing session {existing_session.id} "
+            f"(agent: {existing_session.agent_id}, requester: {requester_id}) "
+            f"due to new connection request"
+        )
+
+        # End the session in database (no commit - handled by caller's transaction)
+        terminated_session = await RemoteAccessRepository.end_session(
+            db=db,
+            session_id=existing_session.id,
+            end_reason="replaced_by_new_request",
+        )
+
+        # Broadcast termination notification to both participants
+        try:
+            from services.signalr_client import signalr_client
+
+            await signalr_client.notify_remote_session_ended(
+                session_id=str(existing_session.id),
+                agent_id=str(existing_session.agent_id),
+                requester_id=str(requester_id),
+                reason="replaced_by_new_request",
+            )
+        except Exception as e:
+            # Log but don't fail - notification is best-effort
+            logger.warning(
+                f"Failed to broadcast session termination for {existing_session.id}: {e}"
+            )
+
+        return terminated_session
 
     @staticmethod
     @log_database_operation("resume_session")

@@ -1736,20 +1736,24 @@ pub fn run() {
             image_storage::image_storage_get_size,
             image_storage::image_storage_get_directory
         ])
-        // Handle window events - hide instead of close/minimize
+        // Handle window events - hide on close, allow minimize, restore on focus
         .on_window_event(|window, event| {
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = window.hide();
                 }
-                tauri::WindowEvent::Resized(_size) => {
-                    // On Windows, minimize triggers a resize event
-                    // Check if window was minimized and convert to hide
-                    if window.label() == "main" {
+                tauri::WindowEvent::Focused(is_focused) => {
+                    // Handle taskbar click restoration for main window
+                    if *is_focused && window.label() == "main" {
                         if window.is_minimized().unwrap_or(false) {
+                            // Apply same logic as floating icon handler
                             let _ = window.unminimize();
-                            let _ = window.hide();
+                            if let Some(floating_icon) = window.app_handle().get_webview_window("floating-icon") {
+                                position_window_near_icon(window, &floating_icon);
+                            }
+                            let _ = window.set_always_on_top(true);
+                            let _ = window.set_focus();
                         }
                     }
                 }

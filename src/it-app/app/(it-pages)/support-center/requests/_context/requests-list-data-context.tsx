@@ -8,9 +8,10 @@
  * when counts or UI state changes.
  */
 
-import { createContext, useContext, useMemo, useRef, useState, useEffect } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequestsList } from '@/lib/hooks/use-requests-list';
+import { useSignalRTicketList } from '@/lib/signalr';
 import type {
   RequestListItem,
   ViewType,
@@ -99,6 +100,17 @@ export function RequestsListDataProvider({
   // Store refresh function in ref for external access
   const refreshTicketsRef = useRef(refreshTickets);
   refreshTicketsRef.current = refreshTickets;
+
+  // Subscribe to real-time ticket list updates via SignalR
+  const handleTicketListUpdated = useCallback(() => {
+    console.log('[RequestsListDataProvider] Received ticket list update, refreshing...');
+    refreshTicketsRef.current();
+  }, []);
+
+  useSignalRTicketList({
+    onTicketUpdated: handleTicketListUpdated,
+    enabled: true,
+  });
 
   // Check if returning from details page and trigger refresh
   const hasCheckedReturnFromDetails = useRef(false);

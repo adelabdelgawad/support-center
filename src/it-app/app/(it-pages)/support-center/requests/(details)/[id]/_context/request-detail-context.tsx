@@ -117,60 +117,6 @@ export function RequestDetailProvider({
   const scrollHandlerRef = useRef<(() => void) | null>(null);
   const forceScrollHandlerRef = useRef<(() => void) | null>(null);
 
-  // **WEBSOCKET CALLBACKS** - For task status changes
-  // We need to access the ticket mutation from metadata context
-  // Store refs that will be passed to metadata context
-  const mutateTicketRef = useRef<(() => Promise<void>) | null>(null);
-  const statusesDataRef = useRef<RequestStatus[] | null>(null);
-
-  // **MESSAGING PERMISSION CHECK**
-  const messagingPermission = useMemo(() => {
-    if (!currentUserId || !initialTicket) {
-      return {
-        canMessage: false,
-        reason: 'User not authenticated',
-        isAssignee: false,
-        isRequester: false,
-      };
-    }
-
-    const isStatusSolved = initialTicket.status?.countAsSolved === true;
-    if (isStatusSolved) {
-      return {
-        canMessage: false,
-        reason: 'Cannot send messages to solved requests',
-        isAssignee: initialAssignees.some((a) => String(a.userId) === String(currentUserId)),
-        isRequester: String(initialTicket.requester?.id ?? initialTicket.requesterId ?? '') === String(currentUserId),
-      };
-    }
-
-    const isAssignee = initialAssignees.some((a) => String(a.userId) === String(currentUserId));
-    const requesterId = initialTicket.requester?.id ?? initialTicket.requesterId ?? null;
-    const isRequester = requesterId !== null && String(requesterId) === String(currentUserId);
-
-    const canMessage = isAssignee || isRequester;
-
-    return {
-      canMessage,
-      reason: canMessage ? undefined : 'Only assigned technicians can send messages on this request',
-      isAssignee,
-      isRequester,
-    };
-  }, [currentUserId, initialTicket, initialAssignees]);
-
-  // **CHAT DISABLED CHECK**
-  const chatDisabledState = useMemo(() => {
-    const status = initialTicket.status;
-    const isDisabled = status?.countAsSolved === true;
-    let reason: string | undefined;
-    if (isDisabled) {
-      const statusName = status?.name || 'completed';
-      const displayName = statusName.charAt(0).toUpperCase() + statusName.slice(1).toLowerCase();
-      reason = `This ticket is ${displayName}. Chat is disabled for ${displayName.toLowerCase()} tickets.`;
-    }
-    return { isDisabled, reason };
-  }, [initialTicket.status]);
-
   // Build combined context value
   const value: RequestDetailsContextType = useMemo(
     () => ({
@@ -178,6 +124,35 @@ export function RequestDetailProvider({
     } as RequestDetailsContextType),
     [] // Dependencies don't matter since this is just a placeholder
   );
+
+  // Bridge component to connect reactive metadata values to chat provider
+  // This component sits inside RequestDetailMetadataProvider and can access reactive values
+  function ChatProviderBridge({ children }: { children: React.ReactNode }) {
+    // Get reactive values and event handlers from metadata context
+    const {
+      messagingPermission,
+      isChatDisabled,
+      handleTicketUpdateEvent,
+      handleTaskStatusChangedEvent,
+    } = useRequestDetailMetadata();
+
+    return (
+      <RequestDetailChatProvider
+        requestId={initialTicket.id}
+        initialMessages={initialMessages}
+        currentUserId={currentUserId ? String(currentUserId) : undefined}
+        currentUser={currentUser}
+        messagingPermission={messagingPermission}
+        ticketSolved={isChatDisabled}
+        scrollHandlerRef={scrollHandlerRef}
+        forceScrollHandlerRef={forceScrollHandlerRef}
+        onTicketUpdate={handleTicketUpdateEvent}
+        onTaskStatusChanged={handleTaskStatusChangedEvent}
+      >
+        {children}
+      </RequestDetailChatProvider>
+    );
+  }
 
   return (
     <RequestDetailContext.Provider value={value}>
@@ -195,18 +170,9 @@ export function RequestDetailProvider({
         sessionUser={session?.user}
         subTasks={initialSubTasks}
       >
-        <RequestDetailChatProvider
-          requestId={initialTicket.id}
-          initialMessages={initialMessages}
-          currentUserId={currentUserId ? String(currentUserId) : undefined}
-          currentUser={currentUser}
-          messagingPermission={messagingPermission}
-          ticketSolved={chatDisabledState.isDisabled}
-          scrollHandlerRef={scrollHandlerRef}
-          forceScrollHandlerRef={forceScrollHandlerRef}
-        >
+        <ChatProviderBridge>
           {children}
-        </RequestDetailChatProvider>
+        </ChatProviderBridge>
       </RequestDetailMetadataProvider>
     </RequestDetailContext.Provider>
   );

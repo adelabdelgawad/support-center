@@ -733,6 +733,16 @@ async def update_request(
                     "request": request.model_dump(mode="json"),
                 },
             )
+
+            # Broadcast to user ticket lists (requester + assignees)
+            user_ids = [str(request.requester_id)]
+            user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            await signalr_client.broadcast_user_ticket_update(
+                user_ids=list(set(user_ids)),  # Dedupe
+                request_id=str(request_id),
+                update_type="fields_updated",
+                update_data={"updatedFields": changed_fields},
+            )
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -918,6 +928,16 @@ async def update_request_by_technician(
                     "request": request.model_dump(mode="json"),
                 },
             )
+
+            # Broadcast to user ticket lists (requester + assignees)
+            user_ids = [str(request.requester_id)]
+            user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            await signalr_client.broadcast_user_ticket_update(
+                user_ids=list(set(user_ids)),  # Dedupe
+                request_id=str(request_id),
+                update_type="technician_updated",
+                update_data={"updatedFields": changed_fields},
+            )
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -1022,6 +1042,16 @@ async def assign_request(
                     "fullName": current_user.full_name,
                 },
             },
+        )
+
+        # Broadcast to user ticket lists (requester + all assignees including new one)
+        user_ids = [str(request.requester_id)]
+        user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+        await signalr_client.broadcast_user_ticket_update(
+            user_ids=list(set(user_ids)),  # Dedupe
+            request_id=str(request_id),
+            update_type="assigned",
+            update_data={"updatedFields": ["assignedTechnician"]},
         )
     except Exception as e:
         import logging
@@ -1135,6 +1165,21 @@ async def unassign_request(
                 },
             },
         )
+
+        # Broadcast to user ticket lists (requester + remaining assignees + unassigned user)
+        request = await RequestService.get_service_request_by_id(db=db, request_id=request_id)
+        if request:
+            user_ids = [str(request.requester_id)]
+            user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            # Also notify the unassigned user so their list updates
+            if assign_data.technician_id:
+                user_ids.append(str(assign_data.technician_id))
+            await signalr_client.broadcast_user_ticket_update(
+                user_ids=list(set(user_ids)),  # Dedupe
+                request_id=str(request_id),
+                update_type="unassigned",
+                update_data={"updatedFields": ["unassignedTechnician"]},
+            )
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
@@ -1233,6 +1278,16 @@ async def take_request(
                 },
                 "request": request.model_dump(mode="json"),
             },
+        )
+
+        # Broadcast to user ticket lists (requester + new assignee)
+        user_ids = [str(request.requester_id)]
+        user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+        await signalr_client.broadcast_user_ticket_update(
+            user_ids=list(set(user_ids)),  # Dedupe
+            request_id=str(request_id),
+            update_type="picked_up",
+            update_data={"updatedFields": ["status", "assignedTechnician"]},
         )
     except Exception as e:
         import logging
