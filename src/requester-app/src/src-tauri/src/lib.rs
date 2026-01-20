@@ -112,6 +112,31 @@ fn get_screen_dims_for_mouse() -> (i32, i32) {
     })
 }
 
+// ============================================================================
+// Floating Icon Taskbar Fix (Windows Only)
+// ============================================================================
+
+/// Set window as a tool window to hide it from the taskbar (Windows only)
+///
+/// This function uses the Windows API to set the WS_EX_TOOLWINDOW extended
+/// style on a window, which prevents it from appearing in the taskbar and
+/// ALT+TAB switcher. This is the standard approach for auxiliary windows
+/// like floating palettes and toolbars.
+#[cfg(target_os = "windows")]
+fn set_window_as_tool_window(hwnd: windows::Win32::Foundation::HWND) -> Result<(), String> {
+    use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE};
+    use windows::Win32::UI::WindowsAndMessaging::WS_EX_TOOLWINDOW;
+
+    unsafe {
+        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        let new_style = ex_style | WS_EX_TOOLWINDOW.0 as isize;
+        if SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_style) == 0 {
+            return Err("Failed to set window extended style".to_string());
+        }
+    }
+    Ok(())
+}
+
 // Keep the xcap-based function for other uses (window positioning, etc.)
 static CACHED_MONITOR_DIMS: OnceLock<(i32, i32, i32, i32)> = OnceLock::new();
 
@@ -880,13 +905,13 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
         use fast_image_resize::{images::Image, Resizer, ResizeOptions, ResizeAlg, FilterType};
         use std::time::Instant;
 
-        let t0 = Instant::now();
+        let _t0 = Instant::now();
 
         // Get monitor (cached operation, ~0ms)
         let monitors = xcap::Monitor::all()
             .map_err(|e| format!("Failed to get monitors: {}", e))?;
 
-        let t1 = Instant::now();
+        let _t1 = Instant::now();
 
         let monitor = monitors
             .get(monitor_id)
@@ -897,7 +922,7 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
             .capture_image()
             .map_err(|e| format!("Failed to capture monitor: {}", e))?;
 
-        let t2 = Instant::now();
+        let _t2 = Instant::now();
 
         // Source dimensions
         let src_width = captured.width();
@@ -930,7 +955,7 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
             &ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3)),
         ).map_err(|e| format!("Failed to resize: {}", e))?;
 
-        let t3 = Instant::now();
+        let _t3 = Instant::now();
 
         // Convert RGBA to RGB for JPEG
         let rgba_data = dst_image.into_vec();
@@ -953,7 +978,7 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
 
         let jpeg_data = jpeg_buffer;
 
-        let t4 = Instant::now();
+        let _t4 = Instant::now();
 
         // Log timing breakdown (only occasionally, debug builds only)
         #[cfg(debug_assertions)]
@@ -964,11 +989,11 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
                 eprintln!(
                     "[capture_monitor_stream] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms",
                     frame_num,
-                    t1.duration_since(t0).as_millis(),
-                    t2.duration_since(t1).as_millis(),
-                    t3.duration_since(t2).as_millis(),
-                    t4.duration_since(t3).as_millis(),
-                    t4.duration_since(t0).as_millis()
+                    _t1.duration_since(_t0).as_millis(),
+                    _t2.duration_since(_t1).as_millis(),
+                    _t3.duration_since(_t2).as_millis(),
+                    _t4.duration_since(_t3).as_millis(),
+                    _t4.duration_since(_t0).as_millis()
                 );
             }
         }
@@ -988,12 +1013,12 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
         use fast_image_resize::{images::Image, Resizer, ResizeOptions, ResizeAlg, FilterType};
         use std::time::Instant;
 
-        let t0 = Instant::now();
+        let _t0 = Instant::now();
 
         let monitors = xcap::Monitor::all()
             .map_err(|e| format!("Failed to get monitors: {}", e))?;
 
-        let t1 = Instant::now();
+        let _t1 = Instant::now();
 
         let monitor = monitors
             .get(monitor_id)
@@ -1003,7 +1028,7 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
             .capture_image()
             .map_err(|e| format!("Failed to capture monitor: {}", e))?;
 
-        let t2 = Instant::now();
+        let _t2 = Instant::now();
 
         let src_width = captured.width();
         let src_height = captured.height();
@@ -1035,7 +1060,7 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
             &ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3)),
         ).map_err(|e| format!("Failed to resize: {}", e))?;
 
-        let t3 = Instant::now();
+        let _t3 = Instant::now();
 
         // Convert RGBA to RGB for JPEG
         let rgba_data = dst_image.into_vec();
@@ -1058,7 +1083,7 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
 
         let jpeg_data = jpeg_buffer;
 
-        let t4 = Instant::now();
+        let _t4 = Instant::now();
 
         // Log timing breakdown (only occasionally, debug builds only)
         #[cfg(debug_assertions)]
@@ -1069,11 +1094,11 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
                 eprintln!(
                     "[capture_monitor_stream_extreme] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms, size={}KB",
                     frame_num,
-                    t1.duration_since(t0).as_millis(),
-                    t2.duration_since(t1).as_millis(),
-                    t3.duration_since(t2).as_millis(),
-                    t4.duration_since(t3).as_millis(),
-                    t4.duration_since(t0).as_millis(),
+                    _t1.duration_since(_t0).as_millis(),
+                    _t2.duration_since(_t1).as_millis(),
+                    _t3.duration_since(_t2).as_millis(),
+                    _t4.duration_since(_t3).as_millis(),
+                    _t4.duration_since(_t0).as_millis(),
                     jpeg_data.len() / 1024
                 );
             }
@@ -1472,8 +1497,8 @@ fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEna
     }
 
     // Mark profile setup as complete
-    if let Err(e) = storage::set_value(&app, storage::KEY_PROFILE_SETUP_COMPLETED, serde_json::Value::Bool(true)) {
-        debug_eprintln!("[autostart] Warning: Failed to persist profile_setup_completed flag: {}", e);
+    if let Err(_e) = storage::set_value(&app, storage::KEY_PROFILE_SETUP_COMPLETED, serde_json::Value::Bool(true)) {
+        debug_eprintln!("[autostart] Warning: Failed to persist profile_setup_completed flag");
         // Continue anyway - this is non-critical
     }
 
@@ -1482,8 +1507,8 @@ fn mark_profile_setup_complete(app: AppHandle) -> Result<autostart::AutostartEna
 
     // If successful, mark as configured to avoid redundant registry operations
     if result.success {
-        if let Err(e) = storage::set_value(&app, storage::KEY_AUTOSTART_CONFIGURED, serde_json::Value::Bool(true)) {
-            debug_eprintln!("[autostart] Warning: Failed to persist autostart_configured flag: {}", e);
+        if let Err(_e) = storage::set_value(&app, storage::KEY_AUTOSTART_CONFIGURED, serde_json::Value::Bool(true)) {
+            debug_eprintln!("[autostart] Warning: Failed to persist autostart_configured flag");
             // Continue anyway - worst case we'll try again next launch
         }
     }
@@ -1660,8 +1685,6 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         // Register the shell plugin for opening URLs
         .plugin(tauri_plugin_shell::init())
-        // Register the autostart plugin for auto-launch on login
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         // Register commands
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -1749,8 +1772,12 @@ pub fn run() {
                         if window.is_minimized().unwrap_or(false) {
                             // Apply same logic as floating icon handler
                             let _ = window.unminimize();
-                            if let Some(floating_icon) = window.app_handle().get_webview_window("floating-icon") {
-                                position_window_near_icon(window, &floating_icon);
+                            let app_handle = window.app_handle();
+                            if let (Some(main_window), Some(floating_icon)) = (
+                                app_handle.get_webview_window("main"),
+                                app_handle.get_webview_window("floating-icon")
+                            ) {
+                                position_window_near_icon(&main_window, &floating_icon);
                             }
                             let _ = window.set_always_on_top(true);
                             let _ = window.set_focus();
@@ -1769,26 +1796,26 @@ pub fn run() {
                     if result.migrated {
                         debug_println!("[App] Migration completed: {}", result.reason);
                         debug_println!("[App]    Files copied: {}", result.files_copied);
-                        if let Some(old_path) = &result.old_path {
-                            debug_println!("[App]    Old path: {}", old_path);
+                        if let Some(_old_path) = &result.old_path {
+                            debug_println!("[App]    Old path: (see migration result)");
                         }
-                        if let Some(new_path) = &result.new_path {
-                            debug_println!("[App]    New path: {}", new_path);
+                        if let Some(_new_path) = &result.new_path {
+                            debug_println!("[App]    New path: (see migration result)");
                         }
                     } else {
                         debug_println!("[App] Migration not needed: {}", result.reason);
                     }
                 }
-                Err(e) => {
-                    debug_eprintln!("[App] Warning: Migration failed: {}", e);
+                Err(_e) => {
+                    debug_eprintln!("[App] Warning: Migration failed");
                     debug_eprintln!("[App] App will continue, but data may need manual migration.");
                 }
             }
 
             // Initialize persistent storage with defaults from .env
             debug_println!("[App] Initializing persistent storage...");
-            if let Err(e) = storage::init_store_with_defaults(&app.handle()) {
-                debug_eprintln!("[App] Warning: Failed to initialize storage: {}", e);
+            if let Err(_e) = storage::init_store_with_defaults(&app.handle()) {
+                debug_eprintln!("[App] Warning: Failed to initialize storage");
                 debug_eprintln!("[App] App will continue, but settings may not persist.");
             } else {
                 debug_println!("[App] Storage initialized successfully");
@@ -1833,6 +1860,16 @@ pub fn run() {
                 }));
                 let _ = floating_icon.show();
                 let _ = floating_icon.set_always_on_top(true);
+
+                // Windows: Set as tool window to hide from taskbar
+                #[cfg(target_os = "windows")]
+                {
+                    use windows::Win32::Foundation::HWND;
+                    if let Ok(hwnd_raw) = floating_icon.hwnd() {
+                        let hwnd = HWND(hwnd_raw.0 as *mut std::ffi::c_void);
+                        let _ = set_window_as_tool_window(hwnd);
+                    }
+                }
 
                 // Reposition after window initializes (handles actual size on Linux)
                 let floating_icon_clone = floating_icon.clone();

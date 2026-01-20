@@ -41,6 +41,8 @@ pub const ALLOWED_AUTH_KEYS: &[&str] = &[
 /// Configuration keys (PUBLIC - accessible via generic storage commands)
 pub const KEY_THEME_PREFERENCE: &str = "theme_preference";
 pub const KEY_FEATURE_FLAGS: &str = "feature_flags";
+pub const KEY_AUTOSTART_CONFIGURED: &str = "autostart_configured";
+pub const KEY_PROFILE_SETUP_COMPLETED: &str = "profile_setup_completed";
 
 // ============================================================================
 // STORE SINGLETON
