@@ -42,12 +42,6 @@ pub const ALLOWED_AUTH_KEYS: &[&str] = &[
 pub const KEY_THEME_PREFERENCE: &str = "theme_preference";
 pub const KEY_FEATURE_FLAGS: &str = "feature_flags";
 
-/// Auto-start related keys (for Windows login auto-start feature)
-/// profile_setup_completed: true once user has completed initial setup/auth
-/// autostart_configured: true once auto-start has been enabled in Windows Registry
-pub const KEY_PROFILE_SETUP_COMPLETED: &str = "profile_setup_completed";
-pub const KEY_AUTOSTART_CONFIGURED: &str = "autostart_configured";
-
 // ============================================================================
 // STORE SINGLETON
 // ============================================================================

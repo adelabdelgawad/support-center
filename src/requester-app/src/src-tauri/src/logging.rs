@@ -237,8 +237,8 @@ fn enforce_max_files(logs_dir: &PathBuf) -> Result<(), String> {
         let to_delete = files.len() - max_archived;
         for file_info in files.iter().take(to_delete) {
             let file_path = logs_dir.join(&file_info.name);
-            if let Err(e) = fs::remove_file(&file_path) {
-                debug_eprintln!("[logging] Failed to delete old log file {}: {}", file_info.name, e);
+            if let Err(_e) = fs::remove_file(&file_path) {
+                debug_eprintln!("[logging] Failed to delete old log file {}: {}", file_info.name, _e);
             } else {
                 debug_eprintln!("[logging] Deleted old log file: {}", file_info.name);
             }
@@ -413,8 +413,8 @@ pub fn log_clear_all(app: AppHandle) -> Result<(), String> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
-                if let Err(e) = fs::remove_file(&path) {
-                    debug_eprintln!("[logging] Failed to delete log file: {}", e);
+                if let Err(_e) = fs::remove_file(&path) {
+                    debug_eprintln!("[logging] Failed to delete log file: {}", _e);
                 }
             }
         }

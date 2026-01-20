@@ -12,17 +12,7 @@ import { createRoot } from "solid-js";
 import { createStore } from "solid-js/store";
 import type { User, LoginResponse, VersionEnforcementError } from "@/types";
 import { AuthStorage, AuthStorageSync, migrateFromLocalStorage } from "@/lib/storage";
-import { AutoStart } from "@/lib/autostart";
-
-// Lazy import auth functions to avoid issues
-let authApi: typeof import("@/api/auth") | null = null;
-
-async function getAuthApi() {
-  if (!authApi) {
-    authApi = await import("@/api/auth");
-  }
-  return authApi;
-}
+import { performAutoSSO, getSystemUsername } from "@/api/auth";
 
 interface AuthState {
   token: string | null;
@@ -156,14 +146,6 @@ function createAuthStore() {
       error: null,
       explicitLogout: false, // Reset on successful login
     });
-
-    // Enable auto-start on Windows after first successful login
-    // Fire-and-forget: non-blocking, silent on failure
-    // The call is idempotent - safe to call on every login
-    AutoStart.markProfileSetupComplete().catch((error) => {
-      // Silent failure - don't affect user experience
-      console.warn('[auth-store] Auto-start setup failed (non-fatal):', error);
-    });
   };
 
   /**
@@ -180,8 +162,7 @@ function createAuthStore() {
     }
 
     try {
-      const api = await getAuthApi();
-      const result = await api.performAutoSSO();
+      const result = await performAutoSSO();
 
       console.log("SSO result:", result);
 
@@ -317,8 +298,7 @@ function createAuthStore() {
     console.log("Running in Tauri, fetching username...");
 
     try {
-      const api = await getAuthApi();
-      const username = await api.getSystemUsername();
+      const username = await getSystemUsername();
       console.log(`Got username: ${username}`);
       setState("systemUsername", username);
 

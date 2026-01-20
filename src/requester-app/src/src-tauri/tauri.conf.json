@@ -59,7 +59,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["msi"],
+    "targets": ["nsis"],
     "icon": [
       "icons/icon.ico",
       "icons/icon.png",
@@ -73,7 +73,8 @@
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
       "nsis": {
-        "installMode": "currentUser",
+        "installMode": "perMachine",
+        "installerHooks": "nsis/installer.nsi",
         "installerIcon": "icons/icon.ico",
         "headerImage": null,
         "sidebarImage": null

@@ -15,6 +15,8 @@
 import * as signalR from '@microsoft/signalr';
 import { RuntimeConfig } from '@/lib/runtime-config';
 import { authStore } from '@/stores/auth-store';
+import { remoteAccessStore } from '@/stores/remote-access-store';
+import { showRemoteSessionRequestNotification } from '@/lib/notifications';
 import type { ChatMessage, TypingIndicator, ReadStatusUpdate, TicketUpdateEvent, TaskStatusChangedEvent } from '@/types';
 
 // Connection states
@@ -527,28 +529,20 @@ class SignalRHubManager {
         };
 
         if (session?.sessionId) {
-          // Import and call the remote access store handler
-          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
-            remoteAccessStore.handleRemoteSessionAutoStart({
-              sessionId: session.sessionId,
-              agentName: session.agentName || 'Agent',
-              requestTitle: session.requestTitle || 'Remote Support',
-              expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min expiry
-            });
-          }).catch((err) => {
-            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
+          // Call the remote access store handler
+          remoteAccessStore.handleRemoteSessionAutoStart({
+            sessionId: session.sessionId,
+            agentName: session.agentName || 'Agent',
+            requestTitle: session.requestTitle || 'Remote Support',
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min expiry
           });
 
           // Show desktop notification for incoming remote session request
           // This is shown in addition to the in-app banner
-          import('@/lib/notifications').then(({ showRemoteSessionRequestNotification }) => {
-            showRemoteSessionRequestNotification(
-              session.agentName || 'Agent',
-              session.requestTitle
-            );
-          }).catch((err) => {
-            console.error(`[SignalR:${this.hubType}] Failed to show desktop notification:`, err);
-          });
+          showRemoteSessionRequestNotification(
+            session.agentName || 'Agent',
+            session.requestTitle
+          );
         } else {
           console.warn(`[SignalR:${this.hubType}] RemoteSessionAutoStart received invalid data:`, data);
         }
@@ -574,17 +568,13 @@ class SignalRHubManager {
         };
 
         if (session?.sessionId) {
-          // Import and call the remote access store handler
-          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
-            console.log(`[SignalR:${this.hubType}] Handling remote session reconnect`);
-            remoteAccessStore.handleRemoteSessionAutoStart({
-              sessionId: session.sessionId,
-              agentName: session.agentName || 'Agent',
-              requestTitle: session.requestTitle || 'Remote Support (Reconnect)',
-              expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            });
-          }).catch((err) => {
-            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
+          // Call the remote access store handler
+          console.log(`[SignalR:${this.hubType}] Handling remote session reconnect`);
+          remoteAccessStore.handleRemoteSessionAutoStart({
+            sessionId: session.sessionId,
+            agentName: session.agentName || 'Agent',
+            requestTitle: session.requestTitle || 'Remote Support (Reconnect)',
+            expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
           });
         } else {
           console.warn(`[SignalR:${this.hubType}] RemoteSessionReconnect received invalid data:`, data);
@@ -605,13 +595,9 @@ class SignalRHubManager {
         };
 
         if (session?.sessionId) {
-          // Import and call the remote access store handler
-          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
-            console.log(`[SignalR:${this.hubType}] Handling remote session ended`);
-            remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
-          }).catch((err) => {
-            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
-          });
+          // Call the remote access store handler
+          console.log(`[SignalR:${this.hubType}] Handling remote session ended`);
+          remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
         } else {
           console.warn(`[SignalR:${this.hubType}] RemoteSessionEnded received invalid data:`, data);
         }
@@ -627,12 +613,8 @@ class SignalRHubManager {
           sessionId: string;
         };
         if (session?.sessionId) {
-          import('@/stores/remote-access-store').then(({ remoteAccessStore }) => {
-            console.log(`[SignalR:${this.hubType}] Agent left session, clearing banner`);
-            remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
-          }).catch((err) => {
-            console.error(`[SignalR:${this.hubType}] Failed to import remote-access-store:`, err);
-          });
+          console.log(`[SignalR:${this.hubType}] Agent left session, clearing banner`);
+          remoteAccessStore.handleRemoteSessionEnded(session.sessionId);
         }
       };
 

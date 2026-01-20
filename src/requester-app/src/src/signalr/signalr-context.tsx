@@ -30,6 +30,7 @@ import {
   type InitialStateData,
 } from './signalr-manager';
 import type { ChatMessage, TypingIndicator, ReadStatusUpdate, TicketUpdateEvent, TaskStatusChangedEvent } from '@/types';
+import { markMessagesAsRead } from '@/api/messages';
 import { logger } from '@/logging';
 
 // Context value type
@@ -528,8 +529,6 @@ export function useSignalRChatRoom(
   const markAsRead = async (_messageIds: string[]) => {
     const requestId = getRequestId();
     try {
-      // Import and call HTTP API for mark-read
-      const { markMessagesAsRead } = await import('@/api/messages');
       await markMessagesAsRead(requestId);
     } catch (error) {
       console.error('[SignalR:Chat] Failed to mark as read:', error);

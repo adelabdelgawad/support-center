@@ -10,12 +10,13 @@
 
 import { render } from "solid-js/web";
 import { Router, Route, Navigate } from "@solidjs/router";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { QueryClientProvider } from "@tanstack/solid-query";
 import { lazy } from "solid-js";
 import { RealTimeProvider, NotificationSignalRProvider } from "@/signalr";
 import { NotificationProvider } from "@/context/notification-context";
 import { LanguageProvider } from "@/context/language-context";
 import { ThemeProvider } from "@/context/theme-context";
+import { queryClient } from "@/lib/query-client";
 import App from "./App";
 import "./index.css";
 
@@ -25,16 +26,8 @@ const TicketsPage = lazy(() => import("@/routes/tickets"));
 const TicketChatPage = lazy(() => import("@/routes/ticket-chat"));
 const SettingsPage = lazy(() => import("@/routes/settings"));
 
-// Create TanStack Query client
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60, // 1 minute
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+// Re-export for backwards compatibility
+export { queryClient } from "@/lib/query-client";
 
 // Get root element
 const root = document.getElementById("root");

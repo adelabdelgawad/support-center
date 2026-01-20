@@ -16,16 +16,9 @@
  * Wrap only routes that need image functionality
  */
 
-import { Component, JSX, lazy, Suspense } from 'solid-js';
-
-// Lazy load the providers
-const ImageCacheProvider = lazy(() =>
-  import('@/context/image-cache-context').then(mod => ({ default: mod.ImageCacheProvider }))
-);
-
-const ImageViewerProvider = lazy(() =>
-  import('@/context/image-viewer-context').then(mod => ({ default: mod.ImageViewerProvider }))
-);
+import { Component, JSX } from 'solid-js';
+import { ImageCacheProvider } from '@/context/image-cache-context';
+import { ImageViewerProvider } from '@/context/image-viewer-context';
 
 interface LazyImageProvidersProps {
   children: JSX.Element;
@@ -88,12 +81,10 @@ function ChatPageSkeleton() {
  */
 export const LazyImageProviders: Component<LazyImageProvidersProps> = (props) => {
   return (
-    <Suspense fallback={<ChatPageSkeleton />}>
-      <ImageCacheProvider>
-        <ImageViewerProvider>
-          {props.children}
-        </ImageViewerProvider>
-      </ImageCacheProvider>
-    </Suspense>
+    <ImageCacheProvider>
+      <ImageViewerProvider>
+        {props.children}
+      </ImageViewerProvider>
+    </ImageCacheProvider>
   );
 };

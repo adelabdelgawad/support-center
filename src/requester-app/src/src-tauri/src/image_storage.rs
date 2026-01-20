@@ -166,8 +166,8 @@ pub async fn image_storage_clear_all(app: AppHandle) -> Result<u32, String> {
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
         if path.is_file() {
-            if let Err(e) = fs::remove_file(&path).await {
-                debug_eprintln!("[image_storage] Warning: Failed to delete {:?}: {}", path, e);
+            if let Err(_e) = fs::remove_file(&path).await {
+                debug_eprintln!("[image_storage] Warning: Failed to delete {:?}: {}", path, _e);
             } else {
                 count += 1;
             }

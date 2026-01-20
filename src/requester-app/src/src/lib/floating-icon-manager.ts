@@ -8,6 +8,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { ChatPageResponse } from '@/types';
+import { queryClient } from '@/lib/query-client';
+import { ticketKeys } from '@/queries';
 
 /**
  * Current unread count stored in memory
@@ -103,10 +105,6 @@ export async function handleNewMessageNotification(): Promise<void> {
  */
 export async function refreshUnreadCountFromAPI(): Promise<void> {
   try {
-    // Import dynamically to avoid circular dependencies
-    const { queryClient } = await import('@/index');
-    const { ticketKeys } = await import('@/queries');
-
     console.log('[FloatingIconManager] Query client:', !!queryClient);
     console.log('[FloatingIconManager] Query key:', ticketKeys.allUserTickets());
 
