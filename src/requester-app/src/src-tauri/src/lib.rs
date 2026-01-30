@@ -61,6 +61,9 @@ mod image_storage;
 // Debug logging macros (compile to no-ops in release builds)
 mod debug_macros;
 
+// Watchdog module for auto-restart functionality
+mod watchdog;
+
 // ============================================================================
 // PERFORMANCE OPTIMIZATION: Screen Dimension Caching for Mouse Positioning
 // ============================================================================
@@ -423,6 +426,52 @@ fn get_app_version(app: AppHandle) -> String {
 
 // ============================================================================
 // END PHASE 8 Commands
+// ============================================================================
+
+// ============================================================================
+// WATCHDOG COMMANDS (Auto-Restart)
+// ============================================================================
+
+/// Check if the app is running as a watchdog process
+#[tauri::command]
+fn is_watchdog_process() -> bool {
+    watchdog::is_watchdog()
+}
+
+/// Check if watchdog is enabled for this session
+#[tauri::command]
+fn is_watchdog_enabled() -> bool {
+    // Watchdog is always enabled in production builds
+    !watchdog::is_watchdog()
+}
+
+/// Manually restart the application (for testing purposes)
+#[tauri::command]
+fn trigger_restart() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+
+        let exe_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get executable path: {}", e))?;
+
+        // Spawn new instance
+        let _ = Command::new(&exe_path)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn new instance: {}", e))?;
+
+        // Exit current instance
+        std::process::exit(0);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Restart not supported on this platform".to_string())
+    }
+}
+
+// ============================================================================
+// END WATCHDOG COMMANDS
 // ============================================================================
 
 /// Get the current Windows/system username for SSO authentication
@@ -1613,6 +1662,22 @@ fn auth_storage_delete(app: AppHandle, key: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Check if running as watchdog process
+    if watchdog::is_watchdog() {
+        // This is the watchdog process - run watchdog logic
+        eprintln!("[App] Running as watchdog process");
+
+        // Create a simple runtime for the watchdog
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime for watchdog");
+
+        let _ = rt.block_on(watchdog::run_watchdog());
+        return;
+    }
+
+    // Initialize watchdog for auto-restart (main process only)
+    watchdog::init_watchdog();
+
     // Try to load .env file from various locations (works in both debug and release)
     // This supports local testing with release builds - just place .env next to the exe
     // In production deployments, environment variables should be set externally
@@ -1757,7 +1822,11 @@ pub fn run() {
             image_storage::image_storage_delete,
             image_storage::image_storage_clear_all,
             image_storage::image_storage_get_size,
-            image_storage::image_storage_get_directory
+            image_storage::image_storage_get_directory,
+            // Watchdog commands (auto-restart)
+            is_watchdog_process,
+            is_watchdog_enabled,
+            trigger_restart
         ])
         // Handle window events - hide on close, allow minimize, restore on focus
         .on_window_event(|window, event| {
