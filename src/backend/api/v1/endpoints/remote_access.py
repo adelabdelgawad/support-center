@@ -318,8 +318,6 @@ async def start_remote_access_by_user(
             )
 
         # Auto-terminate existing session before creating
-        from services.remote_access_service import RemoteAccessService
-
         terminated_session = await RemoteAccessService.terminate_active_session_for_requester(
             db=db,
             requester_id=user_id,
@@ -332,8 +330,6 @@ async def start_remote_access_by_user(
             )
 
         # Create session without request
-        from repositories.remote_access_repository import RemoteAccessRepository
-
         session = await RemoteAccessRepository.create_session(
             db=db,
             request_id=None,  # No request

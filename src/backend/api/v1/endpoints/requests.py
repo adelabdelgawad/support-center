@@ -4,12 +4,15 @@ Service Request API endpoints with performance optimizations.
 REFACTORED: Renamed all "agent" references to "technician" throughout.
 """
 
+import logging
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from core.database import get_session
 from core.dependencies import _get_user_with_roles, get_client_ip, get_current_user, require_supervisor, require_technician
@@ -88,9 +91,6 @@ async def create_request(
 
         await EventTriggerService.trigger_new_request(db=db, request=request)
     except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to trigger new_request event: {e}")
 
     # Broadcast new ticket via SignalR
@@ -109,9 +109,6 @@ async def create_request(
             request_id=str(request.id),
         )
     except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to broadcast new ticket via SignalR: {e}")
 
     # Invalidate tickets list cache for requester (new ticket created)
@@ -673,9 +670,6 @@ async def update_request(
             )
         except Exception as e:
             # Log error but don't fail the request update
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to trigger status change event: {e}")
 
     # Trigger solved message if new status has count_as_solved=True
@@ -690,9 +684,6 @@ async def update_request(
             )
         except Exception as e:
             # Log error but don't fail the request update
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to trigger request_solved event: {e}")
 
     # Emit task_status_changed event if marked as solved
@@ -706,12 +697,8 @@ async def update_request(
                 changed_by=current_user.full_name or current_user.username,
             )
 
-            import logging
-            logger = logging.getLogger(__name__)
             logger.info(f"Task {request_id} marked as solved, closure event emitted")
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to emit task closure event: {e}")
 
     # Broadcast ticket update if anything changed
@@ -744,8 +731,6 @@ async def update_request(
                 update_data={"updatedFields": changed_fields},
             )
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to broadcast ticket update: {e}")
 
     return request
@@ -868,9 +853,6 @@ async def update_request_by_technician(
             )
         except Exception as e:
             # Log error but don't fail the request update
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to trigger status change event: {e}")
 
     # Trigger solved message if new status has count_as_solved=True
@@ -885,9 +867,6 @@ async def update_request_by_technician(
             )
         except Exception as e:
             # Log error but don't fail the request update
-            import logging
-
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to trigger request_solved event: {e}")
 
     # Broadcast task closure event if marked as solved
@@ -901,12 +880,8 @@ async def update_request_by_technician(
                 changed_by=current_user.full_name or current_user.username,
             )
 
-            import logging
-            logger = logging.getLogger(__name__)
             logger.info(f"Task {request_id} marked as solved, closure event emitted")
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to emit task closure event: {e}")
 
     # Broadcast ticket update if anything changed
@@ -939,8 +914,6 @@ async def update_request_by_technician(
                 update_data={"updatedFields": changed_fields},
             )
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"Failed to broadcast ticket update: {e}")
 
     return request
@@ -1019,9 +992,6 @@ async def assign_request(
                 db=db, request_id=request_id, technician=technician
             )
     except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to trigger ticket_assigned event: {e}")
 
     # Broadcast the update via SignalR
@@ -1054,8 +1024,6 @@ async def assign_request(
             update_data={"updatedFields": ["assignedTechnician"]},
         )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to broadcast assignment update: {e}")
 
     return request
@@ -1181,8 +1149,6 @@ async def unassign_request(
                 update_data={"updatedFields": ["unassignedTechnician"]},
             )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to broadcast unassignment update: {e}")
 
     return {"success": True, "message": "Technician unassigned successfully"}
@@ -1253,9 +1219,6 @@ async def take_request(
             db=db, request_id=request_id, technician=current_user
         )
     except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to trigger ticket_assigned event: {e}")
 
     # Broadcast the update via SignalR
@@ -1290,8 +1253,6 @@ async def take_request(
             update_data={"updatedFields": ["status", "assignedTechnician"]},
         )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(f"Failed to broadcast pickup update: {e}")
 
     return request

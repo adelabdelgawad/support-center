@@ -5,14 +5,36 @@ Provides caching utilities for frequently accessed data.
 
 import json
 import logging
+from datetime import date, datetime
 from functools import wraps
 from typing import Any, Optional, Union
+from uuid import UUID
 
 import redis.asyncio as redis
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class CacheJSONEncoder(json.JSONEncoder):
+    """
+    Custom JSON encoder that handles common non-serializable types.
+
+    Handles:
+    - UUID: converts to string
+    - datetime: converts to ISO format string
+    - date: converts to ISO format string
+    """
+
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, UUID):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        if isinstance(obj, date):
+            return obj.isoformat()
+        return super().default(obj)
 
 # Sentinel value for no TTL
 NO_TTL = object()
@@ -85,7 +107,7 @@ class CacheManager:
             return False
 
         try:
-            serialized = json.dumps(value)
+            serialized = json.dumps(value, cls=CacheJSONEncoder)
 
             if ttl is NO_TTL:
                 # No TTL - persist indefinitely
