@@ -19,19 +19,18 @@ export const metadata = {
  * Location: /management/scheduler
  */
 export default async function SchedulerPage() {
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect("/login");
-  }
-
-  // Fetch all data in parallel
-  const [jobsData, taskFunctions, jobTypes] = await Promise.all([
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, jobsData, taskFunctions, jobTypes] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
     getScheduledJobs({ page: 1, perPage: 50 }),
     getTaskFunctions(),
     getJobTypes(),
   ]);
+
+  if (!session?.accessToken) {
+    redirect("/login");
+  }
 
   return (
     <SchedulerContent

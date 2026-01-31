@@ -133,46 +133,56 @@ export function RequestDetailMetadataProvider({
   sessionUser,
   subTasks: initialSubTasks,
 }: RequestDetailMetadataProviderProps) {
-  // **SESSION STATE** - Hydration-safe: null initially, populated in useEffect
-  const [session, setSession] = useState<{
+  // **SESSION STATE** - Initialize synchronously to avoid post-mount re-render
+  const [session] = useState<{
     isAuthenticated: boolean;
     user: any;
     sessionId: string | null;
     accessToken: string | null;
-  } | null>(null);
-
-  // Load session from cookie after mount (client-side only)
-  useEffect(() => {
-    const getSessionFromCookie = () => {
-      try {
-        const userData = document.cookie
-          .split(';')
-          .map((c: string) => c.trim())
-          .find((c: string) => c.startsWith('user_data='))
-          ?.split('=')[1];
-
-        if (!userData) return null;
-
-        const user = JSON.parse(decodeURIComponent(userData));
+  }>(() => {
+    // This runs once during initial render (client-side only due to 'use client')
+    try {
+      if (typeof document === 'undefined') {
+        // SSR safety - return default state
         return {
-          isAuthenticated: true,
-          user,
+          isAuthenticated: false,
+          user: null,
           sessionId: null,
           accessToken: null,
         };
-      } catch {
-        return null;
       }
-    };
 
-    const sessionData = getSessionFromCookie();
-    setSession(sessionData ?? {
-      isAuthenticated: false,
-      user: null,
-      sessionId: null,
-      accessToken: null,
-    });
-  }, []);
+      const userData = document.cookie
+        .split(';')
+        .map((c: string) => c.trim())
+        .find((c: string) => c.startsWith('user_data='))
+        ?.split('=')[1];
+
+      if (!userData) {
+        return {
+          isAuthenticated: false,
+          user: null,
+          sessionId: null,
+          accessToken: null,
+        };
+      }
+
+      const user = JSON.parse(decodeURIComponent(userData));
+      return {
+        isAuthenticated: true,
+        user,
+        sessionId: null,
+        accessToken: null,
+      };
+    } catch {
+      return {
+        isAuthenticated: false,
+        user: null,
+        sessionId: null,
+        accessToken: null,
+      };
+    }
+  });
 
   const currentUser = useMemo(() => {
     return session?.isAuthenticated && session?.user

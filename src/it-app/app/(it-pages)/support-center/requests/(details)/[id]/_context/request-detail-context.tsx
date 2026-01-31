@@ -74,30 +74,26 @@ export function RequestDetailProvider({
   currentUserIsTechnician,
   subTasks: initialSubTasks,
 }: RequestDetailProviderProps) {
-  // **SESSION STATE** - Hydration-safe: null initially, populated in useEffect
-  const [session, setSession] = useState<{ user: any } | null>(null);
+  // **SESSION STATE** - Initialize synchronously to avoid post-mount re-render
+  const [session] = useState<{ user: any } | null>(() => {
+    // This runs once during initial render (client-side only due to 'use client')
+    try {
+      if (typeof document === 'undefined') return null; // SSR safety
 
-  // Load session from cookie after mount (client-side only)
-  useEffect(() => {
-    const getSessionFromCookie = () => {
-      try {
-        const userData = document.cookie
-          .split(';')
-          .map((c) => c.trim())
-          .find((c) => c.startsWith('user_data='))
-          ?.split('=')[1];
+      const userData = document.cookie
+        .split(';')
+        .map((c) => c.trim())
+        .find((c) => c.startsWith('user_data='))
+        ?.split('=')[1];
 
-        if (!userData) return null;
+      if (!userData) return null;
 
-        const user = JSON.parse(decodeURIComponent(userData));
-        return { user };
-      } catch {
-        return null;
-      }
-    };
-
-    setSession(getSessionFromCookie());
-  }, []);
+      const user = JSON.parse(decodeURIComponent(userData));
+      return { user };
+    } catch {
+      return null;
+    }
+  });
 
   const currentUser = useMemo(() => {
     return session?.user

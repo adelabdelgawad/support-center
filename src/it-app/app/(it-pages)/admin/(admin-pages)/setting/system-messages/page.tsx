@@ -18,14 +18,6 @@ export default async function SystemMessagesPage({
     limit?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect('/login');
-  }
-
   const params = await searchParams;
   const { is_active, page: pageParam, limit: limitParam } = params;
 
@@ -36,13 +28,23 @@ export default async function SystemMessagesPage({
   let messagesData;
 
   try {
-    messagesData = await getSystemMessages({
-      limit,
-      skip,
-      filterCriteria: {
-        is_active: is_active ? is_active === 'true' : undefined,
-      },
-    });
+    const [_, session, data] = await Promise.all([
+      validateAgentAccess(),
+      auth(),
+      getSystemMessages({
+        limit,
+        skip,
+        filterCriteria: {
+          is_active: is_active ? is_active === 'true' : undefined,
+        },
+      }),
+    ]);
+
+    if (!session?.accessToken) {
+      redirect('/login');
+    }
+
+    messagesData = data;
   } catch (error) {
     console.error('Failed to fetch system messages:', error);
     messagesData = {

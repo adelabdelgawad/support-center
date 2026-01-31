@@ -22,10 +22,6 @@ export default async function UsersPage({
     role?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
-  // Await searchParams before destructuring
   const params = await searchParams;
   const { is_active, user_type, filter, page, limit, role } = params;
 
@@ -41,8 +37,9 @@ export default async function UsersPage({
     role_id: role, // Backend expects role_id parameter
   };
 
-  // Fetch users and roles in parallel for better performance
-  const [users, roles] = await Promise.all([
+  // Parallelize auth validation and data fetching
+  const [_, users, roles] = await Promise.all([
+    validateAgentAccess(),
     getUsers(limitNumber, skip, filters),
     getActiveRolesForUserForms(),
   ]);

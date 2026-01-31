@@ -1105,6 +1105,8 @@ class RequestService:
         """
         Get ticket type counts (all/parents/subtasks) for a specific view.
 
+        OPTIMIZED: Uses SQL COUNT queries instead of fetching full objects.
+
         Args:
             db: Database session
             user: Current user (for region filtering)
@@ -1116,23 +1118,31 @@ class RequestService:
         """
         from repositories.service_request_repository import ServiceRequestRepository
 
-        # Get all requests for this view (without pagination) to count them
-        # We use a large per_page to get all results for counting
-        requests, total = await RequestService.get_technician_view_requests(
-            db=db,
+        # Build the base query using the same logic as the view methods
+        # but WITHOUT selectinload options (we only need counts)
+        base_stmt = await ServiceRequestRepository.build_view_base_query(
             user=user,
             view_type=view_type,
-            business_unit_id=business_unit_id,
-            page=1,
-            per_page=10000,  # Large number to get all results
+            business_unit_id=business_unit_id
         )
 
-        # Count parents (no parent_task_id) and subtasks (has parent_task_id)
-        parents_count = sum(1 for req in requests if req.parent_task_id is None)
-        subtasks_count = sum(1 for req in requests if req.parent_task_id is not None)
+        # Count total records
+        total_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await db.execute(total_stmt)
+        total_count = total_result.scalar() or 0
+
+        # Count parents (parent_task_id IS NULL)
+        parents_stmt = select(func.count()).select_from(
+            base_stmt.where(ServiceRequest.parent_task_id.is_(None)).subquery()
+        )
+        parents_result = await db.execute(parents_stmt)
+        parents_count = parents_result.scalar() or 0
+
+        # Subtasks = total - parents
+        subtasks_count = total_count - parents_count
 
         return {
-            "all": total,
+            "all": total_count,
             "parents": parents_count,
             "subtasks": subtasks_count,
         }

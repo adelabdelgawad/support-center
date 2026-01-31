@@ -22,14 +22,6 @@ export default async function RolesPage({
     page_id?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect("/login");
-  }
-
   const params = await searchParams;
   const { is_active, name, page_id, page: pageParam, limit: limitParam } = params;
 
@@ -37,8 +29,10 @@ export default async function RolesPage({
   const limit = Number(limitParam || "10");
   const skip = (page - 1) * limit;
 
-  // Fetch all data in parallel for optimal performance
-  const [response, pages, users] = await Promise.all([
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, response, pages, users] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
     getRoles({
       limit,
       skip,
@@ -59,6 +53,10 @@ export default async function RolesPage({
     getPages().catch(() => ({ pages: [] })),
     getAllUsers().catch(() => []),
   ]);
+
+  if (!session?.accessToken) {
+    redirect("/login");
+  }
 
   return (
     <RolesTable

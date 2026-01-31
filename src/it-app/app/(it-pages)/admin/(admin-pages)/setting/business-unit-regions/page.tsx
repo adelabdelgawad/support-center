@@ -20,14 +20,6 @@ export default async function BusinessUnitRegionsPage({
     name?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect('/login');
-  }
-
   const params = await searchParams;
   const { is_active, name, page: pageParam, limit: limitParam } = params;
 
@@ -35,17 +27,27 @@ export default async function BusinessUnitRegionsPage({
   const limit = Number(limitParam || '10');
   const skip = (page - 1) * limit;
 
-  // Fetch business unit regions data with error handling
+  // Parallelize auth validation, session check, and data fetching
   let response;
   try {
-    response = await getBusinessUnitRegions({
-      limit,
-      skip,
-      filterCriteria: {
-        is_active: is_active || undefined,
-        name: name || undefined,
-      },
-    });
+    const [_, session, regionsData] = await Promise.all([
+      validateAgentAccess(),
+      auth(),
+      getBusinessUnitRegions({
+        limit,
+        skip,
+        filterCriteria: {
+          is_active: is_active || undefined,
+          name: name || undefined,
+        },
+      }),
+    ]);
+
+    if (!session?.accessToken) {
+      redirect('/login');
+    }
+
+    response = regionsData;
   } catch (error) {
     console.error('Failed to fetch business unit regions:', error);
     // Provide empty initial data on error

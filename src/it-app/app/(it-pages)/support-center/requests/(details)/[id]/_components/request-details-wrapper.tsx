@@ -41,11 +41,6 @@ export function RequestDetailsWrapper({
   // Use initial data from server if available, otherwise use SWR data
   const pageData = initialData ?? data;
 
-  // Show skeleton during initial load (no data yet)
-  if (!pageData && isLoading) {
-    return <RequestDetailsSkeleton />;
-  }
-
   // Show error if data failed to load
   if (error && !pageData) {
     return (

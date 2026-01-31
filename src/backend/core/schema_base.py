@@ -36,12 +36,14 @@ def serialize_datetime(dt: datetime | None) -> str | None:
     """
     Serialize datetime to ISO 8601 format with UTC timezone indicator.
 
-    All datetimes in the database are stored as UTC (timezone-naive).
-    This function ensures they are serialized with 'Z' suffix to indicate UTC,
-    allowing the frontend to correctly convert to user's local timezone.
+    All datetimes in the database are stored as UTC. If the datetime object
+    has timezone info (timezone-aware), it's converted to UTC and made
+    timezone-naive before serialization. This function ensures they are
+    serialized with 'Z' suffix to indicate UTC, allowing the frontend to
+    correctly convert to user's local timezone.
 
     Args:
-        dt: The datetime to serialize (assumed to be UTC)
+        dt: The datetime to serialize (assumed to be UTC or UTC-aware)
 
     Returns:
         ISO 8601 string with 'Z' suffix (e.g., "2025-12-18T14:30:00Z")
@@ -49,7 +51,14 @@ def serialize_datetime(dt: datetime | None) -> str | None:
     """
     if dt is None:
         return None
+
+    # If timezone-aware, convert to UTC and make timezone-naive
+    if dt.tzinfo is not None:
+        from datetime import timezone
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+
     # Add 'Z' to indicate UTC timezone
+    # Now isoformat() won't include timezone offset
     return dt.isoformat() + "Z"
 
 

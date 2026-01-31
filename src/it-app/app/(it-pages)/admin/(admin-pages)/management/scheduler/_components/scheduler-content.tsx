@@ -3,7 +3,6 @@
 import useSWR from "swr";
 import { useMemo, useCallback } from "react";
 import { SchedulerTableBody } from "./table/scheduler-table-body";
-import LoadingSkeleton from "@/components/loading-skelton";
 import type {
   ScheduledJob,
   JobsListResponse,
@@ -145,8 +144,6 @@ export function SchedulerContent({
 
   return (
     <div className="relative h-full bg-muted min-h-0 p-1">
-      {/* Loading Overlay */}
-      {isLoading && <LoadingSkeleton />}
 
       {/* Main Content */}
       <SchedulerTableBody

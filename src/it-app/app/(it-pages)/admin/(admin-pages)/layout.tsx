@@ -18,7 +18,7 @@ import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { AdminLeftSidebar } from "@/components/admin/admin-left-sidebar";
 import { buildAdminNavigationWithState } from "@/lib/utils/admin-navigation-utils";
-import { getUserPages } from "@/lib/actions/users.actions";
+import { getUserPagesCached } from "@/lib/actions/users.actions";
 import { ReactNode } from "react";
 
 interface AdminPagesLayoutProps {
@@ -66,7 +66,7 @@ export default async function AdminPagesLayout({ children }: AdminPagesLayoutPro
 
   // HYDRATION FIX: Build navigation state server-side
   // This ensures the sidebar renders with correct state on first paint
-  const pages = await getUserPages(user.id);
+  const pages = await getUserPagesCached(user.id);
   const { navigation, expandedSections, activeLink } = buildAdminNavigationWithState(pages, pathname);
 
   // Layout with sidebar for all admin sub-pages

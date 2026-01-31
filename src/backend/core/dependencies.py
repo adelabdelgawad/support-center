@@ -25,7 +25,7 @@ from core.security import (
     decode_token,
     get_user_id_from_token,
 )
-from models import User, ServiceRequest
+from models import User, ServiceRequest, UserRole, BusinessUnitUserAssign, TechnicianRegion
 
 # HTTP Bearer security scheme
 security = HTTPBearer()
@@ -78,7 +78,16 @@ async def get_current_user(
         user_id = get_user_id_from_token(payload)  # Returns UUID string
 
         # Get user from database using UUID (User.id is now UUID primary key)
-        result = await db.execute(select(User).where(User.id == user_id))
+        # Eager-load relationships used by _get_region_filter for performance
+        result = await db.execute(
+            select(User)
+            .where(User.id == user_id)
+            .options(
+                selectinload(User.user_roles).selectinload(UserRole.role),
+                selectinload(User.business_unit_assigns),
+                selectinload(User.region_assigns),
+            )
+        )
         user = result.scalar_one_or_none()
 
         if not user:

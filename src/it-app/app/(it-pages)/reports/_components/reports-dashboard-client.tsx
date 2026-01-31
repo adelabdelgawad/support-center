@@ -132,11 +132,7 @@ function DistributionChart({
   );
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+).map((_, i) => (
           <Card key={i}>
             <CardHeader className="pb-2">
               <Skeleton className="h-4 w-24" />
@@ -283,7 +279,6 @@ export function ReportsDashboardClient({ initialData }: ReportsDashboardClientPr
         </Card>
       )}
 
-      {isLoading && <LoadingSkeleton />}
 
       {data && (
         <Tabs defaultValue="overview" className="space-y-4">

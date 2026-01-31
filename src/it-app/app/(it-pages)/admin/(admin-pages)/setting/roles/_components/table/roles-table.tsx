@@ -4,7 +4,6 @@ import { useState, useCallback } from "react";
 import { Pagination } from "@/components/data-table";
 import { RolesTableBody } from "./roles-table-body";
 import { MobileRolesView } from "../mobile/mobile-roles-view";
-import LoadingSkeleton from "@/components/loading-skelton";
 import type { SettingRolesResponse, RoleResponse } from "@/types/roles";
 import type { PageResponse } from "@/types/pages";
 import type { AuthUserResponse } from "@/types/users";
@@ -173,8 +172,6 @@ function RolesTable({
     <>
       {/* Desktop View (md and up) */}
       <div className="relative hidden md:flex h-full bg-muted min-h-0 p-1">
-        {/* Loading Overlay - only show on initial load, not on optimistic updates */}
-        {isLoading && <LoadingSkeleton />}
 
         {/* Main Content */}
         <div className="h-full flex-1 flex flex-col min-h-0 min-w-0 space-y-2">

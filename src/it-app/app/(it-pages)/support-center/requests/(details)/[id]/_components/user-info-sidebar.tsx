@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { ChevronRight, Mail, User as UserIcon, Building, Phone, FileText, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Badge } from '@/components/ui/badge';
 import { useRequestDetail } from '../_context/request-detail-context';
 import { SubTasksPanel } from './sub-tasks-panel';
-import { getUserStatus, type UserSessionStatus } from '@/lib/api/user-status';
+import { useUserStatus } from '@/lib/hooks/use-user-status';
 import { cn } from '@/lib/utils';
 import { formatShortDateTime } from '@/lib/utils/date-formatting';
 
@@ -42,39 +42,12 @@ export function UserInfoSidebar() {
   // Check if current status is "count_as_solved" - solved tickets are static
   const isStatusSolved = ticket.status?.countAsSolved === true;
 
-  // Fetch user session status - only when sidebar is visible (PERF: defer until needed)
-  // PERF: No polling for solved tickets - user status doesn't change for completed requests
-  const [userStatus, setUserStatus] = useState<UserSessionStatus | undefined>(undefined);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!isVisible) return;
-
-    const fetchStatus = async () => {
-      if (!isMountedRef.current) return;
-      try {
-        const status = await getUserStatus(ticket.requesterId);
-        if (isMountedRef.current) {
-          setUserStatus(status);
-        }
-      } catch (err) {
-        // Silently fail - status is optional
-      }
-    };
-
-    fetchStatus();
-
-    // Set up polling if not solved
-    if (!isStatusSolved) {
-      const intervalId = setInterval(fetchStatus, 30000);
-      return () => clearInterval(intervalId);
-    }
-  }, [isVisible, ticket.requesterId, isStatusSolved]);
+  // Fetch user session status using SWR hook - automatic deduplication & polling
+  // Only fetch when sidebar is visible and ticket is not solved
+  const { userStatus } = useUserStatus(
+    ticket.requesterId,
+    isVisible && !isStatusSolved
+  );
 
   // Build user info from ticket requester
   const user = {

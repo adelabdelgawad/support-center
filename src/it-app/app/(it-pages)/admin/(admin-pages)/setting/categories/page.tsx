@@ -16,23 +16,24 @@ export default async function CategoriesPage({
     name?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
   const params = await searchParams;
   const { is_active, name } = params;
 
-  // Fetch categories data with subcategories for better UX
+  // Parallelize auth validation and data fetching
   let response;
   try {
-    response = await getCategories({
-      activeOnly: false,
-      includeSubcategories: true, // Preload all subcategories
-      filterCriteria: {
-        is_active: is_active || undefined,
-        name: name || undefined,
-      },
-    });
+    const [_, categoriesData] = await Promise.all([
+      validateAgentAccess(),
+      getCategories({
+        activeOnly: false,
+        includeSubcategories: true, // Preload all subcategories
+        filterCriteria: {
+          is_active: is_active || undefined,
+          name: name || undefined,
+        },
+      }),
+    ]);
+    response = categoriesData;
   } catch (error) {
     console.error("Failed to fetch categories:", error);
     // Provide empty initial data on error

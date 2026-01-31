@@ -24,25 +24,25 @@ export default async function ClientVersionsPage({
     limit?: string;
   }>;
 }) {
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect("/login");
-  }
-
-  // Await searchParams before destructuring
   const params = await searchParams;
   const { platform, active_only, page, limit } = params;
 
   const pageNumber = Number(page) || 1;
   const limitNumber = Number(limit) || 10;
 
-  // Fetch initial data on server
-  const initialData = await getClientVersions({
-    platform,
-    activeOnly: active_only === "true",
-  });
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, initialData] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
+    getClientVersions({
+      platform,
+      activeOnly: active_only === "true",
+    }),
+  ]);
+
+  if (!session?.accessToken) {
+    redirect("/login");
+  }
 
   return (
     <ClientVersionsTable

@@ -16,6 +16,7 @@ from models.database_models import (
     RequestStatus,
     Priority,
     Category,
+    Subcategory,
     BusinessUnit,
     User,
     RequestAssignee,
@@ -553,7 +554,8 @@ class ReportingService:
                 Category.name_en,
                 func.count(ServiceRequest.id).label("count"),
             )
-            .join(Category, ServiceRequest.category_id == Category.id)
+            .join(Subcategory, ServiceRequest.subcategory_id == Subcategory.id)
+            .join(Category, Subcategory.category_id == Category.id)
             .where(and_(*base_conditions))
             .group_by(Category.id, Category.name_en)
             .order_by(func.count(ServiceRequest.id).desc())

@@ -21,14 +21,6 @@ export default async function BusinessUnitsPage({
     name?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect('/login');
-  }
-
   const params = await searchParams;
   const { is_active, name, page: pageParam, limit: limitParam } = params;
 
@@ -40,7 +32,9 @@ export default async function BusinessUnitsPage({
   let regionsData: BusinessUnitRegionResponse[];
 
   try {
-    [businessUnitsData, regionsData] = await Promise.all([
+    const [_, session, units, regions] = await Promise.all([
+      validateAgentAccess(),
+      auth(),
       getBusinessUnits({
         limit,
         skip,
@@ -51,6 +45,13 @@ export default async function BusinessUnitsPage({
       }),
       getActiveRegionsForForms(),
     ]);
+
+    if (!session?.accessToken) {
+      redirect('/login');
+    }
+
+    businessUnitsData = units;
+    regionsData = regions;
   } catch (error) {
     console.error('Failed to fetch business units:', error);
     businessUnitsData = {

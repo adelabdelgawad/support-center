@@ -19,13 +19,6 @@ export default async function SystemEventsPage({
     event_name?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect('/login');
-  }
-
   const params = await searchParams;
   const { is_active, event_name, page: pageParam, limit: limitParam } = params;
 
@@ -36,14 +29,24 @@ export default async function SystemEventsPage({
   let eventsData;
 
   try {
-    eventsData = await getSystemEvents({
-      limit,
-      skip,
-      filterCriteria: {
-        is_active: is_active || undefined,
-        event_name: event_name || undefined,
-      },
-    });
+    const [_, session, data] = await Promise.all([
+      validateAgentAccess(),
+      auth(),
+      getSystemEvents({
+        limit,
+        skip,
+        filterCriteria: {
+          is_active: is_active || undefined,
+          event_name: event_name || undefined,
+        },
+      }),
+    ]);
+
+    if (!session?.accessToken) {
+      redirect('/login');
+    }
+
+    eventsData = data;
   } catch (error) {
     console.error('Failed to fetch system events:', error);
     eventsData = {

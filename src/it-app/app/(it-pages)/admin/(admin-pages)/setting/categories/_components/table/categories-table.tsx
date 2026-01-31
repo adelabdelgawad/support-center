@@ -2,7 +2,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
-import LoadingSkeleton from "@/components/loading-skelton";
 import { CategoriesTableBody } from "./categories-table-body";
 import { CategoriesActionsProvider } from "../../context/categories-actions-context";
 import { toggleCategoryStatus } from "@/lib/api/categories";
@@ -350,8 +349,6 @@ function CategoriesTable({ initialData }: CategoriesTableProps) {
   return (
     <CategoriesActionsProvider actions={actions}>
       <div className="relative h-full bg-muted min-h-0 p-1">
-        {/* Loading Overlay */}
-        {isLoading && <LoadingSkeleton />}
 
         {/* Main Content */}
         <div className="h-full flex-1 flex flex-col min-h-0 min-w-0 space-y-2">

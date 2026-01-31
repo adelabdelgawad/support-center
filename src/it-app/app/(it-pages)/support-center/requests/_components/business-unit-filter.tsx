@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Building2, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { useRequestsListCounts } from '../_context/requests-list-counts-context';
 
 interface BusinessUnit {
   id: number;
@@ -22,37 +23,13 @@ export function BusinessUnitFilter({
   selectedIds,
   onSelectionChange,
 }: BusinessUnitFilterProps) {
-  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use data from context instead of fetching independently
+  const { allBusinessUnits, isBusinessUnitsValidating } = useRequestsListCounts();
+
   const [isExpanded, setIsExpanded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch business unit counts
-  useEffect(() => {
-    async function fetchBusinessUnits() {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await fetch('/api/requests/business-unit-counts', {
-          credentials: 'include',
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch business units');
-        }
-
-        const data = await response.json();
-        setBusinessUnits(data.businessUnits || []);
-      } catch (err) {
-        console.error('Error fetching business units:', err);
-        setError('Failed to load filters');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchBusinessUnits();
-  }, []);
+  const businessUnits = allBusinessUnits;
+  const isLoading = isBusinessUnitsValidating && businessUnits.length === 0;
 
   const handleToggle = (id: number) => {
     if (selectedIds.includes(id)) {
@@ -73,14 +50,6 @@ export function BusinessUnitFilter({
           <Building2 className="h-4 w-4" />
           <span>Loading filters...</span>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="px-4 py-3 border-t border-border">
-        <div className="text-sm text-destructive">{error}</div>
       </div>
     );
   }

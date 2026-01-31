@@ -105,8 +105,9 @@ export function NavigationProgressProvider({ children }: NavigationProgressProvi
       return false;
     }
 
-    setIsNavigating(true);
-    setTargetPath(normalizedPath);
+    // DISABLED: Don't show loading states during navigation
+    // setIsNavigating(true);
+    // setTargetPath(normalizedPath);
     return true;
   }, [isNavigating, targetPath, pathname]);
 

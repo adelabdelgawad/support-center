@@ -15,14 +15,16 @@ export const metadata = {
  * Location: /management/deployments/jobs
  */
 export default async function DeploymentsJobsPage() {
-  await validateAgentAccess();
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, jobsData] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
+    getDeploymentJobs(),
+  ]);
 
-  const session = await auth();
   if (!session?.accessToken) {
     redirect("/login");
   }
-
-  const jobsData = await getDeploymentJobs();
 
   return <JobsTab initialData={jobsData} />;
 }

@@ -6,7 +6,6 @@ import type { SettingUsersResponse, UserWithRolesResponse } from "@/types/users"
 import type { RoleResponse } from "@/types/roles";
 import { StatusPanel } from "../sidebar/status-panel";
 import UsersTableBody from "./users-table-body";
-import LoadingSkeleton from "@/components/loading-skelton";
 import { UsersActionsProvider } from "../../context/users-actions-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { AppUser } from "@/types/auth";
@@ -463,8 +462,6 @@ function UsersTable({
   return (
     <UsersActionsProvider actions={actions}>
       <div className="relative h-full bg-background min-h-0">
-        {/* Loading Overlay */}
-        {isLoading && <LoadingSkeleton />}
 
         {/* Desktop View (md and up) */}
         <div className="hidden md:flex h-full p-1">

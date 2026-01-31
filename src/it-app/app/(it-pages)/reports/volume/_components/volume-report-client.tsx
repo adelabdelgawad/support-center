@@ -48,11 +48,7 @@ const dateRangeOptions: { value: DateRangePreset; label: string }[] = [
   { value: "last_month", label: "Last Month" },
 ];
 
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, i) => (
+).map((_, i) => (
           <Card key={i}>
             <CardHeader className="pb-2">
               <Skeleton className="h-4 w-24" />
@@ -166,7 +162,6 @@ export function VolumeReportClient({ initialData }: VolumeReportClientProps) {
         </Card>
       )}
 
-      {isLoading && <LoadingSkeleton />}
 
       {data && (
         <div className="space-y-6">

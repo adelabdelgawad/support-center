@@ -8,6 +8,7 @@ import type {
   SettingCategoriesResponse,
   SubcategoriesResponse,
   SubcategoryResponse,
+  CategoryWithSubcategoriesResponse,
 } from "@/types/categories";
 
 /**
@@ -42,18 +43,23 @@ export async function getCategories(params?: {
     ? false
     : params?.activeOnly ?? false;
 
-  const categories = await serverFetch<CategoryResponse[]>(
-    `/categories/categories?active_only=${activeOnly}`,
+  // Fetch categories with subcategories in a single request if needed
+  const includeSubcategories = params?.includeSubcategories ?? false;
+
+  const categories = await serverFetch<CategoryWithSubcategoriesResponse[]>(
+    `/categories/categories?active_only=${activeOnly}&include_subcategories=${includeSubcategories}`,
     CACHE_PRESETS.NO_CACHE()
   );
 
-  // Calculate counts
+  // Calculate counts - fix inverted ternary
+  // When activeOnly=false, categories already has all categories (active_only=false in the fetch)
+  // When activeOnly=true, we need to fetch again with active_only=false to get counts
   const allCategories = activeOnly
-    ? categories
-    : await serverFetch<CategoryResponse[]>(
-        `/categories/categories?active_only=false`,
+    ? await serverFetch<CategoryWithSubcategoriesResponse[]>(
+        `/categories/categories?active_only=false&include_subcategories=${includeSubcategories}`,
         CACHE_PRESETS.NO_CACHE()
-      );
+      )
+    : categories;
 
   const activeCount = allCategories.filter((c) => c.isActive).length;
   const inactiveCount = allCategories.filter((c) => !c.isActive).length;
@@ -77,16 +83,13 @@ export async function getCategories(params?: {
     filteredCategories = filteredCategories.filter((c) => !c.isActive);
   }
 
-  // Fetch subcategories for all categories if requested
+  // Build subcategoriesMap from response instead of N fetches
   let subcategoriesMap: Record<number, SubcategoryResponse[]> | undefined;
-  if (params?.includeSubcategories) {
+  if (includeSubcategories) {
     subcategoriesMap = {};
-    await Promise.all(
-      filteredCategories.map(async (category) => {
-        const subcategories = await getCategorySubcategories(category.id);
-        subcategoriesMap![category.id] = subcategories;
-      })
-    );
+    for (const category of filteredCategories) {
+      subcategoriesMap[category.id] = category.subcategories ?? [];
+    }
   }
 
   return {

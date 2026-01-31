@@ -19,13 +19,6 @@ export default async function RequestStatusesPage({
     name?: string;
   }>;
 }) {
-  // Validate technician access before processing
-  await validateAgentAccess();
-  const session = await auth();
-  if (!session?.accessToken) {
-    redirect('/login');
-  }
-
   const params = await searchParams;
   const { is_active, name, page: pageParam, limit: limitParam } = params;
 
@@ -36,14 +29,24 @@ export default async function RequestStatusesPage({
   let statusesData;
 
   try {
-    statusesData = await getRequestStatuses({
-      limit,
-      skip,
-      filterCriteria: {
-        is_active: is_active || undefined,
-        name: name || undefined,
-      },
-    });
+    const [_, session, data] = await Promise.all([
+      validateAgentAccess(),
+      auth(),
+      getRequestStatuses({
+        limit,
+        skip,
+        filterCriteria: {
+          is_active: is_active || undefined,
+          name: name || undefined,
+        },
+      }),
+    ]);
+
+    if (!session?.accessToken) {
+      redirect('/login');
+    }
+
+    statusesData = data;
   } catch (error) {
     console.error('Failed to fetch request statuses:', error);
     statusesData = {

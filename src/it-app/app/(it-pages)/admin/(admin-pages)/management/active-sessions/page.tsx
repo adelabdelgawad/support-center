@@ -25,16 +25,6 @@ export default async function ActiveSessionsPage({
     limit?: string;
   }>;
 }) {
-  // Validate agent access before processing
-  await validateAgentAccess();
-
-  const session = await auth();
-
-  if (!session?.accessToken) {
-    redirect("/login");
-  }
-
-  // Await searchParams before destructuring
   const params = await searchParams;
   const { is_active, version_status, filter, page, limit } = params;
 
@@ -42,14 +32,22 @@ export default async function ActiveSessionsPage({
   const pageNumber = Number(page) || 1;
   const limitNumber = Number(limit) || 10;
 
-  // Fetch sessions and stats with filters (server-side)
-  const pageData = await getActiveSessionsPageData({
-    isActive: is_active,
-    versionStatus: version_status,
-    filter,
-    page: pageNumber,
-    limit: limitNumber,
-  });
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, pageData] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
+    getActiveSessionsPageData({
+      isActive: is_active,
+      versionStatus: version_status,
+      filter,
+      page: pageNumber,
+      limit: limitNumber,
+    }),
+  ]);
+
+  if (!session?.accessToken) {
+    redirect("/login");
+  }
 
   return <ActiveSessionsTable initialData={pageData} />;
 }

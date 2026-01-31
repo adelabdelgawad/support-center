@@ -4,14 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createSubTask,
-  getSubTasksByRequest,
-  getSubTaskStats,
   type SubTaskCreate,
   type SubTask,
 } from '@/lib/api/sub-tasks';
 import { getServiceSections, type ServiceSection } from '@/lib/api/service-sections';
 import { useRequestDetail } from '../_context/request-detail-context';
-import type { SubTaskStats } from '@/types/requests-list';
+import { useSubTasks } from '@/lib/hooks/use-sub-tasks';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -51,70 +49,29 @@ export function SubTasksPanel({ requestId }: SubTasksPanelProps) {
   // This prevents race condition where statuses array is empty on first render
   const isStatusSolved = ticket.status?.countAsSolved === true;
 
-  // State for sub-tasks data
-  // Note: Type cast needed due to type definitions mismatch between types/sub-task and lib/api/sub-tasks
-  const [subTasksData, setSubTasksData] = useState<{ items: SubTask[]; total: number } | undefined>(
-    initialSubTasks ? { items: initialSubTasks.items as unknown as SubTask[], total: initialSubTasks.total } : undefined
+  // Use SWR hook for sub-tasks - automatic deduplication, uses initial SSR data
+  const { tasks: subTasks, stats, mutate: refreshSubTasks } = useSubTasks(
+    requestId,
+    initialSubTasks
+      ? {
+          items: initialSubTasks.items as unknown as SubTask[],
+          total: initialSubTasks.total,
+          stats: initialSubTasks.stats,
+        }
+      : undefined,
+    { enabled: true }
   );
-  const [stats, setStats] = useState<SubTaskStats | undefined>(initialSubTasks?.stats as SubTaskStats | undefined);
+
   const [sections, setSections] = useState<ServiceSection[]>([]);
 
-  // Track mounted state
+  // Track mounted state for sections fetch
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
-
-  // Check if initial sub-tasks data is empty - if so, we need to fetch on mount
-  const hasRealSubTasksData = initialSubTasks && initialSubTasks.items && initialSubTasks.items.length > 0;
-  const hasRealStatsData = initialSubTasks?.stats !== undefined;
-
-  // Fetch sub-tasks on mount if no initial data, and set up polling for unsolved tickets
-  useEffect(() => {
-    if (!requestId) return;
-
-    const fetchSubTasks = async () => {
-      if (!isMountedRef.current) return;
-      try {
-        const data = await getSubTasksByRequest(requestId);
-        if (isMountedRef.current) {
-          setSubTasksData(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch sub-tasks:', err);
-      }
-    };
-
-    const fetchStats = async () => {
-      if (!isMountedRef.current) return;
-      try {
-        const data = await getSubTaskStats(requestId);
-        if (isMountedRef.current) {
-          setStats(data);
-        }
-      } catch (err) {
-        console.error('Failed to fetch sub-task stats:', err);
-      }
-    };
-
-    // Fetch on mount if no real initial data
-    if (!hasRealSubTasksData) {
-      fetchSubTasks();
-    }
-    if (!hasRealStatsData) {
-      fetchStats();
-    }
-
-    // Set up polling for unsolved tickets (every 5 minutes)
-    if (!isStatusSolved) {
-      const intervalId = setInterval(() => {
-        fetchSubTasks();
-        fetchStats();
-      }, 300000);
-      return () => clearInterval(intervalId);
-    }
-  }, [requestId, isStatusSolved, hasRealSubTasksData, hasRealStatsData]);
 
   // Fetch sections only when dialog opens
   useEffect(() => {
@@ -134,22 +91,6 @@ export function SubTasksPanel({ requestId }: SubTasksPanelProps) {
     fetchSections();
   }, [showCreateDialog]);
 
-  // Refresh function for after creating a sub-task
-  const refreshSubTasks = useCallback(async () => {
-    if (!requestId) return;
-    try {
-      const [tasksData, statsData] = await Promise.all([
-        getSubTasksByRequest(requestId),
-        getSubTaskStats(requestId),
-      ]);
-      setSubTasksData(tasksData);
-      setStats(statsData);
-    } catch (err) {
-      console.error('Failed to refresh sub-tasks:', err);
-    }
-  }, [requestId]);
-
-  const subTasks = subTasksData?.items || [];
 
   // Get filtered technicians based on selected section (with defensive array check)
   const availableTechnicians = sectionId && Array.isArray(sections)

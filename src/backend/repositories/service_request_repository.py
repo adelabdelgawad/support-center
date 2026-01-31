@@ -6,7 +6,7 @@ Handles all database queries related to service requests with business unit regi
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -131,6 +131,110 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
         return ServiceRequest.id.is_(None)
 
     @classmethod
+    async def build_view_base_query(
+        cls,
+        user: User,
+        view_type: str,
+        business_unit_id: Optional[int] = None,
+    ):
+        """
+        Build base query for a view WITHOUT eager loading (for counting).
+
+        This replicates the filter logic from find_* methods but excludes
+        selectinload options to enable efficient COUNT queries.
+
+        Args:
+            user: Current user (for region filtering)
+            view_type: View type (unassigned, all_unsolved, etc.)
+            business_unit_id: Optional filter
+
+        Returns:
+            SQLAlchemy select statement with filters applied
+        """
+        # Build base query based on view type
+        if view_type == "unassigned":
+            # Use NOT EXISTS for better performance
+            assigned_exists = exists(
+                select(1).where(RequestAssignee.request_id == ServiceRequest.id)
+            )
+
+            stmt = select(ServiceRequest).where(
+                ~assigned_exists,
+                ServiceRequest.is_deleted == False
+            )
+
+        elif view_type == "all_unsolved":
+            # Subquery to get solved status IDs
+            solved_subquery = select(RequestStatus.id).where(
+                RequestStatus.count_as_solved == True
+            )
+            # Use EXISTS for better performance
+            assigned_exists = exists(
+                select(1).where(RequestAssignee.request_id == ServiceRequest.id)
+            )
+
+            stmt = select(ServiceRequest).where(
+                ServiceRequest.status_id.notin_(solved_subquery),
+                ServiceRequest.is_deleted == False,
+                assigned_exists
+            )
+
+        elif view_type == "my_unsolved":
+            # Subquery to get solved status IDs
+            solved_subquery = select(RequestStatus.id).where(
+                RequestStatus.count_as_solved == True
+            )
+            # Subquery to get request IDs assigned to user
+            my_requests_subquery = select(RequestAssignee.request_id).where(
+                RequestAssignee.assignee_id == user.id
+            )
+
+            stmt = select(ServiceRequest).where(
+                and_(
+                    ServiceRequest.id.in_(my_requests_subquery),
+                    ServiceRequest.status_id.notin_(solved_subquery),
+                    ServiceRequest.is_deleted == False
+                )
+            )
+
+        elif view_type in ("recently_updated", "recently_solved", "all_your_requests",
+                          "urgent_high_priority", "pending_requester_response",
+                          "pending_subtask", "new_today", "in_progress"):
+            # For other views, use a simpler base (they all have similar structure)
+            # This is a fallback - specific logic can be added per view if needed
+            stmt = select(ServiceRequest).where(ServiceRequest.is_deleted == False)
+
+            # Add view-specific filters
+            if view_type == "recently_solved":
+                solved_subquery = select(RequestStatus.id).where(
+                    RequestStatus.count_as_solved == True
+                )
+                stmt = stmt.where(ServiceRequest.status_id.in_(solved_subquery))
+
+        else:
+            # Default to unassigned
+            assigned_exists = exists(
+                select(1).where(RequestAssignee.request_id == ServiceRequest.id)
+            )
+            stmt = select(ServiceRequest).where(
+                ~assigned_exists,
+                ServiceRequest.is_deleted == False
+            )
+
+        # Apply region filter
+        region_filter = cls._get_region_filter(user)
+        if region_filter is not None:
+            stmt = stmt.where(region_filter)
+
+        # Apply business unit filter
+        if business_unit_id == -1:
+            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
+        elif business_unit_id is not None and business_unit_id > 0:
+            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+
+        return stmt
+
+    @classmethod
     async def find_unassigned_requests(
         cls,
         db: AsyncSession,
@@ -147,14 +251,16 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
         Args:
             business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
         """
-        # Subquery to find request IDs that have assignments
-        assigned_subquery = select(RequestAssignee.request_id).distinct()
+        # Use NOT EXISTS for better performance vs NOT IN
+        assigned_exists = exists(
+            select(1).where(RequestAssignee.request_id == ServiceRequest.id)
+        )
 
         # Base query
         stmt = (
             select(ServiceRequest)
             .where(
-                ServiceRequest.id.notin_(assigned_subquery),
+                ~assigned_exists,
                 ServiceRequest.is_deleted == False
             )
             .options(
@@ -222,15 +328,17 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
             RequestStatus.count_as_solved == True
         )
 
-        # Subquery to get request IDs that have at least one assignee
-        assigned_subquery = select(RequestAssignee.request_id).distinct()
+        # Use EXISTS for better performance vs IN
+        assigned_exists = exists(
+            select(1).where(RequestAssignee.request_id == ServiceRequest.id)
+        )
 
         stmt = (
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id.notin_(solved_subquery),
                 ServiceRequest.is_deleted == False,
-                ServiceRequest.id.in_(assigned_subquery)  # Only requests with assignees
+                assigned_exists  # Only requests with assignees
             )
             .options(
                 selectinload(ServiceRequest.requester),

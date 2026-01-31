@@ -15,14 +15,16 @@ export const metadata = {
  * Location: /management/deployments
  */
 export default async function DeploymentsDevicesPage() {
-  await validateAgentAccess();
+  // Parallelize auth validation, session check, and data fetching
+  const [_, session, devicesData] = await Promise.all([
+    validateAgentAccess(),
+    auth(),
+    getDevices(),
+  ]);
 
-  const session = await auth();
   if (!session?.accessToken) {
     redirect("/login");
   }
-
-  const devicesData = await getDevices();
 
   return <DevicesTab initialData={devicesData} />;
 }

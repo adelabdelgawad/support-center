@@ -115,6 +115,71 @@ export async function serverFetch<T>(
   const response = await fetch(fullUrl, fetchOptions);
 
   if (!response.ok) {
+    // If 401/403 and we have a refresh token, try to refresh
+    const cookieStore = await cookies();
+    const refreshToken = cookieStore.get('refresh_token')?.value;
+
+    if ((response.status === 401 || response.status === 403) && refreshToken) {
+      try {
+        // Attempt token refresh
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3010';
+        const refreshResponse = await fetch(`${baseUrl}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+
+          // Update cookies with new tokens
+          const isSecure = process.env.NODE_ENV === 'production';
+
+          if (refreshData.accessToken) {
+            cookieStore.set('access_token', refreshData.accessToken, {
+              httpOnly: true,
+              secure: isSecure,
+              sameSite: 'strict',
+              path: '/',
+              maxAge: 15 * 60, // 15 minutes
+            });
+
+            // Retry the original request with new token
+            const retryHeaders: Record<string, string> = {
+              ...requestHeaders,
+              'Authorization': `Bearer ${refreshData.accessToken}`,
+            };
+
+            const retryResponse = await fetch(fullUrl, {
+              ...fetchOptions,
+              headers: retryHeaders,
+            });
+
+            if (retryResponse.ok) {
+              // Successful retry - return the response
+              if (retryResponse.status === 204) return undefined as T;
+
+              const responseType = options?.responseType || 'json';
+              switch (responseType) {
+                case 'arraybuffer':
+                  return (await retryResponse.arrayBuffer()) as T;
+                case 'blob':
+                  return (await retryResponse.blob()) as T;
+                case 'text':
+                  return (await retryResponse.text()) as T;
+                case 'json':
+                default:
+                  return retryResponse.json();
+              }
+            }
+          }
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed during API call:', refreshError);
+      }
+    }
+
+    // Original error handling (refresh failed or not applicable)
     let errorData: unknown = {};
     try { errorData = await response.json(); } catch {}
     throw new ServerApiError(
