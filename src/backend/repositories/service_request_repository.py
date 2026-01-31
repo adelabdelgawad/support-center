@@ -10,7 +10,6 @@ from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from core.cache import cache
 from models import (
     BusinessUnit,
     BusinessUnitUserAssign,
@@ -87,22 +86,9 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
 
         if active_bu_assigns:
             # User has explicit business unit assignments
-            # Find ALL business units in the same regions as the assigned BUs
-            # This allows technicians to handle ALL requests in their region, not just their specific BU
+            # Show only requests from the agent's directly assigned business units
             assigned_bu_ids = [ba.business_unit_id for ba in active_bu_assigns]
-
-            # Get regions of assigned business units
-            region_ids_subquery = select(BusinessUnit.business_unit_region_id).where(
-                BusinessUnit.id.in_(assigned_bu_ids),
-                BusinessUnit.business_unit_region_id.is_not(None)
-            ).distinct()
-
-            # Return all BUs in those regions
-            return ServiceRequest.business_unit_id.in_(
-                select(BusinessUnit.id).where(
-                    BusinessUnit.business_unit_region_id.in_(region_ids_subquery)
-                )
-            )
+            return ServiceRequest.business_unit_id.in_(assigned_bu_ids)
 
         # PRIORITY 2: Check for region assignments via RegionUserAssign table
         active_region_assigns = [
@@ -949,23 +935,15 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
         cls, db: AsyncSession, user: User, business_unit_id: Optional[int] = None
     ) -> Dict[str, int]:
         """
-        Get counts for all views using a single optimized query with Redis caching.
+        Get counts for all views using a single optimized query.
         Returns dict with keys for all 11 views.
 
         **NOTE**: Counts include both parent tasks AND subtasks (no parent_task_id filtering).
 
         Args:
             business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
-
-        Cache TTL: 5 minutes (300 seconds)
         """
         from datetime import datetime, date
-
-        # Check cache first (include business_unit_id in cache key)
-        cache_key = f"view_counts:{user.id}:bu_{business_unit_id if business_unit_id is not None else 'all'}"
-        cached_counts = await cache.get(cache_key)
-        if cached_counts:
-            return cached_counts
 
         region_filter = cls._get_region_filter(user)
 
@@ -1104,9 +1082,6 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
             "new_today": row.new_today or 0,
             "in_progress": row.in_progress or 0,
         }
-
-        # Cache result with 5-minute TTL
-        await cache.set(cache_key, counts, ttl=300)
 
         return counts
 

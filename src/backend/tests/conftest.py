@@ -26,7 +26,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
-from core.cache import CacheManager
 from models.database_models import (
     User, Role, Page, PageRole, UserRole,
     Priority, Category, ServiceSection

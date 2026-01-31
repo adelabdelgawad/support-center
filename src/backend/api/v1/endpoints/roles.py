@@ -138,10 +138,6 @@ async def update_role(
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
-    # Invalidate permissions cache for all users with this role (if role metadata changed)
-    from services.permission_cache_service import permission_cache
-    await permission_cache.invalidate_role_users(role_id, db)
-
     return role
 
 
@@ -162,10 +158,6 @@ async def toggle_role_status(
         role = await RoleService.toggle_role_status(
             db=db, role_id=role_id, updated_by=current_user.id
         )
-
-        # Invalidate permissions cache for all users with this role (status changed)
-        from services.permission_cache_service import permission_cache
-        await permission_cache.invalidate_role_users(role_id, db)
 
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -194,10 +186,6 @@ async def delete_role(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a role (soft delete)."""
-    # Invalidate permissions cache for all users with this role (before deletion)
-    from services.permission_cache_service import permission_cache
-    await permission_cache.invalidate_role_users(role_id, db)
-
     success = await RoleService.delete_role(db=db, role_id=role_id)
     if not success:
         raise HTTPException(status_code=404, detail="Role not found")
@@ -278,10 +266,6 @@ async def update_role_pages(
             db=db, role_id=role_id, page_ids=pages_to_remove
         )
 
-    # Invalidate permissions cache for all users with this role
-    from services.permission_cache_service import permission_cache
-    await permission_cache.invalidate_role_users(role_id, db)
-
     # Return updated role with pages and user count
     pages = await role.get_pages(include_inactive=False)
     users = await role.get_users(include_inactive=True)
@@ -351,12 +335,6 @@ async def update_role_users(
         await RoleService.remove_users_from_role(
             db=db, role_id=role_id, user_ids=users_to_remove
         )
-
-    # Invalidate permissions cache for affected users
-    from services.permission_cache_service import permission_cache
-    all_affected_users = users_to_add + users_to_remove
-    for user_id in all_affected_users:
-        await permission_cache.invalidate_user_permissions(user_id)
 
     # Return updated role with pages and user count
     pages = await role.get_pages(include_inactive=False)

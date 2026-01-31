@@ -352,7 +352,7 @@ export function TicketsPageClient() {
   }, [activeView, currentPage, perPage, router, selectedBusinessUnitIds, ticketTypeFilter]);
 
   return (
-    <div className="flex flex-1 min-h-0 bg-muted/30 overflow-hidden transition-all duration-200">
+    <div className="flex h-[calc(100svh-64px)] bg-muted/30 overflow-hidden transition-all duration-200">
       {/* Desktop Sidebar - Hidden on mobile via CSS and JS */}
       {!isMobile && (
       <div className="hidden md:flex">

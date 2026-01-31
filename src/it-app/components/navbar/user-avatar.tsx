@@ -10,16 +10,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/lib/types/auth';
-import { User as UserIcon, LogOut, Settings } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-
+import { User as UserIcon, LogOut } from 'lucide-react';
 interface UserAvatarProps {
   user: UserInfo;
 }
 
 export default function UserAvatar({ user }: UserAvatarProps) {
-  const router = useRouter();
-
   const handleSignOut = async () => {
     try {
       // Call logout API route
@@ -33,10 +29,6 @@ export default function UserAvatar({ user }: UserAvatarProps) {
       // Always redirect to login, even if API call fails
       window.location.href = '/login';
     }
-  };
-
-  const handleProfileClick = () => {
-    router.push('/profile');
   };
 
   return (
@@ -61,14 +53,6 @@ export default function UserAvatar({ user }: UserAvatarProps) {
             {user.email}
           </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={handleProfileClick}
-          className="flex items-center gap-2 cursor-pointer"
-        >
-          <Settings className="w-4 h-4" />
-          Profile & Settings
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleSignOut}

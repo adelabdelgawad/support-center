@@ -159,12 +159,7 @@ class AuthenticationService:
                 db=db,
             )
 
-            # 7. Refresh user permissions in cache (always fresh on login)
-            from services.permission_cache_service import permission_cache
-
-            await permission_cache.refresh_user_permissions(user.id, db)
-
-            # 8. Return response with redirect path
+            # 7. Return response with redirect path
             # Determine redirect path: technicians → /support-center/requests, regular users → /ticket
             redirect_to = (
                 "/support-center/requests" if user.is_technician else "/ticket"
@@ -417,14 +412,7 @@ class AuthenticationService:
             )
             timing_log["session_update"] = time.time() - step_start
 
-            # 9. Refresh user permissions in cache (always fresh on login)
-            step_start = time.time()
-            from services.permission_cache_service import permission_cache
-
-            await permission_cache.refresh_user_permissions(user.id, db)
-            timing_log["permission_cache"] = time.time() - step_start
-
-            # Log total timing for performance monitoring
+            # 9. Log total timing for performance monitoring
             timing_log["total"] = time.time() - login_start
             ad_info = (
                 f"ad_refresh={timing_log.get('ad_refresh', 0):.3f}s"
@@ -437,8 +425,7 @@ class AuthenticationService:
                 f"db_lookup={timing_log.get('db_user_lookup', 0):.3f}s | "
                 f"{ad_info} | "
                 f"session={timing_log.get('session_create', 0):.3f}s | "
-                f"token={timing_log.get('token_generate', 0):.3f}s | "
-                f"perms={timing_log.get('permission_cache', 0):.3f}s"
+                f"token={timing_log.get('token_generate', 0):.3f}s"
             )
 
             # 10. Return response with redirect path
@@ -724,14 +711,7 @@ class AuthenticationService:
             )
             timing_log["session_update"] = time.time() - step_start
 
-            # 10. Refresh user permissions in cache (always fresh on login)
-            step_start = time.time()
-            from services.permission_cache_service import permission_cache
-
-            await permission_cache.refresh_user_permissions(user.id, db)
-            timing_log["permission_cache"] = time.time() - step_start
-
-            # Log total timing for performance monitoring
+            # 10. Log total timing for performance monitoring
             timing_log["total"] = time.time() - login_start
             logger.info(
                 f"AD Login timing for {login_data.username}: "
@@ -741,8 +721,7 @@ class AuthenticationService:
                 f"db_lookup={timing_log.get('db_user_lookup', 0):.3f}s | "
                 f"db_update={timing_log.get('db_user_create_update', 0):.3f}s | "
                 f"session={timing_log.get('session_create', 0):.3f}s | "
-                f"token={timing_log.get('token_generate', 0):.3f}s | "
-                f"perms={timing_log.get('permission_cache', 0):.3f}s"
+                f"token={timing_log.get('token_generate', 0):.3f}s"
             )
 
             # 11. Return response with redirect path
@@ -1221,12 +1200,7 @@ class AuthenticationService:
             db=db,
         )
 
-        # 9. Refresh user permissions in cache (always fresh on login)
-        from services.permission_cache_service import permission_cache
-
-        await permission_cache.refresh_user_permissions(user.id, db)
-
-        # 10. Return response with redirect path
+        # 9. Return response with redirect path
         redirect_to = "/support-center/requests" if user.is_technician else "/ticket"
 
         return LoginResponse(

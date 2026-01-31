@@ -56,39 +56,6 @@ from services.request_service import RequestService
 router = APIRouter()
 
 
-# ==================================================================================
-# CACHE INVALIDATION HELPERS
-# ==================================================================================
-
-
-async def invalidate_technician_views_cache(user_ids: List[int]) -> None:
-    """
-    Invalidate technician views cache for specific users.
-
-    Called when request data changes (status, assignment, new message, etc.)
-    to ensure all affected technicians see fresh data.
-
-    Args:
-        user_ids: List of user IDs whose cache should be invalidated
-    """
-    from core.cache import cache
-
-    try:
-        for user_id in user_ids:
-            # Invalidate all cached views for this user
-            # Pattern: technician_views:{user_id}:*
-            pattern = f"technician_views:{user_id}:*"
-            deleted_count = await cache.delete_pattern(pattern)
-            logger.debug(f"Invalidated {deleted_count} cache entries for user {user_id}")
-
-            # Also invalidate counts-only cache
-            counts_pattern = f"technician_views_counts:{user_id}:*"
-            counts_deleted = await cache.delete_pattern(counts_pattern)
-            logger.debug(f"Invalidated {counts_deleted} counts cache entries for user {user_id}")
-    except Exception as e:
-        logger.warning(f"Failed to invalidate technician views cache: {e}")
-
-
 @router.post("/", response_model=ServiceRequestRead, status_code=201)
 async def create_request(
     request_data: ServiceRequestCreateByRequester,
@@ -145,21 +112,6 @@ async def create_request(
         )
     except Exception as e:
         logger.warning(f"Failed to broadcast new ticket via SignalR: {e}")
-
-    # Invalidate tickets list cache for requester (new ticket created)
-    try:
-        from core.cache import cache
-        cache_key = f"tickets:user:{current_user.id}:all"
-        await cache.delete(cache_key)
-        logger.debug(f"Invalidated tickets cache for user {current_user.id} after ticket creation")
-
-        # Invalidate technician views cache (new unassigned request affects counts)
-        # Note: Only invalidate for users who can see this business unit
-        # For simplicity, we invalidate for all technicians (they have region filters anyway)
-        # A more targeted approach would query users with access to this business unit
-        await invalidate_technician_views_cache([current_user.id])
-    except Exception as e:
-        logger.warning(f"Failed to invalidate cache: {e}")
 
     return request
 
@@ -294,18 +246,6 @@ async def get_technician_views(
             status_code=400,
             detail=f"Invalid view type. Must be one of: {', '.join(valid_views)}",
         )
-
-    # Generate cache key from user_id + view + page + per_page + business_unit_id
-    from core.cache import cache
-    cache_key = f"technician_views:{current_user.id}:{view}:{page}:{per_page}:{business_unit_id or 'all'}"
-
-    # Try to get from cache
-    cached_response = await cache.get(cache_key)
-    if cached_response:
-        logger.debug(f"Cache HIT for technician_views: {cache_key}")
-        return cached_response
-
-    logger.debug(f"Cache MISS for technician_views: {cache_key}")
 
     # Get requests for the specified view (MUST complete first to get request_ids)
     requests, total = await RequestService.get_technician_view_requests(
@@ -474,13 +414,6 @@ async def get_technician_views(
         per_page=per_page,
     )
 
-    # Cache the response for 30 seconds (dashboard uses SWR polling, so brief staleness is acceptable)
-    try:
-        await cache.set(cache_key, response_data.model_dump(mode="json"), ttl=30)
-        logger.debug(f"Cached technician_views response: {cache_key}")
-    except Exception as e:
-        logger.warning(f"Failed to cache technician_views response: {e}")
-
     return response_data
 
 
@@ -529,17 +462,6 @@ async def get_technician_views_counts_only(
             detail=f"Invalid view type. Must be one of: {', '.join(valid_views)}",
         )
 
-    # Check cache first
-    from core.cache import cache
-    cache_key = f"technician_views_counts:{current_user.id}:{view}:{business_unit_id or 'all'}"
-
-    cached_response = await cache.get(cache_key)
-    if cached_response:
-        logger.debug(f"Cache HIT for technician_views_counts: {cache_key}")
-        return cached_response
-
-    logger.debug(f"Cache MISS for technician_views_counts: {cache_key}")
-
     # Run both count operations in parallel
     counts_dict, filter_counts_dict = await asyncio.gather(
         RequestService.get_technician_view_counts(db, current_user, business_unit_id),
@@ -574,13 +496,6 @@ async def get_technician_views_counts_only(
         "filter_counts": filter_counts.model_dump(),
     }
 
-    # Cache for 30 seconds
-    try:
-        await cache.set(cache_key, response, ttl=30)
-        logger.debug(f"Cached technician_views_counts response: {cache_key}")
-    except Exception as e:
-        logger.warning(f"Failed to cache technician_views_counts response: {e}")
-
     return response
 
 
@@ -613,17 +528,6 @@ async def get_business_unit_counts(
     - Total count
     - Unassigned count (requests without a business unit)
     """
-    # Check cache first
-    from core.cache import cache
-    cache_key = f"business_unit_counts:{current_user.id}:{view or 'all'}"
-
-    cached_response = await cache.get(cache_key)
-    if cached_response:
-        logger.debug(f"Cache HIT for business_unit_counts: {cache_key}")
-        return cached_response
-
-    logger.debug(f"Cache MISS for business_unit_counts: {cache_key}")
-
     from repositories.service_request_repository import ServiceRequestRepository
 
     bu_counts, unassigned_count = await ServiceRequestRepository.get_business_unit_counts(
@@ -640,13 +544,6 @@ async def get_business_unit_counts(
         total=sum(bu.count for bu in business_units),
         unassigned_count=unassigned_count,
     )
-
-    # Cache for 30 seconds
-    try:
-        await cache.set(cache_key, response, ttl=30)
-        logger.debug(f"Cached business_unit_counts response: {cache_key}")
-    except Exception as e:
-        logger.warning(f"Failed to cache business_unit_counts response: {e}")
 
     return response
 

@@ -1,7 +1,7 @@
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: postgres:18.1-alpine3.23
     container_name: supportcenter-postgres
     env_file:
       - docker/env/.env.postgres
@@ -46,7 +46,7 @@ services:
 
   # Redis for Caching and Pub/Sub (Scaled for 1000+ connections)
   redis:
-    image: redis:7-alpine
+    image: redis:8.6-rc1-alpine3.23
     container_name: supportcenter-redis
     env_file:
       - docker/env/.env.redis

@@ -32,8 +32,8 @@ export function BusinessUnitCards({
 
   const isLoading = ticketsLoading;
 
-  // Use counts directly from backend (already filtered by current view)
-  const businessUnits = allBusinessUnits;
+  // Use counts directly from backend (already filtered by current view), sorted by count descending
+  const businessUnits = [...allBusinessUnits].sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
 
   // Scroll management
   const scrollContainerRef = useRef<HTMLDivElement>(null);

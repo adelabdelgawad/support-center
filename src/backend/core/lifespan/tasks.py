@@ -67,18 +67,6 @@ async def setup_default_data(get_session):
             break  # Only process first session
 
 
-async def initialize_redis_cache(cache):
-    """Initialize Redis cache connection."""
-    logger = logging.getLogger("main")
-    try:
-        await cache.connect()
-        print("✅ Redis cache connected")
-        logger.info("✅ Redis cache connected")
-    except Exception as e:
-        print(f"⚠️  Redis cache connection failed: {e}")
-        logger.warning(f"⚠️  Redis cache connection failed: {e}")
-
-
 async def initialize_minio(settings):
     """Initialize MinIO storage."""
     logger = logging.getLogger("main")
@@ -93,14 +81,13 @@ async def initialize_minio(settings):
         logger.warning(f"⚠️  MinIO initialization failed: {e}")
 
 
-async def initialize_external_services(cache, settings):
+async def initialize_external_services(settings):
     """Initialize all external services in parallel."""
     logger = logging.getLogger("main")
     logger.info("Initializing external services (parallel execution)...")
 
     # Run all external service initializations in parallel
     await asyncio.gather(
-        initialize_redis_cache(cache),
         initialize_minio(settings),
         return_exceptions=True
     )
@@ -148,18 +135,6 @@ async def shutdown_signalr_client():
     except Exception as e:
         print(f"⚠️  SignalR client shutdown error: {e}")
         logger.warning(f"⚠️  SignalR client shutdown error: {e}")
-
-
-async def shutdown_redis_cache(cache):
-    """Close Redis cache connections."""
-    logger = logging.getLogger("main")
-    try:
-        await cache.disconnect()
-        print("✅ Redis cache disconnected")
-        logger.info("✅ Redis cache disconnected")
-    except Exception as e:
-        print(f"⚠️  Redis cache disconnect error: {e}")
-        logger.warning(f"⚠️  Redis cache disconnect error: {e}")
 
 
 async def shutdown_database():

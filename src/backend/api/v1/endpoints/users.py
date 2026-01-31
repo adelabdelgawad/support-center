@@ -511,10 +511,6 @@ async def update_user_roles(
             )
         removed_count = len(roles_to_remove)
 
-    # Invalidate permissions cache for this user
-    from services.permission_cache_service import permission_cache
-    await permission_cache.invalidate_user_permissions(user_id)
-
     return {
         "message": "User roles updated successfully",
         "added": added_count,

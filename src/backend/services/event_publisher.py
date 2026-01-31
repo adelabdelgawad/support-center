@@ -28,8 +28,7 @@ class RedisStreamsPublisher:
     """
 
     def __init__(self):
-        from core.cache import cache
-        self._cache = cache
+        self._redis: Any = None
         self._redis: Any = None
 
     async def _get_redis(self):

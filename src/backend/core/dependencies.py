@@ -15,7 +15,6 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from core.cache import cache
 from core.config import settings
 from core.database import get_session
 from core.security import (
@@ -253,65 +252,6 @@ class RateLimitExceededError(HTTPException):
             detail=detail,
             headers={"Retry-After": "60"},
         )
-
-
-# Token blacklist TTL: 30 days (2592000 seconds)
-TOKEN_BLACKLIST_TTL = 2592000
-
-
-async def blacklist_token(jti: str) -> None:
-    """Add a token to the blacklist.
-
-    Args:
-        jti: JWT ID to blacklist
-    """
-    cache_key = f"token_blacklist:{jti}"
-    await cache.set(cache_key, True, ttl=TOKEN_BLACKLIST_TTL)
-
-
-async def is_token_blacklisted(token: str) -> bool:
-    """Check if a token is blacklisted.
-
-    Args:
-        token: JWT token to check
-
-    Returns:
-        True if token is blacklisted
-    """
-    try:
-        payload = decode_token(token)
-        jti = payload.get("jti")
-        if not jti:
-            return False
-
-        cache_key = f"token_blacklist:{jti}"
-        return await cache.exists(cache_key)
-    except Exception:
-        return True  # Blacklist invalid tokens
-
-
-async def get_non_blacklisted_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """Get current user and verify token is not blacklisted.
-
-    Args:
-        credentials: HTTP Bearer credentials
-        current_user: Current authenticated user
-
-    Returns:
-        User object if token is not blacklisted
-
-    Raises:
-        AuthenticationError: If token is blacklisted
-    """
-    token = credentials.credentials
-
-    if await is_token_blacklisted(token):
-        raise AuthenticationError("Token has been invalidated")
-
-    return current_user
 
 
 # Utility functions for token validation

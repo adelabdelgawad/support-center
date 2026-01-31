@@ -10,7 +10,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from core.cache import cache
 from core.config import settings
 from core.database import get_session
 from core.logging_config import LogConfig
@@ -41,8 +40,8 @@ async def lifespan(app: FastAPI):
     # Setup default data (admin user, lookup tables, etc.)
     await tasks.setup_default_data(get_session)
 
-    # Initialize external services in parallel (Redis, MinIO)
-    await tasks.initialize_external_services(cache, settings)
+    # Initialize external services (MinIO)
+    await tasks.initialize_external_services(settings)
 
     # Start background scheduler for periodic tasks
     await tasks.start_background_scheduler()
@@ -64,9 +63,6 @@ async def lifespan(app: FastAPI):
 
     # Shutdown event coalescer (Feature 001)
     await tasks.shutdown_event_coalescer()
-
-    # Close Redis cache connections
-    await tasks.shutdown_redis_cache(cache)
 
     # Close database connections
     await tasks.shutdown_database()

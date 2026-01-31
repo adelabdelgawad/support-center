@@ -16,13 +16,11 @@ import { TopbarUserActions } from "./topbar-user-actions";
 
 interface HorizontalTopbarProps {
   user: UserInfo;
-  notificationCount?: number;
   className?: string;
 }
 
 export function HorizontalTopbar({
   user,
-  notificationCount = 0,
   className,
 }: HorizontalTopbarProps) {
   return (
@@ -51,7 +49,7 @@ export function HorizontalTopbar({
       </div>
 
       {/* User Actions */}
-      <TopbarUserActions user={user} notificationCount={notificationCount} />
+      <TopbarUserActions user={user} />
     </header>
   );
 }

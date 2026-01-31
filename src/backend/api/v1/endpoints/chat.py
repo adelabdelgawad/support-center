@@ -207,24 +207,6 @@ async def create_message(
                     f"Failed to send notification for message {message.id}: {notif_error}"
                 )
 
-            # Invalidate tickets list cache for all participants (new message affects list)
-            try:
-                from core.cache import cache
-
-                # Invalidate for requester
-                cache_key = f"tickets:user:{service_request.requester_id}:all"
-                await cache.delete(cache_key)
-                logger.debug(f"Invalidated tickets cache for requester {service_request.requester_id}")
-
-                # Invalidate for assigned technicians (if any)
-                if hasattr(service_request, 'assigned_users') and service_request.assigned_users:
-                    for assigned_user in service_request.assigned_users:
-                        tech_cache_key = f"tickets:user:{assigned_user.id}:all"
-                        await cache.delete(tech_cache_key)
-                        logger.debug(f"Invalidated tickets cache for technician {assigned_user.id}")
-            except Exception as cache_error:
-                logger.warning(f"Failed to invalidate tickets cache: {cache_error}")
-
         # Return the message_dict which includes clientTempId for optimistic UI matching
         return message_dict
     except ValueError as e:

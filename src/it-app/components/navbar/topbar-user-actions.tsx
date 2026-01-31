@@ -8,7 +8,6 @@
  * - Text colors adapt to light/dark mode
  */
 
-import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { UserInfo } from "@/lib/types/auth";
 import UserAvatar from "./user-avatar";
@@ -16,34 +15,15 @@ import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 interface TopbarUserActionsProps {
   user: UserInfo;
-  notificationCount?: number;
   className?: string;
 }
 
 export function TopbarUserActions({
   user,
-  notificationCount = 0,
   className,
 }: TopbarUserActionsProps) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      {/* Notifications */}
-      <button
-        className={cn(
-          "relative flex items-center justify-center w-9 h-9 rounded-md transition-colors",
-          "hover:bg-[var(--popover)]/10",
-          "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-        )}
-        title="Notifications"
-      >
-        <Bell className="w-5 h-5" />
-        {notificationCount > 0 && (
-          <span className="absolute top-1 right-1 flex items-center justify-center">
-            <span className="w-2 h-2 bg-[var(--destructive)] rounded-full" />
-          </span>
-        )}
-      </button>
-
       {/* Theme Switcher */}
       <ThemeSwitcher />
 

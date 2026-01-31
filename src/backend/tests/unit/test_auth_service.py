@@ -138,7 +138,6 @@ class TestADLoginFlow:
         auth_service = AuthenticationService()
 
         with patch("services.auth_service.LdapService") as MockLdap, \
-             patch("services.auth_service.permission_cache") as mock_perm_cache, \
              patch("core.cache.cache", mock_cache):
 
             # Mock LDAP authentication
@@ -147,7 +146,6 @@ class TestADLoginFlow:
             mock_ldap_instance.get_user_by_username = AsyncMock(
                 return_value=sample_domain_user
             )
-            mock_perm_cache.refresh_user_permissions = AsyncMock(return_value={})
 
             # Execute login
             result = await auth_service.ad_login(
@@ -192,7 +190,6 @@ class TestADLoginFlow:
         auth_service = AuthenticationService()
 
         with patch("services.auth_service.LdapService") as MockLdap, \
-             patch("services.auth_service.permission_cache") as mock_perm_cache, \
              patch("core.cache.cache", mock_cache):
 
             mock_ldap_instance = MockLdap.return_value
@@ -230,7 +227,6 @@ class TestADLoginFlow:
         auth_service = AuthenticationService()
 
         with patch("services.auth_service.LdapService") as MockLdap, \
-             patch("services.auth_service.permission_cache") as mock_perm_cache, \
              patch("core.cache.cache", mock_cache):
 
             mock_ldap_instance = MockLdap.return_value
@@ -261,7 +257,6 @@ class TestADLoginFlow:
         auth_service = AuthenticationService()
 
         with patch("services.auth_service.LdapService") as MockLdap, \
-             patch("services.auth_service.permission_cache") as mock_perm_cache, \
              patch("core.cache.cache", mock_cache):
 
             mock_ldap_instance = MockLdap.return_value
@@ -398,14 +393,12 @@ class TestSSOLoginFlow:
         auth_service = AuthenticationService()
 
         with patch("services.auth_service.LdapService") as MockLdap, \
-             patch("services.auth_service.permission_cache") as mock_perm_cache, \
              patch("core.cache.cache", mock_cache):
 
             mock_ldap_instance = MockLdap.return_value
             mock_ldap_instance.get_user_by_username = AsyncMock(
                 return_value=sample_domain_user
             )
-            mock_perm_cache.refresh_user_permissions = AsyncMock(return_value={})
 
             result = await auth_service.sso_login(
                 login_data=login_data, db=db_session, client_ip="127.0.0.1"
