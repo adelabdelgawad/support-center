@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend-lint:
+    name: Backend - Lint (Ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: |
+          uv sync
+
+      - name: Run Ruff linter
+        working-directory: src/backend
+        run: |
+          uv run ruff check .
+
+  backend-typecheck:
+    name: Backend - Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: |
+          uv sync
+
+      - name: Run mypy type checker
+        working-directory: src/backend
+        run: |
+          uv run mypy .
+
+  backend-test:
+    name: Backend - Tests (pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18.1-alpine3.23
+        env:
+          POSTGRES_DB: servicecatalog_test
+          POSTGRES_USER: servicecatalog
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:8.6-rc1-alpine3.23
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        working-directory: src/backend
+        run: |
+          uv sync
+
+      - name: Run pytest
+        working-directory: src/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://servicecatalog:test_password@localhost:5432/servicecatalog_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET_KEY: test-secret-key-for-ci-pipeline-only
+          SECURITY_SECRET_KEY: test-secret-key-for-ci-pipeline-only
+        run: |
+          uv run pytest --maxfail=5 --disable-warnings -v
+
+  frontend-lint:
+    name: Frontend - Lint (ESLint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: src/it-app
+        run: bun install --frozen-lockfile
+
+      - name: Run ESLint
+        working-directory: src/it-app
+        run: bun run lint
+
+  frontend-typecheck:
+    name: Frontend - Type Check (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: src/it-app
+        run: bun install --frozen-lockfile
+
+      - name: Run TypeScript compiler
+        working-directory: src/it-app
+        run: bun run tsc --noEmit
+
+  frontend-test-unit:
+    name: Frontend - Unit Tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: src/it-app
+        run: bun install --frozen-lockfile
+
+      - name: Run Vitest unit tests
+        working-directory: src/it-app
+        run: bun run test:unit
+
+  frontend-test-e2e:
+    name: Frontend - E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: src/it-app
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        working-directory: src/it-app
+        run: bunx playwright install --with-deps
+
+      - name: Run Playwright tests
+        working-directory: src/it-app
+        run: bun run test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: src/it-app/playwright-report/
+          retention-days: 30

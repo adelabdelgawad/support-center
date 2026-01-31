@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useEffect } from "react";
+import { useAsyncData } from "@/lib/hooks/use-async-data";
 import {
   Card,
   CardContent,
@@ -9,13 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -25,7 +18,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertTriangle,
@@ -33,29 +25,14 @@ import {
   Clock,
   TrendingUp,
 } from "lucide-react";
-import { formatDate } from "@/lib/utils/date-formatting";
 import Link from "next/link";
 
-import type { SLAComplianceData, DateRangePreset } from "@/types/reports";
+import { ReportError } from "@/lib/reports/components";
+import { PeriodIndicator } from "@/lib/reports/components";
+import { useReportsFilter } from "../../_context/reports-filter-context";
 
-const fetcher = async (url: string) => {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    throw new Error("Failed to fetch data");
-  }
-  return response.json();
-};
-
-const dateRangeOptions: { value: DateRangePreset; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "last_7_days", label: "Last 7 Days" },
-  { value: "last_30_days", label: "Last 30 Days" },
-  { value: "this_week", label: "This Week" },
-  { value: "last_week", label: "Last Week" },
-  { value: "this_month", label: "This Month" },
-  { value: "last_month", label: "Last Month" },
-];
+import type { SLAComplianceData } from "@/types/reports";
+import { getSLAComplianceReport } from "@/lib/api/reports";
 
 function ComplianceGauge({
   label,
@@ -104,93 +81,41 @@ function ComplianceGauge({
   );
 }
 
-).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-32" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-10 w-24" />
-              <Skeleton className="h-2 w-full mt-2" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-40" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 interface SLAReportClientProps {
   initialData: SLAComplianceData;
 }
 
 export function SLAReportClient({ initialData }: SLAReportClientProps) {
-  const [dateRange, setDateRange] = useState<DateRangePreset>("last_30_days");
+  const { datePreset, registerExport, clearExport } = useReportsFilter();
 
-  const { data, error, isLoading } = useSWR<SLAComplianceData>(
-    `/api/reports/sla/compliance?date_preset=${dateRange}`,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateIfStale: false,
-      revalidateOnFocus: false,
-    }
+  const fetchSLA = async () => {
+    return await getSLAComplianceReport({ datePreset });
+  };
+
+  const { data, error, isLoading } = useAsyncData<SLAComplianceData>(
+    fetchSLA,
+    [datePreset],
+    initialData
   );
 
+  useEffect(() => {
+    if (data) {
+      registerExport({ reportTitle: "SLA Compliance Report", reportData: data });
+    }
+    return () => clearExport();
+  }, [data, registerExport, clearExport]);
+
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">SLA Compliance</h2>
-          <p className="text-muted-foreground">
-            Service Level Agreement metrics and breach analysis
-          </p>
-        </div>
-        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRangePreset)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            {dateRangeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              <span>Failed to load SLA data. Please try again.</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+    <>
+      {error && <ReportError message="Failed to load SLA data. Please try again." />}
 
       {data && (
         <div className="space-y-6">
           {/* Period indicator */}
-          <div className="text-sm text-muted-foreground">
-            Period: {formatDate(data.periodStart)} -{" "}
-            {formatDate(data.periodEnd)}
-          </div>
+          <PeriodIndicator
+            periodStart={data.periodStart}
+            periodEnd={data.periodEnd}
+          />
 
           {/* Summary Cards */}
           <div className="grid gap-4 md:grid-cols-3">
@@ -303,7 +228,7 @@ export function SLAReportClient({ initialData }: SLAReportClientProps) {
                             : `${breach.breachDurationMinutes.toFixed(0)} min`}
                         </TableCell>
                         <TableCell>
-                          {formatDate(breach.createdAt)}
+                          {new Date(breach.createdAt).toLocaleDateString()}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -328,6 +253,6 @@ export function SLAReportClient({ initialData }: SLAReportClientProps) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

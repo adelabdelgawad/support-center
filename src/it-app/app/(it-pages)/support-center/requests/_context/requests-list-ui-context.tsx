@@ -8,7 +8,7 @@
  * when data changes.
  */
 
-import { createContext, useContext, useMemo, useRef, useEffect } from 'react';
+import { createContext, useContext, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { ViewType } from '@/types/requests-list';
 import type { TechnicianViewsResponse } from '@/types/requests-list';
@@ -34,9 +34,6 @@ export interface RequestsListUIContextType {
   // View settings
   activeView: ViewType;
   activeViewDisplayName: string;
-
-  // Loading states
-  isViewChanging: boolean; // True when switching views (show skeleton)
 }
 
 const RequestsListUIContext = createContext<RequestsListUIContextType | undefined>(undefined);
@@ -47,8 +44,6 @@ interface RequestsListUIProviderProps {
   initialView: ViewType;
   initialPage: number;
   businessUnitIds?: number[];
-  isViewChanging?: boolean; // External state (controlled by parent)
-  onViewChange?: (isChanging: boolean) => void; // Callback to notify parent of view change
 }
 
 export function RequestsListUIProvider({
@@ -57,8 +52,6 @@ export function RequestsListUIProvider({
   initialView,
   initialPage,
   businessUnitIds: initialBusinessUnitIds,
-  isViewChanging: externalIsViewChanging,
-  onViewChange,
 }: RequestsListUIProviderProps) {
   // Read current state from URL for client-side navigation support
   const searchParams = useSearchParams();
@@ -76,12 +69,6 @@ export function RequestsListUIProvider({
   }, [searchParams, initialBusinessUnitIds]);
   const urlUnread = searchParams.get('unread') === 'true';
 
-  const lastLoadedViewRef = useRef<ViewType>(initialView);
-
-  // Track previous URL state to detect navigation changes
-  const prevUrlStateRef = useRef<string | null>(null);
-  const currentUrlState = `${urlView}:${urlPage}:${urlPerPage}:${urlBusinessUnitIds?.join(',') || ''}:${urlUnread}`;
-
   // Save current URL to sessionStorage for back navigation from details page
   useEffect(() => {
     const params = new URLSearchParams();
@@ -98,49 +85,15 @@ export function RequestsListUIProvider({
     sessionStorage.setItem('requests-list-url', fullUrl);
   }, [urlView, urlPage, urlPerPage, urlBusinessUnitIds, urlUnread]);
 
-  // Trigger view change state when URL changes
-  useEffect(() => {
-    // Skip initial render
-    if (prevUrlStateRef.current === null) {
-      prevUrlStateRef.current = currentUrlState;
-      return;
-    }
-
-    // If URL state changed, check if view changed
-    if (prevUrlStateRef.current !== currentUrlState) {
-      const prevView = prevUrlStateRef.current.split(':')[0];
-      const newView = currentUrlState.split(':')[0];
-
-      prevUrlStateRef.current = currentUrlState;
-
-      // If view changed (not just page/filter), notify parent to show skeleton
-      if (prevView !== newView && onViewChange) {
-        onViewChange(true);
-      }
-    }
-  }, [currentUrlState, onViewChange]);
-
-  // Update last loaded view when validation completes
-  useEffect(() => {
-    const isCurrentlyChanging = externalIsViewChanging ?? false;
-    if (!isCurrentlyChanging) {
-      lastLoadedViewRef.current = urlView;
-    }
-  }, [externalIsViewChanging, urlView]);
-
   // Get current view display name
   const activeViewDisplayName = viewDisplayNames[urlView];
-
-  // Use external isViewChanging if provided, otherwise use internal state
-  const effectiveIsViewChanging = externalIsViewChanging ?? false;
 
   const value: RequestsListUIContextType = useMemo(
     () => ({
       activeView: urlView,
       activeViewDisplayName,
-      isViewChanging: effectiveIsViewChanging,
     }),
-    [urlView, activeViewDisplayName, effectiveIsViewChanging]
+    [urlView, activeViewDisplayName]
   );
 
   return (

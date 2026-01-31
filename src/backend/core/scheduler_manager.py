@@ -10,7 +10,7 @@ This module provides the core scheduling functionality:
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import Optional
 
@@ -20,9 +20,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.database import AsyncSessionLocal
-from models.database_models import ScheduledJob, SchedulerInstance
-from services.scheduler_service import scheduler_service
+from db.database import AsyncSessionLocal
+from db.models import ScheduledJob, SchedulerInstance
+from api.services.scheduler_service import scheduler_service
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +213,8 @@ class SchedulerManager:
         # Get all enabled jobs
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.is_enabled == True,
-                ScheduledJob.is_paused == False,
+                ScheduledJob.is_enabled,
+                not ScheduledJob.is_paused,
             )
         )
         jobs = result.scalars().all()
@@ -224,9 +224,6 @@ class SchedulerManager:
 
         for job in jobs:
             job_key = str(job.id)
-
-            # Calculate next run time based on schedule config
-            next_run_time = await self._calculate_next_run_time(job)
 
             if job_key not in existing_job_ids:
                 # Add new job
@@ -373,8 +370,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
     logger.debug(f"Dispatching job {job_id} to Celery")
 
     from tasks.scheduler_tasks import execute_scheduled_job
-    from models.database_models import ScheduledJobExecution
-    from uuid import uuid4
+    from db.models import ScheduledJobExecution
 
     async with AsyncSessionLocal() as db:
         # Get job
@@ -399,7 +395,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
 
         # Get scheduler instance for tracking
         leader_result = await db.execute(
-            select(SchedulerInstance).where(SchedulerInstance.is_leader == True)
+            select(SchedulerInstance).where(SchedulerInstance.is_leader)
         )
         leader = leader_result.scalar_one_or_none()
         if leader:

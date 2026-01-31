@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useState, useCallback, useEffect } from 'react';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -104,14 +104,34 @@ export default function SavedReportsClient() {
   const [editingConfig, setEditingConfig] = useState<ReportConfig | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const { data: configs, error, isLoading, mutate } = useSWR<ReportConfig[]>(
-    '/api/report-configs',
-    () => listReportConfigs({}),
-    {
-      refreshInterval: 60000, // 1 minute
-      revalidateOnFocus: true,
-    }
+  const fetchConfigs = async () => {
+    return await listReportConfigs({});
+  };
+
+  const { data, error, isLoading, refetch } = useAsyncData<ReportConfig[]>(
+    fetchConfigs,
+    [],
+    undefined
   );
+
+  // Use data directly from SWR hook instead of duplicating in state
+  const configs = data ?? [];
+
+  // Function to update state from backend response
+  const updateConfigsFromResponse = useCallback((response: ReportConfig) => {
+    setConfigs(prev => {
+      const existingIndex = prev.findIndex(c => c.id === response.id);
+      if (existingIndex >= 0) {
+        // Update existing
+        const newConfigs = [...prev];
+        newConfigs[existingIndex] = response;
+        return newConfigs;
+      } else {
+        // Append new
+        return [...prev, response];
+      }
+    });
+  }, []);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -127,7 +147,7 @@ export default function SavedReportsClient() {
 
   const handleCreate = async (data: FormData) => {
     try {
-      await createReportConfig({
+      const response = await createReportConfig({
         name: data.name,
         description: data.description || undefined,
         reportType: data.reportType,
@@ -137,7 +157,8 @@ export default function SavedReportsClient() {
       });
       setIsCreateDialogOpen(false);
       form.reset();
-      mutate();
+      // Update local state from backend response
+      updateConfigsFromResponse(response);
     } catch (error) {
       console.error('Failed to create report config:', error);
     }
@@ -147,7 +168,7 @@ export default function SavedReportsClient() {
     if (!editingConfig) return;
 
     try {
-      await updateReportConfig(editingConfig.id, {
+      const response = await updateReportConfig(editingConfig.id, {
         name: data.name,
         description: data.description || undefined,
         reportType: data.reportType,
@@ -157,7 +178,8 @@ export default function SavedReportsClient() {
       });
       setEditingConfig(null);
       form.reset();
-      mutate();
+      // Update local state from backend response
+      updateConfigsFromResponse(response);
     } catch (error) {
       console.error('Failed to update report config:', error);
     }
@@ -167,7 +189,8 @@ export default function SavedReportsClient() {
     try {
       await deleteReportConfig(id);
       setDeletingId(null);
-      mutate();
+      // Remove from local state
+      setConfigs(prev => prev.filter(c => c.id !== id));
     } catch (error) {
       console.error('Failed to delete report config:', error);
     }

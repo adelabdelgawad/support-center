@@ -16,6 +16,7 @@ function Checkbox({
       className={cn(
         "peer size-5 shrink-0 rounded-fluent-sm border border-border bg-background duration-fast ease-fluent-standard outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:bg-muted",
         "data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=checked]:border-primary",
+        "data-[state=indeterminate]:bg-primary data-[state=indeterminate]:border-primary",
         "hover:border-[#c8c6c4] dark:hover:border-[#605e5c]",
         "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
         "aria-invalid:border-destructive aria-invalid:outline-destructive",
@@ -27,7 +28,8 @@ function Checkbox({
         data-slot="checkbox-indicator"
         className="flex items-center justify-center text-current transition-none"
       >
-        <CheckIcon className="size-3.5" />
+        <CheckIcon className="size-3.5 [[data-state=indeterminate]_&]:hidden" />
+        <div className="size-2 rounded-[1px] bg-white hidden [[data-state=indeterminate]_&]:block" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )

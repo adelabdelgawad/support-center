@@ -345,7 +345,7 @@ export function LayoutDebugPanel({ viewsSidebarVisible }: LayoutDebugPanelProps)
               <ul className="list-disc list-inside space-y-0.5 ml-2">
                 <li>Toggle left nav to see width changes (256px ↔ 48px)</li>
                 <li>Toggle views sidebar if available</li>
-                <li>Click "Measure" button to force remeasure</li>
+                <li>Click &quot;Measure&quot; button to force remeasure</li>
                 <li>Check console for detailed logs</li>
                 <li>Look for red warnings if issues detected</li>
               </ul>

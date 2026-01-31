@@ -11,7 +11,7 @@
  * - Real-time updates via WebSocket
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, startTransition } from 'react';
 import { Loader2, ChevronDown, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -55,7 +55,9 @@ export function StatusUpdateSection() {
   // This ensures server and client render the same initial content
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    setIsMounted(true);
+    startTransition(() => {
+      setIsMounted(true);
+    });
   }, []);
 
   // State for status change

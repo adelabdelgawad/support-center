@@ -39,7 +39,7 @@ export function JobsTab({ initialData }: JobsTabProps) {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [handleRefresh]);
 
   const allJobs = data.jobs;
 

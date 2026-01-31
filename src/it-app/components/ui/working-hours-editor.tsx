@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, startTransition } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -54,7 +54,9 @@ export function WorkingHoursEditor({
 
   useEffect(() => {
     const normalized = normalizeWorkingHours(value) || createEmptyWorkingHours()
-    setHours(normalized)
+    startTransition(() => {
+      setHours(normalized)
+    })
   }, [value])
 
   /**

@@ -3,7 +3,7 @@
  * Fetches users with their role information
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
 
 /**
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Call backend API with authentication
     const response = await makeAuthenticatedRequest<unknown>(
       'GET',
-      `/users/with-roles/?${queryString}`
+      `/users/with-roles?${queryString}`
     );
 
     return NextResponse.json(response);
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     // Extract status from enhanced error or API error
     let status = 500;
-    if (error instanceof ServerFetchError) {
+    if (error instanceof ApiError) {
       status = error.status;
     } else if (error && typeof error === 'object' && 'status' in error) {
       status = (error as { status: number }).status || 500;

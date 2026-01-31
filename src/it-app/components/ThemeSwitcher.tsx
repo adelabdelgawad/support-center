@@ -10,7 +10,7 @@
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
+import { useEffect, useState, startTransition } from "react";
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
@@ -18,7 +18,9 @@ export function ThemeSwitcher() {
 
   // useEffect only runs on the client, so we can safely detect hydration
   useEffect(() => {
-    setMounted(true);
+    startTransition(() => {
+      setMounted(true);
+    });
   }, []);
 
   // During SSR or before hydration, render a placeholder to avoid mismatch

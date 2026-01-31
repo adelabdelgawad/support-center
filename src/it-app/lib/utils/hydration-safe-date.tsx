@@ -28,6 +28,7 @@ export function useFormattedDate(
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional hydration pattern
     setIsHydrated(true);
     // After hydration, use the requested formatter (may be relative)
     setFormattedDate(formatterFn ? formatterFn(dateString) : baseFormatTicketTimestamp(dateString));
@@ -47,6 +48,7 @@ export function useFormattedDueDate(
   const [result, setResult] = useState(() => formatDueDateInternal(dateString, false));
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional hydration pattern
     setIsHydrated(true);
     setResult(formatDueDateInternal(dateString, true));
   }, [dateString]);
@@ -122,6 +124,7 @@ export function useFormattedChatTimestamp(dateString: string): string {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional hydration pattern
     setIsHydrated(true);
     // After hydration, use local timezone
     setFormattedDate(formatChatTimestampLocal(dateString));

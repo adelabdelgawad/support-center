@@ -3,8 +3,8 @@
  * Handles updating user technician status
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 
 /**
  * PUT /api/users/[id]/technician - Update user technician status
@@ -29,7 +29,7 @@ export async function PUT(
     console.error(`Update user technician status error:`, error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

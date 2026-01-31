@@ -10,16 +10,15 @@ Tests:
 - Case-insensitive username matching
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from models.database_models import User
-from schemas.auth import ADLoginRequest, SSOLoginRequest
-from schemas.user.domain_user import DomainUser
-from services.auth_service import AuthenticationService
+from db.models import User
+from api.schemas.login import ADLoginRequest, SSOLoginRequest
+from api.services.auth_service import AuthenticationService
 
 
 class TestUserCreationFromAD:
@@ -197,9 +196,9 @@ class TestADLoginFlow:
             mock_ldap_instance.get_user_by_username = AsyncMock(
                 return_value=sample_domain_user
             )
-            mock_perm_cache.refresh_user_permissions = AsyncMock(return_value={})
+            mock_cache.refresh_user_permissions = AsyncMock(return_value={})
 
-            result = await auth_service.ad_login(
+            await auth_service.ad_login(
                 login_data=login_data, db=db_session, client_ip="127.0.0.1"
             )
 
@@ -234,7 +233,7 @@ class TestADLoginFlow:
             mock_ldap_instance.get_user_by_username = AsyncMock(
                 return_value=sample_domain_user
             )
-            mock_perm_cache.refresh_user_permissions = AsyncMock(return_value={})
+            mock_cache.refresh_user_permissions = AsyncMock(return_value={})
 
             result = await auth_service.ad_login(
                 login_data=login_data, db=db_session, client_ip="127.0.0.1"
@@ -264,7 +263,7 @@ class TestADLoginFlow:
             mock_ldap_instance.get_user_by_username = AsyncMock(
                 return_value=sample_domain_user
             )
-            mock_perm_cache.refresh_user_permissions = AsyncMock(return_value={})
+            mock_cache.refresh_user_permissions = AsyncMock(return_value={})
 
             # First login creates user
             result1 = await auth_service.ad_login(

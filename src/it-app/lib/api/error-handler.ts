@@ -1,9 +1,9 @@
 /**
  * Central Error Handler for API Errors
- * Provides readable error messages from ServerFetchError responses
+ * Provides readable error messages from ApiError responses
  */
 
-import { ServerFetchError } from '@/lib/api/server-fetch';
+import { ApiError } from '@/lib/fetch/errors';
 
 export interface APIErrorDetail {
   field?: string;
@@ -22,13 +22,13 @@ export interface APIErrorResponse {
 }
 
 /**
- * Extract and format error details from ServerFetchError
+ * Extract and format error details from ApiError
  */
-export function formatServerFetchError(error: unknown): APIErrorResponse {
+export function formatApiError(error: unknown): APIErrorResponse {
   const timestamp = new Date().toISOString();
 
-  // Not a ServerFetchError
-  if (!(error instanceof ServerFetchError)) {
+  // Not a ApiError
+  if (!(error instanceof ApiError)) {
     return {
       status: 500,
       statusText: 'Internal Error',
@@ -196,7 +196,7 @@ function parseValidationErrors(detail: unknown): APIErrorDetail[] {
  * Format error for logging
  */
 export function logError(error: unknown, context?: string): void {
-  const formatted = formatServerFetchError(error);
+  const formatted = formatApiError(error);
 
   console.error(`${context || 'API Error'}:`, {
     status: formatted.status,
@@ -220,7 +220,7 @@ export function logError(error: unknown, context?: string): void {
  * Get user-friendly error message
  */
 export function getUserErrorMessage(error: unknown): string {
-  const formatted = formatServerFetchError(error);
+  const formatted = formatApiError(error);
 
   // For validation errors, show the first field error
   if (formatted.details.length > 0) {
@@ -238,7 +238,7 @@ export function getUserErrorMessage(error: unknown): string {
  * Check if error is a specific status code
  */
 export function isErrorStatus(error: unknown, status: number): boolean {
-  if (error instanceof ServerFetchError) {
+  if (error instanceof ApiError) {
     return error.status === status;
   }
   return false;
@@ -262,7 +262,7 @@ export function isAuthError(error: unknown): boolean {
  * Check if error is a network error
  */
 export function isNetworkError(error: unknown): boolean {
-  if (error instanceof ServerFetchError) {
+  if (error instanceof ApiError) {
     return error.detail === 'connection_refused' || error.status === 503;
   }
   return false;

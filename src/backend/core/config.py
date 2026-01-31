@@ -357,27 +357,6 @@ class ActiveDirectorySettings(BaseSettings):
         return v
 
 
-class EmailSettings(BaseSettings):
-    """Email configuration settings.
-
-    SECURITY: smtp_password has no default and must be configured via environment.
-    """
-
-    smtp_host: str = "smtp.example.com"
-    smtp_port: int = 587
-    smtp_user: str = "noreply@example.com"
-    smtp_password: str = Field(default="", description="SMTP password (REQUIRED)")
-    smtp_from: str = "noreply@example.com"
-    smtp_tls: bool = True
-
-    model_config = SettingsConfigDict(
-        env_prefix="EMAIL_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-
 class WebSocketSettings(BaseSettings):
     """WebSocket configuration settings.
 
@@ -502,21 +481,6 @@ class LoggingSettings(BaseSettings):
     """Logging configuration settings."""
 
     level: str = "INFO"
-    enable_file_logging: bool = True
-    log_dir: str = "logs"
-    max_size: int = 10_485_760  # 10MB
-    backup_count: int = 5
-    enable_console_logging: bool = True
-
-    # Request debugging for tracking invalid HTTP requests
-    enable_request_debug: bool = Field(
-        default=False,
-        description="Enable detailed request debugging to track invalid HTTP requests"
-    )
-    enable_raw_request_logging: bool = Field(
-        default=False,
-        description="Enable ASGI-level raw request logging (very verbose, use only for debugging)"
-    )
 
     model_config = SettingsConfigDict(
         env_prefix="LOG_",
@@ -524,18 +488,6 @@ class LoggingSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
-    @property
-    def log_config(self) -> dict:
-        """Get logging configuration."""
-        return {
-            "level": self.level,
-            "enable_file_logging": self.enable_file_logging,
-            "log_dir": self.log_dir,
-            "max_file_size": self.max_size,
-            "backup_count": self.backup_count,
-            "enable_console": self.enable_console_logging,
-        }
 
 
 class PaginationSettings(BaseSettings):
@@ -679,7 +631,6 @@ class Settings(BaseSettings):
     minio: MinIOSettings = MinIOSettings()
     chat_attachments: ChatAttachmentSettings = ChatAttachmentSettings()
     active_directory: ActiveDirectorySettings = ActiveDirectorySettings()
-    email: EmailSettings = EmailSettings()
     websocket: WebSocketSettings = WebSocketSettings()
     signalr: SignalRSettings = SignalRSettings()
     performance: PerformanceSettings = PerformanceSettings()

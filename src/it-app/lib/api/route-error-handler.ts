@@ -2,7 +2,7 @@
  * Unified Error Handler for Next.js API Routes
  *
  * Provides consistent error response format across all API routes.
- * Uses formatServerFetchError from error-handler.ts internally.
+ * Uses formatApiError from error-handler.ts internally.
  *
  * Standard error response format:
  * {
@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { formatServerFetchError, logError } from './error-handler';
+import { formatApiError, logError } from './error-handler';
 
 /**
  * Standard API error response interface
@@ -27,7 +27,7 @@ export interface APIRouteErrorResponse {
 /**
  * Handle errors in API routes and return a consistent NextResponse
  *
- * @param error - The caught error (can be ServerFetchError, Error, or unknown)
+ * @param error - The caught error (can be ApiError, Error, or unknown)
  * @param context - Description of the operation that failed (e.g., "Create Note", "Fetch Users")
  * @param options - Optional configuration
  * @returns NextResponse with consistent error format
@@ -63,7 +63,7 @@ export function handleRouteError(
   }
 
   // Format the error using existing utility
-  const formatted = formatServerFetchError(error);
+  const formatted = formatApiError(error);
 
   // Determine final status code
   const status = statusOverride || formatted.status || 500;
@@ -175,7 +175,7 @@ export function forbiddenError(
  * Useful when you need just the status code
  */
 export function getErrorStatus(error: unknown): number {
-  const formatted = formatServerFetchError(error);
+  const formatted = formatApiError(error);
   return formatted.status || 500;
 }
 
@@ -184,6 +184,6 @@ export function getErrorStatus(error: unknown): number {
  * Useful when you need just the message
  */
 export function getErrorDetail(error: unknown): string {
-  const formatted = formatServerFetchError(error);
+  const formatted = formatApiError(error);
   return formatted.message;
 }

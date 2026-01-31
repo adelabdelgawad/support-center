@@ -21,8 +21,6 @@ Column renames:
 - technician_section_assigns.user_id → technician_sections.technician_id
 """
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.

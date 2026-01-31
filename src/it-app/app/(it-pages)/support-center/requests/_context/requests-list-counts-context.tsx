@@ -8,11 +8,10 @@
  * when ticket data or UI state changes.
  */
 
-import { createContext, useContext, useMemo, useRef, useEffect, useCallback } from 'react';
+import { createContext, useContext, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useViewCounts } from '@/lib/hooks/use-view-counts';
 import { useAllBusinessUnits } from '@/lib/hooks/use-business-unit-counts';
-import { useSignalRTicketList } from '@/lib/signalr';
 import type { ViewCounts, ViewItem } from '@/types/requests-list';
 import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-actions';
 
@@ -100,20 +99,12 @@ export function RequestsListCountsProvider({
   // Store refresh functions in refs
   const refreshBusinessUnitsRef = useRef(refreshBusinessUnits);
   const refreshCountsRef = useRef(refreshCounts);
-  refreshBusinessUnitsRef.current = refreshBusinessUnits;
-  refreshCountsRef.current = refreshCounts;
 
-  // Subscribe to real-time ticket list updates via SignalR
-  const handleTicketListUpdated = useCallback(() => {
-    console.log('[RequestsListCountsProvider] Received ticket list update, refreshing counts...');
-    refreshCountsRef.current();
-    refreshBusinessUnitsRef.current();
-  }, []);
-
-  useSignalRTicketList({
-    onTicketUpdated: handleTicketListUpdated,
-    enabled: true,
-  });
+  // Update refs when refresh functions change
+  useEffect(() => {
+    refreshBusinessUnitsRef.current = refreshBusinessUnits;
+    refreshCountsRef.current = refreshCounts;
+  }, [refreshBusinessUnits, refreshCounts]);
 
   // Check if returning from details page and trigger refresh
   const hasCheckedReturnFromDetails = useRef(false);

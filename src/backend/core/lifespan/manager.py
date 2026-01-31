@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from core.config import settings
-from core.database import get_session
+from db.database import get_session
 from core.logging_config import LogConfig
 from . import tasks
 
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     # Setup logging
-    log_config = LogConfig(**settings.logging.log_config)
+    log_config = LogConfig(level=settings.logging.level)
     await tasks.initialize_logging(settings, log_config)
 
     logger = logging.getLogger("main")

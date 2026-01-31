@@ -5,8 +5,9 @@
  * POST /api/chat/messages/[requestId]/read-all - Mark all messages as read
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { ApiError } from '@/lib/fetch/errors';
 import { makeAuthenticatedRequest } from '@/lib/api/server-fetch';
-import { formatServerFetchError, logError } from '@/lib/api/error-handler';
+import { formatApiError, logError } from '@/lib/api/error-handler';
 
 interface RouteContext {
   params: Promise<{
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Use centralized error handler for better error messages
     logError(error, 'Mark Messages as Read');
 
-    const formattedError = formatServerFetchError(error);
+    const formattedError = formatApiError(error);
 
     return NextResponse.json(
       {

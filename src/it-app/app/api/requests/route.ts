@@ -10,7 +10,7 @@
  * IMPORTANT: Never call backend directly from client components!
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
 
 /**
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const apiError = error instanceof ServerFetchError ? error : null;
+    const apiError = error instanceof ApiError ? error : null;
     const message = getServerErrorMessage(error);
     const status = apiError?.status || 500;
 
@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

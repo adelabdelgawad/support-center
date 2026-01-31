@@ -8,7 +8,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { makePublicRequest, ServerFetchError, getServerErrorMessage } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
+import { makePublicRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
 
 interface RefreshRequest {
   refresh_token: string;
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     console.error("Token refresh error:", error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? error.status : 500;
+    const status = error instanceof ApiError ? error.status : 500;
 
     // Clear cookies on refresh failure
     const cookieStore = await cookies();

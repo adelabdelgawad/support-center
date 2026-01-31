@@ -6,17 +6,16 @@ authorization, and security validation.
 """
 
 import secrets
-from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.config import settings
-from core.database import get_session
+from db.database import get_session
 from core.security import (
     SecurityError,
     TokenExpiredError,
@@ -24,7 +23,7 @@ from core.security import (
     decode_token,
     get_user_id_from_token,
 )
-from models import User, ServiceRequest, UserRole, BusinessUnitUserAssign, TechnicianRegion
+from db import User, ServiceRequest, UserRole
 
 # HTTP Bearer security scheme
 security = HTTPBearer()
@@ -327,7 +326,7 @@ async def _get_user_with_roles(
         user_id = get_user_id_from_token(payload)  # Returns UUID string
 
         # Get user from database with roles eagerly loaded using UUID (User.id is now UUID primary key)
-        from models import UserRole
+        from db import UserRole
         result = await db.execute(
             select(User)
             .where(User.id == user_id)
@@ -405,27 +404,6 @@ async def require_technician(
     return user
 
 
-async def require_senior(
-    user: User = Depends(_get_user_with_roles),
-) -> User:
-    """Require user to have 'Senior' role.
-
-    Validates token and checks if user has Senior role.
-
-    Args:
-        user: Authenticated user with roles loaded
-
-    Returns:
-        User object if has Senior role
-
-    Raises:
-        AuthorizationError: If user does not have Senior role
-    """
-    if not _has_role(user, "Senior"):
-        raise AuthorizationError("Senior role required")
-    return user
-
-
 async def require_supervisor(
     user: User = Depends(_get_user_with_roles),
 ) -> User:
@@ -445,80 +423,6 @@ async def require_supervisor(
     if not _has_role(user, "Supervisor"):
         raise AuthorizationError("Supervisor role required")
     return user
-
-
-async def require_manager(
-    user: User = Depends(_get_user_with_roles),
-) -> User:
-    """Require user to have 'Manager' role.
-
-    Validates token and checks if user has Manager role.
-
-    Args:
-        user: Authenticated user with roles loaded
-
-    Returns:
-        User object if has Manager role
-
-    Raises:
-        AuthorizationError: If user does not have Manager role
-    """
-    if not _has_role(user, "Manager"):
-        raise AuthorizationError("Manager role required")
-    return user
-
-
-async def require_auditor(
-    user: User = Depends(_get_user_with_roles),
-) -> User:
-    """Require user to have 'Auditor' role.
-
-    Validates token and checks if user has Auditor role.
-
-    Args:
-        user: Authenticated user with roles loaded
-
-    Returns:
-        User object if has Auditor role
-
-    Raises:
-        AuthorizationError: If user does not have Auditor role
-    """
-    if not _has_role(user, "Auditor"):
-        raise AuthorizationError("Auditor role required")
-    return user
-
-
-async def require_technician_or_auditor(
-    user: User = Depends(_get_user_with_roles),
-) -> User:
-    """Require user to be a technician OR have 'Auditor' role.
-
-    Validates token and checks if user has is_technician=True OR has Auditor role.
-    Super admins bypass this check and are always granted access.
-
-    Args:
-        user: Authenticated user with roles loaded
-
-    Returns:
-        User object if is technician or has Auditor role
-
-    Raises:
-        AuthorizationError: If user is not technician and does not have Auditor role
-    """
-    # Super admins always have access
-    if user.is_super_admin:
-        return user
-
-    # Check if user is a technician
-    if user.is_technician:
-        return user
-
-    # Check if user has Auditor role
-    if _has_role(user, "Auditor"):
-        return user
-
-    raise AuthorizationError("Technician or Auditor role required")
 
 
 async def require_admin(
@@ -541,7 +445,7 @@ async def require_admin(
     if user.is_super_admin:
         return user
 
-    if not _has_role(user, "Admin"):
+    if not _has_role(user, "admin"):
         raise AuthorizationError("Admin role required")
     return user
 
@@ -571,62 +475,6 @@ async def require_super_admin(
         raise AuthorizationError("SuperAdmin role required")
 
     return user
-
-
-# ============================================================================
-# DEPRECATED DEPENDENCIES (for backward compatibility)
-# ============================================================================
-
-
-def require_roles(*roles: str):
-    """Create a dependency that requires any of the specified roles.
-
-    DEPRECATED: Use specific role dependencies instead (require_technician, require_admin, etc.)
-    This is kept for backward compatibility only.
-
-    Args:
-        *roles: Required role names
-
-    Returns:
-        Dependency function for role authorization
-    """
-
-    async def role_checker(
-        user: User = Depends(_get_user_with_roles),
-    ) -> User:
-        # Check if user has any of the required roles
-        for role_name in roles:
-            if _has_role(user, role_name):
-                return user
-
-        raise AuthorizationError(
-            f"Required role: one of {', '.join(roles)}"
-        )
-
-    return role_checker
-
-
-async def require_agent_or_admin(
-    user: User = Depends(_get_user_with_roles),
-) -> User:
-    """Require technician attribute or admin role for access.
-
-    DEPRECATED: Use require_technician or require_admin instead.
-    This is kept for backward compatibility only.
-
-    Args:
-        user: Authenticated user with roles loaded
-
-    Returns:
-        User object if technician or admin
-
-    Raises:
-        AuthorizationError: If user is not technician or admin
-    """
-    if user.is_technician or _has_role(user, "Admin") or user.is_super_admin:
-        return user
-
-    raise AuthorizationError("Technician access or Admin role required")
 
 
 # =============================================================================

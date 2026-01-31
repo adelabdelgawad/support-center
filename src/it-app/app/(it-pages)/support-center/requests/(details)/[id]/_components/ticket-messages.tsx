@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, startTransition } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RightChatMessage, type MessageStatus } from './right-chat-message';
 import { LeftChatMessage } from './left-chat-message';
@@ -68,7 +68,9 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   // canTakeRequest depends on client-side session which differs from server
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    setIsMounted(true);
+    startTransition(() => {
+      setIsMounted(true);
+    });
   }, []);
 
   // Find the index of the last requester (non-current-user) message
@@ -120,10 +122,12 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
       // Reset scroll state for new chat
       hasPerformedInitialScrollRef.current = false;
       initialScrollRetryCountRef.current = 0;
-      setInitialScrollDone(false);
-      setIsOnBottom(true);
-      setLoadingImages(new Set());
-      setNewMessagesWhileScrolledUp(0);
+      startTransition(() => {
+        setInitialScrollDone(false);
+        setIsOnBottom(true);
+        setLoadingImages(new Set());
+        setNewMessagesWhileScrolledUp(0);
+      });
     }
     prevMessageCountRef.current = messages.length;
   }, [messages]);
@@ -131,6 +135,8 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   // ============================================================================
   // PERFORM INITIAL SCROLL (with retry logic)
   // ============================================================================
+  const performInitialScrollRef = useRef<(() => void) | null>(null);
+
   const performInitialScroll = useCallback(() => {
     // Already done for this chat session
     if (hasPerformedInitialScrollRef.current) {
@@ -143,7 +149,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     if (!container) {
       if (initialScrollRetryCountRef.current < MAX_INITIAL_SCROLL_RETRIES) {
         initialScrollRetryCountRef.current++;
-        setTimeout(performInitialScroll, 16);
+        setTimeout(() => performInitialScrollRef.current?.(), 16);
       } else {
         // Force complete to unblock
         hasPerformedInitialScrollRef.current = true;
@@ -159,7 +165,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     if (scrollHeight === 0) {
       if (initialScrollRetryCountRef.current < MAX_INITIAL_SCROLL_RETRIES) {
         initialScrollRetryCountRef.current++;
-        setTimeout(performInitialScroll, 32);
+        setTimeout(() => performInitialScrollRef.current?.(), 32);
       } else {
         // Force complete to unblock
         hasPerformedInitialScrollRef.current = true;
@@ -186,6 +192,11 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
       isScrollingProgrammaticallyRef.current = false;
     }, 0);
   }, []);
+
+  // Update ref after callback is defined (in useEffect to avoid render-time ref update)
+  useEffect(() => {
+    performInitialScrollRef.current = performInitialScroll;
+  }, [performInitialScroll]);
 
   // ============================================================================
   // SCROLL TO BOTTOM (for new messages)
@@ -321,11 +332,11 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
       // Use setTimeout with small delay to ensure DOM is fully painted
       setTimeout(() => {
         if (!hasPerformedInitialScrollRef.current) {
-          performInitialScroll();
+          performInitialScrollRef.current?.();
         }
       }, 50);
     }
-  }, [messages.length, loadingImages.size, initialScrollDone, performInitialScroll]);
+  }, [messages.length, loadingImages.size, initialScrollDone]);
 
   // ============================================================================
   // TIMEOUT FALLBACK: Force scroll if images take too long

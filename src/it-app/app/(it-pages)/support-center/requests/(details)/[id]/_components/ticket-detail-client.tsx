@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, startTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useRequestDetail } from '../_context/request-detail-context';
@@ -128,8 +128,10 @@ export function TicketDetailClient() {
 
   // Mount remote session component only on client side (after hydration)
   useEffect(() => {
-    setIsRemoteSessionMounted(true);
-    setIsHydrated(true);
+    startTransition(() => {
+      setIsRemoteSessionMounted(true);
+      setIsHydrated(true);
+    });
   }, []);
 
   // Build user data from requester info with defensive fallback

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import useSWR from "swr";
+import { useEffect } from "react";
+import { useAsyncData } from "@/lib/hooks/use-async-data";
 import {
   Card,
   CardContent,
@@ -9,15 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertTriangle,
   TrendingUp,
@@ -25,151 +17,57 @@ import {
   Calendar,
   BarChart3,
 } from "lucide-react";
-import { formatDate, formatFullDateTime } from "@/lib/utils/date-formatting";
 
-import type { VolumeReportData, DateRangePreset, DistributionItem } from "@/types/reports";
+import { ReportError } from "@/lib/reports/components";
+import { PeriodIndicator } from "@/lib/reports/components";
+import { SimpleDistributionChart } from "@/lib/reports/components";
+import { useReportsFilter } from "../../_context/reports-filter-context";
 
-const fetcher = async (url: string) => {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    throw new Error("Failed to fetch data");
-  }
-  return response.json();
-};
-
-const dateRangeOptions: { value: DateRangePreset; label: string }[] = [
-  { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "last_7_days", label: "Last 7 Days" },
-  { value: "last_30_days", label: "Last 30 Days" },
-  { value: "this_week", label: "This Week" },
-  { value: "last_week", label: "Last Week" },
-  { value: "this_month", label: "This Month" },
-  { value: "last_month", label: "Last Month" },
-];
-
-).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="pb-2">
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-5 w-40" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-full" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function DistributionChart({
-  title,
-  items,
-}: {
-  title: string;
-  items: DistributionItem[];
-}) {
-  const maxValue = Math.max(...items.map((item) => item.value), 1);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div key={item.id} className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span>{item.label}</span>
-                <span className="font-medium">{item.value}</span>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-2">
-                <div
-                  className="h-2 rounded-full bg-primary transition-all"
-                  style={{ width: `${(item.value / maxValue) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import type { VolumeReportData } from "@/types/reports";
+import { getVolumeAnalysisReport } from "@/lib/api/reports";
 
 interface VolumeReportClientProps {
   initialData: VolumeReportData;
 }
 
 export function VolumeReportClient({ initialData }: VolumeReportClientProps) {
-  const [dateRange, setDateRange] = useState<DateRangePreset>("last_30_days");
+  const { datePreset, customStartDate, customEndDate, filters, registerExport, clearExport } = useReportsFilter();
 
-  const { data, error, isLoading } = useSWR<VolumeReportData>(
-    `/api/reports/volume/analysis?date_preset=${dateRange}`,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateIfStale: false,
-      revalidateOnFocus: false,
-    }
+  const fetchParams = {
+    datePreset,
+    startDate: customStartDate,
+    endDate: customEndDate,
+    ...filters,
+  };
+
+  const fetchVolume = async () => {
+    return await getVolumeAnalysisReport(fetchParams);
+  };
+
+  const { data, error, isLoading } = useAsyncData<VolumeReportData>(
+    fetchVolume,
+    [fetchParams],
+    initialData
   );
 
+  useEffect(() => {
+    if (data) {
+      registerExport({ reportTitle: "Volume Analysis Report", reportData: data });
+    }
+    return () => clearExport();
+  }, [data, registerExport, clearExport]);
+
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Volume Analysis</h2>
-          <p className="text-muted-foreground">
-            Ticket volume trends and distribution analysis
-          </p>
-        </div>
-        <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRangePreset)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select period" />
-          </SelectTrigger>
-          <SelectContent>
-            {dateRangeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {error && (
-        <Card className="border-destructive">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              <span>Failed to load volume data. Please try again.</span>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+    <>
+      {error && <ReportError message="Failed to load volume data. Please try again." />}
 
       {data && (
         <div className="space-y-6">
           {/* Period indicator */}
-          <div className="text-sm text-muted-foreground">
-            Period: {formatDate(data.periodStart)} -{" "}
-            {formatDate(data.periodEnd)}
-          </div>
+          <PeriodIndicator
+            periodStart={data.periodStart}
+            periodEnd={data.periodEnd}
+          />
 
           {/* Summary Cards */}
           <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -274,13 +172,13 @@ export function VolumeReportClient({ initialData }: VolumeReportClientProps) {
           {/* Distributions */}
           <div className="grid gap-4 md:grid-cols-2">
             {data.dayOfWeekDistribution && data.dayOfWeekDistribution.length > 0 && (
-              <DistributionChart
+              <SimpleDistributionChart
                 title="Tickets by Day of Week"
                 items={data.dayOfWeekDistribution}
               />
             )}
             {data.hourlyDistribution && data.hourlyDistribution.length > 0 && (
-              <DistributionChart
+              <SimpleDistributionChart
                 title="Tickets by Hour"
                 items={data.hourlyDistribution.filter((_, i) => i >= 6 && i <= 20)}
               />
@@ -362,6 +260,6 @@ export function VolumeReportClient({ initialData }: VolumeReportClientProps) {
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }

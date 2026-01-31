@@ -79,13 +79,23 @@ function UsersTable({
 }: UsersTableProps) {
   const searchParams = useSearchParams();
 
+  // UUID validation helper
+  const isValidUUID = (str: string): boolean => {
+    if (!str) return false;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return UUID_REGEX.test(str);
+  };
+
   // Read URL parameters
   const page = Number(searchParams?.get("page") || "1");
   const limit = Number(searchParams?.get("limit") || "10");
   const filter = searchParams?.get("filter") || "";
   const isActiveFilter = searchParams?.get("is_active") || "";
   const userTypeFilter = searchParams?.get("user_type") || "";
-  const role = searchParams?.get("role") || "";
+  const roleParam = searchParams?.get("role") || "";
+
+  // Validate role parameter - only use if it's a valid UUID
+  const role = roleParam && isValidUUID(roleParam) ? roleParam : "";
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📍 [UsersTable] URL PARAMETERS');
@@ -93,7 +103,8 @@ function UsersTable({
   console.log('Status Filter (is_active):', isActiveFilter || 'NONE');
   console.log('User Type Filter (user_type):', userTypeFilter || 'NONE');
   console.log('Search Filter (filter):', filter || 'NONE');
-  console.log('Role Filter (role):', role || 'NONE');
+  console.log('Role Filter (role - raw):', roleParam || 'NONE');
+  console.log('Role Filter (role - validated):', role || 'NONE (invalid UUID filtered out)');
   console.log('Page:', page);
   console.log('Limit:', limit);
 
@@ -104,7 +115,7 @@ function UsersTable({
   if (filter) params.append("username", filter);
   if (isActiveFilter) params.append("is_active", isActiveFilter);
   if (userTypeFilter) params.append("user_type", userTypeFilter);
-  if (role) params.append("role_id", role);
+  if (role) params.append("role_id", role); // Only add if validated as UUID
 
   // Use Next.js internal API route for authentication
   const apiUrl = `/api/users/with-roles?${params.toString()}`;

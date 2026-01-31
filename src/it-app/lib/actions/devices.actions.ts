@@ -1,6 +1,6 @@
 "use server";
 
-import { serverFetch, CACHE_PRESETS } from "@/lib/api/server-fetch";
+import { serverGet } from "@/lib/fetch";
 import type {
   Device,
   DeviceListItem,
@@ -11,7 +11,7 @@ import type {
 /**
  * Get list of discovered devices with optional filtering.
  *
- * Cache: SHORT_LIVED (30s) - devices update relatively frequently
+ * Cache: NO_CACHE - devices update relatively frequently
  */
 export async function getDevices(options?: {
   lifecycleState?: string;
@@ -35,9 +35,9 @@ export async function getDevices(options?: {
     params.set("limit", String(options?.limit ?? 100));
     params.set("offset", String(options?.offset ?? 0));
 
-    const devices = await serverFetch<DeviceListItem[]>(
+    const devices = await serverGet<DeviceListItem[]>(
       `/devices?${params.toString()}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return { devices, total: devices.length };
@@ -64,9 +64,9 @@ export async function getDeviceCount(options?: {
       params.set("discovery_source", options.discoverySource);
     }
 
-    const response = await serverFetch<DeviceCountResponse>(
+    const response = await serverGet<DeviceCountResponse>(
       `/devices/count?${params.toString()}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return response.count;
@@ -81,9 +81,9 @@ export async function getDeviceCount(options?: {
  */
 export async function getDevice(deviceId: string): Promise<Device | null> {
   try {
-    const device = await serverFetch<Device>(
+    const device = await serverGet<Device>(
       `/devices/${deviceId}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return device;

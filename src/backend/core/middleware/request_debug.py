@@ -9,7 +9,7 @@ import logging
 import traceback
 from typing import Callable
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -134,7 +134,7 @@ class RawRequestLogger:
 
             try:
                 await self.app(scope, logging_receive, send)
-                logger.debug(f"✅ [RAW] Request completed successfully")
+                logger.debug("✅ [RAW] Request completed successfully")
             except Exception as e:
                 logger.error(f"❌ [RAW] Request failed: {type(e).__name__}: {str(e)}")
                 logger.error(f"   [RAW] Traceback: {traceback.format_exc()}")

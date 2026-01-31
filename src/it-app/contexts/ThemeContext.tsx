@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, startTransition } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -15,33 +15,24 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 // Default theme for SSR - must match server render to avoid hydration mismatch
 const DEFAULT_THEME: Theme = 'light';
 
-/**
- * Get the initial theme from localStorage or system preference.
- * Only called on client after hydration.
- */
-function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return DEFAULT_THEME;
-
-  const savedTheme = localStorage.getItem('theme') as Theme | null;
-  if (savedTheme) return savedTheme;
-
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
-  }
-
-  return DEFAULT_THEME;
-}
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Start with default theme to match SSR, update after hydration
-  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+  // Initialize theme from localStorage/system preference using lazy initializer
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return DEFAULT_THEME;
+    const savedTheme = localStorage.getItem('theme') as Theme | null;
+    if (savedTheme) return savedTheme;
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return DEFAULT_THEME;
+  });
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // After hydration, read actual theme from localStorage/system preference
+  // Mark as hydrated after mount
   useEffect(() => {
-    setIsHydrated(true);
-    const actualTheme = getInitialTheme();
-    setThemeState(actualTheme);
+    startTransition(() => {
+      setIsHydrated(true);
+    });
   }, []);
 
   useEffect(() => {

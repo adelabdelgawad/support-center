@@ -21,6 +21,7 @@ import React, {
   useEffect,
   useRef,
   useMemo,
+  startTransition,
 } from 'react';
 import { usePathname } from 'next/navigation';
 
@@ -72,8 +73,10 @@ export function NavigationProgressProvider({ children }: NavigationProgressProvi
   useEffect(() => {
     if (prevPathnameRef.current !== pathname) {
       // Navigation completed - reset state
-      setIsNavigating(false);
-      setTargetPath(null);
+      startTransition(() => {
+        setIsNavigating(false);
+        setTargetPath(null);
+      });
       prevPathnameRef.current = pathname;
     }
   }, [pathname]);

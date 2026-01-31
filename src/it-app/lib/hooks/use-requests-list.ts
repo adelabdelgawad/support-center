@@ -37,7 +37,7 @@ export function useRequestsList(
       revalidateIfStale: false, // Don't refetch on stale - use refreshInterval instead
       revalidateOnFocus: false, // Don't refetch on focus - prevents initial load spinner
       revalidateOnReconnect: false, // Don't refetch on reconnect - prevents initial load spinner
-      refreshInterval: 30000, // Auto-revalidate every 30 seconds
+      refreshInterval: 60000, // Auto-revalidate every 60 seconds (changed from 30s)
       dedupingInterval: 2000, // Dedupe requests within 2 seconds
       keepPreviousData: true, // Keep previous data while loading new data
     }

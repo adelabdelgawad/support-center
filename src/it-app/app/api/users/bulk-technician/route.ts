@@ -3,8 +3,8 @@
  * Handles bulk updating user technician status
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 
 /**
  * POST /api/users/bulk-technician - Bulk update user technician status
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     console.error(`Bulk update user technician status error:`, error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

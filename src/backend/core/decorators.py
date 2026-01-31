@@ -7,7 +7,7 @@ import functools
 import inspect
 import logging
 import traceback
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable, Optional
 from sqlalchemy.exc import (
     SQLAlchemyError,
     IntegrityError,
@@ -263,7 +263,7 @@ def database_transaction(
 
                 return result
 
-            except Exception as exc:
+            except Exception:
                 if rollback_on_error:
                     try:
                         await db_session.rollback()

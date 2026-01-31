@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,9 @@ export function AdminBreadcrumb({ className }: AdminBreadcrumbProps) {
 
   // Set hydrated state after mount to avoid hydration mismatch
   useEffect(() => {
-    setIsHydrated(true);
+    startTransition(() => {
+      setIsHydrated(true);
+    });
   }, []);
 
   // Don't render until hydrated to avoid mismatch

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, startTransition } from "react"
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -17,7 +17,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
   // Only render after mount to avoid hydration mismatch
   useEffect(() => {
-    setMounted(true)
+    startTransition(() => {
+      setMounted(true)
+    })
   }, [])
 
   // Use a stable default during SSR and initial hydration

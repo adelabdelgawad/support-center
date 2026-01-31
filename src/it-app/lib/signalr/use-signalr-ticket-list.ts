@@ -59,7 +59,7 @@ export function useSignalRTicketList(
       if (subscriptionIdRef.current) {
         signalRTicket.unsubscribeFromUserTicketList(subscriptionIdRef.current);
         subscriptionIdRef.current = null;
-        setIsSubscribed(false);
+        setIsSubscribed(false); // eslint-disable-line react-hooks/set-state-in-effect -- Legitimate cleanup pattern
       }
       return;
     }

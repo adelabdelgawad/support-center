@@ -1,5 +1,6 @@
 /**
  * Type for API error responses
+ * @deprecated Use ApiError from @/lib/fetch/errors instead
  */
 export interface ServerFetchError {
   response?: {
@@ -13,6 +14,7 @@ export interface ServerFetchError {
 
 /**
  * Helper function to extract error message and status from API error
+ * @deprecated Use ApiError from @/lib/fetch/errors instead
  */
 export function handleServerFetchError(error: unknown): { detail: string; status: number } {
   const apiError = error as ServerFetchError;

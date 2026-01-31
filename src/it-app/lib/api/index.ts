@@ -22,27 +22,43 @@
  * ```
  */
 
-// Client-side utilities (fetch-based)
+// New canonical imports (from lib/fetch)
 export {
+  ApiError,
   api,
   apiClient,
-  default,
+  getErrorMessage,
+  isAPIError,
   getClientErrorMessage,
-  ClientFetchError,
-} from '../fetch/client';
-export { getErrorMessage, isAPIError } from './client-fetch';
+} from '@/lib/fetch';
 
-// Server-side utilities (fetch-based)
+export {
+  serverFetch,
+  serverGet,
+  serverPost,
+  serverPut,
+  serverPatch,
+  serverDelete,
+  withAuth,
+} from '@/lib/fetch';
+
+// Server-side utilities (from lib/api/server-fetch)
 export {
   makeAuthenticatedRequest,
   makePublicRequest,
+  publicFetch,
   getServerAccessToken,
   getServerSessionId,
   getServerUserInfo,
   getServerErrorMessage,
   isServerAPIError,
-  ServerFetchError,
+  CACHE_PRESETS,
 } from './server-fetch';
+
+// Legacy re-exports for backward compatibility
+export { ApiError as ClientFetchError } from '@/lib/fetch';
+export { ApiError as ServerFetchError } from '@/lib/fetch';
+export { ApiError as ServerApiError } from '@/lib/fetch';
 
 // Service Request API
 export {
@@ -52,3 +68,6 @@ export {
   type CreateServiceRequestData,
   type ServiceRequest,
 } from './service-request';
+
+// Default export
+export { default } from '@/lib/fetch/client';

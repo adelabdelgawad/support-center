@@ -23,6 +23,7 @@ import React, {
   useCallback,
   useRef,
   useMemo,
+  startTransition,
 } from 'react';
 import { SessionContext } from '@/components/auth/client-app-wrapper';
 import {
@@ -573,13 +574,14 @@ export function useSignalRChatRoom(
       const currentInitialMessages = initialMessagesRef.current;
 
       // Reset state - but preserve any pending optimistic messages
-      if (currentInitialMessages.length === 0) {
-        setIsLoading(true);
-      } else {
-        setIsLoading(false);
-      }
+      startTransition(() => {
+        if (currentInitialMessages.length === 0) {
+          setIsLoading(true);
+        } else {
+          setIsLoading(false);
+        }
 
-      setMessages((prev) => {
+        setMessages((prev) => {
         const pendingOptimistic = prev.filter(
           (m) => m.status === 'pending' && m.tempId
         );
@@ -600,8 +602,10 @@ export function useSignalRChatRoom(
       });
 
       setLatestSequence(0);
-      initialMessagesAppliedRef.current = true;
-    }
+    });
+
+    initialMessagesAppliedRef.current = true;
+  }
 
     // Only subscribe if this is a new requestId
     if (shouldSubscribe) {
@@ -635,6 +639,7 @@ export function useSignalRChatRoom(
     // CRITICAL FIX: Removed 'signalR' and 'initialMessages' from dependencies
     // - signalR: Context value is stable (from SignalRProvider), re-subscribing on context changes is unnecessary
     // - initialMessages: Array reference changes on every render, causing infinite subscription loops
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, requestId]);
 
   // Send message with optimistic update

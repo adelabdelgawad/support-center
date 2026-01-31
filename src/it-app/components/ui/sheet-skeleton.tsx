@@ -19,7 +19,7 @@ interface SheetSkeletonProps {
  * Skeleton loader for modal sheets during lazy loading
  */
 export function SheetSkeleton({
-  open = true,
+  open = false,
   title = 'Loading...',
   description = 'Please wait',
 }: SheetSkeletonProps) {

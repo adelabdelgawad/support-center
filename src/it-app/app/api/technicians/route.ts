@@ -10,8 +10,8 @@
  * IMPORTANT: Never call backend directly from client components!
  */
 import { NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 
 /**
  * GET /api/technicians - List all active technicians
@@ -42,7 +42,7 @@ export async function GET() {
     return NextResponse.json(response);
   } catch (error) {
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

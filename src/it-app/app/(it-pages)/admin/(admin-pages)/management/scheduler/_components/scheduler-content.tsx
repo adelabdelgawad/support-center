@@ -1,8 +1,10 @@
 "use client";
 
 import useSWR from "swr";
-import { useMemo, useCallback } from "react";
+import { useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { SchedulerTableBody } from "./table/scheduler-table-body";
+import { Pagination } from "@/components/data-table";
 import type {
   ScheduledJob,
   JobsListResponse,
@@ -30,6 +32,57 @@ const fetchJobs = async (url: string): Promise<JobsListResponse> => {
 };
 
 /**
+ * Compare function to minimize re-renders by only updating changed jobs
+ * - Checks if jobs array changed (length or individual job properties)
+ * - Only triggers re-render if actual data changed
+ */
+const compareJobsData = (
+  prevData: JobsListResponse | undefined,
+  newData: JobsListResponse | undefined
+): boolean => {
+  // Always update if transitioning from undefined to data
+  if (!prevData && newData) return false;
+  if (prevData && !newData) return false;
+  if (!prevData || !newData) return true;
+
+  // Quick count checks - if counts changed, data changed
+  if (
+    prevData.total !== newData.total ||
+    prevData.enabledCount !== newData.enabledCount ||
+    prevData.disabledCount !== newData.disabledCount ||
+    prevData.runningCount !== newData.runningCount
+  ) {
+    return false; // Data changed
+  }
+
+  // Check if jobs array length changed
+  if (prevData.jobs.length !== newData.jobs.length) {
+    return false; // Data changed
+  }
+
+  // Deep compare each job - only update if at least one job changed
+  const prevJobsMap = new Map(prevData.jobs.map((j) => [j.id, j]));
+  for (const newJob of newData.jobs) {
+    const prevJob = prevJobsMap.get(newJob.id);
+    if (!prevJob) return false; // New job added
+
+    // Check key properties that change during execution
+    if (
+      prevJob.isEnabled !== newJob.isEnabled ||
+      prevJob.lastStatus !== newJob.lastStatus ||
+      prevJob.nextRunTime !== newJob.nextRunTime ||
+      prevJob.lastRunTime !== newJob.lastRunTime ||
+      prevJob.updatedAt !== newJob.updatedAt
+    ) {
+      return false; // At least one job changed
+    }
+  }
+
+  // No meaningful changes detected - skip re-render
+  return true;
+};
+
+/**
  * SWR JUSTIFICATION:
  * - Reason: Jobs updated by background scheduler processes
  * - Trigger: Manual refresh + reconnection detection
@@ -41,22 +94,28 @@ export function SchedulerContent({
   initialTaskFunctions,
   initialJobTypes,
 }: SchedulerContentProps) {
+  const searchParams = useSearchParams();
+  const page = Number(searchParams?.get('page') || '1');
+  const limit = Number(searchParams?.get('limit') || '10');
+
   // SWR for jobs data with automatic revalidation when jobs are running/pending
-  const { data: jobsData, mutate: mutateJobs, isLoading, isValidating } = useSWR<JobsListResponse>(
-    "/api/scheduler/jobs?page=1&per_page=50",
+  const { data: jobsData, mutate: mutateJobs, isLoading } = useSWR<JobsListResponse>(
+    `/api/scheduler/jobs?page=${page}&per_page=${limit}`,
     fetchJobs,
     {
       fallbackData: initialJobs,
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
+      // Use compare function to only re-render when data actually changed
+      compare: compareJobsData,
       // Automatically poll when there are running or pending jobs
       refreshInterval: (data) => {
-        if (!data) return 0;
+        if (!data) return 60000; // Default: 60 seconds
         const hasActiveJobs = data.jobs.some(
           (job) => job.lastStatus === "running" || job.lastStatus === "pending"
         );
-        return hasActiveJobs ? 3000 : 0; // Poll every 3 seconds if there are active jobs
+        return hasActiveJobs ? 10000 : 60000; // Poll every 10s if active, 60s otherwise
       },
     }
   );
@@ -66,6 +125,7 @@ export function SchedulerContent({
   const enabledCount = jobsData?.enabledCount ?? 0;
   const disabledCount = jobsData?.disabledCount ?? 0;
   const runningCount = jobsData?.runningCount ?? 0;
+  const totalPages = Math.ceil(total / limit);
 
   /**
    * Updates SWR cache with backend response data (NOT optimistic)
@@ -144,22 +204,35 @@ export function SchedulerContent({
 
   return (
     <div className="relative h-full bg-muted min-h-0 p-1">
-
       {/* Main Content */}
-      <SchedulerTableBody
-        jobs={jobs}
-        total={total}
-        enabledCount={enabledCount}
-        disabledCount={disabledCount}
-        runningCount={runningCount}
-        isLoading={isLoading}
-        isValidating={isValidating}
-        refetch={refresh}
-        updateJobs={updateJobs}
-        addJob={addJob}
-        taskFunctions={initialTaskFunctions}
-        jobTypes={initialJobTypes}
-      />
+      <div className="h-full flex flex-col min-h-0 min-w-0 ml-2 space-y-2">
+        {/* Table */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <SchedulerTableBody
+            jobs={jobs}
+            total={total}
+            enabledCount={enabledCount}
+            disabledCount={disabledCount}
+            runningCount={runningCount}
+            isLoading={isLoading}
+            refetch={refresh}
+            updateJobs={updateJobs}
+            addJob={addJob}
+            taskFunctions={initialTaskFunctions}
+            jobTypes={initialJobTypes}
+          />
+        </div>
+
+        {/* Pagination */}
+        <div className="shrink-0 bg-background border-t border-border rounded-md">
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            pageSize={limit}
+            totalItems={total}
+          />
+        </div>
+      </div>
     </div>
   );
 }

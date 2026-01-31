@@ -3,7 +3,7 @@
  * Fetches ticket counts grouped by business unit
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import {
   makeAuthenticatedRequest,
   getServerErrorMessage,
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Get business unit counts error:", error);
 
-    const apiError = error instanceof ServerFetchError ? error : null;
+    const apiError = error instanceof ApiError ? error : null;
     const message = getServerErrorMessage(error);
     const status = apiError?.status || 500;
 

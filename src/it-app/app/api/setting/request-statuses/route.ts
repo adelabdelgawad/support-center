@@ -16,7 +16,7 @@ export async function GET(_request: NextRequest) {
     const searchParams = _request.nextUrl.searchParams;
     const response = await makeAuthenticatedRequest<unknown>(
       'GET',
-      `/request-statuses/?${searchParams.toString()}`
+      `/request-statuses?${searchParams.toString()}`
     );
     return NextResponse.json(response);
   } catch (error: unknown) {
@@ -35,7 +35,7 @@ export async function POST(_request: NextRequest) {
     const body = await _request.json();
     const response = await makeAuthenticatedRequest<unknown>(
       'POST',
-      '/request-statuses/',
+      '/request-statuses',
       body
     );
     return NextResponse.json(response, { status: 201 });

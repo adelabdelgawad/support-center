@@ -3,8 +3,8 @@
  * Handles updating user roles
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 
 /**
  * PUT /api/users/[id]/roles - Update user roles
@@ -29,7 +29,7 @@ export async function PUT(
     console.error(`Update user roles error:`, error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {
@@ -62,7 +62,7 @@ export async function GET(
     console.error(`Get user roles error:`, error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

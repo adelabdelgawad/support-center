@@ -19,6 +19,7 @@ import {
   useCallback,
   useRef,
   useEffect,
+  startTransition,
   type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
@@ -143,7 +144,10 @@ export function RemoteAccessProvider({ children, requestId }: RemoteAccessProvid
       sessionStartTimeRef.current = Date.now();
 
       durationIntervalRef.current = setInterval(() => {
-        setSessionDuration(Math.floor((Date.now() - sessionStartTimeRef.current) / 1000));
+        const duration = Math.floor((Date.now() - sessionStartTimeRef.current) / 1000);
+        startTransition(() => {
+          setSessionDuration(duration);
+        });
       }, 1000);
     } else {
       if (durationIntervalRef.current) {
@@ -238,6 +242,7 @@ export function RemoteAccessProvider({ children, requestId }: RemoteAccessProvid
         toast.error(message);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setConnectionState is a stable wrapper function
   }, [sessionStatus, sessionId]);
 
   // End the remote access session (ephemeral - cleanup only, no API call)

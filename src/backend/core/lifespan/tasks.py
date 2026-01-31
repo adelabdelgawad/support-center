@@ -20,12 +20,6 @@ async def initialize_logging(settings, log_config):
     # Setup enhanced uvicorn error logging to capture invalid HTTP requests
     setup_uvicorn_error_logging()
 
-    # Log request debugging status
-    if settings.logging.enable_request_debug:
-        logger.info("🔍 Request debugging enabled - detailed request logs will be captured")
-    if settings.logging.enable_raw_request_logging:
-        logger.warning("⚠️  Raw request logging enabled - this is VERY verbose!")
-
     logger.info("🚀 Starting Service Catalog API...")
 
 
@@ -37,7 +31,7 @@ async def log_cors_configuration(settings, logger):
 
 async def initialize_database():
     """Initialize database tables."""
-    from core.database import init_db
+    from db.database import init_db
 
     logger = logging.getLogger("main")
     await init_db()
@@ -47,7 +41,7 @@ async def initialize_database():
 
 async def setup_default_data(get_session):
     """Setup default database data (admin user, lookup tables, etc.)."""
-    from database_setup import setup_database_default_data
+    from db.setup import setup_database_default_data
 
     logger = logging.getLogger("main")
     logger.info("Setting up default database data...")
@@ -71,7 +65,7 @@ async def initialize_minio(settings):
     """Initialize MinIO storage."""
     logger = logging.getLogger("main")
     try:
-        from services.minio_service import MinIOStorageService
+        from api.services.minio_service import MinIOStorageService
 
         await MinIOStorageService.ensure_bucket_exists()
         print("✅ MinIO storage initialized")
@@ -127,7 +121,7 @@ async def shutdown_signalr_client():
     """Close SignalR HTTP client."""
     logger = logging.getLogger("main")
     try:
-        from services.signalr_client import SignalRClient
+        from api.services.signalr_client import SignalRClient
 
         await SignalRClient.close()
         print("✅ SignalR client closed")
@@ -139,7 +133,7 @@ async def shutdown_signalr_client():
 
 async def shutdown_database():
     """Close database connections."""
-    from core.database import close_db
+    from db.database import close_db
 
     logger = logging.getLogger("main")
     await close_db()
@@ -149,10 +143,8 @@ async def shutdown_database():
 
 async def initialize_event_coalescer():
     """Initialize typing event coalescer with publish callback."""
-    from services.event_coalescer import typing_coalescer
-    from services.event_models import StreamEvent
-    from services.event_publisher import publish_event
-    from services.event_types import EventType
+    from api.services.event_coalescer import typing_coalescer
+    from api.services.event_models import StreamEvent
 
     logger = logging.getLogger("main")
 
@@ -173,7 +165,7 @@ async def initialize_event_coalescer():
         start_time = time.time()
         # This would need to use the redis_streams_publisher directly
         # For now, we'll create a simple wrapper
-        from services.event_publisher import redis_streams_publisher
+        from api.services.event_publisher import redis_streams_publisher
 
         success = await redis_streams_publisher.publish(stream, event)
         duration = time.time() - start_time
@@ -204,7 +196,7 @@ def _get_stream_name_from_type(event_type: str) -> str:
 
 async def shutdown_event_coalescer():
     """Flush pending coalesced events before shutdown."""
-    from services.event_coalescer import typing_coalescer
+    from api.services.event_coalescer import typing_coalescer
 
     logger = logging.getLogger("main")
     try:

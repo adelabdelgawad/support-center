@@ -6,10 +6,14 @@
  *
  * Split from monolithic RequestDetailProvider to prevent unnecessary re-renders
  * when chat messages or typing indicators change.
+ *
+ * NOTE: We keep `import { mutate } from 'swr'` ONLY for global invalidation of
+ * requests-list SWR cache keys after assignee/status changes. This is intentional
+ * and documented in the SWR migration plan.
  */
 
 import { createContext, useContext, useMemo, useCallback, useEffect, useState, useRef } from 'react';
-import { mutate } from 'swr';
+import useSWR, { mutate as swrMutate } from 'swr';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/metadata';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
@@ -20,6 +24,7 @@ import { useRequestNotes } from '@/lib/hooks/use-request-notes';
 import { useRequestAssignees } from '@/lib/hooks/use-request-assignees';
 import { useGlobalPriorities, useGlobalStatuses, useGlobalTechnicians } from '@/lib/hooks/use-global-metadata';
 import { useRequestTicket } from '@/lib/hooks/use-request-ticket';
+import { apiClient } from '@/lib/fetch/client';
 
 export interface RequestDetailMetadataContextType {
   // Ticket data
@@ -229,6 +234,31 @@ export function RequestDetailMetadataProvider({
     onError: handleTicketError,
   });
 
+  // **60s AUTO-REFRESH FOR TICKET DATA (via SWR)**
+  // SWR provides background polling without interrupting SignalR
+  // SignalR handles real-time updates, this is a safety net for missed events
+  const fetcher = useCallback(async (url: string) => {
+    const response = await apiClient.get<ServiceRequestDetail>(url);
+    // Update local state when SWR fetches fresh data
+    if (response) {
+      await mutateTicket(response);
+    }
+    return response;
+  }, [mutateTicket]);
+
+  useSWR(
+    `/api/requests-details/${initialTicket.id}`,
+    fetcher,
+    {
+      refreshInterval: 60000, // 60 seconds
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 10000,
+      // Don't show loading states during background refresh
+      keepPreviousData: true,
+    }
+  );
+
   // Wrapper functions to match interface signatures
   const updateTicketStatus = useCallback(
     async (statusId: number, resolution?: string) => {
@@ -278,9 +308,9 @@ export function RequestDetailMetadataProvider({
   const handleAssigneeAdded = useCallback(async () => {
     await mutateTicket();
     await Promise.all([
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/requests/technician-views')),
-      mutate('/api/requests/view-counts'),
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/requests/business-unit-counts')),
+      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/requests/technician-views')),
+      swrMutate('/api/requests/view-counts'),
+      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/requests/business-unit-counts')),
     ]);
   }, [mutateTicket]);
 
@@ -288,9 +318,9 @@ export function RequestDetailMetadataProvider({
   const handleAssigneeRemoved = useCallback(async () => {
     await mutateTicket();
     await Promise.all([
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/requests/technician-views')),
-      mutate('/api/requests/view-counts'),
-      mutate((key) => typeof key === 'string' && key.startsWith('/api/requests/business-unit-counts')),
+      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/requests/technician-views')),
+      swrMutate('/api/requests/view-counts'),
+      swrMutate((key) => typeof key === 'string' && key.startsWith('/api/requests/business-unit-counts')),
     ]);
   }, [mutateTicket]);
 

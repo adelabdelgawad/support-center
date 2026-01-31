@@ -12,7 +12,7 @@
  * - Cleanup on close
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, startTransition } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,9 +65,12 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
 
   const [clipboardEnabled, setClipboardEnabled] = useState(false);
   const [uacDetected, setUacDetected] = useState(false);
-  // Always initialize with default to prevent hydration mismatch
-  // localStorage value is loaded in useEffect after hydration
-  const [colorDepth, setColorDepth] = useState<ColorDepth>(16);
+  // Initialize from localStorage safely using lazy initializer
+  const [colorDepth, setColorDepth] = useState<ColorDepth>(() => {
+    if (typeof window === 'undefined') return 16;
+    const saved = localStorage.getItem('remote_color_depth');
+    return saved ? (parseInt(saved) as ColorDepth) : 16;
+  });
   const [screenshotFlash, setScreenshotFlash] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -299,28 +302,7 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
     return cleanup;
   }, [cleanup, registerCleanup]);
 
-  // Load color depth from localStorage after hydration
-  useEffect(() => {
-    const saved = localStorage.getItem('remote_color_depth');
-    if (saved) {
-      setColorDepth(parseInt(saved) as ColorDepth);
-    }
-  }, []);
-
   // Setup WebRTC connection with SignalR signaling
-  useEffect(() => {
-    if (!sessionId || setupStartedRef.current) {
-      return;
-    }
-    setupStartedRef.current = true;
-
-    setupWebRTCWithSignaling();
-
-    return () => {
-      setupStartedRef.current = false;
-    };
-  }, [sessionId]);
-
   const setupWebRTCWithSignaling = async () => {
     if (!sessionId) return;
 
@@ -610,11 +592,28 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
     }
   };
 
-  const sendControlEvent = (event: any) => {
+  // Setup WebRTC connection with SignalR signaling
+  useEffect(() => {
+    if (!sessionId || setupStartedRef.current) {
+      return;
+    }
+    setupStartedRef.current = true;
+
+    startTransition(() => {
+      setupWebRTCWithSignaling();
+    });
+
+    return () => {
+      setupStartedRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setupWebRTCWithSignaling is defined inline and only called here
+  }, [sessionId]);
+
+  const sendControlEvent = useCallback((event: any) => {
     if (controlChannelRef.current?.readyState === 'open' && controlEnabled) {
       controlChannelRef.current.send(JSON.stringify(event));
     }
-  };
+  }, [controlEnabled]);
 
   // Release all pressed keys and mouse buttons (called on mode switch/disconnect)
   const releaseAllInputs = useCallback(() => {
@@ -894,7 +893,7 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
       setCursorVisible(false);
       setCursorPos(null);
     };
-  }, [controlEnabled, releaseAllInputs]);
+  }, [controlEnabled, releaseAllInputs, sendControlEvent]);
 
   // Track previous mode to detect changes
   const prevRemoteModeRef = useRef<typeof remoteMode | null>(null);

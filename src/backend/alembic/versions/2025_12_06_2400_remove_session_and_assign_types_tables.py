@@ -11,7 +11,7 @@ This migration:
 4. Drops the assign_types table
 
 The session_type_id and assign_type_id columns remain as simple integers.
-Values are now validated by enums in model_enum.py:
+Values are now validated by enums in db.enums:
 - SessionType: WEB=1, DESKTOP=2, MOBILE=3
 - AssignType: TECHNICIAN=1, CC=2
 """

@@ -1,6 +1,6 @@
 'use server';
 
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet, serverPost, serverPut, serverDelete } from '@/lib/fetch';
 import type {
   BusinessUnitRegionResponse,
   BusinessUnitRegionListResponse,
@@ -40,9 +40,9 @@ export async function getBusinessUnitRegions(params?: {
     });
   }
 
-  return serverFetch<BusinessUnitRegionListResponse>(
-    `/business-unit-regions/?${queryParams}`,
-    CACHE_PRESETS.NO_CACHE()
+  return serverGet<BusinessUnitRegionListResponse>(
+    `/business-unit-regions?${queryParams}`,
+    { revalidate: 0 }
   );
 }
 
@@ -52,9 +52,9 @@ export async function getBusinessUnitRegions(params?: {
 export async function createBusinessUnitRegion(
   data: BusinessUnitRegionCreate
 ): Promise<BusinessUnitRegionResponse> {
-  return serverFetch<BusinessUnitRegionResponse>(
-    '/business-unit-regions/',
-    { method: 'POST', body: data }
+  return serverPost<BusinessUnitRegionResponse>(
+    '/business-unit-regions',
+    data
   );
 }
 
@@ -64,9 +64,9 @@ export async function createBusinessUnitRegion(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getBusinessUnitRegion(id: number): Promise<BusinessUnitRegionResponse> {
-  return serverFetch<BusinessUnitRegionResponse>(
+  return serverGet<BusinessUnitRegionResponse>(
     `/business-unit-regions/${id}`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 }
 
@@ -77,9 +77,9 @@ export async function updateBusinessUnitRegion(
   id: number,
   data: BusinessUnitRegionUpdate
 ): Promise<BusinessUnitRegionResponse> {
-  return serverFetch<BusinessUnitRegionResponse>(
+  return serverPut<BusinessUnitRegionResponse>(
     `/business-unit-regions/${id}`,
-    { method: 'PUT', body: data }
+    data
   );
 }
 
@@ -89,9 +89,8 @@ export async function updateBusinessUnitRegion(
 export async function toggleBusinessUnitRegionStatus(
   id: number
 ): Promise<BusinessUnitRegionResponse> {
-  return serverFetch<BusinessUnitRegionResponse>(
-    `/business-unit-regions/${id}/status`,
-    { method: 'PUT' }
+  return serverPut<BusinessUnitRegionResponse>(
+    `/business-unit-regions/${id}/status`
   );
 }
 
@@ -101,9 +100,9 @@ export async function toggleBusinessUnitRegionStatus(
 export async function bulkUpdateBusinessUnitRegionsStatus(
   data: BulkBusinessUnitRegionStatusUpdate
 ): Promise<BusinessUnitRegionResponse[]> {
-  return serverFetch<BusinessUnitRegionResponse[]>(
+  return serverPost<BusinessUnitRegionResponse[]>(
     '/business-unit-regions/bulk-status',
-    { method: 'POST', body: data }
+    data
   );
 }
 
@@ -111,17 +110,17 @@ export async function bulkUpdateBusinessUnitRegionsStatus(
  * Deletes a business unit region
  */
 export async function deleteBusinessUnitRegion(id: number): Promise<void> {
-  await serverFetch('/business-unit-regions/' + id, { method: 'DELETE' });
+  await serverDelete(`/business-unit-regions/${id}`);
 }
 
 /**
  * Fetches business unit region counts
  *
- * Cache: SHORT_LIVED (1 minute) - counts for settings page header
+ * Cache: NO_CACHE - counts for settings page header
  */
 export async function getBusinessUnitRegionCounts(): Promise<BusinessUnitRegionCountsResponse> {
-  return serverFetch<BusinessUnitRegionCountsResponse>(
+  return serverGet<BusinessUnitRegionCountsResponse>(
     '/business-unit-regions/counts',
-    CACHE_PRESETS.SHORT_LIVED()
+    { revalidate: 0 }
   );
 }

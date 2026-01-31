@@ -272,7 +272,7 @@ async def track_connection(
             client_type=client_type,
             status='success'
         ).inc()
-    except Exception as e:
+    except Exception:
         # Track failed connection
         websocket_connections.labels(
             endpoint=endpoint,

@@ -1,15 +1,19 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, CheckCircle2, XCircle, Loader2, Server, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusCircle } from "@/components/data-table";
 import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
+import type { SchedulerStatus, ScheduledJob } from "@/lib/actions/scheduler.actions";
 
 type SchedulerStatusPanelProps = {
   isRunning: boolean;
   totalJobs: number;
   enabledJobs: number;
   runningJobs: number;
+  leaderInstance: SchedulerStatus["leaderInstance"];
+  nextScheduledJob: ScheduledJob | null;
 };
 
 export const SchedulerStatusPanel: React.FC<SchedulerStatusPanelProps> = ({
@@ -17,6 +21,8 @@ export const SchedulerStatusPanel: React.FC<SchedulerStatusPanelProps> = ({
   totalJobs,
   enabledJobs,
   runningJobs,
+  leaderInstance,
+  nextScheduledJob,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -72,6 +78,58 @@ export const SchedulerStatusPanel: React.FC<SchedulerStatusPanelProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Leader Info */}
+            {leaderInstance && (
+              <div className="px-4 pb-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  Leader Instance
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Host</span>
+                    <span className="font-mono font-medium">{leaderInstance.hostname}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">PID</span>
+                    <span className="font-mono">{leaderInstance.pid}</span>
+                  </div>
+                  {leaderInstance.leaderSince && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Since</span>
+                      <span suppressHydrationWarning>
+                        {formatDistanceToNow(new Date(leaderInstance.leaderSince.endsWith('Z') ? leaderInstance.leaderSince : leaderInstance.leaderSince + 'Z'), { addSuffix: true })}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Heartbeat</span>
+                    <span suppressHydrationWarning>
+                      {formatDistanceToNow(new Date(leaderInstance.lastHeartbeat.endsWith('Z') ? leaderInstance.lastHeartbeat : leaderInstance.lastHeartbeat + 'Z'), { addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Next Scheduled Job */}
+            {nextScheduledJob && (
+              <div className="px-4 pb-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                  <CalendarClock className="h-3 w-3" />
+                  Next Scheduled
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-xs">
+                  <div className="font-medium">{nextScheduledJob.name}</div>
+                  {nextScheduledJob.nextRunTime && (
+                    <div className="text-muted-foreground" suppressHydrationWarning>
+                      {formatDistanceToNow(new Date(nextScheduledJob.nextRunTime.endsWith('Z') ? nextScheduledJob.nextRunTime : nextScheduledJob.nextRunTime + 'Z'), { addSuffix: true })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Job Counts */}
             <div className="px-4 pb-6">

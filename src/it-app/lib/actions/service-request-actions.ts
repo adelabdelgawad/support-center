@@ -1,6 +1,6 @@
 'use server';
 
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet, serverPost } from '@/lib/fetch';
 import type {
   ServiceRequestDetail
 } from '@/types/ticket-detail';
@@ -25,13 +25,10 @@ export async function createServiceRequest(
     headers['X-Real-IP'] = clientIp;
   }
 
-  const response = await serverFetch<ServiceRequestDetail>(
+  const response = await serverPost<ServiceRequestDetail>(
     '/requests',
-    {
-      method: 'POST',
-      body: { title: data.title.trim() },
-      headers: Object.keys(headers).length > 0 ? headers : undefined,
-    }
+    { title: data.title.trim() },
+    Object.keys(headers).length > 0 ? { headers } : undefined
   );
 
   return response;
@@ -48,9 +45,9 @@ export async function getServiceRequestById(id: string) {
     throw new Error('Request ID must be a valid UUID');
   }
 
-  const response = await serverFetch<ServiceRequestDetail>(
+  const response = await serverGet<ServiceRequestDetail>(
     `/requests/${id}`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 
   return response;
@@ -74,12 +71,12 @@ export async function listServiceRequests(params?: ListServiceRequestsParams) {
   const queryString = new URLSearchParams(queryParams).toString();
   const endpoint = queryString ? `/requests?${queryString}` : '/requests';
 
-  const response = await serverFetch<{
+  const response = await serverGet<{
     data: ServiceRequestSummary[];
     total: number;
     page: number;
     perPage: number;
-  }>(endpoint, CACHE_PRESETS.NO_CACHE());
+  }>(endpoint, { revalidate: 0 });
 
   return response;
 }
@@ -102,9 +99,9 @@ export async function getTechnicianViews(params?: TechnicianViewsParams) {
 
   const endpoint = `/requests/technician-views?${queryParams.toString()}`;
 
-  const response = await serverFetch<TechnicianViewsResponse>(
+  const response = await serverGet<TechnicianViewsResponse>(
     endpoint,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 
   return response;

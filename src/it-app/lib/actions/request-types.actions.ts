@@ -1,6 +1,6 @@
 'use server';
 
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet, serverPost, serverPut, serverDelete } from '@/lib/fetch/server';
 import type {
   RequestType,
   RequestTypeCreate,
@@ -40,9 +40,9 @@ export async function getRequestTypes(params?: {
     });
   }
 
-  return serverFetch<RequestTypeListResponse>(
-    `/request-types/?${queryParams}`,
-    CACHE_PRESETS.NO_CACHE()
+  return serverGet<RequestTypeListResponse>(
+    `/request-types?${queryParams}`,
+    { revalidate: 0 }
   );
 }
 
@@ -52,9 +52,9 @@ export async function getRequestTypes(params?: {
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getRequestType(id: string): Promise<RequestType> {
-  return serverFetch<RequestType>(
+  return serverGet<RequestType>(
     `/request-types/${id}`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 }
 
@@ -64,9 +64,9 @@ export async function getRequestType(id: string): Promise<RequestType> {
 export async function createRequestType(
   data: RequestTypeCreate
 ): Promise<RequestType> {
-  return serverFetch<RequestType>(
-    '/request-types/',
-    { method: 'POST', body: data }
+  return serverPost<RequestType>(
+    '/request-types',
+    data
   );
 }
 
@@ -77,9 +77,9 @@ export async function updateRequestType(
   id: string,
   data: RequestTypeUpdate
 ): Promise<RequestType> {
-  return serverFetch<RequestType>(
+  return serverPut<RequestType>(
     `/request-types/${id}`,
-    { method: 'PUT', body: data }
+    data
   );
 }
 
@@ -87,9 +87,8 @@ export async function updateRequestType(
  * Toggles request type status (active/inactive)
  */
 export async function toggleRequestTypeStatus(id: string): Promise<RequestType> {
-  return serverFetch<RequestType>(
-    `/request-types/${id}/status`,
-    { method: 'PUT' }
+  return serverPut<RequestType>(
+    `/request-types/${id}/status`
   );
 }
 
@@ -99,9 +98,9 @@ export async function toggleRequestTypeStatus(id: string): Promise<RequestType> 
 export async function bulkUpdateRequestTypesStatus(
   data: BulkRequestTypeUpdate
 ): Promise<RequestType[]> {
-  return serverFetch<RequestType[]>(
+  return serverPost<RequestType[]>(
     '/request-types/bulk-status',
-    { method: 'POST', body: data }
+    data
   );
 }
 
@@ -109,5 +108,5 @@ export async function bulkUpdateRequestTypesStatus(
  * Deletes a request type
  */
 export async function deleteRequestType(id: string): Promise<void> {
-  await serverFetch('/request-types/' + id, { method: 'DELETE' });
+  await serverDelete(`/request-types/${id}`);
 }

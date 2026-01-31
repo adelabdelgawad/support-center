@@ -1,7 +1,8 @@
-import useSWR from 'swr';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { getSubTasksByRequest, getSubTaskStats } from '@/lib/api/sub-tasks';
 import type { SubTask } from '@/lib/api/sub-tasks';
 import type { SubTaskStats } from '@/types/requests-list';
+import { useCallback, useMemo } from 'react';
 
 interface UseSubTasksOptions {
   enabled?: boolean;
@@ -10,13 +11,13 @@ interface UseSubTasksOptions {
 }
 
 /**
- * SWR hook for fetching sub-tasks and their stats
+ * Hook for fetching sub-tasks and their stats using useAsyncData
  * Provides automatic request deduplication and uses initial SSR data
  *
  * @param requestId - The parent request ID
  * @param initialData - Initial data from SSR (optional)
  * @param options - Options for fetching (enabled, skip, limit)
- * @returns Sub-tasks data, stats, loading states, and mutate function
+ * @returns Sub-tasks data, stats, loading states, and refetch function
  */
 export function useSubTasks(
   requestId: string | null,
@@ -29,50 +30,74 @@ export function useSubTasks(
 ) {
   const { enabled = true, skip = 0, limit = 20 } = options;
 
+  // Memoize fetch params for tasks
+  const tasksFetchParams = useMemo(() => ({
+    enabled,
+    requestId,
+    skip,
+    limit,
+  }), [enabled, requestId, skip, limit]);
+
   // Fetch tasks
+  const fetchTasks = useCallback(async () => {
+    if (!enabled || !requestId) {
+      return { items: [], total: 0 };
+    }
+    return await getSubTasksByRequest(requestId, skip, limit);
+  }, [enabled, requestId, skip, limit]);
+
   const {
-    data: tasks,
+    data: tasksData,
     error: tasksError,
     isLoading: tasksLoading,
-    mutate: mutateTasks,
-  } = useSWR(
-    enabled && requestId ? ['sub-tasks', requestId, skip, limit] : null,
-    () => getSubTasksByRequest(requestId!, skip, limit),
-    {
-      dedupingInterval: 30000, // Dedupe requests within 30s
-      fallbackData: initialData
-        ? { items: initialData.items as SubTask[], total: initialData.total }
-        : undefined,
-      revalidateOnMount: !initialData?.items?.length, // Don't refetch if we have initial data
-      revalidateOnFocus: false,
-    }
+    refetch: refetchTasks,
+  } = useAsyncData(
+    fetchTasks,
+    [tasksFetchParams],
+    initialData ? { items: initialData.items as SubTask[], total: initialData.total } : undefined
   );
 
   // Fetch stats
+  const statsFetchParams = useMemo(() => ({
+    enabled,
+    requestId,
+  }), [enabled, requestId]);
+
+  const fetchStats = useCallback(async () => {
+    if (!enabled || !requestId) {
+      return {
+        total: 0,
+        byStatus: {},
+        blockedCount: 0,
+        overdueCount: 0,
+        completedCount: 0,
+      } as SubTaskStats;
+    }
+    return await getSubTaskStats(requestId);
+  }, [enabled, requestId]);
+
   const {
     data: stats,
     error: statsError,
     isLoading: statsLoading,
-    mutate: mutateStats,
-  } = useSWR(
-    enabled && requestId ? ['sub-task-stats', requestId] : null,
-    () => getSubTaskStats(requestId!),
-    {
-      dedupingInterval: 30000,
-      fallbackData: initialData?.stats as SubTaskStats | undefined,
-      revalidateOnMount: !initialData?.stats,
-      revalidateOnFocus: false,
-    }
+    refetch: refetchStats,
+  } = useAsyncData(
+    fetchStats,
+    [statsFetchParams],
+    initialData?.stats as SubTaskStats | undefined
   );
 
-  // Combined mutate function to refresh both tasks and stats
-  const mutate = async () => {
-    await Promise.all([mutateTasks(), mutateStats()]);
-  };
+  // Combined refetch function to refresh both tasks and stats
+  const mutate = useCallback(async () => {
+    await Promise.all([
+      refetchTasks(),
+      refetchStats(),
+    ]);
+  }, [refetchTasks, refetchStats]);
 
   return {
-    tasks: tasks?.items ?? [],
-    total: tasks?.total ?? 0,
+    tasks: tasksData?.items ?? [],
+    total: tasksData?.total ?? 0,
     stats: stats ?? {
       total: 0,
       byStatus: {},

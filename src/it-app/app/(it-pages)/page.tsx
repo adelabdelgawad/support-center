@@ -1,44 +1,36 @@
 /**
- * Home Dashboard Page (Server Component)
+ * Home Page (Server Component)
  *
- * Fetches dashboard data and renders the dashboard
- * This is the root page (/) for authenticated users
+ * Empty welcome page for all authenticated users
+ * No redirects - just a simple welcome message
  */
 
 import { Metadata } from "next";
-import { cookies } from "next/headers";
-import { getDashboardStats } from "@/lib/actions/dashboard.actions";
-import { DashboardClient } from "./dashboard-client";
-import type { AppUser } from "@/types/auth";
+import { getCurrentUser } from "@/lib/auth/server-auth";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: 'Dashboard',
-  description: 'IT Support Center dashboard with key metrics and quick actions',
+  title: 'Welcome',
+  description: 'IT Support Center',
 };
 
-async function getCurrentUser(): Promise<AppUser | null> {
-  try {
-    const cookieStore = await cookies();
-    const userDataCookie = cookieStore.get('user_data');
+export default async function HomePage() {
+  const user = await getCurrentUser();
 
-    if (!userDataCookie || !userDataCookie.value) {
-      return null;
-    }
-
-    const userData = JSON.parse(userDataCookie.value);
-    return userData;
-  } catch (error) {
-    console.error('Error getting current user:', error);
-    return null;
+  if (!user) {
+    redirect("/login");
   }
-}
 
-export default async function DashboardPage() {
-  // Fetch user and dashboard data in parallel
-  const [user, stats] = await Promise.all([
-    getCurrentUser(),
-    getDashboardStats(),
-  ]);
-
-  return <DashboardClient user={user} stats={stats} />;
+  return (
+    <div className="flex items-center justify-center min-h-[80vh]">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold tracking-tight">
+          Welcome Back, {user.fullName || user.username}
+        </h1>
+        <p className="text-muted-foreground text-lg">
+          IT Support Center
+        </p>
+      </div>
+    </div>
+  );
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet } from '@/lib/fetch';
 import type {
   TechnicianViewsResponse,
   ViewType,
@@ -44,11 +44,11 @@ export async function getTechnicianViewsData(
       params.append('business_unit_id', businessUnitIds[0].toString());
     }
 
-    // Call backend API directly from server using serverFetch
+    // Call backend API directly from server using serverGet
     // This automatically includes the session token from cookies
-    const data = await serverFetch<TechnicianViewsResponse>(
+    const data = await serverGet<TechnicianViewsResponse>(
       `/requests/technician-views?${params.toString()}`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
 
     return data;
@@ -82,10 +82,10 @@ export async function getBusinessUnitCountsData(view?: string): Promise<Business
       ? `/requests/business-unit-counts?view=${encodeURIComponent(view)}`
       : '/requests/business-unit-counts';
 
-    // Call backend API directly from server using serverFetch
-    const data = await serverFetch<BusinessUnitCountsResponse>(
+    // Call backend API directly from server using serverGet
+    const data = await serverGet<BusinessUnitCountsResponse>(
       url,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
 
     return data;

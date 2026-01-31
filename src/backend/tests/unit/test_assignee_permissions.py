@@ -13,8 +13,8 @@ import pytest_asyncio
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database_models import User, Role, UserRole, ServiceRequest, RequestStatus
-from services.request_service import RequestService
+from db.models import User, Role, UserRole, ServiceRequest, RequestStatus
+from api.services.request_service import RequestService
 
 
 @pytest_asyncio.fixture
@@ -191,7 +191,7 @@ async def open_request_with_assignee(
     await db_session.refresh(request)
 
     # Assign technician_a
-    from models.database_models import RequestAssignee
+    from db.models import RequestAssignee
     assignment = RequestAssignee(
         request_id=request.id,
         assignee_id=technician_a.id,
@@ -225,7 +225,7 @@ async def solved_request_with_assignee(
     await db_session.refresh(request)
 
     # Assign technician_a
-    from models.database_models import RequestAssignee
+    from db.models import RequestAssignee
     assignment = RequestAssignee(
         request_id=request.id,
         assignee_id=technician_a.id,
@@ -301,7 +301,7 @@ async def test_assigned_technician_can_remove_assignee(
     NF-3: Any technician can remove assignees from non-solved requests.
     """
     # First add a second assignee so we're not removing the last one
-    from models.database_models import RequestAssignee
+    from db.models import RequestAssignee
     assignment = RequestAssignee(
         request_id=open_request_with_assignee.id,
         assignee_id=technician_c.id,
@@ -334,7 +334,7 @@ async def test_unassigned_technician_can_remove_assignee(
     Even unassigned technicians can remove assignees.
     """
     # First add a second assignee so we're not removing the last one
-    from models.database_models import RequestAssignee
+    from db.models import RequestAssignee
     assignment = RequestAssignee(
         request_id=open_request_with_assignee.id,
         assignee_id=technician_c.id,
@@ -392,7 +392,7 @@ async def test_cannot_remove_assignee_from_solved_request(
     NF-3: Cannot remove assignees from solved requests (countAsSolved=true).
     """
     # First add a second assignee
-    from models.database_models import RequestAssignee
+    from db.models import RequestAssignee
     assignment = RequestAssignee(
         request_id=solved_request_with_assignee.id,
         assignee_id=technician_c.id,

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const response = await makeAuthenticatedRequest(
       "GET",
-      `/pages/?${searchParams.toString()}`
+      `/pages?${searchParams.toString()}`
     );
 
     return NextResponse.json(response);

@@ -3,7 +3,7 @@
  * Provides consistent error messaging, logging, and user feedback across the application
  */
 
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 
 export interface ApiErrorResponse {
   detail?: string;
@@ -45,8 +45,8 @@ export function _handleApiError(
 
   let errorMessage = defaultMessage;
 
-  // Handle ServerFetchError
-  if (error instanceof ServerFetchError) {
+  // Handle ApiError
+  if (error instanceof ApiError) {
     // Use detail if available, otherwise message
     if (error.detail) {
       errorMessage = error.detail;
@@ -80,7 +80,7 @@ export function handleNetworkError(
   error: unknown,
   options: ApiErrorOptions = {}
 ): never {
-  if (error instanceof ServerFetchError) {
+  if (error instanceof ApiError) {
     if (error.detail === 'connection_refused') {
       // Network error (no response)
       const message = `Network error while ${operation.toLowerCase()}. Please check your connection.`;
@@ -106,12 +106,12 @@ export function handleAuthError(
   error: unknown,
   options: ApiErrorOptions = {}
 ): never {
-  if (error instanceof ServerFetchError && error.status === 401) {
+  if (error instanceof ApiError && error.status === 401) {
     const message = "Authentication required. Please log in again.";
     throw new Error(message);
   }
 
-  if (error instanceof ServerFetchError && error.status === 403) {
+  if (error instanceof ApiError && error.status === 403) {
     const message = "You don't have permission to perform this action.";
     throw new Error(message);
   }
@@ -129,7 +129,7 @@ export function handleValidationError(
   error: unknown,
   options: ApiErrorOptions = {}
 ): never {
-  if (error instanceof ServerFetchError && error.status === 422) {
+  if (error instanceof ApiError && error.status === 422) {
     let message = "Validation error";
 
     if (error.detail) {
@@ -155,15 +155,15 @@ export function createApiErrorHandler(operationType: string) {
 /**
  * Validates if an error is an API error with a specific status code
  */
-export function isApiErrorWithStatus(error: unknown, status: number): error is ServerFetchError {
-  return error instanceof ServerFetchError && error.status === status;
+export function isApiErrorWithStatus(error: unknown, status: number): error is ApiError {
+  return error instanceof ApiError && error.status === status;
 }
 
 /**
  * Extracts error message from various error formats
  */
 export function extractErrorMessage(error: unknown): string {
-  if (error instanceof ServerFetchError) {
+  if (error instanceof ApiError) {
     return error.detail || error.message || "Unknown error";
   }
 

@@ -10,7 +10,7 @@
  * IMPORTANT: Never call backend directly from client components!
  */
 import { NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
 
 /**
@@ -44,7 +44,7 @@ export async function GET() {
     console.error("❌ Get priorities error:", error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

@@ -2,13 +2,13 @@
 
 /**
  * Server actions for request details page
- * These functions use serverFetch with appropriate cache strategies
+ * These functions use serverGet/serverPost/etc with appropriate cache strategies
  * Used by page.tsx for server-side data fetching
  */
 
 import { redirect } from 'next/navigation';
 import { getServerUserInfo } from '@/lib/api/server-fetch';
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet, serverPost, serverPatch } from '@/lib/fetch';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestNote, RequestStatus } from '@/types/metadata';
 import type { ChatMessage } from '@/lib/signalr/types';
@@ -23,9 +23,9 @@ import type { Category } from '@/lib/hooks/use-categories-tags';
  */
 export async function getRequestDetails(requestId: string): Promise<ServiceRequestDetail | null> {
   try {
-    const ticket = await serverFetch<ServiceRequestDetail>(
+    const ticket = await serverGet<ServiceRequestDetail>(
       `/requests/${requestId}`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return ticket;
   } catch (error) {
@@ -41,9 +41,9 @@ export async function getRequestDetails(requestId: string): Promise<ServiceReque
  */
 export async function getRequestNotes(requestId: string): Promise<RequestNote[]> {
   try {
-    const notes = await serverFetch<RequestNote[]>(
+    const notes = await serverGet<RequestNote[]>(
       `/request-notes/${requestId}/notes`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return notes;
   } catch (error) {
@@ -59,9 +59,9 @@ export async function getRequestNotes(requestId: string): Promise<RequestNote[]>
  */
 export async function getTechnicians(): Promise<Technician[]> {
   try {
-    const technicians = await serverFetch<Technician[]>(
+    const technicians = await serverGet<Technician[]>(
       '/users?is_technician=true&is_active=true',
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
     return technicians;
   } catch (error) {
@@ -78,9 +78,9 @@ export async function getTechnicians(): Promise<Technician[]> {
  */
 export async function getPriorities(): Promise<Priority[]> {
   try {
-    const priorities = await serverFetch<Priority[]>(
+    const priorities = await serverGet<Priority[]>(
       '/priorities/',
-      CACHE_PRESETS.REFERENCE_DATA('priorities')
+      { revalidate: 0 }
     );
     return priorities;
   } catch (error) {
@@ -97,7 +97,7 @@ export async function getPriorities(): Promise<Priority[]> {
  */
 export async function getStatuses(): Promise<RequestStatus[]> {
   try {
-    const response = await serverFetch<{
+    const response = await serverGet<{
       statuses: RequestStatus[];
       total: number;
       activeCount: number;
@@ -105,7 +105,7 @@ export async function getStatuses(): Promise<RequestStatus[]> {
       readonlyCount: number;
     }>(
       '/request-statuses?is_active=true',
-      CACHE_PRESETS.REFERENCE_DATA('statuses')
+      { revalidate: 0 }
     );
 
     return response.statuses;
@@ -123,9 +123,9 @@ export async function getStatuses(): Promise<RequestStatus[]> {
  */
 export async function getCategories(): Promise<Category[]> {
   try {
-    const categories = await serverFetch<Category[]>(
+    const categories = await serverGet<Category[]>(
       '/categories/categories?active_only=true&include_subcategories=true',
-      CACHE_PRESETS.REFERENCE_DATA('categories')
+      { revalidate: 0 }
     );
 
     return categories || [];
@@ -146,9 +146,9 @@ export async function getRequestMessages(
   perPage: number = 100
 ): Promise<ChatMessage[]> {
   try {
-    const messages = await serverFetch<ChatMessage[]>(
+    const messages = await serverGet<ChatMessage[]>(
       `/chat/messages/request/${requestId}?page=${page}&per_page=${perPage}`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return messages;
   } catch (error) {
@@ -205,9 +205,9 @@ function transformAssignee(item: BackendAssignee): Assignee {
  */
 export async function getRequestAssignees(requestId: string): Promise<Assignee[]> {
   try {
-    const response = await serverFetch<AssigneesResponse>(
+    const response = await serverGet<AssigneesResponse>(
       `/requests/${requestId}/assignees`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return (response.assignees || []).map(transformAssignee);
   } catch (error) {
@@ -243,9 +243,9 @@ interface FullDetailsResponse {
  */
 async function getFullRequestDetails(requestId: string): Promise<FullDetailsResponse | null> {
   try {
-    const response = await serverFetch<FullDetailsResponse>(
+    const response = await serverGet<FullDetailsResponse>(
       `/requests/${requestId}/full-details`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return response;
   } catch (error) {
@@ -260,9 +260,8 @@ async function getFullRequestDetails(requestId: string): Promise<FullDetailsResp
  */
 async function markChatAsReadServer(requestId: string): Promise<void> {
   try {
-    await serverFetch<any>(
-      `/chat/${requestId}/mark-read`,
-      { method: 'POST' }
+    await serverPost<any>(
+      `/chat/${requestId}/mark-read`
     );
   } catch {
     // Silent failure - client-side fallback will handle this case
@@ -277,13 +276,13 @@ async function markChatAsReadServer(requestId: string): Promise<void> {
 async function getRequestSubTasks(requestId: string): Promise<{ items: any[]; total: number; stats: any }> {
   try {
     const [subTasksResponse, statsResponse] = await Promise.all([
-      serverFetch<any[]>(
+      serverGet<any[]>(
         `/requests/${requestId}/sub-tasks?skip=0&limit=20`,
-        CACHE_PRESETS.NO_CACHE()
+        { revalidate: 0 }
       ),
-      serverFetch<any>(
+      serverGet<any>(
         `/requests/${requestId}/sub-tasks/stats`,
-        CACHE_PRESETS.NO_CACHE()
+        { revalidate: 0 }
       ),
     ]);
 
@@ -397,9 +396,9 @@ export async function createNoteServerAction(
   note: string
 ): Promise<RequestNote | null> {
   try {
-    const newNote = await serverFetch<RequestNote>(
+    const newNote = await serverPost<RequestNote>(
       `/request-notes/${requestId}/notes`,
-      { method: 'POST', body: { note } }
+      { note }
     );
     return newNote;
   } catch (error) {
@@ -422,9 +421,9 @@ export async function updateTicketStatusServerAction(
       payload.resolution = resolution;
     }
 
-    const updatedTicket = await serverFetch<ServiceRequestDetail>(
+    const updatedTicket = await serverPatch<ServiceRequestDetail>(
       `/requests/${requestId}`,
-      { method: 'PATCH', body: payload }
+      payload
     );
     return updatedTicket;
   } catch (error) {
@@ -441,9 +440,9 @@ export async function updateTicketPriorityServerAction(
   priorityId: number
 ): Promise<ServiceRequestDetail | null> {
   try {
-    const updatedTicket = await serverFetch<ServiceRequestDetail>(
+    const updatedTicket = await serverPatch<ServiceRequestDetail>(
       `/requests/${requestId}`,
-      { method: 'PATCH', body: { priority_id: priorityId } }
+      { priority_id: priorityId }
     );
     return updatedTicket;
   } catch (error) {
@@ -460,9 +459,9 @@ export async function assignTechnicianServerAction(
   technicianId: number
 ): Promise<boolean> {
   try {
-    await serverFetch(
+    await serverPost(
       `/requests/${requestId}/assign`,
-      { method: 'POST', body: { technician_id: technicianId } }
+      { technician_id: technicianId }
     );
     return true;
   } catch (error) {

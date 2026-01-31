@@ -6,16 +6,14 @@ for the passwordless authentication system.
 """
 
 import hashlib
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Union
 from uuid import UUID, uuid4
 
 from core.config import settings
-from fastapi import HTTPException, status
 import jwt
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWTError
-from models import User, DesktopSession, WebSession
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from db import User, DesktopSession, WebSession
 
 
 class SecurityError(Exception):

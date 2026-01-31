@@ -11,7 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import {
   makeAuthenticatedRequest,
   getServerErrorMessage,
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
-    const apiError = error instanceof ServerFetchError ? error : null;
+    const apiError = error instanceof ApiError ? error : null;
     const message = getServerErrorMessage(error);
     const status = apiError?.status || 500;
 

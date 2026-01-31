@@ -3,7 +3,7 @@
  * Only imported when running in Tauri environment
  */
 
-import { ApiError } from './client';
+import { ApiError, extractErrorMessage } from './errors';
 import { getUnifiedAccessToken } from '@/lib/utils/auth-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -40,11 +40,12 @@ export async function tauriFetch<T>(
   }
 
   if (!response.ok) {
-    const detail = (data as Record<string, unknown>)?.detail;
     throw new ApiError(
-      typeof detail === 'string' ? detail : 'Request failed',
+      extractErrorMessage(data),
       response.status,
-      data
+      data,
+      fullUrl,
+      options.method
     );
   }
 

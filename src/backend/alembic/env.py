@@ -14,7 +14,7 @@ from sqlmodel import SQLModel
 
 from alembic import context
 from core.config import settings
-from models.database_models import *  # Import all models
+from db.models import *  # noqa: F403  # Import all models
 
 # Alembic Config object
 config = context.config

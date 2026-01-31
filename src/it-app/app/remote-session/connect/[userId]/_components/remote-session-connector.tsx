@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ export default function RemoteSessionConnector({
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const createSession = async () => {
+  const createSession = useCallback(async () => {
     setState("connecting");
     setError(null);
 
@@ -62,11 +62,11 @@ export default function RemoteSessionConnector({
       setError(err instanceof Error ? err.message : "Failed to connect");
       setState("error");
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     createSession();
-  }, [userId]);
+  }, [userId, createSession]);
 
   // Connecting state
   if (state === "connecting") {

@@ -1,59 +1,33 @@
 'use client';
 
-import useSWR from 'swr';
+import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '@/lib/fetch/client';
 import type { RequestNote } from '@/types/metadata';
 
 /**
- * Fetcher function for SWR using apiClient
- */
-async function fetcher<T>(url: string): Promise<T> {
-  return apiClient.get<T>(url);
-}
-
-/**
- * Hook to fetch and manage request notes using SWR
+ * Hook to fetch and manage request notes using useState
  * Updates cache directly from server response (no extra network requests)
  *
  * @param requestId - The request/ticket ID
  * @param initialData - Initial notes data from server (for SSR)
- * @returns SWR response with notes data and helpers
+ * @returns Response with notes data and helpers
  */
 export function useRequestNotes(requestId: string, initialData?: RequestNote[]) {
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.length > 0;
-
-  const { data, error, isLoading, mutate } = useSWR<RequestNote[]>(
-    requestId ? `/api/request-notes/${requestId}` : null,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateIfStale: false, // Don't refetch stale data on mount (SSR data is fresh)
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateOnFocus: false, // Don't refetch when window regains focus
-      revalidateOnReconnect: true, // Refetch when network reconnects
-    }
-  );
-
-  // Current notes - either from SWR data or fallback to initialData
-  const notes = data ?? initialData ?? [];
+  // Use useState for notes management
+  const [notes, setNotes] = useState<RequestNote[]>(initialData ?? []);
+  const [isLoading, setIsLoading] = useState(false);
 
   /**
    * Enhanced loading state that considers SSR data
-   * SWR's isLoading is true when no data and request is in flight
-   * But when fallbackData is provided, isLoading should be false
+   * If we have initial data, we're not loading
    */
-  const notesLoading = data === undefined && initialData === undefined ? isLoading : false;
+  const notesLoading = !initialData && isLoading;
 
   /**
-   * Add a new note - uses server response to update cache directly
-   * Flow: POST request → Get new note from response → Add to cache
+   * Add a new note - uses server response to update state directly
+   * Flow: POST request → Get new note from response → Add to state
    */
-  const addNote = async (noteText: string): Promise<RequestNote> => {
-    // Store previous data for rollback
-    const previousNotes = notes;
-
+  const addNote = useCallback(async (noteText: string): Promise<RequestNote> => {
     try {
       // Send request to server and get the created note back
       const newNote = await apiClient.post<RequestNote>('/api/request-notes', {
@@ -61,25 +35,38 @@ export function useRequestNotes(requestId: string, initialData?: RequestNote[]) 
         note: noteText,
       });
 
-      // Update cache directly using the response data (no revalidation needed)
+      // Update state directly using the response data (no revalidation needed)
       // Add new note at the beginning (top of list)
-      await mutate(
-        [newNote, ...notes],
-        { revalidate: false }
-      );
+      setNotes(prev => [newNote, ...prev]);
 
       return newNote;
     } catch (error) {
-      // Rollback is automatic since we didn't mutate, but log for debugging
       console.error('Failed to add note:', error);
       throw error;
     }
-  };
+  }, [requestId]);
+
+  /**
+   * Manual mutate function for compatibility
+   * Can be called to force a refresh from server
+   */
+  const mutate = useCallback(async () => {
+    if (!requestId) return;
+    setIsLoading(true);
+    try {
+      const fetchedNotes = await apiClient.get<RequestNote[]>(`/api/request-notes/${requestId}`);
+      setNotes(fetchedNotes);
+    } catch (error) {
+      console.error('Failed to fetch notes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [requestId]);
 
   return {
     notes,
     isLoading: notesLoading,
-    error,
+    error: undefined,
     addNote,
     mutate,
   };

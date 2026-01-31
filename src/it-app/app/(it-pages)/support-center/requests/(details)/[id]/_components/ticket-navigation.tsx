@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, startTransition } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -45,13 +45,15 @@ export function TicketNavigation({
 
   useEffect(() => {
     // Mark as mounted first (prevents hydration mismatch)
-    setIsMounted(true);
+    startTransition(() => {
+      setIsMounted(true);
 
-    // Read from session storage on mount
-    const savedUrl = sessionStorage.getItem(REQUESTS_LIST_URL_KEY);
-    if (savedUrl) {
-      setRequestsListUrl(savedUrl);
-    }
+      // Read from session storage on mount
+      const savedUrl = sessionStorage.getItem(REQUESTS_LIST_URL_KEY);
+      if (savedUrl) {
+        setRequestsListUrl(savedUrl);
+      }
+    });
   }, []);
 
   // Use default URL during SSR/hydration, saved URL after mount

@@ -1,9 +1,9 @@
 /**
  * Centralized SWR Cache Key Management
  *
- * This module provides consistent cache key generation for all SWR hooks.
- * Using centralized keys ensures proper cache invalidation and data sharing
- * across components.
+ * This module provides consistent cache key generation for SWR hooks.
+ * After the migration to useAsyncData, only requests-list and scheduler
+ * related keys should remain here.
  *
  * Usage:
  * - Import cacheKeys and use the appropriate function to generate keys
@@ -12,16 +12,10 @@
 
 /**
  * Cache key generators for different resources
+ * NOTE: After migration, only requests-list and scheduler keys use SWR
  */
 export const cacheKeys = {
-  // Request/Ticket related keys
-  requestDetails: (requestId: string) => `/api/requests-details/${requestId}`,
-  requestAssignees: (requestId: string) => `/api/requests-details/${requestId}/assignees`,
-  requestCC: (requestId: string) => `/api/requests-details/${requestId}/cc`,
-  requestNotes: (requestId: string) => `/api/request-notes/${requestId}`,
-  // Unified assignment route with type parameter
-  requestAssignment: (requestId: string, typeId: number) => `/api/requests-details/${requestId}/assignments?type=${typeId}`,
-  // Technician views list with view type, pagination, and optional business unit IDs
+  // Request/Ticket related keys (SWR - kept for requests-list)
   technicianViews: (view: string, page: number, perPage: number, businessUnitIds?: number[]) => {
     const params = new URLSearchParams({
       view,
@@ -36,42 +30,18 @@ export const cacheKeys = {
     return `/api/requests/technician-views?${params.toString()}`;
   },
 
-  // Chat related keys
-  chatMessages: (requestId: string) => `/api/chat/messages/${requestId}`,
-
-  // User/Technician related keys
-  technicians: '/api/technicians',
-  usersWithRoles: '/api/users/with-roles',
-  userPages: (userId: string) => `/api/users/${userId}/pages`,
-
-  // Business unit counts
-  businessUnitCounts: (view: string) => `/api/requests/business-unit-counts?view=${view}`,
-
-  // View counts for sidebar (independent of current view/page)
+  // View counts for sidebar (SWR - kept for requests-list)
   viewCounts: '/api/requests/view-counts',
 
-  // Ticket type counts (global, not filtered by view)
+  // Business unit counts (SWR - kept for requests-list)
+  businessUnitCounts: (view: string) => `/api/requests/business-unit-counts?view=${view}`,
+
+  // Ticket type counts (SWR - kept for requests-list)
   ticketTypeCounts: '/api/requests/ticket-type-counts',
 
-  // Metadata keys (global, cached across all ticket views)
-  globalPriorities: '/api/priorities',
-  globalStatuses: '/api/metadata/statuses',
-  globalTechnicians: '/api/technicians',
-  globalCategories: '/api/categories?include_subcategories=true',
-
-  // Legacy metadata keys (for backward compatibility)
-  priorities: '/api/metadata/priorities',
-  statuses: '/api/metadata/statuses',
-  categories: '/api/metadata/categories',
-
-  // Settings keys
-  systemEvents: '/api/setting/system-events',
-  systemEvent: (eventId: string) => `/api/setting/system-events/${eventId}`,
-  systemMessages: '/api/setting/system-messages',
-  systemMessage: (messageId: string) => `/api/setting/system-messages/${messageId}`,
-
-  // Custom views
-  customView: '/api/user-custom-views',
+  // Scheduler related keys (SWR - kept for scheduler)
+  schedulerJobs: (page: number = 1, perPage: number = 50) => `/api/scheduler/jobs?page=${page}&per_page=${perPage}`,
+  schedulerStatus: '/api/scheduler/status',
 } as const;
 
 /**
@@ -92,13 +62,9 @@ export function createKeyMatcher(pattern: RegExp) {
  * Predefined key matchers for common invalidation patterns
  */
 export const keyMatchers = {
-  // Match all request-related keys for a specific request
-  requestRelated: (requestId: string) =>
-    createKeyMatcher(new RegExp(`/api/(requests-details|request-notes|chat/messages)/${requestId}`)),
+  // Match all requests-list keys for invalidation from detail page
+  requestsList: createKeyMatcher(/\/api\/requests\/(technician-views|view-counts|business-unit-counts|ticket-type-counts)/),
 
-  // Match all user-related keys
-  userRelated: createKeyMatcher(/\/api\/users/),
-
-  // Match all metadata keys
-  metadataRelated: createKeyMatcher(/\/api\/metadata/),
+  // Match all scheduler keys
+  schedulerRelated: createKeyMatcher(/\/api\/scheduler\//),
 } as const;

@@ -1,0 +1,32 @@
+{
+  "name": "fullstack-agents",
+  "description": "Unified fullstack development toolkit with 28 AI agents, 8 commands, and 9 skill domains for FastAPI, Next.js, Docker, Celery, WebSocket, and more. Features intelligent code generation with interactive dialogue, pattern detection, and multi-agent orchestration.",
+  "version": "2.1.0",
+  "license": "MIT",
+  "author": {
+    "name": "Adel Abdelgawad",
+    "github": "https://github.com/adelabdelgawad"
+  },
+  "homepage": "https://github.com/adelabdelgawad/fullstack-agents",
+  "keywords": [
+    "fastapi",
+    "nextjs",
+    "docker",
+    "celery",
+    "apscheduler",
+    "fullstack",
+    "agents",
+    "code-generation",
+    "scaffolding",
+    "review",
+    "analysis",
+    "debugging",
+    "optimization",
+    "python",
+    "typescript",
+    "react",
+    "sqlalchemy",
+    "tanstack-table"
+  ],
+  "repository": "https://github.com/adelabdelgawad/fullstack-agents"
+}

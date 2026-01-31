@@ -12,30 +12,24 @@ Tests:
 - Business rules (resolution required for solved status)
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database_models import (
-    ServiceRequest, User, RequestStatus, Priority, Category,
-    BusinessUnit, RequestAssignee
+from db.models import (
+    ServiceRequest, User, RequestStatus, Priority
 )
-from schemas import (
-    ServiceRequestCreate,
+from api.schemas import (
     ServiceRequestCreateByRequester,
     ServiceRequestUpdate,
-    AssignTechnicianRequest,
 )
-from services.request_service import RequestService
+from api.services.request_service import RequestService
 from tests.factories import (
-    UserFactory, ServiceRequestFactory, RequestStatusFactory,
-    PriorityFactory, CategoryFactory, BusinessUnitFactory
+    UserFactory, ServiceRequestFactory
 )
 
 
@@ -48,7 +42,7 @@ async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
     """Get or create standard request statuses."""
     # First try to get existing statuses
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -82,7 +76,7 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
     """Get or create standard priorities."""
     # First try to get existing priorities
     result = await db_session.execute(
-        select(Priority).where(Priority.is_active == True).order_by(Priority.response_time_minutes)
+        select(Priority).where(Priority.is_active).order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 
@@ -470,7 +464,7 @@ class TestRequestUpdate:
         self, db_session, sample_statuses
     ):
         """Test updating non-existent request raises NotFoundError."""
-        from services.request_service import NotFoundError
+        from api.services.request_service import NotFoundError
         fake_id = uuid4()
         update_data = ServiceRequestUpdate(
             status_id=sample_statuses[1].id
@@ -745,7 +739,6 @@ class TestRequestDeletion:
         self, db_session, sample_request
     ):
         """Test soft-deleting a request using is_deleted flag."""
-        from services.request_service import NotFoundError
 
         # Use mock since the actual service may have different implementation
         with patch.object(RequestService, 'delete_service_request') as mock_delete:
@@ -764,7 +757,7 @@ class TestRequestDeletion:
         self, db_session
     ):
         """Test deleting non-existent request raises NotFoundError."""
-        from services.request_service import NotFoundError
+        from api.services.request_service import NotFoundError
         fake_id = uuid4()
 
         with pytest.raises(NotFoundError):
@@ -786,15 +779,15 @@ class TestBusinessUnitCounts:
         self, db_session, technician_user
     ):
         """Test getting request counts by business unit."""
-        from repositories.service_request_repository import ServiceRequestRepository
+        from crud.service_request_crud import ServiceRequestCRUD
 
-        with patch.object(ServiceRequestRepository, 'get_business_unit_counts') as mock_counts:
+        with patch.object(ServiceRequestCRUD, 'get_business_unit_counts') as mock_counts:
             mock_counts.return_value = (
                 [{"id": 1, "name": "HQ", "count": 10}],
                 5  # unassigned count
             )
 
-            bu_counts, unassigned = await ServiceRequestRepository.get_business_unit_counts(
+            bu_counts, unassigned = await ServiceRequestCRUD.get_business_unit_counts(
                 db=db_session,
                 user=technician_user,
             )

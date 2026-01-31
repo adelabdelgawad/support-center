@@ -14,7 +14,7 @@ export async function GET(_request: NextRequest) {
   try {
     // Forward all query parameters to the backend
     const searchParams = _request.nextUrl.searchParams;
-    const response = await makeAuthenticatedRequest<unknown>('GET', `/business-units/?${searchParams.toString()}`);
+    const response = await makeAuthenticatedRequest<unknown>('GET', `/business-units?${searchParams.toString()}`);
     return NextResponse.json(response);
   } catch (error: unknown) {
     const message = getServerErrorMessage(error);
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest) {
 export async function POST(_request: NextRequest) {
   try {
     const body = await _request.json();
-    const response = await makeAuthenticatedRequest<unknown>('POST', `/business-units/`, body);
+    const response = await makeAuthenticatedRequest<unknown>('POST', '/business-units', body);
     return NextResponse.json(response, { status: 201 });
   } catch (error: unknown) {
     const message = getServerErrorMessage(error);

@@ -10,7 +10,6 @@ This migration adds composite indexes to improve query performance:
 3. ChatMessage: last message queries with DESC order (request_id, created_at DESC)
 """
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.

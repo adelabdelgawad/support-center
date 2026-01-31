@@ -12,7 +12,7 @@ export async function GET() {
       '/user-custom-views/available-tabs'
     );
 
-    return NextResponse.json(response);
+    return NextResponse.json(response.availableTabs);
   } catch (error) {
     console.error('Error fetching available tabs:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch available tabs';

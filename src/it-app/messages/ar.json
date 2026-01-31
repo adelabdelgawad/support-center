@@ -1,0 +1,66 @@
+{
+  "common": {
+    "appName": "مركز الدعم الفني",
+    "welcome": "مرحباً",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجح",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "create": "إنشاء",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "import": "استيراد",
+    "refresh": "تحديث",
+    "close": "إغلاق",
+    "confirm": "تأكيد",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "submit": "إرسال"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "requests": "الطلبات",
+    "users": "المستخدمون",
+    "reports": "التقارير",
+    "settings": "الإعدادات",
+    "profile": "الملف الشخصي",
+    "logout": "تسجيل الخروج"
+  },
+  "requests": {
+    "title": "طلبات الخدمة",
+    "create": "إنشاء طلب",
+    "myRequests": "طلباتي",
+    "allRequests": "جميع الطلبات",
+    "pending": "قيد الانتظار",
+    "inProgress": "قيد التنفيذ",
+    "resolved": "تم الحل",
+    "closed": "مغلق",
+    "priority": "الأولوية",
+    "status": "الحالة",
+    "assignedTo": "مُعيَّن إلى",
+    "createdAt": "تاريخ الإنشاء",
+    "updatedAt": "تاريخ التحديث"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+    "rememberMe": "تذكرني",
+    "forgotPassword": "نسيت كلمة المرور؟",
+    "loginError": "اسم المستخدم أو كلمة المرور غير صحيحة"
+  },
+  "errors": {
+    "general": "حدث خطأ",
+    "notFound": "غير موجود",
+    "unauthorized": "غير مصرح",
+    "forbidden": "محظور",
+    "serverError": "خطأ في الخادم",
+    "networkError": "خطأ في الشبكة"
+  }
+}

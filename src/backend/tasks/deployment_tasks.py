@@ -16,8 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from celery_app import celery_app
 from core.config import settings
-from models import Device, DeploymentJob
-from models.model_enum import DeviceLifecycleState, DeploymentJobStatus
+from db import Device, DeploymentJob
+from db.enums import DeviceLifecycleState, DeploymentJobStatus
 
 logger = logging.getLogger(__name__)
 
@@ -217,12 +217,3 @@ def cleanup_stale_deployment_jobs(self):
     except Exception as e:
         logger.error(f"Cleanup stale jobs task failed: {e}")
         raise self.retry(exc=e)
-
-
-# Celery Beat schedule for periodic execution
-celery_app.conf.beat_schedule = celery_app.conf.get("beat_schedule", {})
-celery_app.conf.beat_schedule["cleanup-stale-deployment-jobs"] = {
-    "task": "tasks.deployment_tasks.cleanup_stale_deployment_jobs",
-    "schedule": TASK_INTERVAL_SECONDS,  # Run every 30 seconds
-    "options": {"queue": "celery"},
-}

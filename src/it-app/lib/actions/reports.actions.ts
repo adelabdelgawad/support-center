@@ -1,6 +1,6 @@
 'use server';
 
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet } from '@/lib/fetch';
 import type {
   VolumeReportData,
   AgentPerformanceData,
@@ -18,9 +18,9 @@ export async function getVolumeAnalysisReportData(
   datePreset: DateRangePreset = 'last_30_days'
 ): Promise<VolumeReportData> {
   try {
-    const data = await serverFetch<VolumeReportData>(
+    const data = await serverGet<VolumeReportData>(
       `/reports/volume/analysis?date_preset=${datePreset}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
     return data;
   } catch (error) {
@@ -38,9 +38,9 @@ export async function getAgentPerformanceReportData(
   datePreset: DateRangePreset = 'last_30_days'
 ): Promise<AgentPerformanceData> {
   try {
-    const data = await serverFetch<AgentPerformanceData>(
+    const data = await serverGet<AgentPerformanceData>(
       `/reports/agents/performance?date_preset=${datePreset}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
     return data;
   } catch (error) {
@@ -58,9 +58,9 @@ export async function getSLAComplianceReportData(
   datePreset: DateRangePreset = 'last_30_days'
 ): Promise<SLAComplianceData> {
   try {
-    const data = await serverFetch<SLAComplianceData>(
+    const data = await serverGet<SLAComplianceData>(
       `/reports/sla/compliance?date_preset=${datePreset}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
     return data;
   } catch (error) {
@@ -109,9 +109,9 @@ export async function getOperationsDashboardData(
     }
 
     const queryString = searchParams.toString();
-    const data = await serverFetch<VolumeReportData>(
+    const data = await serverGet<VolumeReportData>(
       `/reports/dashboard/operations${queryString ? `?${queryString}` : ''}`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
     return data;
   } catch (error) {
@@ -138,9 +138,9 @@ export async function getOutshiftReportData(
     }
 
     const queryString = searchParams.toString();
-    const data = await serverFetch<OutshiftGlobalReportData>(
+    const data = await serverGet<OutshiftGlobalReportData>(
       `/reports/outshift/global${queryString ? `?${queryString}` : ''}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
     return data;
   } catch (error) {

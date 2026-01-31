@@ -5,7 +5,7 @@
  * Route: /api/requests/[id]
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import { makeAuthenticatedRequest, getServerErrorMessage } from "@/lib/api/server-fetch";
 
 /**
@@ -42,7 +42,7 @@ export async function GET(
     console.error(`Get service request ${requestId} error:`, error);
 
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? (error.status) : 500;
+    const status = error instanceof ApiError ? (error.status) : 500;
 
     return NextResponse.json(
       {

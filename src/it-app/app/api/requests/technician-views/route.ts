@@ -10,7 +10,7 @@
  * IMPORTANT: Never call backend directly from client components!
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import {
   makeAuthenticatedRequest,
   getServerErrorMessage,
@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Get technician views error:", error);
 
-    const apiError = error instanceof ServerFetchError ? error : null;
+    const apiError = error instanceof ApiError ? error : null;
     console.error("Error details:", {
       message: apiError?.message || "Unknown error",
       status: apiError?.status,

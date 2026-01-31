@@ -17,7 +17,7 @@ Test Scenarios:
 6. Existing sessions unaffected by enforcement state changes
 """
 
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -25,12 +25,12 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import ClientVersion, DesktopSession
-from schemas.auth import ADLoginRequest, SSOLoginRequest
-from schemas.version import ClientVersionCreate
-from services.auth_service import AuthenticationService
-from services.client_version_service import ClientVersionService
-from services.version_policy_service import VersionStatus
+from db import ClientVersion, DesktopSession
+from api.schemas.login import ADLoginRequest, SSOLoginRequest
+from api.schemas.version import ClientVersionCreate
+from api.services.auth_service import AuthenticationService
+from api.services.client_version_service import ClientVersionService
+from api.services.version_policy_service import VersionStatus
 
 
 class TestVersionEnforcementSetup:
@@ -531,7 +531,7 @@ class TestExistingSessionsUnaffected:
         This test verifies the enforcement boundary guarantee: enforcement only
         affects NEW session creation, never existing sessions.
         """
-        from models import DesktopSession
+        from db import DesktopSession
         from datetime import datetime, timezone
 
         await db_session.execute(delete(DesktopSession))
@@ -774,7 +774,7 @@ class TestInstallerMetadata:
     @pytest.mark.asyncio
     async def test_installer_metadata_in_policy_result(self, db_session):
         """VersionPolicyResult should include installer metadata."""
-        from services.version_policy_service import VersionPolicyService, VersionStatus
+        from api.services.version_policy_service import VersionPolicyService
 
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()

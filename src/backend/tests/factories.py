@@ -12,16 +12,16 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID, uuid4
 
+from db.models import (
+    User, Role, Page, UserRole, ServiceRequest,
+    RequestStatus, Priority, Category, BusinessUnit, BusinessUnitRegion,
+    ChatMessage, RequestNote, DesktopSession, WebSession
+)
+
 
 def _unique_suffix() -> str:
     """Generate a unique suffix for test data."""
     return uuid.uuid4().hex[:8]
-
-from models.database_models import (
-    User, Role, Page, UserRole, PageRole, ServiceRequest,
-    RequestStatus, Priority, Category, BusinessUnit, BusinessUnitRegion,
-    ChatMessage, RequestNote, Tag, ServiceSection, DesktopSession, WebSession
-)
 
 
 class UserFactory:

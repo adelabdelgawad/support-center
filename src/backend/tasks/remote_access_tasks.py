@@ -10,8 +10,8 @@ import logging
 from datetime import datetime, timedelta
 
 from celery_app import celery_app
-from core.database import get_async_session_context
-from repositories.remote_access_repository import RemoteAccessRepository
+from crud.remote_access_crud import RemoteAccessCRUD
+from tasks.database import get_celery_session
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,9 @@ async def _cleanup_orphaned_sessions_async():
     """Async implementation of orphaned session cleanup."""
     threshold = datetime.utcnow() - timedelta(minutes=ORPHAN_THRESHOLD_MINUTES)
 
-    async with get_async_session_context() as db:
+    async with get_celery_session() as db:
         try:
-            orphaned = await RemoteAccessRepository.get_orphaned_sessions(db, threshold)
+            orphaned = await RemoteAccessCRUD.get_orphaned_sessions(db, threshold)
 
             if not orphaned:
                 logger.debug("No orphaned remote sessions found")
@@ -59,7 +59,7 @@ async def _cleanup_orphaned_sessions_async():
                     f"last_heartbeat: {session.last_heartbeat}, "
                     f"created_at: {session.created_at})"
                 )
-                await RemoteAccessRepository.end_session(
+                await RemoteAccessCRUD.end_session(
                     db, session.id, "orphaned_cleanup"
                 )
 

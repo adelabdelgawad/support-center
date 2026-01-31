@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ApiError } from "@/lib/fetch/errors";
 import { makeAuthenticatedRequest } from "@/lib/api/server-fetch";
 
 /**
@@ -66,10 +67,10 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error("[Chat File Upload] Error:", error);
 
-    // Handle ServerFetchError
-    const status = (error as { status?: number })?.status || 500;
+    // Handle ApiError
+    const status = error instanceof ApiError ? error.status : 500;
     const message =
-      (error as { message?: string })?.message || "Failed to upload file";
+      error instanceof ApiError ? error.message : "Failed to upload file";
 
     return NextResponse.json({ detail: message }, { status });
   }

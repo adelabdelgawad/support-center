@@ -31,8 +31,9 @@ export function useTicketTypeCounts() {
     fetchCounts,
     {
       revalidateOnFocus: false,
-      refreshInterval: 10000, // 10 seconds
+      refreshInterval: 60000, // 60 seconds (changed from 10s)
       dedupingInterval: 5000, // Deduplicate requests within 5 seconds
+      keepPreviousData: true, // Keep previous data while loading
     }
   );
 

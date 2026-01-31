@@ -1,17 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import useSWR from 'swr';
+import { useMemo, useEffect } from 'react';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
-import { DateRangePicker } from '@/components/reports/date-range-picker';
-import { ReportFilters } from '@/components/reports/report-filters';
-import { ExportButton } from '@/components/reports/export-button';
-import { LazyTrendLineChart, LazyDistributionBarChart, LazyDistributionPieChart } from '@/components/charts/lazy-charts';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { LazyTrendLineChart, LazyDistributionBarChart } from '@/components/charts/lazy-charts';
 import { getOperationsDashboard } from '@/lib/api/reports';
-import { DateRangePreset, VolumeReportData } from '@/types/reports';
+import { ReportError } from '@/lib/reports/components';
+import { useReportsFilter } from '../../_context/reports-filter-context';
+
+import type { VolumeReportData } from '@/types/reports';
 import { formatDate } from '@/lib/utils/date-formatting';
 
 interface OperationsDashboardClientProps {
@@ -19,97 +18,39 @@ interface OperationsDashboardClientProps {
 }
 
 export default function OperationsDashboardClient({ initialData }: OperationsDashboardClientProps) {
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_30_days');
-  const [customStartDate, setCustomStartDate] = useState<string | undefined>();
-  const [customEndDate, setCustomEndDate] = useState<string | undefined>();
-  const [filters, setFilters] = useState<{
-    businessUnitIds?: number[];
-    technicianIds?: string[];
-    priorityIds?: number[];
-    statusIds?: number[];
-  }>({});
+  const { datePreset, customStartDate, customEndDate, filters, registerExport, clearExport } = useReportsFilter();
 
-  const { data, error, isLoading } = useSWR<VolumeReportData>(
-    ['/api/reports/operations', datePreset, customStartDate, customEndDate, filters],
-    () =>
-      getOperationsDashboard({
-        datePreset,
-        startDate: customStartDate,
-        endDate: customEndDate,
-        ...filters,
-      }),
-    {
-      fallbackData: initialData,
-      revalidateIfStale: false,
-      refreshInterval: 300000, // 5 minutes
-      revalidateOnFocus: true,
-    }
+  // Memoize fetch params to avoid unnecessary refetches
+  const fetchParams = useMemo(() => ({
+    datePreset,
+    startDate: customStartDate,
+    endDate: customEndDate,
+    ...filters,
+  }), [datePreset, customStartDate, customEndDate, filters]);
+
+  const fetchOperations = async () => {
+    return await getOperationsDashboard(fetchParams);
+  };
+
+  const { data, error, isLoading } = useAsyncData<VolumeReportData>(
+    fetchOperations,
+    [fetchParams],
+    initialData
   );
 
-  const handlePresetChange = (preset: DateRangePreset) => {
-    setDatePreset(preset);
-    if (preset !== 'custom') {
-      setCustomStartDate(undefined);
-      setCustomEndDate(undefined);
+  useEffect(() => {
+    if (data) {
+      registerExport({ reportTitle: "Operations Dashboard", reportData: data });
     }
-  };
-
-  const handleCustomRangeChange = (startDate: string, endDate: string) => {
-    setCustomStartDate(startDate);
-    setCustomEndDate(endDate);
-    setDatePreset('custom');
-  };
-
-  const handleFiltersChange = (newFilters: typeof filters) => {
-    setFilters(newFilters);
-  };
+    return () => clearExport();
+  }, [data, registerExport, clearExport]);
 
   if (error) {
-    return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Failed to load operations dashboard data. Please try again later.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
+    return <ReportError message="Failed to load operations dashboard data. Please try again later." />;
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold">Operations Dashboard</h1>
-          <p className="text-muted-foreground">
-            Ticket volume, trends, and operational metrics
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {data && <ExportButton reportTitle="Operations Dashboard" reportData={data} />}
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-4">
-        <DateRangePicker
-          preset={datePreset}
-          customStartDate={customStartDate}
-          customEndDate={customEndDate}
-          onPresetChange={handlePresetChange}
-          onCustomRangeChange={handleCustomRangeChange}
-        />
-        <ReportFilters
-          selectedBusinessUnitIds={filters.businessUnitIds}
-          selectedTechnicianIds={filters.technicianIds}
-          selectedPriorityIds={filters.priorityIds}
-          selectedStatusIds={filters.statusIds}
-          onFiltersChange={handleFiltersChange}
-        />
-      </div>
-
+    <>
       {/* KPI Cards */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -311,6 +252,6 @@ export default function OperationsDashboardClient({ initialData }: OperationsDas
           </div>
         </>
       ) : null}
-    </div>
+    </>
   );
 }

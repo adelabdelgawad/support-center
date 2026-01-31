@@ -14,7 +14,7 @@ Design Principles:
 import re
 from dataclasses import dataclass
 from functools import total_ordering
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 
 class InvalidVersionError(ValueError):

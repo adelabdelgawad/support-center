@@ -1,0 +1,14 @@
+# Ralph Execution Progress
+# Branch: ralph/simplify-backend-architecture
+
+## Story Status
+
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| US-001 | Remove service_section service layer (passthrough) | COMPLETE | Typecheck passed, no broken imports |
+| US-002 | Remove tag service layer (inline raw SQL) | COMPLETE | Typecheck passed, no broken imports |
+| US-003 | Remove system_event service and CRUD layers | COMPLETE | Typecheck passed, no broken imports |
+| US-004 | Remove page service layer (keep complex CRUD) | COMPLETE | Typecheck passed, no broken imports |
+| US-005 | Remove business_unit service and CRUD layers | COMPLETE | Typecheck passed, no broken imports |
+| US-006 | Cleanup: inline helper functions, remove imports, verify endpoints | COMPLETE | Helper functions inlined, router paths fixed, typechecks pass |
+

@@ -53,7 +53,7 @@ export function DashboardClient({ user, stats }: DashboardClientProps) {
           Welcome back{user?.fullName ? `, ${user.fullName}` : ''}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Here's an overview of your IT support center
+          Here&apos;s an overview of your IT support center
         </p>
       </div>
 

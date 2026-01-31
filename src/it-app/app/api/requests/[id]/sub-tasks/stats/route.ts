@@ -10,7 +10,7 @@
  * IMPORTANT: Never call backend directly from client components!
  */
 import { NextRequest, NextResponse } from "next/server";
-import { ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
 import {
   makeAuthenticatedRequest,
   getServerErrorMessage,
@@ -42,7 +42,7 @@ export async function GET(
   } catch (error) {
     console.error("Get sub-tasks stats error:", error);
 
-    const apiError = error instanceof ServerFetchError ? error : null;
+    const apiError = error instanceof ApiError ? error : null;
     const message = getServerErrorMessage(error);
     const status = apiError?.status || 500;
 

@@ -2,57 +2,77 @@
 API v1 routes.
 
 REFACTORED:
+- Organized endpoints into subdirectories: auth, setting, support, management, reporting, internal
 - Re-added business_unit_user_assigns endpoints for technician-to-business-unit assignments
 """
 
 from fastapi import APIRouter
 
-from .endpoints import (
-    auth,
+# Import from subdirectories
+from .endpoints.auth import audit, auth
+from .endpoints.setting import (
+    active_directory_config,
     business_unit_regions,
     business_unit_user_assigns,
     business_units,
     categories,
+    domain_users,
+    email_config,
+    organizational_units,
+    pages,
+    priorities,
+    request_status,
+    request_types,
+    roles,
+    service_sections,
+    sla_configs,
+    system_messages,
+    tags,
+    user_custom_views,
+    users,
+)
+from .endpoints.support import (
     chat,
     chat_files,
+    files,
+    notifications,
+    request_details_metadata,
+    request_notes,
+    requests,
+    screenshots,
+    search,
+)
+from .endpoints.management import (
     client_versions,
     deployment_jobs,
     desktop_sessions,
     devices,
-    domain_users,
-    events,
-    files,
-    internal,
-    notifications,
-    organizational_units,
-    pages,
-    priorities,
     remote_access,
-    report_configs,
-    reports,
-    request_details_metadata,
-    request_notes,
-    request_status,
-    request_types,
-    requests,
-    roles,
-    screenshots,
     scheduler,
-    search,
-    service_sections,
     session_stats,
-    sla_configs,
     system_events,
-    system_messages,
-    tags,
     turn,
-    user_custom_views,
-    users,
 )
+from .endpoints.reporting import report_configs, reports
+from .endpoints.internal import events, internal
 
 api_router = APIRouter()
 
 # Include all endpoint routers
+api_router.include_router(
+    active_directory_config.router,
+    prefix="/active-directory-configs",
+    tags=["active-directory"],
+)
+
+api_router.include_router(
+    email_config.router,
+    prefix="/email-configs",
+    tags=["email"],
+)
+
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
+
 api_router.include_router(users.router, prefix="/users", tags=["users"])
 
 api_router.include_router(

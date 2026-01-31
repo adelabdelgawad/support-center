@@ -1,22 +1,21 @@
 import { cookies, headers } from 'next/headers';
+import { ApiError, extractErrorMessage } from '@/lib/fetch/errors';
 
-export class ServerApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public detail?: string,
-    public url?: string,
-    public method?: string
-  ) {
-    super(message);
-    this.name = 'ServerApiError';
-  }
-}
+// Re-export ApiError under legacy names for backward compatibility
+export { ApiError as ServerApiError } from '@/lib/fetch/errors';
+export { ApiError as ServerFetchError } from '@/lib/fetch/errors';
 
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+const DEFAULT_TIMEOUT = 30000;
+const MAX_RETRIES = 2;
+const RETRYABLE_STATUSES = [429, 503];
 
 type ResponseType = 'json' | 'arraybuffer' | 'blob' | 'text';
+
+function getRetryDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, 4000);
+}
 
 async function getAccessToken(): Promise<string | undefined> {
   const cookieStore = await cookies();
@@ -35,16 +34,6 @@ async function getForwardingHeaders(): Promise<Record<string, string>> {
   } catch {
     return {};
   }
-}
-
-function extractErrorMessage(data: unknown): string {
-  if (data && typeof data === 'object') {
-    const obj = data as Record<string, unknown>;
-    if (typeof obj.detail === 'string') return obj.detail;
-    if (Array.isArray(obj.detail) && obj.detail[0]?.msg) return obj.detail[0].msg;
-    if (typeof obj.message === 'string') return obj.message;
-  }
-  return 'Request failed';
 }
 
 /**
@@ -71,10 +60,13 @@ export async function serverFetch<T>(
     timeout?: number;
     cache?: RequestCache;
     responseType?: ResponseType;
+    retries?: number;
   }
 ): Promise<T> {
   const fullUrl = `${API_URL}${API_BASE_PATH}${endpoint}`;
   const method = options?.method || 'GET';
+  const timeout = options?.timeout ?? DEFAULT_TIMEOUT;
+  const maxRetries = options?.retries ?? MAX_RETRIES;
 
   const accessToken = await getAccessToken();
   const forwardedHeaders = await getForwardingHeaders();
@@ -112,103 +104,144 @@ export async function serverFetch<T>(
     };
   }
 
-  const response = await fetch(fullUrl, fetchOptions);
+  let lastError: ApiError | undefined;
 
-  if (!response.ok) {
-    // If 401/403 and we have a refresh token, try to refresh
-    const cookieStore = await cookies();
-    const refreshToken = cookieStore.get('refresh_token')?.value;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    if ((response.status === 401 || response.status === 403) && refreshToken) {
-      try {
-        // Attempt token refresh
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3010';
-        const refreshResponse = await fetch(`${baseUrl}/api/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
+    try {
+      const response = await fetch(fullUrl, {
+        ...fetchOptions,
+        signal: controller.signal,
+      });
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
+      clearTimeout(timeoutId);
 
-          // Update cookies with new tokens
-          const isSecure = process.env.NODE_ENV === 'production';
+      if (!response.ok) {
+        // If 401/403 and we have a refresh token, try to refresh
+        const cookieStore = await cookies();
+        const refreshToken = cookieStore.get('refresh_token')?.value;
 
-          if (refreshData.accessToken) {
-            cookieStore.set('access_token', refreshData.accessToken, {
-              httpOnly: true,
-              secure: isSecure,
-              sameSite: 'strict',
-              path: '/',
-              maxAge: 15 * 60, // 15 minutes
+        if ((response.status === 401 || response.status === 403) && refreshToken) {
+          try {
+            // Attempt token refresh
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3010';
+            const refreshResponse = await fetch(`${baseUrl}/api/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refresh_token: refreshToken }),
             });
 
-            // Retry the original request with new token
-            const retryHeaders: Record<string, string> = {
-              ...requestHeaders,
-              'Authorization': `Bearer ${refreshData.accessToken}`,
-            };
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
 
-            const retryResponse = await fetch(fullUrl, {
-              ...fetchOptions,
-              headers: retryHeaders,
-            });
+              // Update cookies with new tokens
+              const isSecure = process.env.NODE_ENV === 'production';
 
-            if (retryResponse.ok) {
-              // Successful retry - return the response
-              if (retryResponse.status === 204) return undefined as T;
+              if (refreshData.accessToken) {
+                cookieStore.set('access_token', refreshData.accessToken, {
+                  httpOnly: true,
+                  secure: isSecure,
+                  sameSite: 'strict',
+                  path: '/',
+                  maxAge: 15 * 60, // 15 minutes
+                });
 
-              const responseType = options?.responseType || 'json';
-              switch (responseType) {
-                case 'arraybuffer':
-                  return (await retryResponse.arrayBuffer()) as T;
-                case 'blob':
-                  return (await retryResponse.blob()) as T;
-                case 'text':
-                  return (await retryResponse.text()) as T;
-                case 'json':
-                default:
-                  return retryResponse.json();
+                // Retry the original request with new token
+                const retryHeaders: Record<string, string> = {
+                  ...requestHeaders,
+                  'Authorization': `Bearer ${refreshData.accessToken}`,
+                };
+
+                const retryResponse = await fetch(fullUrl, {
+                  ...fetchOptions,
+                  headers: retryHeaders,
+                });
+
+                if (retryResponse.ok) {
+                  // Successful retry - return the response
+                  if (retryResponse.status === 204) return undefined as T;
+
+                  const responseType = options?.responseType || 'json';
+                  switch (responseType) {
+                    case 'arraybuffer':
+                      return (await retryResponse.arrayBuffer()) as T;
+                    case 'blob':
+                      return (await retryResponse.blob()) as T;
+                    case 'text':
+                      return (await retryResponse.text()) as T;
+                    case 'json':
+                    default:
+                      return retryResponse.json();
+                  }
+                }
               }
             }
+          } catch (refreshError) {
+            console.error('Token refresh failed during API call:', refreshError);
           }
         }
-      } catch (refreshError) {
-        console.error('Token refresh failed during API call:', refreshError);
+
+        // Original error handling (refresh failed or not applicable)
+        let errorData: unknown = {};
+        try { errorData = await response.json(); } catch {}
+
+        const error = new ApiError(
+          extractErrorMessage(errorData),
+          response.status,
+          errorData,
+          fullUrl,
+          method
+        );
+
+        // Retry on 429/503
+        if (RETRYABLE_STATUSES.includes(response.status) && attempt < maxRetries) {
+          lastError = error;
+          await new Promise(r => setTimeout(r, getRetryDelay(attempt)));
+          continue;
+        }
+
+        throw error;
       }
+
+      if (response.status === 204) return undefined as T;
+
+      // Handle response based on responseType
+      const responseType = options?.responseType || 'json';
+
+      switch (responseType) {
+        case 'arraybuffer':
+          return (await response.arrayBuffer()) as T;
+        case 'blob':
+          return (await response.blob()) as T;
+        case 'text':
+          return (await response.text()) as T;
+        case 'json':
+        default:
+          return response.json();
+      }
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new ApiError('Request timeout', 408, undefined, fullUrl, method);
+      }
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(
+        error instanceof Error ? error.message : 'Network error',
+        500,
+        undefined,
+        fullUrl,
+        method
+      );
     }
-
-    // Original error handling (refresh failed or not applicable)
-    let errorData: unknown = {};
-    try { errorData = await response.json(); } catch {}
-    throw new ServerApiError(
-      extractErrorMessage(errorData),
-      response.status,
-      typeof (errorData as Record<string, unknown>)?.detail === 'string'
-        ? (errorData as Record<string, unknown>).detail as string
-        : undefined,
-      fullUrl,
-      method
-    );
   }
 
-  if (response.status === 204) return undefined as T;
-
-  // Handle response based on responseType
-  const responseType = options?.responseType || 'json';
-
-  switch (responseType) {
-    case 'arraybuffer':
-      return (await response.arrayBuffer()) as T;
-    case 'blob':
-      return (await response.blob()) as T;
-    case 'text':
-      return (await response.text()) as T;
-    case 'json':
-    default:
-      return response.json();
-  }
+  // Should not reach here, but just in case
+  throw lastError || new ApiError('Request failed after retries', 500, undefined, fullUrl, method);
 }
 
 // Public request (no auth required)
@@ -225,24 +258,47 @@ export async function makePublicRequest<T>(
 ): Promise<T> {
   const fullUrl = `${API_URL}${API_BASE_PATH}${endpoint}`;
   const forwardedHeaders = await getForwardingHeaders();
+  const timeout = config?.timeout ?? DEFAULT_TIMEOUT;
 
-  const response = await fetch(fullUrl, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...forwardedHeaders,
-      ...config?.headers,
-    },
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (!response.ok) {
-    let errorData: unknown = {};
-    try { errorData = await response.json(); } catch {}
-    throw new ServerApiError(extractErrorMessage(errorData), response.status, undefined, fullUrl, method);
+  try {
+    const response = await fetch(fullUrl, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...forwardedHeaders,
+        ...config?.headers,
+      },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let errorData: unknown = {};
+      try { errorData = await response.json(); } catch {}
+      throw new ApiError(extractErrorMessage(errorData), response.status, errorData, fullUrl, method);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('Request timeout', 408, undefined, fullUrl, method);
+    }
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(
+      error instanceof Error ? error.message : 'Network error',
+      500,
+      undefined,
+      fullUrl,
+      method
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 // New simplified public fetch
@@ -316,16 +372,13 @@ export async function getServerUserInfo() {
 }
 
 export function getServerErrorMessage(error: unknown): string {
-  if (error instanceof ServerApiError) return error.message;
+  if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return "An unknown error occurred";
 }
 
-export function isServerAPIError(error: unknown): error is ServerApiError {
-  return error instanceof ServerApiError;
+export function isServerAPIError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
 }
-
-// Re-export ServerApiError as ServerFetchError for backward compatibility
-export { ServerApiError as ServerFetchError };
 
 export default makeAuthenticatedRequest;

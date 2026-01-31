@@ -15,7 +15,7 @@ export default async function ReportsPage() {
   try {
     initialData = await serverFetch<ExecutiveDashboardData>(
       '/reports/dashboard/executive?date_preset=last_30_days',
-      CACHE_PRESETS.SHORT_LIVED()
+      CACHE_PRESETS.NO_CACHE()
     );
   } catch (error) {
     console.error('Error fetching executive dashboard:', error);

@@ -37,7 +37,7 @@ export function SubcategoryRow({
             <div className="flex items-center gap-2">
               <FolderOpen className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium text-muted-foreground">
-                Subcategories for "{categoryName}"
+                Subcategories for &ldquo;{categoryName}&rdquo;
               </span>
             </div>
             <AddSubcategoryButton categoryId={categoryId} onAdd={onRefresh} />
@@ -46,7 +46,7 @@ export function SubcategoryRow({
           {/* Subcategories Table or Empty State */}
           {subcategories.length === 0 ? (
             <div className="text-center py-8 text-sm text-muted-foreground bg-background rounded-lg border border-dashed">
-              No subcategories found. Click "Add Subcategory" to create one.
+              No subcategories found. Click &ldquo;Add Subcategory&rdquo; to create one.
             </div>
           ) : (
             <div className="bg-background rounded-lg border overflow-hidden">

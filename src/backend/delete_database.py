@@ -8,13 +8,12 @@ Only asks "Are you sure you want to delete? y/N"
 """
 import asyncio
 import logging
-from typing import Optional
 
 import asyncpg
 from sqlalchemy import inspect, text
 
 from core.config import settings
-from core.database import engine
+from db.database import engine
 
 logger = logging.getLogger(__name__)
 

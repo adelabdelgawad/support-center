@@ -1,6 +1,6 @@
 "use server";
 
-import { serverFetch, CACHE_PRESETS } from "@/lib/api/server-fetch";
+import { serverGet, serverPost, serverPut } from "@/lib/fetch";
 import type {
   SettingUsersResponse,
   AuthUserResponse,
@@ -16,7 +16,7 @@ import type { RoleResponse } from "@/types/roles";
  * This is a dedicated function for the users page to avoid coupling with roles page logic
  * Backend limit is 100 per page, so we fetch with max per_page
  *
- * Cache: 10 minutes (reference data that rarely changes)
+ * Cache: NO_CACHE (reference data that rarely changes)
  * Invalidate via: revalidateTag('reference:roles', {})
  */
 export async function getActiveRolesForUserForms(): Promise<RoleResponse[]> {
@@ -26,9 +26,9 @@ export async function getActiveRolesForUserForms(): Promise<RoleResponse[]> {
     params.append('per_page', '100'); // Backend max is 100
     params.append('is_active', 'true');
 
-    const response = await serverFetch<{ roles: RoleResponse[] }>(
-      `/roles/?${params.toString()}`,
-      CACHE_PRESETS.REFERENCE_DATA('roles')
+    const response = await serverGet<{ roles: RoleResponse[] }>(
+      `/roles?${params.toString()}`,
+      { revalidate: 0 }
     );
     return response.roles ?? [];
   } catch (error: unknown) {
@@ -74,9 +74,9 @@ export async function getUsers(
     params.append('sort', JSON.stringify(sort));
   }
 
-  return serverFetch<SettingUsersResponse>(
-    `/users/with-roles/?${params.toString()}`,
-    CACHE_PRESETS.NO_CACHE()
+  return serverGet<SettingUsersResponse>(
+    `/users/with-roles?${params.toString()}`,
+    { revalidate: 0 }
   );
 }
 
@@ -91,9 +91,9 @@ export async function getDomainUsers(
   const params = new URLSearchParams();
   params.append("update", shouldUpdate ? "true" : "false");
 
-  return serverFetch<AuthUserResponse[]>(
-    `/users/domain-users/?${params.toString()}`,
-    CACHE_PRESETS.NO_CACHE()
+  return serverGet<AuthUserResponse[]>(
+    `/users/domain-users?${params.toString()}`,
+    { revalidate: 0 }
   );
 }
 
@@ -101,9 +101,9 @@ export async function getDomainUsers(
  * Creates a new user with role assignments
  */
 export async function createUser(userData: UserCreate) {
-  return serverFetch(
-    '/users/',
-    { method: 'POST', body: userData }
+  return serverPost(
+    '/users',
+    userData
   );
 }
 
@@ -113,9 +113,9 @@ export async function createUser(userData: UserCreate) {
 export async function updateUserRoles(
   userData: UserUpdateRolesRequest
 ): Promise<{ message: string; added: number; removed: number }> {
-  return serverFetch<{ message: string; added: number; removed: number }>(
+  return serverPut<{ message: string; added: number; removed: number }>(
     `/users/${userData.userId}/roles`,
-    { method: 'PUT', body: userData }
+    userData
   );
 }
 
@@ -126,12 +126,9 @@ export async function toggleUserStatus(
   userId: string,
   newStatus: boolean
 ): Promise<UserWithRolesResponse> {
-  return serverFetch<UserWithRolesResponse>(
+  return serverPut<UserWithRolesResponse>(
     `/users/${userId}/status`,
-    {
-      method: 'PUT',
-      body: { userId, isActive: newStatus },
-    }
+    { userId, isActive: newStatus }
   );
 }
 
@@ -142,9 +139,9 @@ export async function toggleUserStatus(
  * Cache: NO_CACHE (deprecated function, use getUserPagesCached instead)
  */
 export async function getUserPages(userId: string): Promise<Array<Page>> {
-  return serverFetch<Page[]>(
+  return serverGet<Page[]>(
     `/users/${userId}/pages`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 }
 
@@ -164,9 +161,9 @@ export async function getUserPages(userId: string): Promise<Array<Page>> {
  * ```
  */
 export async function getUserPagesCached(userId: string): Promise<Array<Page>> {
-  return serverFetch<Page[]>(
+  return serverGet<Page[]>(
     `/users/${userId}/pages`,
-    CACHE_PRESETS.USER_PAGES(userId)
+    { revalidate: 0 }
   );
 }
 
@@ -177,31 +174,28 @@ export async function updateUsersStatus(
   userIds: string[],
   isActive: boolean
 ): Promise<{ updatedUsers: UserWithRolesResponse[] }> {
-  return serverFetch<{ updatedUsers: UserWithRolesResponse[] }>(
+  return serverPost<{ updatedUsers: UserWithRolesResponse[] }>(
     '/users/bulk-status',
-    {
-      method: 'POST',
-      body: { userIds, isActive },
-    }
+    { userIds, isActive }
   );
 }
 
 /**
  * Fetches user count statistics
  *
- * Cache: 1 minute (dashboard stats, short-lived)
+ * Cache: NO_CACHE (dashboard stats, short-lived)
  */
 export async function getUserCounts(): Promise<{
   total: number;
   activeCount: number;
   inactiveCount: number;
 }> {
-  return serverFetch<{
+  return serverGet<{
     total: number;
     activeCount: number;
     inactiveCount: number;
   }>(
-    '/users/counts/',
-    CACHE_PRESETS.SHORT_LIVED()
+    '/users/counts',
+    { revalidate: 0 }
   );
 }

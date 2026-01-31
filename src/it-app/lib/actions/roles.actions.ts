@@ -1,6 +1,6 @@
 "use server";
 
-import { serverFetch, CACHE_PRESETS } from "@/lib/api/server-fetch";
+import { serverGet, serverPost, serverPut } from "@/lib/fetch";
 import type {
   SettingRolesResponse,
   RoleCreateRequest,
@@ -43,9 +43,9 @@ export async function getRoles(params?: {
     });
   }
 
-  return serverFetch<SettingRolesResponse>(
-    `/roles/?${queryParams}`,
-    CACHE_PRESETS.NO_CACHE()
+  return serverGet<SettingRolesResponse>(
+    `/roles?${queryParams}`,
+    { revalidate: 0 }
   );
 }
 
@@ -55,9 +55,9 @@ export async function getRoles(params?: {
 export async function createRole(
   roleData: RoleCreateRequest
 ): Promise<RoleResponse> {
-  return serverFetch<RoleResponse>(
-    '/roles/',
-    { method: 'POST', body: roleData }
+  return serverPost<RoleResponse>(
+    '/roles',
+    roleData
   );
 }
 
@@ -68,9 +68,9 @@ export async function updateRole(
   roleId: string,
   roleData: RoleUpdateRequest
 ): Promise<RoleResponse> {
-  return serverFetch<RoleResponse>(
+  return serverPut<RoleResponse>(
     `/roles/${roleId}`,
-    { method: 'PUT', body: roleData }
+    roleData
   );
 }
 
@@ -78,9 +78,8 @@ export async function updateRole(
  * Toggle role status (active/inactive)
  */
 export async function toggleRoleStatus(roleId: string, newStatus: boolean): Promise<RoleResponse> {
-  return serverFetch<RoleResponse>(
-    `/roles/${roleId}/status?is_active=${newStatus}`,
-    { method: 'PUT' }
+  return serverPut<RoleResponse>(
+    `/roles/${roleId}/status?is_active=${newStatus}`
   );
 }
 
@@ -99,7 +98,7 @@ export async function getRolePages(
     params.set("include_inactive", "true");
   }
 
-  return serverFetch<RolePagesResponse>(
+  return serverGet<RolePagesResponse>(
     `/roles/${roleId}/pages?${params.toString()}`,
     {
       revalidate: 300,
@@ -121,9 +120,9 @@ export async function updateRolePages(
     updatedPageIds,
   };
 
-  return serverFetch<{ message: string; added: number; removed: number }>(
+  return serverPut<{ message: string; added: number; removed: number }>(
     `/roles/${roleId}/pages`,
-    { method: 'PUT', body: request }
+    request
   );
 }
 
@@ -131,12 +130,12 @@ export async function updateRolePages(
  * Get all technician users (for role assignment)
  * Only fetches users where is_technician=true
  *
- * Cache: 1 minute (user list, may change frequently)
+ * Cache: NO_CACHE (user list, may change frequently)
  */
 export async function getAllUsers(): Promise<AuthUserResponse[]> {
-  return serverFetch<AuthUserResponse[]>(
+  return serverGet<AuthUserResponse[]>(
     '/users?is_technician=true&per_page=100',
-    CACHE_PRESETS.SHORT_LIVED()
+    { revalidate: 0 }
   );
 }
 
@@ -147,7 +146,7 @@ export async function getAllUsers(): Promise<AuthUserResponse[]> {
  * Invalidate via: revalidateTag(`role-users:${roleId}`, {})
  */
 export async function fetchRoleUsers(roleId: string): Promise<AuthUserResponse[]> {
-  return serverFetch<AuthUserResponse[]>(
+  return serverGet<AuthUserResponse[]>(
     `/roles/${roleId}/users`,
     {
       revalidate: 300,
@@ -169,8 +168,8 @@ export async function updateRoleUsers(
     updatedUserIds,
   };
 
-  return serverFetch<{ message: string; added: number; removed: number }>(
+  return serverPut<{ message: string; added: number; removed: number }>(
     `/roles/${roleId}/users`,
-    { method: 'PUT', body: request }
+    request
   );
 }

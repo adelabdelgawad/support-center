@@ -18,12 +18,27 @@ export const metadata = {
  * Admin page for managing scheduled jobs and task automation.
  * Location: /management/scheduler
  */
-export default async function SchedulerPage() {
+export default async function SchedulerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    page?: string;
+    limit?: string;
+  }>;
+}) {
+  // Await searchParams (Next.js 15 requirement)
+  const params = await searchParams;
+  const { page, limit } = params;
+
+  // Get pagination params from URL
+  const pageNumber = Number(page) || 1;
+  const limitNumber = Number(limit) || 10;
+
   // Parallelize auth validation, session check, and data fetching
   const [_, session, jobsData, taskFunctions, jobTypes] = await Promise.all([
     validateAgentAccess(),
     auth(),
-    getScheduledJobs({ page: 1, perPage: 50 }),
+    getScheduledJobs({ page: pageNumber, perPage: limitNumber }),
     getTaskFunctions(),
     getJobTypes(),
   ]);

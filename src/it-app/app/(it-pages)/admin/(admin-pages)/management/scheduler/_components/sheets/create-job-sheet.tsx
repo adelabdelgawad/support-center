@@ -43,8 +43,12 @@ interface FormData {
   jobTypeId: string;
   intervalValue: string;
   intervalUnit: "seconds" | "minutes" | "hours";
+  cronSecond: string;
   cronMinute: string;
   cronHour: string;
+  cronDay: string;
+  cronMonth: string;
+  cronDayOfWeek: string;
   isEnabled: boolean;
 }
 
@@ -55,10 +59,22 @@ const initialFormData: FormData = {
   jobTypeId: "",
   intervalValue: "",
   intervalUnit: "minutes",
+  cronSecond: "0",
   cronMinute: "0",
   cronHour: "*",
+  cronDay: "*",
+  cronMonth: "*",
+  cronDayOfWeek: "*",
   isEnabled: true,
 };
+
+const CRON_PRESETS: { label: string; values: Partial<FormData> }[] = [
+  { label: "Every Minute", values: { cronSecond: "0", cronMinute: "*", cronHour: "*", cronDay: "*", cronMonth: "*", cronDayOfWeek: "*" } },
+  { label: "Hourly", values: { cronSecond: "0", cronMinute: "0", cronHour: "*", cronDay: "*", cronMonth: "*", cronDayOfWeek: "*" } },
+  { label: "Daily (midnight)", values: { cronSecond: "0", cronMinute: "0", cronHour: "0", cronDay: "*", cronMonth: "*", cronDayOfWeek: "*" } },
+  { label: "Weekdays 9AM", values: { cronSecond: "0", cronMinute: "0", cronHour: "9", cronDay: "*", cronMonth: "*", cronDayOfWeek: "mon-fri" } },
+  { label: "Weekly (Sun)", values: { cronSecond: "0", cronMinute: "0", cronHour: "0", cronDay: "*", cronMonth: "*", cronDayOfWeek: "sun" } },
+];
 
 export function CreateJobSheet({
   open,
@@ -101,12 +117,12 @@ export function CreateJobSheet({
         };
       } else if (jobType?.name === "cron") {
         scheduleConfig = {
-          second: "0",
+          second: formData.cronSecond,
           minute: formData.cronMinute,
           hour: formData.cronHour,
-          day: "*",
-          month: "*",
-          day_of_week: "*",
+          day: formData.cronDay,
+          month: formData.cronMonth,
+          day_of_week: formData.cronDayOfWeek,
         };
       }
 
@@ -381,32 +397,91 @@ export function CreateJobSheet({
                   {/* Cron Schedule */}
                   {isCron && (
                     <div className="space-y-4">
+                      {/* Presets */}
                       <div className="space-y-2">
-                        <Label htmlFor="cronHour">Hour (0-23 or *)</Label>
-                        <Input
-                          id="cronHour"
-                          value={formData.cronHour}
-                          onChange={(e) =>
-                            setFormData({ ...formData, cronHour: e.target.value })
-                          }
-                          placeholder="*"
-                          disabled={isBusy}
-                        />
+                        <Label className="text-xs text-muted-foreground">Presets</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {CRON_PRESETS.map((preset) => (
+                            <Button
+                              key={preset.label}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={isBusy}
+                              onClick={() => setFormData({ ...formData, ...preset.values })}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cronMinute">Minute (0-59)</Label>
-                        <Input
-                          id="cronMinute"
-                          value={formData.cronMinute}
-                          onChange={(e) =>
-                            setFormData({ ...formData, cronMinute: e.target.value })
-                          }
-                          placeholder="0"
-                          disabled={isBusy}
-                        />
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="cronSecond">Second</Label>
+                          <Input
+                            id="cronSecond"
+                            value={formData.cronSecond}
+                            onChange={(e) => setFormData({ ...formData, cronSecond: e.target.value })}
+                            placeholder="0"
+                            disabled={isBusy}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cronMinute">Minute</Label>
+                          <Input
+                            id="cronMinute"
+                            value={formData.cronMinute}
+                            onChange={(e) => setFormData({ ...formData, cronMinute: e.target.value })}
+                            placeholder="0"
+                            disabled={isBusy}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cronHour">Hour</Label>
+                          <Input
+                            id="cronHour"
+                            value={formData.cronHour}
+                            onChange={(e) => setFormData({ ...formData, cronHour: e.target.value })}
+                            placeholder="*"
+                            disabled={isBusy}
+                          />
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Run at {formData.cronHour}:{formData.cronMinute} every day
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-2">
+                          <Label htmlFor="cronDay">Day</Label>
+                          <Input
+                            id="cronDay"
+                            value={formData.cronDay}
+                            onChange={(e) => setFormData({ ...formData, cronDay: e.target.value })}
+                            placeholder="*"
+                            disabled={isBusy}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cronMonth">Month</Label>
+                          <Input
+                            id="cronMonth"
+                            value={formData.cronMonth}
+                            onChange={(e) => setFormData({ ...formData, cronMonth: e.target.value })}
+                            placeholder="*"
+                            disabled={isBusy}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cronDayOfWeek">Day of Week</Label>
+                          <Input
+                            id="cronDayOfWeek"
+                            value={formData.cronDayOfWeek}
+                            onChange={(e) => setFormData({ ...formData, cronDayOfWeek: e.target.value })}
+                            placeholder="*"
+                            disabled={isBusy}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {formData.cronSecond} {formData.cronMinute} {formData.cronHour} {formData.cronDay} {formData.cronMonth} {formData.cronDayOfWeek}
                       </p>
                     </div>
                   )}

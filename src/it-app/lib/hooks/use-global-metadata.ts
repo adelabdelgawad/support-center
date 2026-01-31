@@ -1,13 +1,12 @@
 'use client';
 
-import useSWR, { mutate as globalMutate } from 'swr';
+import { useAsyncData } from '@/lib/hooks/use-async-data';
 import { useCallback, useMemo } from 'react';
-import { cacheKeys } from '@/lib/swr/cache-keys';
 import type { Priority, RequestStatus } from '@/types/metadata';
 import type { Technician } from '@/types/metadata';
 
 /**
- * SWR fetcher for API calls
+ * Fetcher for API calls
  */
 const fetcher = async (url: string): Promise<any> => {
   const response = await fetch(url, {
@@ -24,26 +23,20 @@ const fetcher = async (url: string): Promise<any> => {
 };
 
 /**
- * Hook to fetch and cache priorities globally using SWR
- *
- * SWR provides:
- * - Automatic caching and deduplication
- * - Background revalidation
- * - Optimistic UI updates via mutate()
+ * Hook to fetch and cache priorities using useAsyncData
  *
  * @param initialData - Initial priorities data from server (for SSR)
  * @returns Priorities data and loading state
  */
 export function useGlobalPriorities(initialData?: Priority[]) {
-  const { data, error, isLoading, mutate } = useSWR<Priority[]>(
-    cacheKeys.globalPriorities,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateOnMount: !initialData?.length,
-      revalidateOnFocus: false,
-      dedupingInterval: 60000, // Deduplicate requests within 1 minute
-    }
+  const fetchPriorities = useCallback(async () => {
+    return await fetcher('/api/priorities');
+  }, []);
+
+  const { data, error, isLoading, mutate } = useAsyncData<Priority[]>(
+    fetchPriorities,
+    [],
+    initialData
   );
 
   return {
@@ -55,26 +48,20 @@ export function useGlobalPriorities(initialData?: Priority[]) {
 }
 
 /**
- * Hook to fetch and cache request statuses globally using SWR
- *
- * SWR provides:
- * - Automatic caching and deduplication
- * - Background revalidation
- * - Optimistic UI updates via mutate()
+ * Hook to fetch and cache request statuses using useAsyncData
  *
  * @param initialData - Initial statuses data from server (for SSR)
  * @returns Statuses data and loading state
  */
 export function useGlobalStatuses(initialData?: RequestStatus[]) {
-  const { data, error, isLoading, mutate } = useSWR<RequestStatus[]>(
-    cacheKeys.globalStatuses,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateOnMount: !initialData?.length,
-      revalidateOnFocus: false,
-      dedupingInterval: 60000, // Deduplicate requests within 1 minute
-    }
+  const fetchStatuses = useCallback(async () => {
+    return await fetcher('/api/metadata/statuses');
+  }, []);
+
+  const { data, error, isLoading, mutate } = useAsyncData<RequestStatus[]>(
+    fetchStatuses,
+    [],
+    initialData
   );
 
   return {
@@ -86,29 +73,23 @@ export function useGlobalStatuses(initialData?: RequestStatus[]) {
 }
 
 /**
- * Hook to fetch and cache technicians globally using SWR
- *
- * SWR provides:
- * - Automatic caching and deduplication
- * - Background revalidation
- * - Helper functions for technician lookups
+ * Hook to fetch and cache technicians using useAsyncData
  *
  * @param initialData - Initial technicians data from server (for SSR)
  * @returns Technicians data with helper functions
  */
 export function useGlobalTechnicians(initialData?: Technician[]) {
-  const { data, error, isLoading, mutate } = useSWR<Technician[]>(
-    cacheKeys.globalTechnicians,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateOnMount: !initialData?.length,
-      revalidateOnFocus: false,
-      dedupingInterval: 60000, // Deduplicate requests within 1 minute
-    }
+  const fetchTechnicians = useCallback(async () => {
+    return await fetcher('/api/technicians');
+  }, []);
+
+  const { data, error, isLoading, mutate } = useAsyncData<Technician[]>(
+    fetchTechnicians,
+    [],
+    initialData
   );
 
-  const technicians = data ?? [];
+  const technicians = useMemo(() => data ?? [], [data]);
 
   /**
    * Get a technician by their user ID (UUID string)
@@ -165,17 +146,13 @@ export function useGlobalTechnicians(initialData?: Technician[]) {
 
 /**
  * Hook to refresh all global metadata at once
- * Useful for admin panels or when metadata is updated
+ * Note: Since useAsyncData doesn't have global cache, this is now a no-op
+ * Individual hooks manage their own state and can be refreshed via their mutate/refetch
  */
 export function useRefreshGlobalMetadata() {
   const refresh = useCallback(async () => {
-    // Use SWR's global mutate to refresh all metadata keys at once
-    await Promise.all([
-      globalMutate(cacheKeys.globalPriorities),
-      globalMutate(cacheKeys.globalStatuses),
-      globalMutate(cacheKeys.globalTechnicians),
-      globalMutate(cacheKeys.globalCategories),
-    ]);
+    // No-op: useAsyncData hooks use initialData from SSR
+    // If you need to refresh specific metadata, use the mutate function from each hook
   }, []);
 
   return { refresh };

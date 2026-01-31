@@ -1,6 +1,6 @@
 'use server';
 
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet, serverPost, serverPatch, serverDelete } from '@/lib/fetch/server';
 import type {
   SystemMessageResponse,
   SystemMessageListResponse,
@@ -37,9 +37,9 @@ export async function getSystemMessages(params?: {
     });
   }
 
-  return serverFetch<SystemMessageListResponse>(
+  return serverGet<SystemMessageListResponse>(
     `/system-messages?${queryParams}`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 }
 
@@ -49,9 +49,9 @@ export async function getSystemMessages(params?: {
 export async function createSystemMessage(
   data: SystemMessageCreate
 ): Promise<SystemMessageResponse> {
-  return serverFetch<SystemMessageResponse>(
+  return serverPost<SystemMessageResponse>(
     '/system-messages',
-    { method: 'POST', body: data }
+    data
   );
 }
 
@@ -61,9 +61,9 @@ export async function createSystemMessage(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getSystemMessage(id: string): Promise<SystemMessageResponse> {
-  return serverFetch<SystemMessageResponse>(
+  return serverGet<SystemMessageResponse>(
     `/system-messages/${id}`,
-    CACHE_PRESETS.NO_CACHE()
+    { revalidate: 0 }
   );
 }
 
@@ -74,9 +74,9 @@ export async function updateSystemMessage(
   id: string,
   data: SystemMessageUpdate
 ): Promise<SystemMessageResponse> {
-  return serverFetch<SystemMessageResponse>(
+  return serverPatch<SystemMessageResponse>(
     `/system-messages/${id}`,
-    { method: 'PATCH', body: data }
+    data
   );
 }
 
@@ -84,9 +84,8 @@ export async function updateSystemMessage(
  * Toggles system message status (active/inactive)
  */
 export async function toggleSystemMessageStatus(id: string): Promise<SystemMessageResponse> {
-  return serverFetch<SystemMessageResponse>(
-    `/system-messages/${id}/toggle`,
-    { method: 'PATCH' }
+  return serverPatch<SystemMessageResponse>(
+    `/system-messages/${id}/toggle`
   );
 }
 
@@ -94,5 +93,5 @@ export async function toggleSystemMessageStatus(id: string): Promise<SystemMessa
  * Deletes a system message
  */
 export async function deleteSystemMessage(id: string): Promise<void> {
-  await serverFetch('/system-messages/' + id, { method: 'DELETE' });
+  await serverDelete(`/system-messages/${id}`);
 }

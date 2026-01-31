@@ -5,8 +5,9 @@
  * GET /api/chat/messages/[requestId] - Get messages for a request
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { ApiError } from '@/lib/fetch/errors';
 import { makeAuthenticatedRequest } from '@/lib/api/server-fetch';
-import { formatServerFetchError, logError } from '@/lib/api/error-handler';
+import { formatApiError, logError } from '@/lib/api/error-handler';
 
 interface RouteContext {
   params: Promise<{
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     // Use centralized error handler for better error messages
     logError(error, 'Get Chat Messages');
 
-    const formattedError = formatServerFetchError(error);
+    const formattedError = formatApiError(error);
 
     return NextResponse.json(
       {

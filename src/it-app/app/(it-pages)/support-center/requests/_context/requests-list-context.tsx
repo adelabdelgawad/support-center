@@ -13,8 +13,6 @@
  * don't cause re-renders in components that only consume the other contexts.
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
 import type { ViewType } from '@/types/requests-list';
 import type { TechnicianViewsResponse } from '@/types/requests-list';
 import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-actions';
@@ -48,43 +46,18 @@ export function RequestsListProvider({
   businessUnitIds,
   visibleTabs,
 }: RequestsListProviderProps) {
-  // Shared state for coordinating isViewChanging across contexts
-  const [isViewChanging, setIsViewChanging] = useState(false);
-  const lastLoadedViewRef = useRef<ViewType>(initialView);
-
-  // Read current state from URL
-  const searchParams = useSearchParams();
-  const urlView = (searchParams.get('view') as ViewType) || initialView;
-
-  // Callback for data context to notify validation state
-  const onDataValidationChange = useCallback((isValidating: boolean) => {
-    // Clear isViewChanging when validation completes
-    if (!isValidating && isViewChanging) {
-      setIsViewChanging(false);
-      lastLoadedViewRef.current = urlView;
-    }
-  }, [isViewChanging, urlView]);
-
-  // Callback for UI context to notify when view changes
-  const onViewChange = useCallback((isChanging: boolean) => {
-    setIsViewChanging(isChanging);
-  }, []);
-
   return (
     <RequestsListUIProvider
       initialData={initialData}
       initialView={initialView}
       initialPage={initialPage}
       businessUnitIds={businessUnitIds}
-      isViewChanging={isViewChanging}
-      onViewChange={onViewChange}
     >
       <RequestsListDataProvider
         initialData={initialData}
         initialView={initialView}
         initialPage={initialPage}
         businessUnitIds={businessUnitIds}
-        onValidationChange={onDataValidationChange}
       >
         <RequestsListCountsProvider
           initialData={initialData}

@@ -16,6 +16,7 @@ export interface AdminSection {
   icon: string;
   description: string;
   links: AdminLink[];
+  order?: number; // Optional order for sorting
 }
 
 export const ADMIN_SECTIONS: AdminSection[] = [
@@ -71,6 +72,8 @@ export const ADMIN_SECTIONS: AdminSection[] = [
       { label: "Active Sessions", href: "/admin/management/active-sessions" },
       { label: "Deployments", href: "/admin/management/deployments" },
       { label: "Scheduler", href: "/admin/management/scheduler" },
+      { label: "Active Directory", href: "/admin/management/active-directory" },
+      { label: "Email", href: "/admin/management/email" },
     ],
   },
 ];

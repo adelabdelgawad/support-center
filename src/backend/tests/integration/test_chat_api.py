@@ -10,21 +10,20 @@ Tests:
 - Total unread count
 """
 
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from datetime import datetime
+from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database_models import ChatMessage, ServiceRequest, User, RequestStatus, Priority
-from schemas import ChatMessageCreate, ChatMessageCreateByClient, ChatMessageRead
-from services.chat_service import ChatService
+from db.models import ChatMessage, ServiceRequest, User, RequestStatus, Priority
+from api.schemas import ChatMessageCreate
+from api.services.chat_service import ChatService
 from tests.factories import (
-    UserFactory, ServiceRequestFactory, ChatMessageFactory,
-    RequestStatusFactory, PriorityFactory
+    UserFactory, ServiceRequestFactory, ChatMessageFactory
 )
 
 
@@ -37,7 +36,7 @@ async def sample_statuses(db_session: AsyncSession):
     """Get or create standard request statuses."""
     # First try to get existing statuses
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -67,7 +66,7 @@ async def sample_priorities(db_session: AsyncSession):
     """Get or create standard priorities."""
     # First try to get existing priorities
     result = await db_session.execute(
-        select(Priority).where(Priority.is_active == True).order_by(Priority.response_time_minutes)
+        select(Priority).where(Priority.is_active).order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 
@@ -521,7 +520,7 @@ class TestTotalUnread:
         self, db_session, requester_user
     ):
         """Test getting total unread count."""
-        from services.chat_read_state_service import ChatReadStateService
+        from api.services.chat_read_state_service import ChatReadStateService
 
         total = await ChatReadStateService.get_total_unread_count(
             db=db_session,
@@ -535,7 +534,7 @@ class TestTotalUnread:
         self, db_session, chat_request, requester_user, technician_user
     ):
         """Test that total unread updates when new messages arrive."""
-        from services.chat_read_state_service import ChatReadStateService
+        from api.services.chat_read_state_service import ChatReadStateService
 
         # Get initial count
         initial_count = await ChatReadStateService.get_total_unread_count(
@@ -578,7 +577,7 @@ class TestMarkChatAsRead:
         self, db_session, chat_request, sample_messages, technician_user
     ):
         """Test marking a chat as fully read."""
-        from services.chat_read_state_service import ChatReadStateService
+        from api.services.chat_read_state_service import ChatReadStateService
 
         monitor = await ChatReadStateService.mark_chat_as_read(
             db=db_session,
@@ -600,7 +599,7 @@ class TestMarkChatAsRead:
         self, db_session, chat_request, technician_user
     ):
         """Test that marking as read updates the timestamp."""
-        from services.chat_read_state_service import ChatReadStateService
+        from api.services.chat_read_state_service import ChatReadStateService
 
         before = datetime.utcnow()
 

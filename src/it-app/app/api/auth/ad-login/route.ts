@@ -7,7 +7,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { makePublicRequest, ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
+import { makePublicRequest } from "@/lib/api/server-fetch";
 import type { ADLoginRequest, LoginResponse, LoginResponseSnakeCase } from "@/lib/types/auth";
 
 export async function POST(request: NextRequest) {
@@ -126,20 +127,19 @@ export async function POST(request: NextRequest) {
     let status = 500;
     let detail = "An unexpected error occurred";
 
-    if (error instanceof ServerFetchError) {
+    if (error instanceof ApiError) {
       status = error.status;
-      detail = error.detail || error.message;
+      detail = error.message;
 
-      console.error('[ad-login] ServerFetchError:', {
+      console.error('[ad-login] ApiError:', {
         status,
         message: error.message,
-        detail: error.detail,
       });
 
       // Handle connection errors
-      if (error.detail === 'connection_refused') {
+      if (error.status === 503 || error.status === 0) {
         detail = 'Cannot connect to authentication server';
-      } else if (error.detail === 'timeout') {
+      } else if (error.status === 408) {
         detail = 'Authentication server timeout';
       }
     } else if (error instanceof Error) {

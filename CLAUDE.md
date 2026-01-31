@@ -479,20 +479,49 @@ uv run alembic heads
 
 ### Docker Services
 
+**Two Docker Compose configurations available:**
+
+1. **`docker-compose.dev.yml`** - Development mode (infrastructure only)
+   - PostgreSQL, Redis, MinIO, PgBouncer
+   - For local development where backend/frontend run on host
+
+2. **`docker-compose.prod.yml`** - Production mode (all services)
+   - Everything in dev + backend replicas, frontend, SignalR, monitoring, nginx
+
+**Development Usage:**
 ```bash
-# Start PostgreSQL and Redis only
-docker-compose up -d postgres redis
+# Start infrastructure only (recommended for local dev)
+docker-compose -f docker-compose.dev.yml up -d
+
+# Then run backend and frontend locally:
+cd src/backend && uvicorn main:app --reload
+cd src/it-app && bun run dev
 
 # PostgreSQL runs on port 5433 (mapped from container 5432)
 # Redis runs on port 6380 (mapped from container 6379)
+# MinIO on ports 9000/9001
 
-# Stop services
-docker-compose down
+# Stop infrastructure
+docker-compose -f docker-compose.dev.yml down
+```
+
+**Production Usage:**
+```bash
+# Start all services for production deployment
+docker-compose -f docker-compose.prod.yml up -d
 
 # View logs
-docker-compose logs -f postgres
-docker-compose logs -f redis
+docker-compose -f docker-compose.prod.yml logs -f backend-1
+docker-compose -f docker-compose.prod.yml logs -f frontend
+
+# Stop all services
+docker-compose -f docker-compose.prod.yml down
 ```
+
+**Legacy `docker-compose.yml`:**
+- Still exists for backward compatibility
+- Contains full production config (same as docker-compose.prod.yml)
+- Will be deprecated in future - use explicit dev/prod files
 
 ### Testing
 
@@ -555,8 +584,10 @@ Key dependencies:
 - `get_session()`: Async database session management
 - `get_current_user()`: JWT authentication from Bearer token
 - `get_current_user_session()`: Returns (User, UserSession) tuple
-- `require_admin()`: Role-based access control
-- `require_roles(*roles)`: Multi-role authorization
+- `require_technician()`: Requires `is_technician=True` flag or `is_super_admin=True`
+- `require_supervisor()`: Requires 'Supervisor' role
+- `require_admin()`: Requires 'admin' role or `is_super_admin=True`
+- `require_super_admin()`: Requires 'SuperAdmin' role or `is_super_admin=True`
 - `get_client_ip(request)`: Extract client IP from request headers
 
 ### Authentication System
@@ -577,13 +608,26 @@ Key dependencies:
 
 ### User Roles and Access Control
 
-Defined in `models/model_enum.py`:
-- **EMPLOYEE**: Submit requests, chat with agents
-- **AGENT**: View/manage requests, chat with employees
-- **SUPERVISOR**: System-wide metrics, task assignment, reporting
+**Hybrid Authorization Model:**
 
-Additional user fields:
-- `is_super_admin`: Full system access override
+The system uses a combination of boolean flags and database roles:
+
+**Boolean Flags (User model):**
+- `is_technician`: Primary access flag for IT agents (boolean)
+- `is_super_admin`: Full system access override (boolean)
+
+**Database Roles (roles table):**
+- **technician**: Handles technical service requests
+- **supervisor**: Supervisory access with system-wide metrics
+- **admin**: System administrator with full access
+
+**Authorization Dependencies:**
+- `require_technician`: Checks `is_technician=True` or `is_super_admin=True`
+- `require_supervisor`: Checks role 'Supervisor'
+- `require_admin`: Checks role 'admin' or `is_super_admin=True`
+- `require_super_admin`: Checks role 'SuperAdmin' or `is_super_admin=True`
+
+**Additional user fields:**
 - `is_domain`: Domain user (AD) vs local user
 - `is_blocked`: Account blocking with custom message
 - `manager_id`: User's manager reference

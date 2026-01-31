@@ -6,6 +6,7 @@ import { createSchedulerTableColumns } from "./scheduler-table-columns";
 import { AddJobButton } from "../actions/add-job-button";
 import type { ScheduledJob, TaskFunction, JobType, JobExecution, JobTriggerResponse } from "@/lib/actions/scheduler.actions";
 import { JobExecutionsSheet } from "../sheets/job-executions-sheet";
+import { EditJobSheet } from "../sheets/edit-job-sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,6 @@ interface SchedulerTableBodyProps {
   disabledCount: number;
   runningCount: number;
   isLoading?: boolean;
-  isValidating?: boolean;
   refetch: () => void;
   updateJobs: (updatedJobs: ScheduledJob[]) => Promise<void>;
   addJob: (newJob: ScheduledJob) => Promise<void>;
@@ -38,7 +38,6 @@ export function SchedulerTableBody({
   disabledCount,
   runningCount,
   isLoading,
-  isValidating,
   refetch,
   updateJobs,
   addJob,
@@ -56,6 +55,7 @@ export function SchedulerTableBody({
   const [executions, setExecutions] = useState<JobExecution[]>([]);
   const [fetchingExecutionsForJobId, setFetchingExecutionsForJobId] = useState<string | null>(null);
   const [deletingJob, setDeletingJob] = useState<ScheduledJob | null>(null);
+  const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null);
 
   const selectedIds = selectedJobs.map((job) => job.id).filter(Boolean) as string[];
 
@@ -160,6 +160,10 @@ export function SchedulerTableBody({
   /**
    * Handle delete job
    */
+  const handleEditJob = useCallback((job: ScheduledJob) => {
+    setEditingJob(job);
+  }, []);
+
   const handleDeleteJob = useCallback((job: ScheduledJob) => {
     setDeletingJob(job);
   }, []);
@@ -295,15 +299,17 @@ export function SchedulerTableBody({
         onTriggerJob: handleTriggerJob,
         onViewExecutions: handleViewExecutions,
         onDeleteJob: handleDeleteJob,
+        onEditJob: handleEditJob,
+        taskFunctions,
       }),
-    [updatingIds, fetchingExecutionsForJobId, handleToggleStatus, handleTriggerJob, handleViewExecutions]
+    [updatingIds, fetchingExecutionsForJobId, handleToggleStatus, handleTriggerJob, handleViewExecutions, handleDeleteJob, handleEditJob, taskFunctions]
   );
 
   // Memoize sorted data
   const tableData = useMemo(() => jobs, [jobs]);
 
   return (
-    <div className="h-full flex flex-col min-h-0 ml-2 space-y-2">
+    <div className="h-full flex flex-col min-h-0 space-y-2">
         {/* Controller Bar */}
         <SettingsTableHeader<string>
           statusFilter={{
@@ -340,7 +346,7 @@ export function SchedulerTableBody({
           renderToolbar={() => null}
           enableRowSelection={true}
           enableSorting={false}
-          _isLoading={isLoading || isValidating}
+          _isLoading={isLoading}
         />
       </div>
 
@@ -355,6 +361,20 @@ export function SchedulerTableBody({
             setViewingExecutions(null);
             setExecutions([]);
           }
+        }}
+      />
+
+      <EditJobSheet
+        open={!!editingJob}
+        onOpenChange={(open) => {
+          if (!open) setEditingJob(null);
+        }}
+        job={editingJob}
+        taskFunctions={taskFunctions}
+        jobTypes={jobTypes}
+        onJobUpdated={async (updatedJob) => {
+          await updateJobs([updatedJob]);
+          setEditingJob(null);
         }}
       />
 

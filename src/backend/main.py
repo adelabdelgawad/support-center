@@ -2,7 +2,7 @@
 Main FastAPI application entry point.
 """
 
-from app import create_app
+from core.factory import create_app
 
 # Create application instance
 app = create_app()

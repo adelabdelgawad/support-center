@@ -40,7 +40,7 @@ export async function retryWithBackoff<T>(
     } catch (error: unknown) {
       lastError = error as Error;
 
-      // Type guard for error with status (works with both ServerFetchError and generic errors)
+      // Type guard for error with status (works with both ApiError and generic errors)
       const errorWithStatus = error as { status?: number; detail?: string };
 
       // Check if error is retryable

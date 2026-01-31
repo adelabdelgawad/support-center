@@ -14,33 +14,18 @@ from celery import Task
 from celery_app import celery_app
 from tasks.base import BaseTask
 from tasks.database import get_celery_session
-from services.whatsapp_sender import WhatsAppSender
+from api.services.whatsapp_sender import WhatsAppSender
 
 logger = logging.getLogger(__name__)
 
 
 def run_async(coro):
-    """
-    Run an async coroutine in a sync context (Celery worker).
-
-    Uses a persistent event loop per worker process instead of asyncio.run()
-    which creates/closes a new loop each time (causing "Event loop is closed" errors).
-    """
+    """Run an async coroutine in a sync context (Celery worker)."""
+    loop = asyncio.new_event_loop()
     try:
-        # Try to get the existing event loop
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        # No event loop in current thread, create one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    # If loop is closed, create a new one
-    if loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    # Run the coroutine and return the result
-    return loop.run_until_complete(coro)
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 @celery_app.task(

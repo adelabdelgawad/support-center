@@ -1,16 +1,27 @@
 """
 Logging configuration for the Service Catalog application.
 Provides structured logging with different levels and formats.
+Console output only.
 """
 
+import datetime
 import logging
-import logging.handlers
 import sys
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel
+
+
+class CorrelationIdFilter(logging.Filter):
+    """Filter to add correlation ID to log records."""
+
+    def filter(self, record):
+        """Add correlation_id to log record."""
+        from core.middleware.correlation import get_correlation_id
+
+        # Add correlation ID from context variable, or "NO-CORRELATION-ID" if not set
+        record.correlation_id = get_correlation_id() or "NO-CORRELATION-ID"
+        return True
 
 
 class LogConfig(BaseModel):
@@ -19,11 +30,6 @@ class LogConfig(BaseModel):
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     date_format: str = "%Y-%m-%d %H:%M:%S"
-    enable_file_logging: bool = True
-    log_dir: str = "logs"
-    max_file_size: int = 10 * 1024 * 1024  # 10MB
-    backup_count: int = 5
-    enable_console: bool = True
 
 
 class ColoredFormatter(logging.Formatter):
@@ -59,14 +65,9 @@ class ColoredFormatter(logging.Formatter):
 
 
 def setup_logging(config: Optional[LogConfig] = None) -> None:
-    """Setup application logging with configuration."""
+    """Setup application logging with console output only."""
     if config is None:
         config = LogConfig()
-
-    # Create logs directory if it doesn't exist and file logging is enabled
-    if config.enable_file_logging:
-        log_path = Path(config.log_dir)
-        log_path.mkdir(exist_ok=True)
 
     # Configure root logger
     root_logger = logging.getLogger()
@@ -75,88 +76,31 @@ def setup_logging(config: Optional[LogConfig] = None) -> None:
     # Clear existing handlers
     root_logger.handlers.clear()
 
-    # Console handler with colors
-    if config.enable_console:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(getattr(logging, config.level.upper()))
+    # Console handler with colors (always enabled)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(getattr(logging, config.level.upper()))
 
-        # Use colored formatter for console
-        console_formatter = ColoredFormatter(
-            fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-            datefmt=config.date_format,
-        )
-        console_handler.setFormatter(console_formatter)
-        root_logger.addHandler(console_handler)
+    # Use colored formatter for console
+    console_formatter = ColoredFormatter(
+        fmt="%(asctime)s | %(correlation_id)s | %(name)s | %(levelname)s | %(message)s",
+        datefmt=config.date_format,
+    )
+    console_handler.setFormatter(console_formatter)
+    console_handler.addFilter(CorrelationIdFilter())
+    root_logger.addHandler(console_handler)
 
-    # File handler with rotation
-    if config.enable_file_logging:
-        # Main application log
-        app_log_file = Path(config.log_dir) / "app.log"
-        app_handler = logging.handlers.RotatingFileHandler(
-            app_log_file,
-            maxBytes=config.max_file_size,
-            backupCount=config.backup_count,
-            encoding="utf-8",
-        )
-        app_handler.setLevel(getattr(logging, config.level.upper()))
+    # Configure library loggers to reduce verbosity
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
-        app_formatter = logging.Formatter(
-            fmt="%(asctime)s | %(name)s | %(levelname)s | %(funcName)s:%(lineno)d | %(message)s",
-            datefmt=config.date_format,
-        )
-        app_handler.setFormatter(app_formatter)
-        root_logger.addHandler(app_handler)
+    # Configure SQLAlchemy logger based on query logging setting
+    from .config import settings
 
-        # Session-specific log
-        session_log_file = Path(config.log_dir) / "sessions.log"
-        session_handler = logging.handlers.RotatingFileHandler(
-            session_log_file,
-            maxBytes=config.max_file_size,
-            backupCount=config.backup_count,
-            encoding="utf-8",
-        )
-        session_handler.setLevel(getattr(logging, config.level.upper()))
-        session_handler.setFormatter(app_formatter)
-
-        # Add session handler to session logger only
-        session_logger = logging.getLogger("services.session_service")
-        session_logger.addHandler(session_handler)
-        session_logger.setLevel(getattr(logging, config.level.upper()))
-
-        # Configure APScheduler logger to DEBUG level to reduce verbosity
-        apscheduler_logger = logging.getLogger("apscheduler.executors.default")
-        apscheduler_logger.setLevel(logging.DEBUG)
-        apscheduler_logger.addHandler(app_handler)
-
-        # Configure httpx logger to WARNING level to reduce verbosity
-        httpx_logger = logging.getLogger("httpx")
-        httpx_logger.setLevel(logging.WARNING)
-        httpx_logger.addHandler(app_handler)
-
-        # Database log
-        db_log_file = Path(config.log_dir) / "database.log"
-        db_handler = logging.handlers.RotatingFileHandler(
-            db_log_file,
-            maxBytes=config.max_file_size,
-            backupCount=config.backup_count,
-            encoding="utf-8",
-        )
-        db_handler.setLevel(getattr(logging, config.level.upper()))
-        db_handler.setFormatter(app_formatter)
-
-        # Add database handler to SQLAlchemy logger only if query logging is enabled
-        sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
-        sqlalchemy_logger.addHandler(db_handler)
-
-        # Respect the ENABLE_QUERY_LOGGING setting for SQLAlchemy logger level
-        from .config import settings
-
-        if settings.performance.enable_query_logging:
-            sqlalchemy_logger.setLevel(getattr(logging, config.level.upper()))
-        else:
-            sqlalchemy_logger.setLevel(
-                logging.WARNING
-            )  # Only show warnings and errors
+    sqlalchemy_logger = logging.getLogger("sqlalchemy.engine")
+    if settings.performance.enable_query_logging:
+        sqlalchemy_logger.setLevel(getattr(logging, config.level.upper()))
+    else:
+        sqlalchemy_logger.setLevel(logging.WARNING)
 
 
 class VersionLogger:

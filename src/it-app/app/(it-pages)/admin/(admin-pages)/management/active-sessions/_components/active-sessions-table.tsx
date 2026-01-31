@@ -1,8 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import useSWR from "swr";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { useAsyncData } from "@/lib/hooks/use-async-data";
 import type { ActiveSessionsPageData, ActiveSession } from "@/types/sessions";
 import { SessionsTableBody } from "./sessions-table-body";
 import { VersionStatusPanel } from "./version-status-panel";
@@ -16,11 +16,11 @@ interface ActiveSessionsTableProps {
 }
 
 /**
- * Fetcher function for SWR - optimized for caching and deduping
+ * Fetcher function for active sessions
  * Uses Next.js internal API routes for authentication
  */
-const fetcher = async (url: string) => {
-  const response = await fetch(url, {
+const fetchSessions = async (apiUrl: string): Promise<ActiveSessionsPageData & { total: number }> => {
+  const response = await fetch(apiUrl, {
     credentials: "include",
   });
 
@@ -46,8 +46,6 @@ export function ActiveSessionsTable({
 
   // Track if this is the initial mount to avoid unnecessary refetch
   const isInitialMount = useRef(true);
-  // Track the previous initialData to detect SSR navigation
-  const prevInitialDataRef = useRef(initialData);
 
   // Read URL parameters
   const page = Number(searchParams?.get("page") || "1");
@@ -56,100 +54,45 @@ export function ActiveSessionsTable({
   const isActiveFilter = searchParams?.get("is_active") || "";
   const versionStatusFilter = searchParams?.get("version_status") || "";
 
-  // Build API URL with current filters - use Next.js API route
-  const params = new URLSearchParams();
-  params.append("page", page.toString());
-  params.append("per_page", limit.toString());
-  if (filter) params.append("username", filter);
-  if (isActiveFilter) params.append("is_active", isActiveFilter);
-  if (versionStatusFilter) params.append("version_status", versionStatusFilter);
+  // Build API URL with current filters - memoize to avoid unnecessary refetches
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    params.append("page", page.toString());
+    params.append("per_page", limit.toString());
+    if (filter) params.append("username", filter);
+    if (isActiveFilter) params.append("is_active", isActiveFilter);
+    if (versionStatusFilter) params.append("version_status", versionStatusFilter);
+    return `/api/sessions/active-desktop?${params.toString()}`;
+  }, [page, limit, filter, isActiveFilter, versionStatusFilter]);
 
-  // Use Next.js internal API route for authentication
-  const apiUrl = `/api/sessions/active-desktop?${params.toString()}`;
-
-  /**
-   * SWR Configuration - Manual Refetch Only
-   *
-   * ALL automatic client-side refetching is DISABLED:
-   * - No refetch on mount
-   * - No refetch on window focus
-   * - No refetch on reconnect
-   * - No refetch when data becomes stale
-   *
-   * Data ONLY refetches when:
-   * - Filters change (isActiveFilter, filter)
-   * - Page changes
-   * - Manual refetch is called (via refresh button)
-   *
-   * This is handled by the useEffect below that watches filter parameters.
-   */
-  // Check if initial data is empty - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && initialData.sessions && initialData.sessions.length > 0;
-
-  const { data, mutate, isLoading, isValidating, error } = useSWR<ActiveSessionsPageData & { total: number }>(
-    apiUrl,
-    fetcher,
-    {
-      // Use server-side data as initial cache
-      fallbackData: initialData ?? undefined,
-
-      // Keep previous data for smooth transitions
-      keepPreviousData: true,
-
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateIfStale: false,
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-
-      // Dedupe requests within 2 seconds
-      dedupingInterval: 2000,
-    }
+  // Use useAsyncData with API URL as dependency
+  const { data, isLoading, isValidating, error, refetch } = useAsyncData<ActiveSessionsPageData & { total: number }>(
+    () => fetchSessions(apiUrl),
+    [apiUrl],
+    initialData ?? undefined
   );
 
-  // When initialData changes (SSR navigation), update SWR cache directly
-  // This avoids a redundant CSR fetch after URL navigation
-  useEffect(() => {
-    // If initialData changed (due to URL navigation with SSR data)
-    if (initialData && initialData !== prevInitialDataRef.current) {
-      // Update SWR cache with new SSR data (no revalidation needed)
-      mutate(initialData, { revalidate: false });
-      prevInitialDataRef.current = initialData;
-    }
-  }, [initialData, mutate]);
-
-  // Force revalidation when filters or page changes
-  // This ensures data refreshes on client-side navigation (pagination, filtering)
-  useEffect(() => {
-    // Skip the first render - we already have data from SSR
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    // Trigger refetch on filter/page changes (including client-side pagination)
-    mutate();
-  }, [isActiveFilter, versionStatusFilter, filter, page, mutate]);
-
-  const sessions = data?.sessions ?? [];
-  const stats = data?.stats ?? initialData?.stats ?? {
+  // Use data from SWR or fall back to initialData (SSR)
+  const sessionsData = data ?? initialData;
+  const sessions = sessionsData?.sessions ?? [];
+  const stats = sessionsData?.stats ?? initialData?.stats ?? {
     totalSessions: 0,
     desktopSessions: 0,
     webSessions: 0,
     mobileSessions: 0,
     activeSessions: 0,
   };
-  const total = data?.total ?? initialData?.total ?? 0;
+  const total = sessionsData?.total ?? initialData?.total ?? 0;
 
   // Session counts from API (calculated before is_active filter)
-  const sessionCounts = data?.sessionCounts ?? initialData?.sessionCounts ?? {
+  const sessionCounts = sessionsData?.sessionCounts ?? initialData?.sessionCounts ?? {
     total: 0,
     active: 0,
     inactive: 0,
   };
 
   // Version metrics from API
-  const versionMetrics = data?.versionMetrics ?? initialData?.versionMetrics ?? {
+  const versionMetrics = sessionsData?.versionMetrics ?? initialData?.versionMetrics ?? {
     total: 0,
     ok: 0,
     outdated: 0,
@@ -160,13 +103,6 @@ export function ActiveSessionsTable({
   // Get latest version from any outdated session (they all point to same target)
   const latestVersion = sessions.find(s => s.targetVersion)?.targetVersion ?? null;
 
-  /**
-   * Force refetch
-   */
-  const refetch = useCallback(() => {
-    mutate();
-  }, [mutate]);
-
   // Error state with retry button
   if (error) {
     return (
@@ -174,7 +110,7 @@ export function ActiveSessionsTable({
         <div className="text-center">
           <div className="text-destructive mb-2">Failed to load active sessions</div>
           <div className="text-muted-foreground text-sm mb-4">{error.message}</div>
-          <button onClick={() => mutate()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">
+          <button onClick={() => refetch()} className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90">
             Retry
           </button>
         </div>
@@ -198,7 +134,7 @@ export function ActiveSessionsTable({
       return { success: false, message: "Not implemented" };
     },
     onRefreshSessions: async () => {
-      await mutate();
+      await refetch();
       return { success: true };
     },
     refetch,

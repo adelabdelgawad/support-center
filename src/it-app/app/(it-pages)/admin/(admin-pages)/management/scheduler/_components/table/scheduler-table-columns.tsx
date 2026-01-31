@@ -4,7 +4,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { StatusSwitch } from "@/components/ui/status-switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, History, Play, Trash2, CheckCircle, XCircle, Clock, RefreshCw } from "lucide-react";
+import { Loader2, History, Play, Trash2, CheckCircle, XCircle, Clock, RefreshCw, Pencil } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { ScheduledJob } from "@/lib/actions/scheduler.actions";
 
@@ -15,6 +15,8 @@ interface SchedulerTableColumnsProps {
   onTriggerJob: (id: string) => Promise<void>;
   onViewExecutions: (job: ScheduledJob) => void;
   onDeleteJob: (job: ScheduledJob) => void;
+  onEditJob: (job: ScheduledJob) => void;
+  taskFunctions: import("@/lib/actions/scheduler.actions").TaskFunction[];
 }
 
 /**
@@ -27,6 +29,8 @@ export function createSchedulerTableColumns({
   onTriggerJob,
   onViewExecutions,
   onDeleteJob,
+  onEditJob,
+  taskFunctions,
 }: SchedulerTableColumnsProps): ColumnDef<ScheduledJob>[] {
   return [
     {
@@ -70,35 +74,53 @@ export function createSchedulerTableColumns({
 
     {
       accessorKey: "name",
-      header: () => <div className="text-center">Name</div>,
+      header: () => <div className="text-left">Name</div>,
       cell: (info) => {
         const job = info.row.original;
         const isRowUpdating = Boolean(job.id && updatingIds.has(job.id));
+        const tfId = job.taskFunctionId;
+        const tf = taskFunctions.find((t) => t.id === tfId);
 
         return (
-          <div className={`flex flex-col items-center justify-center ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
-            <span className="font-medium">{job.name}</span>
-            {job.description && (
-              <span className="text-sm text-muted-foreground">{job.description}</span>
-            )}
+          <div className={`flex items-center gap-2 ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
+            <span className="font-medium">{tf?.displayName ?? `Task #${tfId}`}</span>
           </div>
         );
       },
     },
 
     {
-      accessorKey: "taskFunctionId",
+      id: "task",
       header: () => <div className="text-left">Task</div>,
       cell: (info) => {
-        const isRowUpdating = Boolean(
-          info.row.original.id && updatingIds.has(info.row.original.id)
-        );
+        const job = info.row.original;
+        const isRowUpdating = Boolean(job.id && updatingIds.has(job.id));
+
         return (
-          <div className={isRowUpdating ? "opacity-60 pointer-events-none" : ""}>
-            <Badge variant="outline">{info.getValue() as number}</Badge>
+          <div className={`font-mono text-sm text-muted-foreground ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
+            {job.name}
           </div>
         );
       },
+    },
+
+    {
+      accessorKey: "description",
+      header: () => <div className="text-left">Description</div>,
+      cell: (info) => {
+        const job = info.row.original;
+        const isRowUpdating = Boolean(job.id && updatingIds.has(job.id));
+
+        return (
+          <div
+            className={`text-sm text-muted-foreground truncate max-w-[200px] ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}
+            title={job.description || undefined}
+          >
+            {job.description || <span className="italic">No description</span>}
+          </div>
+        );
+      },
+      size: 200,
     },
 
     {
@@ -110,20 +132,126 @@ export function createSchedulerTableColumns({
         );
         const config = info.getValue() as Record<string, unknown>;
 
-        const formatScheduleConfig = (scheduleConfig: Record<string, unknown>) => {
-          if (scheduleConfig.seconds) return `Every ${scheduleConfig.seconds}s`;
-          if (scheduleConfig.minutes) return `Every ${scheduleConfig.minutes}m`;
-          if (scheduleConfig.hours) return `Every ${scheduleConfig.hours}h`;
-          if (scheduleConfig.minute && scheduleConfig.hour) {
-            return `At ${scheduleConfig.hour}:${String(scheduleConfig.minute).padStart(2, "0")}`;
+        const formatScheduleConfig = (cfg: Record<string, unknown>) => {
+          // Interval format: {seconds, minutes, hours}
+          if (cfg.seconds && Number(cfg.seconds) > 0) return `Every ${cfg.seconds}s`;
+          if (cfg.minutes && Number(cfg.minutes) > 0) return `Every ${cfg.minutes}m`;
+          if (cfg.hours && Number(cfg.hours) > 0) return `Every ${cfg.hours}h`;
+
+          // OLD FORMAT: Raw cron string {cron: "0 */6 * * *", timezone: "UTC"}
+          const cronString = cfg.cron as string | undefined;
+          if (cronString) {
+            return formatCronString(cronString);
           }
-          return JSON.stringify(scheduleConfig);
+
+          // NEW FORMAT: Individual fields {second, minute, hour, day, month, day_of_week}
+          if ("minute" in cfg || "second" in cfg || "hour" in cfg) {
+            const minute = cfg.minute ?? "*";
+            const hour = cfg.hour ?? "*";
+            const dayOfWeek = cfg.day_of_week ?? "*";
+            const day = cfg.day ?? "*";
+            const month = cfg.month ?? "*";
+
+            // Human-readable shortcuts
+            if (minute === "*" && hour === "*") return "Every minute";
+            if (minute === "0" && hour === "*") return "Every hour";
+            if (minute === "0" && hour === "0" && dayOfWeek === "*") return "Daily at midnight";
+
+            // Weekly schedule
+            if (dayOfWeek !== "*" && dayOfWeek !== undefined && dayOfWeek !== null) {
+              const dayNames: Record<string, string> = {
+                "0": "Sunday",
+                "1": "Monday",
+                "2": "Tuesday",
+                "3": "Wednesday",
+                "4": "Thursday",
+                "5": "Friday",
+                "6": "Saturday",
+                "1-5": "Weekdays",
+                "0,6": "Weekends",
+              };
+              const dayName = dayNames[String(dayOfWeek)] || String(dayOfWeek);
+              const time = hour !== "*" ? `${hour}:${String(minute).padStart(2, "0")}` : "";
+              return time ? `Every ${dayName} at ${time}` : `Every ${dayName}`;
+            }
+
+            // Daily schedule at specific time
+            if (hour !== "*" && minute !== "*") {
+              return `Daily at ${hour}:${String(minute).padStart(2, "0")}`;
+            }
+
+            // Show friendly cron expression for complex patterns
+            const parts = [
+              cfg.second ?? "0",
+              minute,
+              hour,
+              day,
+              month,
+              dayOfWeek
+            ];
+            return parts.join(" ");
+          }
+
+          return JSON.stringify(cfg);
+        };
+
+        // Helper to parse and format raw cron expressions (5 or 6 parts)
+        const formatCronString = (cron: string) => {
+          const parts = cron.trim().split(/\s+/);
+          // Handle both 5-part (min hour day month dow) and 6-part (sec min hour day month dow)
+          const hasSeconds = parts.length === 6;
+          const [secOrMin, min, hour, day, month, dow] = hasSeconds
+            ? parts
+            : ["0", ...parts];
+
+          // Every minute
+          if (min === "*" && hour === "*" && day === "*" && month === "*" && dow === "*") {
+            return "Every minute";
+          }
+
+          // Every hour
+          if (min === "0" && hour === "*" && day === "*" && month === "*" && dow === "*") {
+            return "Every hour";
+          }
+
+          // Daily at midnight
+          if (min === "0" && hour === "0" && day === "*" && month === "*" && dow === "*") {
+            return "Daily at midnight";
+          }
+
+          // Every N hours (e.g., "0 */6 * * *" = "Every 6 hours")
+          if (min === "0" && hour?.startsWith("*/") && day === "*" && month === "*" && dow === "*") {
+            const interval = hour.slice(2);
+            return `Every ${interval} hours`;
+          }
+
+          // Weekly schedule (day 0-6 = Sun-Sat)
+          if (dow !== "*" && dow !== undefined && day === "*" && month === "*") {
+            const dayNames: Record<string, string> = {
+              "0": "Sunday",
+              "1": "Monday",
+              "2": "Tuesday",
+              "3": "Wednesday",
+              "4": "Thursday",
+              "5": "Friday",
+              "6": "Saturday",
+            };
+            const dayName = dayNames[dow] || dow;
+            const time = hour !== "*" ? `${hour}:${String(min).padStart(2, "0")}` : "";
+            return time ? `Every ${dayName} at ${time}` : `Every ${dayName}`;
+          }
+
+          // Daily at specific time
+          if (hour !== "*" && min !== "*" && day === "*" && month === "*" && dow === "*") {
+            return `Daily at ${hour}:${String(min).padStart(2, "0")}`;
+          }
+
+          // Return friendly format for complex patterns
+          return parts.join(" ");
         };
 
         return (
-          <div
-            className={`font-mono text-sm ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}
-          >
+          <div className={`text-sm ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
             {formatScheduleConfig(config)}
           </div>
         );
@@ -150,7 +278,7 @@ export function createSchedulerTableColumns({
               title={job.isEnabled ? "Disable job" : "Enable job"}
               description={
                 job.isEnabled
-                  ? `Job "${job.name}" will be disabled and won't run automatically.`
+                  ? `Job "${job.name}" will be disabled and won&apos;t run automatically.`
                   : `Job "${job.name}" will be enabled and run automatically.`
               }
               disabled={isRowUpdating}
@@ -212,7 +340,7 @@ export function createSchedulerTableColumns({
           <div className={`text-sm ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
             {value ? (
               <span suppressHydrationWarning>
-                {formatDistanceToNow(new Date(value), { addSuffix: true })}
+                {formatDistanceToNow(new Date(value.endsWith('Z') ? value : value + 'Z'), { addSuffix: true })}
               </span>
             ) : (
               <span className="text-muted-foreground">Never</span>
@@ -235,7 +363,7 @@ export function createSchedulerTableColumns({
           <div className={`text-sm ${isRowUpdating ? "opacity-60 pointer-events-none" : ""}`}>
             {value ? (
               <span suppressHydrationWarning>
-                {formatDistanceToNow(new Date(value), { addSuffix: true })}
+                {formatDistanceToNow(new Date(value.endsWith('Z') ? value : value + 'Z'), { addSuffix: true })}
               </span>
             ) : (
               <span className="text-muted-foreground">-</span>
@@ -260,6 +388,16 @@ export function createSchedulerTableColumns({
             }`}
             onClick={(e) => e.stopPropagation()}
           >
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onEditJob(job)}
+              disabled={isRowUpdating}
+              className="h-8 w-8"
+              title="Edit job"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"

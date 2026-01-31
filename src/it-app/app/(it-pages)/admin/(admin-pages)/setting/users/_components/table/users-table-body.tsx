@@ -7,7 +7,6 @@ import { createUsersTableColumns } from "./users-table-columns";
 import { AddUserButton } from "../actions/add-user-button";
 import { useUsersTableActions } from "./users-table-actions";
 import { UserActions } from "../actions/actions-menu";
-import { OUManagementDialog } from "../ou-management-dialog";
 
 interface UsersTableBodyProps {
   users: UserWithRolesResponse[];
@@ -150,10 +149,7 @@ export default function UsersTableBody({
           urlParam: "filter",
         }}
         addButton={
-          <div className="flex items-center gap-2">
-            <OUManagementDialog />
-            <AddUserButton onAdd={handleRefresh} addUser={addUser} />
-          </div>
+          <AddUserButton onAdd={handleRefresh} addUser={addUser} />
         }
         bulkActions={{
           onDisable: handleDisable,

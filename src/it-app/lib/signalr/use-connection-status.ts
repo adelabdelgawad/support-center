@@ -47,7 +47,7 @@ export function useConnectionStatus({
     if (isConnected) {
       // Connected - clear everything
       disconnectTimeRef.current = null;
-      setAlertLevel('none');
+      setAlertLevel('none'); // eslint-disable-line react-hooks/set-state-in-effect -- Immediate state update on connection restored
       return;
     }
 

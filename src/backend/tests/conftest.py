@@ -19,6 +19,8 @@ import os
 from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
+from core.cache import cache_manager_class
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -26,13 +28,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
-from models.database_models import (
-    User, Role, Page, PageRole, UserRole,
-    Priority, Category, ServiceSection
+from db.models import (
+    User, Role, Page, UserRole
 )
 # SessionType is now an enum, not a table
-from models.model_enum import SessionType
-from schemas.user.domain_user import DomainUser
+from db.enums import SessionType
+from api.schemas.domain_user import DomainUser
 
 
 # ============================================================================
@@ -121,7 +122,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 def mock_cache():
     """Mock Redis cache manager."""
-    cache = MagicMock(spec=CacheManager)
+    cache = MagicMock(spec=cache_manager_class)
     cache.get = AsyncMock(return_value=None)
     cache.set = AsyncMock(return_value=True)
     cache.delete = AsyncMock(return_value=True)
@@ -136,7 +137,7 @@ def mock_cache():
 @pytest.fixture
 def mock_ldap_service():
     """Mock LDAP service for AD authentication."""
-    from services.active_directory import LdapService
+    from api.services.active_directory import LdapService
 
     ldap_service = MagicMock(spec=LdapService)
     ldap_service.authenticate_user = AsyncMock(return_value=True)

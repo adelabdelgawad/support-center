@@ -28,8 +28,9 @@ export function useAllBusinessUnits(view: string, initialData?: BusinessUnitCoun
       fallbackData: initialData,
       revalidateOnMount: !initialData,
       revalidateOnFocus: false,
-      refreshInterval: 30000, // 30 seconds
+      refreshInterval: 60000, // 60 seconds (changed from 30s)
       dedupingInterval: 10000, // Deduplicate requests within 10 seconds
+      keepPreviousData: true, // Keep previous data while loading
     }
   );
 

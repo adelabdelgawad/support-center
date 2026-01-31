@@ -7,9 +7,6 @@ Create Date: 2026-01-15 16:46:39.188169
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.sql import table, column
-import uuid
-from datetime import datetime
 
 # revision identifiers, used by Alembic.
 revision = 'ef0a6699ff3a'

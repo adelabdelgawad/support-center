@@ -5,7 +5,9 @@ This module provides a shared Celery instance configured with Redis broker,
 task routing, and monitoring settings for the Service Catalog application.
 """
 
+import logging
 from celery import Celery
+from celery.signals import task_failure, task_postrun, task_prerun, worker_process_init
 from kombu import Exchange, Queue
 
 from core.config import settings
@@ -100,9 +102,6 @@ celery_app.conf.update(
 # SIGNAL HANDLERS
 # ============================================================================
 
-from celery.signals import task_prerun, task_postrun, task_failure, worker_process_init
-import logging
-
 logger = logging.getLogger(__name__)
 
 
@@ -137,7 +136,7 @@ def on_worker_process_init(**kwargs):
     in each forked worker to force creation of new connections.
     """
     import asyncio
-    from core.database import engine
+    from db.database import engine
 
     logger.info("Worker process initialized, disposing database engine for fork safety")
 
@@ -165,3 +164,4 @@ from tasks import ad_sync_tasks  # noqa: F401, E402
 from tasks import whatsapp_tasks  # noqa: F401, E402
 from tasks import deployment_tasks  # noqa: F401, E402
 from tasks import scheduler_tasks  # noqa: F401, E402
+from tasks import remote_access_tasks  # noqa: F401, E402

@@ -26,7 +26,6 @@ REMOVES from remote_access_sessions:
 
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel
 from sqlalchemy.dialects import postgresql
 
 

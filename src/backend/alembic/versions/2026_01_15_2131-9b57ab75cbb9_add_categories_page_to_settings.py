@@ -7,7 +7,6 @@ Create Date: 2026-01-15 21:31:10.619414
 """
 from alembic import op
 import sqlalchemy as sa
-import sqlmodel
 from datetime import datetime
 
 

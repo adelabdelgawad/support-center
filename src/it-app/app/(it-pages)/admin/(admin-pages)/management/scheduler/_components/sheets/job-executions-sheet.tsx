@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -16,10 +17,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCircle2, XCircle, Clock, AlertCircle, History, Loader2 } from "lucide-react";
 import type { ScheduledJob, JobExecution } from "@/lib/actions/scheduler.actions";
+
+const STATUS_FILTERS = ["all", "success", "failed", "running", "timeout", "pending"] as const;
 
 interface JobExecutionsSheetProps {
   job: ScheduledJob | null;
@@ -36,10 +40,14 @@ export function JobExecutionsSheet({
   open,
   onOpenChange,
 }: JobExecutionsSheetProps) {
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
   if (!job) return null;
 
-  // Show only the last 20 executions (UI only - no database changes)
-  const displayExecutions = executions.slice(0, 20);
+  const filtered = statusFilter === "all"
+    ? executions
+    : executions.filter((e) => e.status === statusFilter);
+  const displayExecutions = filtered.slice(0, 20);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -74,6 +82,21 @@ export function JobExecutionsSheet({
             Recent executions for <strong className="text-foreground">{job.name}</strong>
           </SheetDescription>
         </SheetHeader>
+
+        {/* Status Filter */}
+        <div className="px-6 py-3 border-b flex flex-wrap gap-2">
+          {STATUS_FILTERS.map((status) => (
+            <Button
+              key={status}
+              variant={statusFilter === status ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs capitalize"
+              onClick={() => setStatusFilter(status)}
+            >
+              {status}
+            </Button>
+          ))}
+        </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-hidden">
@@ -135,7 +158,7 @@ export function JobExecutionsSheet({
                           </TableCell>
                           <TableCell>
                             <span className="text-sm">
-                              {formatDistanceToNow(new Date(execution.startedAt), {
+                              {formatDistanceToNow(new Date(execution.startedAt.endsWith('Z') ? execution.startedAt : execution.startedAt + 'Z'), {
                                 addSuffix: true,
                               })}
                             </span>

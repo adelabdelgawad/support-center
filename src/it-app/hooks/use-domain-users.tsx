@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR, { SWRConfiguration, SWRResponse, KeyedMutator } from "swr";
+import { useAsyncData } from "@/lib/hooks/use-async-data";
 import { apiClient } from "@/lib/fetch/client";
 import type { AuthUserResponse } from "@/types/users";
 
@@ -39,7 +39,7 @@ interface UseAuthUsersReturn {
   error: Error | undefined;
   isLoading: boolean;
   isValidating: boolean;
-  mutate: KeyedMutator<AuthUsersResponse>;
+  mutate: () => void;
   paginatedOptions: {
     value: string;
     label: string;
@@ -50,11 +50,6 @@ interface UseAuthUsersReturn {
 // Cache key generator
 const getCacheKey = (search: string, page: number, limit: number) =>
   `domain-users-${search || "all"}-page-${page}-limit-${limit}`;
-
-// SWR fetcher function using apiClient (calls Next.js API routes)
-const fetcher = async (url: string) => {
-  return apiClient.get<AuthUsersResponse>(url);
-};
 
 // LRU Cache for storing fetched pages
 class LRUCache<T> {
@@ -109,11 +104,10 @@ const pageCache = new LRUCache<AuthUsersResponse>();
 
 /**
  * Hook for fetching and caching domain users with pagination and search
- * Uses SWR for data fetching and LRU cache for page storage
+ * Uses useAsyncData for data fetching and LRU cache for page storage
  */
 export function useAuthUsers(
-  params: UseAuthUsersParams = {},
-  swrOptions: SWRConfiguration = {}
+  params: UseAuthUsersParams = {}
 ): UseAuthUsersReturn {
   const { search = "", page = 1, limit = 50, enabled = true } = params;
 
@@ -122,19 +116,20 @@ export function useAuthUsers(
   // Check cache first
   const cachedData = pageCache.get(cacheKey);
 
-  const swrResponse: SWRResponse<AuthUsersResponse, Error> = useSWR(
-    enabled ? cacheKey : null,
-    () => fetcher(`/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`),
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 1000,
-      ...swrOptions,
-    }
+  const fetchAuthUsers = async () => {
+    return await apiClient.get<AuthUsersResponse>(
+      `/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`
+    );
+  };
+
+  const { data: swrData, error, isLoading, isValidating, mutate } = useAsyncData<AuthUsersResponse>(
+    enabled ? fetchAuthUsers : async () => cachedData!,
+    [enabled, cacheKey],
+    cachedData ?? undefined
   );
 
   // If we have cached data and SWR hasn't fetched yet, use it
-  const data = swrResponse.data || cachedData || undefined;
+  const data = swrData || cachedData || undefined;
 
   // Helper function to convert users to options for Select
   // Map to AuthUserResponse type for compatibility
@@ -158,15 +153,15 @@ export function useAuthUsers(
 
   return {
     data,
-    error: swrResponse.error,
-    isLoading: swrResponse.isLoading,
-    isValidating: swrResponse.isValidating,
-    mutate: (newData) => {
-      // Invalidate cache for this key
-      if (newData) {
-        pageCache.set(cacheKey, newData as AuthUsersResponse);
+    error,
+    isLoading,
+    isValidating,
+    mutate: () => {
+      // Update cache for this key when mutate is called with data
+      if (data) {
+        pageCache.set(cacheKey, data);
       }
-      return swrResponse.mutate(newData);
+      return mutate();
     },
     paginatedOptions,
   };
@@ -187,7 +182,9 @@ export function usePrefetchAuthUsers() {
 
     // Prefetch by calling fetcher directly and caching the result
     try {
-      const data = await fetcher(`/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`);
+      const data = await apiClient.get<AuthUsersResponse>(
+        `/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=${page}&limit=${limit}`
+      );
       pageCache.set(cacheKey, data);
     } catch (error) {
       console.error('Failed to prefetch auth users:', error);
@@ -202,19 +199,17 @@ export function usePrefetchAuthUsers() {
  * This can be used to show total results
  */
 export function useAuthUsersCount(search: string = "", enabled: boolean = true) {
-  const { data } = useSWR(
-    enabled ? `domain-users-count-${search}` : null,
-    async () => {
-      const response = await fetcher(
-        `/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=1&limit=1`
-      );
-      return response.total;
-    },
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 10000,
-    }
+  const fetchCount = async () => {
+    const response = await apiClient.get<AuthUsersResponse>(
+      `/api/setting/users/domain-users/search?search=${encodeURIComponent(search)}&page=1&limit=1`
+    );
+    return response.total;
+  };
+
+  const { data } = useAsyncData<number>(
+    enabled ? fetchCount : async () => 0,
+    [enabled, search],
+    undefined
   );
 
   return data || 0;

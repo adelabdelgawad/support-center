@@ -72,18 +72,18 @@ def upgrade() -> None:
     # Drop old service_section_id constraint if it exists
     try:
         op.drop_index('ix_requests_service_section_id', table_name='service_requests')
-    except:
+    except Exception:
         pass
 
     try:
         op.drop_constraint('fk_service_requests_service_section_id', 'service_requests', type_='foreignkey')
-    except:
+    except Exception:
         pass
 
     # Drop service_section_id column
     try:
         op.drop_column('service_requests', 'service_section_id')
-    except:
+    except Exception:
         pass
 
 

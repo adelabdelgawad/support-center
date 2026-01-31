@@ -1,6 +1,6 @@
 "use server";
 
-import { serverFetch, CACHE_PRESETS } from "@/lib/api/server-fetch";
+import { serverGet } from "@/lib/fetch";
 import type { ClientVersion, ClientVersionListResponse } from "@/types/client-versions";
 
 /**
@@ -16,11 +16,9 @@ export async function getClientVersions(options?: {
     if (options?.platform) params.set("platform", options.platform);
     params.set("active_only", (options?.activeOnly ?? false).toString());
 
-    const versions = await serverFetch<ClientVersion[]>(
+    const versions = await serverGet<ClientVersion[]>(
       `/client-versions?${params.toString()}`,
-      {
-        ...CACHE_PRESETS.SHORT_LIVED(), // 1 minute cache
-      }
+      { revalidate: 0 }
     );
 
     // Calculate counts

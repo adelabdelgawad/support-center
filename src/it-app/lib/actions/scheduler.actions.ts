@@ -3,10 +3,12 @@
  *
  * Server-side actions for fetching and managing scheduled jobs.
  * These run on the server and make authenticated requests to the backend API.
+ *
+ * NOTE: No revalidatePath calls here - client-side SWR handles cache updates
+ * with optimistic updates and polling for server-side state changes.
  */
 
-import { serverFetch } from "@/lib/api/server-fetch";
-import { revalidatePath } from "next/cache";
+import { serverGet, serverPost, serverPut, serverDelete } from "@/lib/fetch/server";
 
 // Types
 export interface TaskFunction {
@@ -124,7 +126,7 @@ export interface JobTriggerResponse {
  */
 export async function getSchedulerStatus(): Promise<SchedulerStatus> {
   try {
-    return await serverFetch<SchedulerStatus>("/scheduler/status");
+    return await serverGet<SchedulerStatus>("/scheduler/status");
   } catch (error) {
     console.error("Failed to fetch scheduler status:", error);
     throw error;
@@ -136,7 +138,7 @@ export async function getSchedulerStatus(): Promise<SchedulerStatus> {
  */
 export async function getTaskFunctions(): Promise<TaskFunction[]> {
   try {
-    const response = await serverFetch<{ taskFunctions: TaskFunction[] }>(
+    const response = await serverGet<{ taskFunctions: TaskFunction[] }>(
       "/scheduler/task-functions"
     );
     return response.taskFunctions || [];
@@ -151,7 +153,7 @@ export async function getTaskFunctions(): Promise<TaskFunction[]> {
  */
 export async function getJobTypes(): Promise<JobType[]> {
   try {
-    return await serverFetch<JobType[]>("/scheduler/job-types") || [];
+    return await serverGet<JobType[]>("/scheduler/job-types") || [];
   } catch (error) {
     console.error("Failed to fetch job types:", error);
     return [];
@@ -176,7 +178,7 @@ export async function getScheduledJobs(params: {
   if (params.taskFunctionId) searchParams.set("task_function_id", String(params.taskFunctionId));
 
   try {
-    return await serverFetch<JobsListResponse>(
+    return await serverGet<JobsListResponse>(
       `/scheduler/jobs?${searchParams.toString()}`
     );
   } catch (error) {
@@ -190,7 +192,7 @@ export async function getScheduledJobs(params: {
  */
 export async function getScheduledJob(jobId: string): Promise<ScheduledJobDetail> {
   try {
-    return await serverFetch<ScheduledJobDetail>(`/scheduler/jobs/${jobId}`);
+    return await serverGet<ScheduledJobDetail>(`/scheduler/jobs/${jobId}`);
   } catch (error) {
     console.error(`Failed to fetch job ${jobId}:`, error);
     throw error;
@@ -216,7 +218,7 @@ export async function getJobExecutions(params: {
     : `/scheduler/executions?${searchParams.toString()}`;
 
   try {
-    return await serverFetch<ExecutionsListResponse>(endpoint);
+    return await serverGet<ExecutionsListResponse>(endpoint);
   } catch (error) {
     console.error("Failed to fetch executions:", error);
     return { executions: [], total: 0 };
@@ -240,11 +242,7 @@ export async function createScheduledJob(data: {
   isEnabled?: boolean;
 }): Promise<ScheduledJob> {
   try {
-    const response = await serverFetch<ScheduledJob>("/scheduler/jobs", {
-      method: "POST",
-      body: data,
-    });
-    revalidatePath("/management/scheduler");
+    const response = await serverPost<ScheduledJob>("/scheduler/jobs", data);
     return response;
   } catch (error) {
     console.error("Failed to create scheduled job:", error);
@@ -272,11 +270,7 @@ export async function updateScheduledJob(
   }>
 ): Promise<ScheduledJob> {
   try {
-    const response = await serverFetch<ScheduledJob>(`/scheduler/jobs/${jobId}`, {
-      method: "PUT",
-      body: data,
-    });
-    revalidatePath("/management/scheduler");
+    const response = await serverPut<ScheduledJob>(`/scheduler/jobs/${jobId}`, data);
     return response;
   } catch (error) {
     console.error(`Failed to update job ${jobId}:`, error);
@@ -289,10 +283,7 @@ export async function updateScheduledJob(
  */
 export async function deleteScheduledJob(jobId: string): Promise<void> {
   try {
-    await serverFetch<void>(`/scheduler/jobs/${jobId}`, {
-      method: "DELETE",
-    });
-    revalidatePath("/management/scheduler");
+    await serverDelete(`/scheduler/jobs/${jobId}`);
   } catch (error) {
     console.error(`Failed to delete job ${jobId}:`, error);
     throw error;
@@ -307,14 +298,10 @@ export async function toggleJobStatus(
   isEnabled: boolean
 ): Promise<ScheduledJob> {
   try {
-    const response = await serverFetch<ScheduledJob>(
+    const response = await serverPut<ScheduledJob>(
       `/scheduler/jobs/${jobId}/status`,
-      {
-        method: "PUT",
-        body: { isEnabled },
-      }
+      { isEnabled }
     );
-    revalidatePath("/management/scheduler");
     return response;
   } catch (error) {
     console.error(`Failed to toggle job ${jobId}:`, error);
@@ -332,15 +319,12 @@ export async function triggerJob(jobId: string): Promise<{
   message: string;
 }> {
   try {
-    const response = await serverFetch<{
+    const response = await serverPost<{
       jobId: string;
       executionId: string;
       celeryTaskId: string | null;
       message: string;
-    }>(`/scheduler/jobs/${jobId}/trigger`, {
-      method: "POST",
-    });
-    revalidatePath("/management/scheduler");
+    }>(`/scheduler/jobs/${jobId}/trigger`);
     return response;
   } catch (error) {
     console.error(`Failed to trigger job ${jobId}:`, error);

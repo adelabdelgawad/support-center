@@ -1,6 +1,6 @@
 "use server";
 
-import { serverFetch, CACHE_PRESETS } from "@/lib/api/server-fetch";
+import { serverGet } from "@/lib/fetch";
 import type {
   DeploymentJob,
   DeploymentJobListItem,
@@ -31,9 +31,9 @@ export async function getDeploymentJobs(options?: {
     params.set("limit", String(options?.limit ?? 50));
     params.set("offset", String(options?.offset ?? 0));
 
-    const response = await serverFetch<DeploymentJobListResponse>(
+    const response = await serverGet<DeploymentJobListResponse>(
       `/deployment-jobs?${params.toString()}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return response;
@@ -60,9 +60,9 @@ export async function getDeploymentJobCount(options?: {
       params.set("job_type", options.jobType);
     }
 
-    const response = await serverFetch<DeploymentJobCountResponse>(
+    const response = await serverGet<DeploymentJobCountResponse>(
       `/deployment-jobs/count?${params.toString()}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return response.count;
@@ -77,9 +77,9 @@ export async function getDeploymentJobCount(options?: {
  */
 export async function getQueuedJobCount(): Promise<number> {
   try {
-    const response = await serverFetch<DeploymentJobCountResponse>(
+    const response = await serverGet<DeploymentJobCountResponse>(
       `/deployment-jobs/queued-count`,
-      CACHE_PRESETS.NO_CACHE()
+      { revalidate: 0 }
     );
 
     return response.count;
@@ -94,9 +94,9 @@ export async function getQueuedJobCount(): Promise<number> {
  */
 export async function getDeploymentJob(jobId: string): Promise<DeploymentJob | null> {
   try {
-    const job = await serverFetch<DeploymentJob>(
+    const job = await serverGet<DeploymentJob>(
       `/deployment-jobs/${jobId}`,
-      CACHE_PRESETS.SHORT_LIVED()
+      { revalidate: 0 }
     );
 
     return job;

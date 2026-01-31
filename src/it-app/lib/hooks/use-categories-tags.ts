@@ -1,17 +1,7 @@
 'use client';
 
-import useSWR from 'swr';
-import { cacheKeys } from '@/lib/swr/cache-keys';
-
-/**
- * Hook for fetching categories with subcategories using SWR
- * Used in the request details sidebar for category/subcategory selection
- *
- * SWR provides:
- * - Automatic caching and deduplication
- * - Background revalidation
- * - Optimistic UI updates via mutate()
- */
+import { useAsyncData } from '@/lib/hooks/use-async-data';
+import { useCallback } from 'react';
 
 interface Subcategory {
   id: number;
@@ -54,21 +44,20 @@ const fetcher = async (url: string): Promise<Category[]> => {
 };
 
 /**
- * Hook to fetch all categories with subcategories using SWR
+ * Hook to fetch all categories with subcategories using useAsyncData
  *
  * @param initialData - Initial categories data from server (for SSR)
  * @returns Categories data and loading state
  */
 export function useCategories(initialData?: Category[]) {
-  const { data, error, isLoading, mutate } = useSWR<Category[]>(
-    cacheKeys.globalCategories,
-    fetcher,
-    {
-      fallbackData: initialData,
-      revalidateOnMount: !initialData,
-      revalidateOnFocus: false,
-      dedupingInterval: 5000, // Deduplicate requests within 5 seconds
-    }
+  const fetchCategories = useCallback(async () => {
+    return await fetcher('/api/categories?include_subcategories=true');
+  }, []);
+
+  const { data, error, isLoading, mutate } = useAsyncData<Category[]>(
+    fetchCategories,
+    [],
+    initialData
   );
 
   return {

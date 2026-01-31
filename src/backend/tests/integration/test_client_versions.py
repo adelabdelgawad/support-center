@@ -15,9 +15,9 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import ClientVersion
-from schemas.version import ClientVersionCreate, ClientVersionUpdate
-from services.client_version_service import ClientVersionService
+from db import ClientVersion
+from api.schemas.version import ClientVersionCreate, ClientVersionUpdate
+from api.services.client_version_service import ClientVersionService
 
 
 class TestClientVersionCreate:

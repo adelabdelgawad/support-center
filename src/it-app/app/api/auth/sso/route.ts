@@ -7,7 +7,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { makePublicRequest, ServerFetchError } from "@/lib/api/server-fetch";
+import { ApiError } from "@/lib/fetch/errors";
+import { makePublicRequest } from "@/lib/api/server-fetch";
 import type { SSOLoginRequest, LoginResponse, LoginResponseSnakeCase } from "@/lib/types/auth";
 
 export async function POST(request: NextRequest) {
@@ -82,9 +83,9 @@ export async function POST(request: NextRequest) {
     let status = 500;
     let detail = "An unexpected error occurred";
 
-    if (error instanceof ServerFetchError) {
+    if (error instanceof ApiError) {
       status = error.status;
-      detail = error.detail || error.message;
+      detail = error.message;
 
       // Log readable error info
       console.error("SSO login error:", {

@@ -19,10 +19,10 @@ import logging
 from typing import Dict, Any
 
 from tasks.database import get_celery_session
-from services.auth_service import AuthenticationService
-from services.desktop_session_service import DesktopSessionService
-from services.deployment_job_service import DeploymentJobService
-from services.scheduler_service import SchedulerService
+from api.services.auth_service import AuthenticationService
+from api.services.desktop_session_service import DesktopSessionService
+from api.services.deployment_job_service import DeploymentJobService
+from api.services.scheduler_service import SchedulerService
 
 logger = logging.getLogger(__name__)
 
@@ -155,20 +155,19 @@ async def cleanup_old_job_executions_task(retention_days: int = 90) -> Dict[str,
         return result
 
 
-async def timeout_stale_job_executions_task(timeout_minutes: int = 30) -> Dict[str, Any]:
+async def timeout_stale_job_executions_task(timeout_minutes: int = 5) -> Dict[str, Any]:
     """
     Mark stale job executions (stuck in running/pending) as timed out.
 
-    This task should be scheduled to run periodically (e.g., every 10 minutes)
-    to clean up executions that are stuck due to:
-    - Server crashes during execution
-    - Celery worker failures
-    - Network issues preventing completion status updates
+    This task should be scheduled to run every 1 minute to check for executions
+    that have exceeded their job's timeout_seconds (default: 300 seconds = 5 minutes).
+    Uses job-level timeout settings instead of a fixed timeout for all jobs.
 
     Wrapper for SchedulerService.timeout_stale_executions()
 
     Args:
-        timeout_minutes: Minutes before an execution is considered stale (default: 30)
+        timeout_minutes: Default minutes before an execution is considered stale (default: 5)
+                         This is used as fallback when job.timeout_seconds is None
 
     Returns:
         dict: Cleanup statistics with keys:
@@ -180,7 +179,7 @@ async def timeout_stale_job_executions_task(timeout_minutes: int = 30) -> Dict[s
     """
     from datetime import datetime
 
-    logger.info(f"Starting timeout of stale job executions (timeout_minutes={timeout_minutes})")
+    logger.info(f"Starting timeout of stale job executions (default timeout_minutes={timeout_minutes})")
 
     async with get_celery_session() as db:
         service = SchedulerService()

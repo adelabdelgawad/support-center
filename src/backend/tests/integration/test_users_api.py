@@ -13,18 +13,15 @@ Tests:
 - User permissions
 """
 
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.database_models import User, Role, UserRole, Page, PageRole
-from services.user_service import UserService
+from db.models import User, Role, UserRole, PageRole
+from api.services.user_service import UserService
 from tests.factories import (
     UserFactory, RoleFactory, PageFactory
 )
@@ -279,7 +276,7 @@ class TestUserRetrieval:
         result = await db_session.execute(
             select(User).where(User.username.ilike(sample_user.username.upper()))
         )
-        user = result.scalar_one_or_none()
+        result.scalar_one_or_none()
 
         # SQLite might not support ilike, so this could fail
         # In production with PostgreSQL, this should work
@@ -508,7 +505,6 @@ class TestBulkOperations:
     ):
         """Test bulk update user status."""
         users_to_update = multiple_users[:5]
-        user_ids = [u.id for u in users_to_update]
 
         for user in users_to_update:
             user.is_active = False
@@ -623,7 +619,7 @@ class TestUserRoles:
         result = await db_session.execute(
             select(UserRole).where(
                 UserRole.user_id == admin_user.id,
-                UserRole.is_active == True
+                UserRole.is_active
             )
         )
         user_roles = result.scalars().all()

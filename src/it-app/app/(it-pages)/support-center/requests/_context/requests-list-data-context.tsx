@@ -8,10 +8,9 @@
  * when counts or UI state changes.
  */
 
-import { createContext, useContext, useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequestsList } from '@/lib/hooks/use-requests-list';
-import { useSignalRTicketList } from '@/lib/signalr';
 import type {
   RequestListItem,
   ViewType,
@@ -43,7 +42,6 @@ interface RequestsListDataProviderProps {
   initialView: ViewType;
   initialPage: number;
   businessUnitIds?: number[];
-  onValidationChange?: (isValidating: boolean) => void; // Callback to notify parent of validation state
 }
 
 export function RequestsListDataProvider({
@@ -52,7 +50,6 @@ export function RequestsListDataProvider({
   initialView,
   initialPage,
   businessUnitIds: initialBusinessUnitIds,
-  onValidationChange,
 }: RequestsListDataProviderProps) {
   // HYDRATION GUARD: Track first render to ensure SSR data is used during hydration
   const isFirstRenderRef = useRef(true);
@@ -99,18 +96,11 @@ export function RequestsListDataProvider({
 
   // Store refresh function in ref for external access
   const refreshTicketsRef = useRef(refreshTickets);
-  refreshTicketsRef.current = refreshTickets;
 
-  // Subscribe to real-time ticket list updates via SignalR
-  const handleTicketListUpdated = useCallback(() => {
-    console.log('[RequestsListDataProvider] Received ticket list update, refreshing...');
-    refreshTicketsRef.current();
-  }, []);
-
-  useSignalRTicketList({
-    onTicketUpdated: handleTicketListUpdated,
-    enabled: true,
-  });
+  // Update ref when refresh function changes
+  useEffect(() => {
+    refreshTicketsRef.current = refreshTickets;
+  }, [refreshTickets]);
 
   // Check if returning from details page and trigger refresh
   const hasCheckedReturnFromDetails = useRef(false);
@@ -124,11 +114,6 @@ export function RequestsListDataProvider({
       refreshTicketsRef.current();
     }
   }, []);
-
-  // Notify parent of validation state changes (for coordinating isViewChanging)
-  useEffect(() => {
-    onValidationChange?.(isValidating);
-  }, [isValidating, onValidationChange]);
 
   // HYDRATION SAFETY: Force SSR data during first render to prevent hydration mismatch
   const safeFilterCounts = isFirstRenderRef.current

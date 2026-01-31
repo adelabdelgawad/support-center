@@ -2,30 +2,101 @@
 
 import { useState, useMemo } from "react";
 import { AdminSectionCard } from "@/components/admin/admin-section-card";
-import { ADMIN_SECTIONS } from "@/lib/config/admin-sections";
+import type { AdminSection } from "@/lib/config/admin-sections";
+import type { Page } from "@/types/pages";
 import { Search } from "lucide-react";
 
-export function AdminHub() {
+interface AdminHubProps {
+  pages: Page[];
+}
+
+// Map parent page icons and descriptions
+const PARENT_PAGE_CONFIG: Record<
+  number,
+  { icon: string; description: string; order: number }
+> = {
+  1: {
+    // Settings
+    icon: "Settings2",
+    description: "System messages and events",
+    order: 4,
+  },
+  2: {
+    // Support Center
+    icon: "Headphones",
+    description: "Support center and request management",
+    order: 1,
+  },
+  3: {
+    // Reports
+    icon: "BarChart",
+    description: "Reports and analytics",
+    order: 2,
+  },
+  4: {
+    // Management
+    icon: "Activity",
+    description: "System operations and monitoring",
+    order: 3,
+  },
+};
+
+export function AdminHub({ pages }: AdminHubProps) {
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Build sections from pages dynamically
+  const adminSections = useMemo((): AdminSection[] => {
+    // Group pages by parent
+    const parentPages = pages.filter((p) => !p.parentId && p.path === null);
+    const childPages = pages.filter((p) => p.parentId);
+
+    return parentPages
+      .map((parent) => {
+        const children = childPages
+          .filter((child) => child.parentId === parent.id)
+          .map((child) => ({
+            label: child.title,
+            href: `/${child.path}`,
+          }));
+
+        const config = PARENT_PAGE_CONFIG[parent.id] || {
+          icon: "Settings",
+          description: parent.description || "",
+          order: 999,
+        };
+
+        return {
+          id: `section-${parent.id}`,
+          title: parent.title,
+          icon: config.icon,
+          description: config.description,
+          links: children,
+          order: config.order,
+        };
+      })
+      .filter((section) => section.links.length > 0) // Only show sections with links
+      .sort((a, b) => a.order - b.order); // Sort by order
+  }, [pages]);
 
   // Filter sections and links based on search query
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) {
-      return ADMIN_SECTIONS;
+      return adminSections;
     }
 
     const query = searchQuery.toLowerCase();
 
-    return ADMIN_SECTIONS
+    return adminSections
       .map((section) => ({
         ...section,
-        links: section.links.filter((link) =>
-          link.label.toLowerCase().includes(query) ||
-          section.title.toLowerCase().includes(query)
+        links: section.links.filter(
+          (link) =>
+            link.label.toLowerCase().includes(query) ||
+            section.title.toLowerCase().includes(query)
         ),
       }))
       .filter((section) => section.links.length > 0);
-  }, [searchQuery]);
+  }, [searchQuery, adminSections]);
 
   return (
     <div className="p-4 h-full">
@@ -64,7 +135,7 @@ export function AdminHub() {
               <Search className="w-8 h-8 text-muted-foreground" />
             </div>
             <p className="text-lg text-muted-foreground">
-              No settings found matching <span className="font-medium">"{searchQuery}"</span>
+              No settings found matching <span className="font-medium">&ldquo;{searchQuery}&rdquo;</span>
             </p>
             <p className="text-sm text-muted-foreground mt-2">
               Try different keywords or browse the categories below

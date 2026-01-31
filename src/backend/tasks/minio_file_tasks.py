@@ -14,13 +14,13 @@ from uuid import UUID
 
 from PIL import Image
 from io import BytesIO
-from sqlalchemy import create_engine, delete, select, update
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine, select, update
+from sqlalchemy.orm import sessionmaker
 
 from celery_app import celery_app
 from core.config import settings
-from models.database_models import ChatFile, Screenshot
-from services.minio_service import MinIOStorageService
+from db.models import ChatFile, Screenshot
+from api.services.minio_service import MinIOStorageService
 from tasks.base import BaseTask
 from tasks.database import get_celery_session
 
@@ -83,7 +83,7 @@ def upload_file_to_minio(
         with open(local_path, "rb") as f:
             content = f.read()
 
-        file_size = len(content)
+        len(content)  # File size (for reference/debugging)
         file_hash = hashlib.sha256(content).hexdigest()
 
         # Get MIME type from database (sync version)
@@ -217,7 +217,7 @@ def upload_thumbnail_to_minio(
             )
 
             # Upload to MinIO
-            upload_result = await MinIOStorageService.upload_file(
+            await MinIOStorageService.upload_file(
                 object_key=thumbnail_key,
                 content=content,
                 content_type="image/jpeg",

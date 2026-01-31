@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { serverFetch, CACHE_PRESETS } from '@/lib/api/server-fetch';
+import { serverGet } from '@/lib/fetch';
 import { getServerUserInfo } from '@/lib/api/server-fetch';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestNote } from '@/types/metadata';
@@ -28,38 +28,38 @@ export async function getTicketPageData(ticketId: string) {
     // Fetch ALL data in parallel for maximum performance
     const [ticket, technicians, priorities, notes, initialMessages] = await Promise.all([
       // Ticket details - NO_CACHE (real-time state)
-      serverFetch<ServiceRequestDetail>(
+      serverGet<ServiceRequestDetail>(
         `/requests/${ticketId}`,
-        CACHE_PRESETS.NO_CACHE()
+        { revalidate: 0 }
       ),
       // Active technicians - REFERENCE_DATA (dropdown options)
-      serverFetch<Technician[]>(
+      serverGet<Technician[]>(
         '/users?is_technician=true&is_active=true',
-        CACHE_PRESETS.REFERENCE_DATA('technicians')
+        { revalidate: 0 }
       ).catch((error) => {
         console.error('Error fetching technicians:', error);
         return [] as Technician[];
       }),
       // Priorities - REFERENCE_DATA (dropdown options)
-      serverFetch<Priority[]>(
+      serverGet<Priority[]>(
         '/cache/priorities',
-        CACHE_PRESETS.REFERENCE_DATA('priorities')
+        { revalidate: 0 }
       ).catch((error) => {
         console.error('Error fetching priorities:', error);
         return [] as Priority[];
       }),
       // Request notes - NO_CACHE (may be added during session)
-      serverFetch<RequestNote[]>(
+      serverGet<RequestNote[]>(
         `/request-notes/${ticketId}/notes`,
-        CACHE_PRESETS.NO_CACHE()
+        { revalidate: 0 }
       ).catch((error) => {
         console.error('Error fetching notes:', error);
         return [] as RequestNote[];
       }),
       // Initial chat messages - NO_CACHE (real-time chat)
-      serverFetch<ChatMessage[]>(
+      serverGet<ChatMessage[]>(
         `/chat/messages/request/${ticketId}?page=1&per_page=100`,
-        CACHE_PRESETS.NO_CACHE()
+        { revalidate: 0 }
       ).catch((error) => {
         console.error('Error fetching initial messages:', error);
         return [] as ChatMessage[];

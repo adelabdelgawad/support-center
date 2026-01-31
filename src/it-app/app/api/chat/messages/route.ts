@@ -9,7 +9,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { makeAuthenticatedRequest, ServerFetchError, getServerErrorMessage } from '@/lib/api/server-fetch';
+import { ApiError } from '@/lib/fetch/errors';
+import { makeAuthenticatedRequest, getServerErrorMessage } from '@/lib/api/server-fetch';
 
 export async function POST(request: NextRequest) {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -91,12 +92,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const status = error instanceof ServerFetchError ? error.status : 500;
+    const status = error instanceof ApiError ? error.status : 500;
     const message = getServerErrorMessage(error);
 
     console.error(`[chat/messages:${requestId}] Error (status: ${status}):`, {
       message,
-      isServerFetchError: error instanceof ServerFetchError,
+      isApiError: error instanceof ApiError,
       error: error instanceof Error ? error.message : String(error),
     });
 

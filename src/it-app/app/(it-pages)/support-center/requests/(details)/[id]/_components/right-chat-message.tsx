@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImageIcon, Clock, RotateCcw, Loader2, FileText, FileSpreadsheet, FileIcon, Download, Paperclip } from "lucide-react";
@@ -135,7 +135,9 @@ export function RightChatMessage({
   // Check if pending message is stuck (older than threshold)
   useEffect(() => {
     if (status !== 'pending' || !createdAt) {
-      setIsStuck(false);
+      startTransition(() => {
+        setIsStuck(false);
+      });
       return;
     }
 
@@ -143,7 +145,9 @@ export function RightChatMessage({
       const messageTime = new Date(createdAt).getTime();
       const now = Date.now();
       const elapsed = now - messageTime;
-      setIsStuck(elapsed >= STUCK_MESSAGE_THRESHOLD);
+      startTransition(() => {
+        setIsStuck(elapsed >= STUCK_MESSAGE_THRESHOLD);
+      });
     };
 
     // Check immediately

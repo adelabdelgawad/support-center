@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { makeAuthenticatedRequest, ServerFetchError, getServerErrorMessage } from '@/lib/api/server-fetch';
+import { makeAuthenticatedRequest, getServerErrorMessage } from '@/lib/api/server-fetch';
+import { ApiError } from '@/lib/fetch/errors';
 
 /**
  * GET /api/metadata/statuses
@@ -8,7 +9,6 @@ import { makeAuthenticatedRequest, ServerFetchError, getServerErrorMessage } fro
  */
 export async function GET(request: NextRequest) {
   try {
-    // Note: Trailing slash required by FastAPI router
     // Backend returns { statuses: [...], total, active_count, ... }
     const response = await makeAuthenticatedRequest<{
       statuses: any[];
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       readonly_count: number;
     }>(
       'GET',
-      '/request-statuses/?is_active=true'
+      '/request-statuses?is_active=true'
     );
 
     // Extract just the statuses array
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(statuses);
   } catch (error) {
     const message = getServerErrorMessage(error);
-    const status = error instanceof ServerFetchError ? error.status : 500;
+    const status = error instanceof ApiError ? error.status : 500;
 
     return NextResponse.json(
       { error: 'Failed to fetch statuses', detail: message },
