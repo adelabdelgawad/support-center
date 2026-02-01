@@ -357,7 +357,7 @@ public class RedisStreamConsumer : BackgroundService
                 JsonValueKind.True => true,
                 JsonValueKind.False => false,
                 JsonValueKind.Null => null,
-                JsonValueKind.Array => jsonElement.EnumerateArray().Select(ConvertJsonElementToObject).ToArray(),
+                JsonValueKind.Array => jsonElement.EnumerateArray().Select(e => ConvertJsonElementToObject(e)).ToArray(),
                 JsonValueKind.Object => jsonElement.EnumerateObject()
                     .ToDictionary(prop => prop.Name, prop => ConvertJsonElementToObject(prop.Value)),
                 _ => value

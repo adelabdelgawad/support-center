@@ -351,154 +351,298 @@ class DatabaseSetup:
         logger.info("Creating default categories and subcategories...")
 
         # Categories with bilingual support (EN/AR)
-        # Section 1: Application Support
-        # Section 2: Infrastructure
-        # Section 3: Technical Support
+        # Updated category structure as per requirements
         categories_data = [
-            # Application Support categories (section_id=1)
             {
                 "id": 1,
-                "name": "erp_systems",  # Internal ID
-                "name_en": "ERP Systems",
-                "name_ar": "أنظمة تخطيط موارد المؤسسات",
-                "description": "Enterprise Resource Planning applications",
-                "section_id": 1,
+                "name": "hardware",
+                "name_en": "Hardware",
+                "name_ar": "الأجهزة",
+                "description": "Hardware peripherals and devices",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "oracle_ebs",
-                        "name_en": "Oracle EBS",
-                        "name_ar": "أوراكل EBS",
-                        "description": "Oracle E-Business Suite support",
+                        "name": "keyboard_mouse",
+                        "name_en": "Keyboard or mouse",
+                        "name_ar": "لوحة المفاتيح أو الماوس",
+                        "description": "Keyboard and mouse support",
                     },
                     {
-                        "name": "sap",
-                        "name_en": "SAP",
-                        "name_ar": "SAP",
-                        "description": "SAP system support",
+                        "name": "monitor",
+                        "name_en": "monitor",
+                        "name_ar": "الشاشة",
+                        "description": "Monitor support",
+                    },
+                    {
+                        "name": "pc",
+                        "name_en": "pc",
+                        "name_ar": "الحاسوب",
+                        "description": "PC support",
+                    },
+                    {
+                        "name": "scanner",
+                        "name_en": "Scanner",
+                        "name_ar": "الماسح الضوئي",
+                        "description": "Scanner support",
                     },
                 ],
             },
             {
                 "id": 2,
-                "name": "healthcare_apps",  # Internal ID
-                "name_en": "Healthcare Applications",
-                "name_ar": "تطبيقات الرعاية الصحية",
-                "description": "Hospital Information Systems and clinical applications",
-                "section_id": 1,
+                "name": "printers",
+                "name_en": "Printers",
+                "name_ar": "الطابعات",
+                "description": "Printer support and maintenance",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "his",
-                        "name_en": "HIS",
-                        "name_ar": "نظام المعلومات الطبية",
-                        "description": "Hospital Information System",
+                        "name": "access_printer",
+                        "name_en": "Access Printer",
+                        "name_ar": "الوصول إلى الطابعة",
+                        "description": "Printer access issues",
                     },
                     {
-                        "name": "lis",
-                        "name_en": "LIS",
-                        "name_ar": "نظام المختبر",
-                        "description": "Laboratory Information System",
+                        "name": "change_toner",
+                        "name_en": "Change Toner",
+                        "name_ar": "تغيير الحبر",
+                        "description": "Toner replacement",
+                    },
+                    {
+                        "name": "paper_jam",
+                        "name_en": "Paper Jam",
+                        "name_ar": "انحشار الورق",
+                        "description": "Paper jam issues",
+                    },
+                    {
+                        "name": "printer_not_working",
+                        "name_en": "Printer Not Working",
+                        "name_ar": "الطابعة لا تعمل",
+                        "description": "Printer malfunction",
                     },
                 ],
             },
-            # Infrastructure categories (section_id=2)
             {
                 "id": 3,
-                "name": "network",  # Internal ID
-                "name_en": "Network",
-                "name_ar": "الشبكة",
-                "description": "Network infrastructure services",
-                "section_id": 2,
+                "name": "pacs",
+                "name_en": "PACS",
+                "name_ar": "نظام أرشفة الصور الطبية",
+                "description": "Picture Archiving and Communication System",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "wifi",
-                        "name_en": "WiFi",
-                        "name_ar": "واي فاي",
-                        "description": "Wireless network support",
+                        "name": "access",
+                        "name_en": "Access",
+                        "name_ar": "الوصول",
+                        "description": "PACS access issues",
                     },
                     {
-                        "name": "vpn",
-                        "name_en": "VPN",
-                        "name_ar": "شبكة افتراضية خاصة",
-                        "description": "Virtual Private Network support",
+                        "name": "problem",
+                        "name_en": "Problem",
+                        "name_ar": "مشكلة",
+                        "description": "PACS technical problems",
                     },
                 ],
             },
             {
                 "id": 4,
-                "name": "servers",  # Internal ID
-                "name_en": "Servers",
-                "name_ar": "الخوادم",
-                "description": "Server infrastructure services",
-                "section_id": 2,
+                "name": "avaya",
+                "name_en": "Avaya",
+                "name_ar": "أفايا",
+                "description": "Avaya telephone system",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "windows_server",
-                        "name_en": "Windows Server",
-                        "name_ar": "خادم ويندوز",
-                        "description": "Windows Server administration",
+                        "name": "telephone_cable",
+                        "name_en": "Telephone Cable",
+                        "name_ar": "كابل الهاتف",
+                        "description": "Telephone cable issues",
                     },
                     {
-                        "name": "linux_server",
-                        "name_en": "Linux Server",
-                        "name_ar": "خادم لينكس",
-                        "description": "Linux Server administration",
+                        "name": "avaya_not_working",
+                        "name_en": "Avaya Is Not Working",
+                        "name_ar": "أفايا لا يعمل",
+                        "description": "Avaya system malfunction",
+                    },
+                    {
+                        "name": "electricity_problem",
+                        "name_en": "Electricity Problem",
+                        "name_ar": "مشكلة كهرباء",
+                        "description": "Electrical issues",
                     },
                 ],
             },
-            # Technical Support categories (section_id=3)
             {
                 "id": 5,
-                "name": "hardware",  # Internal ID
-                "name_en": "Hardware",
-                "name_ar": "الأجهزة",
-                "description": "Hardware support and maintenance",
-                "section_id": 3,
+                "name": "create_user_account",
+                "name_en": "Create User Account",
+                "name_ar": "إنشاء حساب مستخدم",
+                "description": "User account creation and management",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "desktop_pc",
-                        "name_en": "Desktop PC",
-                        "name_ar": "حاسب مكتبي",
-                        "description": "Desktop computer support",
+                        "name": "for_dotcare_only",
+                        "name_en": "For DotCare Only",
+                        "name_ar": "لـ DotCare فقط",
+                        "description": "DotCare account creation",
                     },
                     {
-                        "name": "printer",
-                        "name_en": "Printer",
-                        "name_ar": "طابعة",
-                        "description": "Printer and scanner support",
+                        "name": "for_windows_and_dotcare",
+                        "name_en": "For Windows And DotCare",
+                        "name_ar": "لـ Windows و DotCare",
+                        "description": "Windows and DotCare account creation",
+                    },
+                    {
+                        "name": "reset_password",
+                        "name_en": "Reset Password",
+                        "name_ar": "إعادة تعيين كلمة المرور",
+                        "description": "Password reset",
+                    },
+                    {
+                        "name": "for_millensys",
+                        "name_en": "For Millensys",
+                        "name_ar": "لـ Millensys",
+                        "description": "Millensys account creation",
+                    },
+                    {
+                        "name": "for_windows_only",
+                        "name_en": "For Windows Only",
+                        "name_ar": "لـ Windows فقط",
+                        "description": "Windows account creation",
                     },
                 ],
             },
             {
                 "id": 6,
-                "name": "software",  # Internal ID
-                "name_en": "Software",
-                "name_ar": "البرامج",
-                "description": "Software installation and support",
-                "section_id": 3,
+                "name": "email",
+                "name_en": "Email",
+                "name_ar": "البريد الإلكتروني",
+                "description": "Email and Outlook support",
+                "section_id": None,
                 "subcategories": [
                     {
-                        "name": "ms_office",
-                        "name_en": "Microsoft Office",
-                        "name_ar": "مايكروسوفت أوفيس",
-                        "description": "MS Office suite support",
+                        "name": "outlook_issue",
+                        "name_en": "Outlook Issue",
+                        "name_ar": "مشكلة Outlook",
+                        "description": "Outlook problems",
                     },
                     {
-                        "name": "antivirus",
-                        "name_en": "Antivirus",
-                        "name_ar": "برنامج مكافحة الفيروسات",
-                        "description": "Antivirus and security software",
+                        "name": "send_on_behalf",
+                        "name_en": "Permission To Send On Behalf",
+                        "name_ar": "إذن للإرسال بالنيابة",
+                        "description": "Send on behalf permission",
+                    },
+                    {
+                        "name": "setup_on_phone",
+                        "name_en": "SetUp On Phone",
+                        "name_ar": "الإعداد على الهاتف",
+                        "description": "Email setup on mobile phone",
+                    },
+                ],
+            },
+            {
+                "id": 7,
+                "name": "network",
+                "name_en": "Network",
+                "name_ar": "الشبكة",
+                "description": "Network connectivity",
+                "section_id": None,
+                "subcategories": [
+                    {
+                        "name": "lan",
+                        "name_en": "LAN",
+                        "name_ar": "شبكة محلية",
+                        "description": "Local Area Network",
+                    },
+                    {
+                        "name": "wireless",
+                        "name_en": "Wireless",
+                        "name_ar": "لاسلكي",
+                        "description": "Wireless network",
+                    },
+                ],
+            },
+            {
+                "id": 8,
+                "name": "surveillance_cameras",
+                "name_en": "Surveillance Cameras",
+                "name_ar": "كاميرات المراقبة",
+                "description": "Security camera systems",
+                "section_id": None,
+                "subcategories": [
+                    {
+                        "name": "add_access",
+                        "name_en": "Add Access",
+                        "name_ar": "إضافة وصول",
+                        "description": "Add camera access",
+                    },
+                    {
+                        "name": "add_camera",
+                        "name_en": "Add Camera",
+                        "name_ar": "إضافة كاميرا",
+                        "description": "Add new camera",
+                    },
+                    {
+                        "name": "camera_not_working",
+                        "name_en": "Camera Not Working",
+                        "name_ar": "الكاميرا لا تعمل",
+                        "description": "Camera malfunction",
+                    },
+                    {
+                        "name": "export_video",
+                        "name_en": "Export Video",
+                        "name_ar": "تصدير الفيديو",
+                        "description": "Export video footage",
+                    },
+                ],
+            },
+            {
+                "id": 9,
+                "name": "sharepoint",
+                "name_en": "SharePoint",
+                "name_ar": "شير بوينت",
+                "description": "SharePoint platform support",
+                "section_id": None,
+                "subcategories": [
+                    {
+                        "name": "access",
+                        "name_en": "Access",
+                        "name_ar": "الوصول",
+                        "description": "SharePoint access issues",
+                    },
+                    {
+                        "name": "edit_library",
+                        "name_en": "Edit Library",
+                        "name_ar": "تحرير المكتبة",
+                        "description": "Edit SharePoint library",
+                    },
+                    {
+                        "name": "edit_list",
+                        "name_en": "Edit List",
+                        "name_ar": "تحرير القائمة",
+                        "description": "Edit SharePoint list",
+                    },
+                    {
+                        "name": "not_working",
+                        "name_en": "Not Working",
+                        "name_ar": "لا يعمل",
+                        "description": "SharePoint not working",
                     },
                 ],
             },
         ]
 
         try:
-            subcategory_id_counter = 1
+            # Track statistics
+            created_categories = 0
+            skipped_categories = 0
+            created_subcategories = 0
+            skipped_subcategories = 0
 
             for category_data in categories_data:
-                # Check if category already exists
+                # Check if category already exists by ID or name
                 stmt = select(Category).where(
-                    Category.id == category_data["id"]
+                    (Category.id == category_data["id"]) |
+                    (Category.name == category_data["name"])
                 )
                 result = await db.execute(stmt)
                 existing_category = result.scalar_one_or_none()
@@ -507,12 +651,11 @@ class DatabaseSetup:
                     logger.info(
                         f"Category '{category_data['name_en']}' (ID: {category_data['id']}) already exists, skipping..."
                     )
-                    # Still create subcategories if they don't exist
+                    skipped_categories += 1
                     category_id = existing_category.id
                 else:
-                    # Create new category with bilingual support
+                    # Create new category with bilingual support (without explicit ID)
                     new_category = Category(
-                        id=category_data["id"],
                         name=category_data["name"],
                         name_en=category_data.get(
                             "name_en", category_data["name"]
@@ -527,13 +670,14 @@ class DatabaseSetup:
                     db.add(new_category)
                     await db.flush()  # Get the ID
                     category_id = new_category.id
+                    created_categories += 1
                     logger.info(
                         f"✅ Created category: {category_data['name_en']} (ID: {category_id})"
                     )
 
                 # Create subcategories for this category
                 for subcat_data in category_data.get("subcategories", []):
-                    # Check if subcategory already exists
+                    # Check if subcategory already exists by name within this category
                     subcat_stmt = select(Subcategory).where(
                         Subcategory.category_id == category_id,
                         Subcategory.name == subcat_data["name"],
@@ -545,10 +689,11 @@ class DatabaseSetup:
                         logger.info(
                             f"  Subcategory '{subcat_data['name_en']}' already exists, skipping..."
                         )
+                        skipped_subcategories += 1
                         continue
 
+                    # Create subcategory without explicit ID (let DB auto-increment)
                     new_subcategory = Subcategory(
-                        id=subcategory_id_counter,
                         category_id=category_id,
                         name=subcat_data["name"],
                         name_en=subcat_data.get(
@@ -561,13 +706,18 @@ class DatabaseSetup:
                         is_active=True,
                     )
                     db.add(new_subcategory)
+                    await db.flush()  # Get the ID for logging
+                    created_subcategories += 1
                     logger.info(
-                        f"  ✅ Created subcategory: {subcat_data['name_en']} (ID: {subcategory_id_counter})"
+                        f"  ✅ Created subcategory: {subcat_data['name_en']} (ID: {new_subcategory.id})"
                     )
-                    subcategory_id_counter += 1
 
             await db.commit()
-            logger.info("✅ Categories and subcategories seeded successfully")
+            logger.info(
+                f"✅ Categories and subcategories seeded successfully - "
+                f"Created: {created_categories} categories, {created_subcategories} subcategories | "
+                f"Skipped: {skipped_categories} categories, {skipped_subcategories} subcategories"
+            )
             return True
 
         except Exception as e:
@@ -2259,10 +2409,10 @@ class DatabaseSetup:
                 "✅ 2 assignment types created (Assignees and CC only)"
             )
             logger.info(
-                "✅ 6 categories with 12 subcategories created (with bilingual EN/AR names)"
+                "✅ 9 categories with 31 subcategories created (with bilingual EN/AR names)"
             )
             logger.info(
-                "✅ 28 default tags created across all categories (Network, Software, Hardware, Servers, ERP, Healthcare)"
+                "✅ 28 default tags created across all categories (Hardware, Printers, PACS, Avaya, Create User Account, Email, Network, Surveillance Cameras, SharePoint)"
             )
             logger.info(
                 "✅ 8 default statuses created (Open, Hold, Solved, Archived, Canceled, Pending Sub-Task, Pending Requester Response, In Progress)"

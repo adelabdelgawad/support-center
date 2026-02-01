@@ -106,11 +106,13 @@ export default async function SupportCenterLayout({ children }: SupportCenterLay
     redirect(`/login?redirect=${redirectUrl}`);
   }
 
-  // Check if user is a technician - agent portal requires technician access
-  // This ensures navbar and pages are in sync with actual permissions
+  // Check if user is a technician for technician-only pages
+  // Allow all authenticated users to access home (/) and portal (/portal)
   // Skip check for /unauthorized page to prevent redirect loop
   const isUnauthorizedPage = pathname === '/unauthorized' || pathname.startsWith('/unauthorized');
-  if (!isUnauthorizedPage) {
+  const isPublicPage = pathname === '/' || pathname === '/portal';
+
+  if (!isUnauthorizedPage && !isPublicPage) {
     const isTechnician = user.isTechnician === true || user.is_technician === true || user.isSuperAdmin === true || user.is_super_admin === true;
     if (!isTechnician) {
       redirect('/unauthorized?reason=not_technician');

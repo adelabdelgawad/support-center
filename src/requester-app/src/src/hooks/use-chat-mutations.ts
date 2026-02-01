@@ -11,7 +11,7 @@
  *
  * IMPORTANT: Authentication is checked directly from authStore to avoid
  * timing issues where props might be stale during component mount.
- * See: https://github.com/adelabdelgawad/support_center/issues/XXX
+ * See: https://github.com/adelabdelgawad/support-center/issues/XXX
  */
 
 import { createSignal, createMemo } from 'solid-js';

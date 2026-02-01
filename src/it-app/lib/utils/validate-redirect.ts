@@ -11,7 +11,7 @@
  */
 export function getSafeRedirectUrl(
   url: string | null | undefined,
-  defaultPath: string = "/support-center/requests"
+  defaultPath: string = "/"
 ): string {
   // If no URL provided, return default
   if (!url) {

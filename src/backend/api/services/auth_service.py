@@ -40,6 +40,7 @@ from api.schemas.login import (
 )
 from api.schemas.domain_user import DomainUser
 from api.services.active_directory import LdapService
+from crud.active_directory_config_crud import get_active_config as get_ad_config
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -237,7 +238,15 @@ class AuthenticationService:
 
             # 2. If user not found in DB, fetch from AD
             if not user:
-                ldap_service = LdapService()
+                # Fetch active AD configuration
+                ad_config = await get_ad_config(db)
+                if not ad_config:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Active Directory is not configured. Please contact system administrator.",
+                    )
+
+                ldap_service = LdapService(ad_config=ad_config)
                 domain_user = await ldap_service.get_user_by_username(
                     login_data.username
                 )
@@ -300,7 +309,15 @@ class AuthenticationService:
                 step_start = time.time()
                 if needs_ad_refresh:
                     try:
-                        ldap_service = LdapService()
+                        # Fetch active AD configuration
+                        ad_config = await get_ad_config(db)
+                        if not ad_config:
+                            raise HTTPException(
+                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Active Directory is not configured. Please contact system administrator.",
+                            )
+
+                        ldap_service = LdapService(ad_config=ad_config)
                         domain_user = await ldap_service.get_user_by_username(
                             login_data.username
                         )
@@ -487,9 +504,16 @@ class AuthenticationService:
                     login_data=login_data, db=db, client_ip=client_ip
                 )
 
-            # 1. Authenticate against Active Directory
+            # 1. Fetch active AD configuration and authenticate
             step_start = time.time()
-            ldap_service = LdapService()
+            ad_config = await get_ad_config(db)
+            if not ad_config:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Active Directory is not configured. Please contact system administrator.",
+                )
+
+            ldap_service = LdapService(ad_config=ad_config)
             try:
                 is_authenticated = await ldap_service.authenticate_user(
                     login_data.username, login_data.password

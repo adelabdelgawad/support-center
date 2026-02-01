@@ -1,10 +1,8 @@
-version: '3.8'
-
 # ============================================================================
 # Development Docker Compose Configuration
 # ============================================================================
 # This file provides INFRASTRUCTURE ONLY for local development.
-# Backend and frontend run directly on the host for faster iteration.
+# Backend, Celery, and Frontend run directly on the host for faster iteration.
 #
 # Usage:
 #   docker-compose -f docker-compose.dev.yml up -d
@@ -14,10 +12,12 @@ version: '3.8'
 #   - PgBouncer (port 6432)
 #   - Redis (port 6380)
 #   - MinIO (ports 9000/9001)
+#   - SignalR (port 5000)
 #
-# Then run backend and frontend locally:
-#   cd src/backend && uvicorn main:app --reload
-#   cd src/it-app && bun run dev
+# Then run backend, celery, and frontend locally:
+#   Backend:  cd src/backend && uvicorn main:app --reload
+#   Celery:   cd src/backend && celery -A celery_app worker --loglevel=info
+#   Frontend: cd src/it-app && bun run dev
 
 services:
   # PostgreSQL Database
@@ -27,7 +27,7 @@ services:
     env_file:
       - docker/env/.env.postgres
     volumes:
-      - ~/workspace/docker/it_support_center/postgres-dev:/var/lib/postgresql/data
+      - ~/workspace/docker/support-center/postgres-dev:/var/lib/postgresql/data
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     healthcheck:
@@ -73,7 +73,7 @@ services:
       - docker/env/.env.redis
     command: sh -c 'redis-server --maxmemory 2gb --maxmemory-policy allkeys-lru --appendonly yes --notify-keyspace-events Ex --maxclients 10000 --timeout 0 --tcp-keepalive 300 --requirepass $$REDIS_PASSWORD'
     volumes:
-      - ~/workspace/docker/it_support_center/redis-dev:/data
+      - ~/workspace/docker/support-center/redis-dev:/data
     ports:
       - "127.0.0.1:${REDIS_PORT:-6380}:6379"
     healthcheck:
@@ -96,12 +96,35 @@ services:
     env_file:
       - docker/env/.env.minio
     volumes:
-      - ~/workspace/docker/it_support_center/minio-dev:/data
+      - ~/workspace/docker/support-center/minio-dev:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - supportcenter-dev-network
+    restart: unless-stopped
+
+  # SignalR Real-time Communication Service
+  signalr-service:
+    build:
+      context: ./src/signalr-service
+      dockerfile: ../../docker/signalr-service/Dockerfile
+    container_name: supportcenter-signalr-dev
+    ports:
+      - "5000:5000"
+    env_file:
+      - docker/env/.env.signalr
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     networks:
       - supportcenter-dev-network
     restart: unless-stopped

@@ -1103,9 +1103,25 @@ async def get_user_pages(
     # DEBUG: Log user roles
     logger.debug(f"User role_ids: {role_ids}")
 
+    # Get pages with no role restrictions (public pages)
+    # These are pages that have NO entries in page_roles table
+    public_pages_query = (
+        select(Page)
+        .where(Page.is_active)
+        .where(~Page.id.in_(select(PageRole.page_id)))
+        .order_by(Page.id)
+    )
+    public_pages_result = await db.execute(public_pages_query)
+    public_pages = list(public_pages_result.scalars().all())
+
+    # DEBUG: Log public pages
+    logger.debug(f"Public pages (no role restrictions): {len(public_pages)}")
+    logger.debug(f"Public page IDs: {[p.id for p in public_pages]}")
+
+    # If user has no roles, return only public pages
     if not role_ids:
-        logger.debug("User has no roles assigned - returning empty pages list")
-        return []
+        logger.debug("User has no roles assigned - returning only public pages")
+        return public_pages
 
     # Get pages accessible through user's roles
     page_roles_query = (
@@ -1120,19 +1136,25 @@ async def get_user_pages(
     # DEBUG: Log page IDs found
     logger.debug(f"Page IDs found for user's roles: {page_ids}")
 
-    if not page_ids:
-        logger.debug("No page permissions found for user's roles - returning empty pages list")
-        return []
+    # Fetch the actual pages user has access to through roles
+    if page_ids:
+        pages_query = (
+            select(Page)
+            .where(Page.id.in_(page_ids))
+            .where(Page.is_active)
+            .order_by(Page.id)
+        )
+        pages_result = await db.execute(pages_query)
+        role_pages = list(pages_result.scalars().all())
+    else:
+        role_pages = []
 
-    # Fetch the actual pages user has direct access to
-    pages_query = (
-        select(Page)
-        .where(Page.id.in_(page_ids))
-        .where(Page.is_active)
-        .order_by(Page.id)
-    )
-    pages_result = await db.execute(pages_query)
-    pages = list(pages_result.scalars().all())
+    # Combine public pages and role-based pages (avoid duplicates)
+    pages_dict = {page.id: page for page in public_pages}
+    for page in role_pages:
+        pages_dict[page.id] = page
+
+    pages = list(pages_dict.values())
 
     # DEBUG: Log direct pages
     logger.debug(f"Direct pages from permissions: {len(pages)}")

@@ -376,7 +376,7 @@ bun run lint
 
 1. **Navigate to it-app directory:**
    ```bash
-   cd /home/arc-webapp-01/support_center/src/it-app
+   cd /home/arc-webapp-01/support-center/src/it-app
    ```
 
 2. **Build the application:**
@@ -763,7 +763,7 @@ Service layer decorators:
 ## Project Structure
 
 ```
-it_support_center/
+support-center/
 ├── backend/                    # FastAPI backend
 │   ├── main.py                 # App entry point with lifespan events
 │   ├── core/                   # Core configuration and utilities
@@ -878,7 +878,7 @@ Cache keys centralized in `lib/swr/cache-keys.ts`.
 
 - Backend fully functional with passwordless auth, multi-role access, real-time chat
 - **Agent Portal** (`it-app/`): Next.js frontend for agents/supervisors to manage tickets
-- **Requester App** (`@it_support_center_frontend/`): Separate Tauri + SolidJS desktop app for employees to submit requests (Windows, features: SSO, notifications, screenshots)
+- **Requester App** (`@support-center_frontend/`): Separate Tauri + SolidJS desktop app for employees to submit requests (Windows, features: SSO, notifications, screenshots)
 - SMB and Active Directory integration available but optional
 - **Backend schemas MUST inherit from `HTTPSchemaModel`** (from `core.schema_base`)
 - **Frontend variables use camelCase, backend uses snake_case** - conversion handled by HTTPSchemaModel

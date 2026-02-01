@@ -39,7 +39,6 @@ class DatabaseSettings(BaseSettings):
     max_overflow: int = 5  # Reduced from 10 for horizontal scaling
     pool_timeout: int = 30
     pool_recycle: int = 1800  # 30 minutes (reduced from 1 hour for better connection cycling)
-    echo: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="DATABASE_",
@@ -92,14 +91,6 @@ class RedisSettings(BaseSettings):
     socket_timeout: int = 60  # Increased from 5 to 60 seconds for pub/sub stability
     socket_connect_timeout: int = 10  # Connection timeout
     retry_on_timeout: bool = True
-    health_check_interval: int = 30  # Periodic health check interval (seconds)
-    max_reconnect_attempts: int = 10  # Maximum reconnection attempts
-    reconnect_backoff_base: float = 2.0  # Exponential backoff base for reconnection
-
-    # Session store settings (for horizontal WebSocket scaling)
-    session_prefix: str = "ws_session:"
-    room_prefix: str = "ws_room:"
-    instance_prefix: str = "ws_instance:"
 
     model_config = SettingsConfigDict(
         env_prefix="REDIS_",
@@ -438,25 +429,10 @@ class SignalRSettings(BaseSettings):
 class PerformanceSettings(BaseSettings):
     """Performance configuration settings."""
 
-    query_cache_size: int = 1000
     enable_query_logging: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="PERFORMANCE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-
-class RateLimitSettings(BaseSettings):
-    """Rate Limiting configuration settings."""
-
-    per_minute: int = 60
-    burst: int = 10
-
-    model_config = SettingsConfigDict(
-        env_prefix="RATE_LIMIT_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -634,7 +610,6 @@ class Settings(BaseSettings):
     websocket: WebSocketSettings = WebSocketSettings()
     signalr: SignalRSettings = SignalRSettings()
     performance: PerformanceSettings = PerformanceSettings()
-    rate_limit: RateLimitSettings = RateLimitSettings()
     monitoring: MonitoringSettings = MonitoringSettings()
     logging: LoggingSettings = LoggingSettings()
     pagination: PaginationSettings = PaginationSettings()

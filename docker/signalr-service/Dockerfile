@@ -3,11 +3,11 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy csproj and restore dependencies
-COPY src/signalr-service/SignalRService.csproj .
+COPY SignalRService.csproj .
 RUN dotnet restore
 
 # Copy source and build
-COPY src/signalr-service/ .
+COPY . .
 RUN dotnet publish -c Release -o /app/publish
 
 # Runtime stage

@@ -22,7 +22,7 @@ const WATCHDOG_GRACEFUL_EXIT: i32 = 99;
 
 /// Check if the current process is running as watchdog
 pub fn is_watchdog() -> bool {
-    env::var("SUPPORT_CENTER_WATCHDOG").is_ok()
+    env::var("support-center_WATCHDOG").is_ok()
 }
 
 /// Spawn the watchdog process
@@ -40,8 +40,8 @@ pub fn spawn_watchdog() -> Result<(), String> {
 
         // Spawn watchdog process with environment variable
         let result = Command::new(&exe_path)
-            .env("SUPPORT_CENTER_WATCHDOG", "1")
-            .env("SUPPORT_CENTER_PARENT_PID", format!("{}", std::process::id()))
+            .env("support-center_WATCHDOG", "1")
+            .env("support-center_PARENT_PID", format!("{}", std::process::id()))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -79,8 +79,8 @@ pub async fn run_watchdog() -> Result<(), String> {
     }
 
     // Get parent PID from environment
-    let parent_pid_str = env::var("SUPPORT_CENTER_PARENT_PID")
-        .map_err(|_| "SUPPORT_CENTER_PARENT_PID not set".to_string())?;
+    let parent_pid_str = env::var("support-center_PARENT_PID")
+        .map_err(|_| "support-center_PARENT_PID not set".to_string())?;
 
     let parent_pid: u32 = parent_pid_str
         .parse()

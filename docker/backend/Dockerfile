@@ -77,5 +77,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Start command: Initialize DB, stamp alembic, then start server
-CMD python init_db.py && alembic stamp head && uvicorn main:app --host 0.0.0.0 --port 8000
+# Start command: Start server (database initialization handled by FastAPI lifespan)
+CMD uvicorn main:app --host 0.0.0.0 --port 8000

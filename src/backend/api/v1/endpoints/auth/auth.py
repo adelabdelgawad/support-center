@@ -174,7 +174,7 @@ async def validate_token(
         - Returns user information for valid tokens
     """
     try:
-        result = await auth_service.validate_access_token(
+        result = await auth_service.validate_token(
             token=request.token,
             db=db,
         )
