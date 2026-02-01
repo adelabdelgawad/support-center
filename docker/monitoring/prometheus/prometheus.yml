@@ -1,50 +1,33 @@
-# Prometheus Configuration for IT Support Center
-# Production-ready setup with alerts and recording rules
-
+# Prometheus Configuration
+# Global settings
 global:
-  scrape_interval: 15s          # Scrape targets every 15 seconds
-  evaluation_interval: 15s      # Evaluate rules every 15 seconds
-  scrape_timeout: 10s           # Timeout for scraping
+  scrape_interval: 15s
+  evaluation_interval: 15s
   external_labels:
-    cluster: 'it-support-prod'
-    environment: 'production'
+    monitor: 'myapp-monitor'
 
-# Alertmanager configuration (optional - uncomment when alertmanager is added)
-# alerting:
-#   alertmanagers:
-#     - static_configs:
-#       - targets: ['alertmanager:9093']
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
 
-# Load alert rules and recording rules
+# Rule files
 rule_files:
-  - '/etc/prometheus/alerts/*.yml'
-  - '/etc/prometheus/rules/*.yml'
+  - 'alerts/*.yml'
 
 # Scrape configurations
 scrape_configs:
-  # FastAPI Backend Cluster - Multiple instances for horizontal scaling
-  - job_name: 'backend-cluster'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metrics_path: '/metrics'
-    static_configs:
-      - targets: ['10.25.10.50:8000']
-        labels:
-          service: 'fastapi-backend'
-          instance: 'backend-1'
-      - targets: ['10.25.10.50:8001']
-        labels:
-          service: 'fastapi-backend'
-          instance: 'backend-2'
-      - targets: ['10.25.10.50:8002']
-        labels:
-          service: 'fastapi-backend'
-          instance: 'backend-3'
-
   # Prometheus self-monitoring
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-        labels:
-          service: 'prometheus'
 
+  # Backend API metrics
+  # Use 'backend:8000' when backend runs in Docker (uncommented in docker-compose.yml)
+  # Use 'host.docker.internal:8000' when backend runs on host (dev mode with 'uv run fastapi dev')
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s

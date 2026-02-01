@@ -1,6 +1,4 @@
-# Grafana Datasource Provisioning
-# Automatically configure Prometheus as the default datasource
-
+# Grafana Datasource Provisioning Configuration
 apiVersion: 1
 
 datasources:
@@ -9,12 +7,8 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
-    editable: false
+    editable: true
     jsonData:
-      httpMethod: POST
       timeInterval: 15s
       queryTimeout: 60s
-      # Enable Exemplars for tracing (if needed later)
-      exemplarTraceIdDestinations: []
-    version: 1
-    uid: prometheus
+      httpMethod: POST
