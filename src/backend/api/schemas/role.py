@@ -3,6 +3,7 @@ Role schemas for user role management.
 
 This module contains schemas for managing user roles and permissions.
 """
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -36,10 +37,12 @@ class RoleUpdate(HTTPSchemaModel):
 
 class RoleWithPagesAndUsers(RoleRead):
     """Schema for role with associated pages and users."""
-    page_ids: List[UUID] = Field(default_factory=list, description="Associated page IDs")
-    user_ids: List[UUID] = Field(default_factory=list, description="Associated user IDs")
-    page_count: int = Field(default=0, description="Number of associated pages")
-    user_count: int = Field(default=0, description="Number of associated users")
+    page_paths: List[str] = Field(default_factory=list, description="Active page paths")
+    total_users: int = Field(default=0, description="Number of associated users")
+    created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
+    updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
+    created_by: Optional[UUID] = Field(default=None, description="Creator user ID")
+    updated_by: Optional[UUID] = Field(default=None, description="Last updater user ID")
 
 
 class RoleListResponse(HTTPSchemaModel):
@@ -47,13 +50,17 @@ class RoleListResponse(HTTPSchemaModel):
     roles: List[RoleWithPagesAndUsers] = Field(
         default_factory=list, description="List of roles")
     total: int = Field(..., description="Total count")
+    active_count: int = Field(default=0, description="Active roles count")
+    inactive_count: int = Field(default=0, description="Inactive roles count")
 
 
 class RolePagesUpdateRequest(HTTPSchemaModel):
     """Schema for updating role's associated pages."""
-    page_ids: List[UUID] = Field(..., description="List of page IDs to associate")
+    original_page_ids: List[int] = Field(..., description="Current page IDs before update")
+    updated_page_ids: List[int] = Field(..., description="New page IDs after update")
 
 
 class RoleUsersUpdateRequest(HTTPSchemaModel):
     """Schema for updating role's associated users."""
-    user_ids: List[UUID] = Field(..., description="List of user IDs to associate")
+    original_user_ids: List[str] = Field(..., description="Current user IDs before update")
+    updated_user_ids: List[str] = Field(..., description="New user IDs after update")
