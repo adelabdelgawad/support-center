@@ -93,7 +93,8 @@ async def get_request_details_metadata(
     Requires authentication.
     """
     try:
-        metadata = await RequestDetailsMetadataService.get_request_details_metadata(db)
+        service = RequestDetailsMetadataService(db)
+        metadata = await service.get_request_details_metadata()
         return metadata
     except Exception as e:
         logger.error(f"Error fetching request details metadata: {e}")

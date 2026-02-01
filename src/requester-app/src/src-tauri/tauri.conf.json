@@ -29,7 +29,7 @@
         "transparent": false,
         "shadow": true,
         "focus": true,
-        "devtools": false
+        "devtools": true
       },
       {
         "label": "floating-icon",

@@ -28,6 +28,9 @@ scrape_configs:
   # Use 'host.docker.internal:8000' when backend runs on host (dev mode with 'uv run fastapi dev')
   - job_name: 'backend'
     static_configs:
-      - targets: ['backend:8000']
+      - targets:
+          - 'backend-1:8000'
+          - 'backend-2:8000'
+          - 'backend-3:8000'
     metrics_path: '/metrics'
     scrape_interval: 15s

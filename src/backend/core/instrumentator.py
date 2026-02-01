@@ -14,8 +14,20 @@ instrumentator = Instrumentator(
     should_instrument_requests_inprogress=True,
 )
 
-# Add custom metrics for better error tracking
+# Add metrics for Grafana dashboards
 instrumentator.add(
+    metrics.requests(
+        should_include_handler=True,
+        should_include_method=True,
+        should_include_status=True,
+    )
+).add(
+    metrics.latency(
+        should_include_handler=True,
+        should_include_method=True,
+        should_include_status=True,
+    )
+).add(
     metrics.request_size(
         should_include_handler=True,
         should_include_method=True,

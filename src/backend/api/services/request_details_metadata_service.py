@@ -44,27 +44,21 @@ class RequestDetailsMetadataService:
             RequestDetailsMetadataResponse with all metadata
         """
         try:
-            # Instantiate services with session
+            # PriorityService is instance-based
             priority_service = PriorityService(self.db)
-            status_service = RequestStatusService(self.db)
-            user_service = UserService(self.db)
-            category_service = CategoryService(self.db)
-
-            # Execute sequentially
             priorities = await priority_service.list_priorities(active_only=True)
 
-            # list_request_statuses returns (statuses, total, active_count, inactive_count, readonly_count)
-            statuses_list, *_ = await status_service.list_request_statuses(
-                is_active=True, page=1, per_page=1000
+            # These services use static methods with db as first param
+            statuses_list, *_ = await RequestStatusService.list_request_statuses(
+                self.db, is_active=True, page=1, per_page=1000
             )
 
-            # list_users returns (users, total)
-            technicians_list, _ = await user_service.list_users(
-                is_technician=True, is_active=True, page=1, per_page=1000
+            technicians_list, _ = await UserService.list_users(
+                self.db, is_technician=True, is_active=True, page=1, per_page=1000
             )
 
-            categories = await category_service.list_categories(
-                active_only=True, include_subcategories=True
+            categories = await CategoryService.list_categories(
+                self.db, active_only=True, include_subcategories=True
             )
 
             # Convert to list item schemas

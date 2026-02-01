@@ -366,7 +366,7 @@ services:
       - ~/workspace/docker/support-center/grafana:/var/lib/grafana
       - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
-      - "${GRAFANA_PORT:-3030}:3000"
+      - "127.0.0.1:${GRAFANA_PORT:-3030}:3000"
     depends_on:
       - prometheus
     healthcheck:
@@ -397,6 +397,7 @@ services:
       - backend-2
       - backend-3
       - frontend
+      - grafana
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/health || exit 1"]
       interval: 30s

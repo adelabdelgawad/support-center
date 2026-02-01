@@ -83,6 +83,7 @@ def create_access_token(
             payload,
             settings.security.jwt_secret_key_property,
             algorithm=settings.security.algorithm,
+            headers={"kid": "default"},
         )
         return token
     except Exception as e:
@@ -349,6 +350,7 @@ def create_temporary_token(
             payload,
             settings.security.jwt_secret_key_property,
             algorithm=settings.security.algorithm,
+            headers={"kid": "default"},
         )
         return token
     except Exception as e:
