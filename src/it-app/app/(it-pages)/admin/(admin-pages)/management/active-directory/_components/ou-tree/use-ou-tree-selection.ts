@@ -50,9 +50,12 @@ export function useOUTreeSelection(
   tree: OUTreeNode[],
   initialSelected: string[] = []
 ) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
+
   // Auto-select alreadyExists nodes when tree loads
-  // Compute the initial selected set directly from tree and initialSelected
-  const selected = useMemo(() => {
+  useEffect(() => {
+    if (tree.length === 0) return;
+
     const result = new Set(initialSelected);
 
     const collectExisting = (nodes: OUTreeNode[]) => {
@@ -65,12 +68,10 @@ export function useOUTreeSelection(
       }
     };
 
-    if (tree.length > 0) {
-      collectExisting(tree);
-    }
-
-    return result;
-  }, [tree, initialSelected]);
+    collectExisting(tree);
+    setSelected(result);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tree]);
 
   // Calculate indeterminate states
   const indeterminate = useMemo(() => {

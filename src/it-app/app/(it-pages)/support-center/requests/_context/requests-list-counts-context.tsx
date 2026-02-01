@@ -121,15 +121,18 @@ export function RequestsListCountsProvider({
   }, []);
 
   // HYDRATION SAFETY: Force SSR data during first render to prevent hydration mismatch
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeCounts = isFirstRenderRef.current
     ? initialData.counts
     : (counts ?? initialData.counts);
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeUnassignedCount = isFirstRenderRef.current
     ? initialBusinessUnitsData.unassignedCount
     : (unassignedCount ?? initialBusinessUnitsData.unassignedCount);
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeAllBusinessUnits = isFirstRenderRef.current
     ? initialBusinessUnitsData.businessUnits
-    : allBusinessUnits;
+    : (allBusinessUnits.length > 0 ? allBusinessUnits : initialBusinessUnitsData.businessUnits);
 
   // Build view items from counts - filter by visible tabs
   const viewItems: ViewItem[] = useMemo(() => {

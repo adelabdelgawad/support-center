@@ -116,12 +116,15 @@ export function RequestsListDataProvider({
   }, []);
 
   // HYDRATION SAFETY: Force SSR data during first render to prevent hydration mismatch
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeFilterCounts = isFirstRenderRef.current
     ? initialData.filterCounts
     : (filterCounts ?? initialData.filterCounts);
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeTotal = isFirstRenderRef.current
     ? initialData.total
     : (total ?? initialData.total);
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeTickets = isFirstRenderRef.current
     ? initialData.data
     : tickets;

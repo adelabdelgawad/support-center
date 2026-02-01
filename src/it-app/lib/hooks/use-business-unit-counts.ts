@@ -1,7 +1,7 @@
 'use client';
 
 import useSWR from 'swr';
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { cacheKeys } from '@/lib/swr/cache-keys';
 import { getBusinessUnitCounts } from '@/lib/api/requests-list';
 import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-actions';
@@ -21,6 +21,9 @@ import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-act
  * @returns Business units data and helpers
  */
 export function useAllBusinessUnits(view: string, initialData?: BusinessUnitCountsResponse) {
+  // Keep last known good data to prevent flash on cache key change
+  const lastDataRef = useRef(initialData);
+
   const { data, error, isLoading, isValidating, mutate } = useSWR<BusinessUnitCountsResponse>(
     cacheKeys.businessUnitCounts(view),
     () => getBusinessUnitCounts(view),
@@ -34,6 +37,8 @@ export function useAllBusinessUnits(view: string, initialData?: BusinessUnitCoun
     }
   );
 
+  if (data) lastDataRef.current = data;
+
   /**
    * Force refresh from server
    */
@@ -42,10 +47,8 @@ export function useAllBusinessUnits(view: string, initialData?: BusinessUnitCoun
   }, [mutate]);
 
   return {
-    allBusinessUnits: data?.businessUnits ?? [],
-    // Use undefined to represent "unknown" state - never default to 0
-    // This allows UI to distinguish between "loading" and "actually zero"
-    unassignedCount: data?.unassignedCount,
+    allBusinessUnits: data?.businessUnits ?? lastDataRef.current?.businessUnits ?? [],
+    unassignedCount: data?.unassignedCount ?? lastDataRef.current?.unassignedCount,
     isLoading,
     isValidating,
     error,

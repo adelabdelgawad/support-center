@@ -167,7 +167,7 @@ class ActiveDirectoryConfigService:
 
         # Update the config
         updated_config = await base_crud.update(
-            db, db_obj=config, obj_in=update_dict
+            db, ActiveDirectoryConfig, id_value=config_id, obj_in=update_dict
         )
 
         logger.info(f"Updated AD configuration: {updated_config.name} (ID: {config_id})")

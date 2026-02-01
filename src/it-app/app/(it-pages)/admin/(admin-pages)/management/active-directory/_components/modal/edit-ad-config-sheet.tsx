@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Network } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { updateADConfig } from "@/lib/api/active-directory-config";
+import { updateADConfig, testADConnection } from "@/lib/api/active-directory-config";
 import { toastError } from "@/lib/toast";
+import { toast } from "sonner";
 import type { ActiveDirectoryConfig } from "@/types/active-directory-config";
 
 const formSchema = z.object({
@@ -55,6 +56,7 @@ export function EditADConfigSheet({
   onSuccess,
 }: EditADConfigSheetProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -122,6 +124,22 @@ export function EditADConfigSheet({
       toastError(error.message || "Failed to update AD configuration");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    try {
+      const result = await testADConnection(config.id);
+      if (result.success) {
+        toast.success(result.message || "Connection successful");
+      } else {
+        toast.error(result.message || "Connection failed");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to test connection");
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -271,19 +289,39 @@ export function EditADConfigSheet({
               </p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-between pt-4">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading}
+                onClick={handleTestConnection}
+                disabled={isTesting || isLoading}
               >
-                Cancel
+                {isTesting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testing...
+                  </>
+                ) : (
+                  <>
+                    <Network className="mr-2 h-4 w-4" />
+                    Test Connection
+                  </>
+                )}
               </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Update Configuration
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Update Configuration
+                </Button>
+              </div>
             </div>
           </form>
         </Form>

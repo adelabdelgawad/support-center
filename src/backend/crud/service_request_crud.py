@@ -1154,7 +1154,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                         return [], 0
 
         # Build view-specific filter conditions for ServiceRequest
-        view_conditions = [not ServiceRequest.is_deleted]
+        view_conditions = [ServiceRequest.is_deleted == False]
 
         if view:
             # Subquery for solved statuses (where count_as_solved = True)
@@ -1176,7 +1176,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 .where(
                     and_(
                         ServiceRequest.parent_task_id.isnot(None),
-                        not ServiceRequest.is_deleted,
+                        ServiceRequest.is_deleted == False,
                         ServiceRequest.status_id.notin_(solved_subquery),
                     )
                 )
@@ -1226,8 +1226,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             )
             .outerjoin(ServiceRequest, join_condition)
             .where(
-                BusinessUnit.is_active,
-                not BusinessUnit.is_deleted,
+                BusinessUnit.is_active == True,
+                BusinessUnit.is_deleted == False,
             )
             .group_by(BusinessUnit.id, BusinessUnit.name)
             .order_by(func.count(ServiceRequest.id).desc(), BusinessUnit.name)
