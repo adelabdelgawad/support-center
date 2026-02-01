@@ -83,7 +83,14 @@ export function AddADConfigSheet({ open, onOpenChange, onSuccess }: AddADConfigS
   const handleSave = async (data: FormValues) => {
     setIsLoading(true);
     try {
-      const result = await createADConfig(data);
+      const result = await createADConfig({
+        ...data,
+        baseDn: domainName
+          .split(".")
+          .map((part) => `DC=${part}`)
+          .join(","),
+        isActive: true,
+      });
 
       if (onSuccess) {
         onSuccess(result);

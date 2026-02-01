@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getUserStatus } from '@/lib/api/user-status';
+import { getUserStatus, type UserSessionStatus } from '@/lib/api/user-status';
 
 /**
  * Hook for fetching user session status with polling
@@ -10,7 +10,7 @@ import { getUserStatus } from '@/lib/api/user-status';
  * @returns User status data with loading and error states
  */
 export function useUserStatus(userId: string | null, enabled: boolean = true) {
-  const [data, setData] = useState<{ isOnline?: boolean } | null>(null);
+  const [data, setData] = useState<UserSessionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 

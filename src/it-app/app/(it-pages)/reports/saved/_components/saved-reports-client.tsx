@@ -117,21 +117,10 @@ export default function SavedReportsClient() {
   // Use data directly from SWR hook instead of duplicating in state
   const configs = data ?? [];
 
-  // Function to update state from backend response
-  const updateConfigsFromResponse = useCallback((response: ReportConfig) => {
-    setConfigs(prev => {
-      const existingIndex = prev.findIndex(c => c.id === response.id);
-      if (existingIndex >= 0) {
-        // Update existing
-        const newConfigs = [...prev];
-        newConfigs[existingIndex] = response;
-        return newConfigs;
-      } else {
-        // Append new
-        return [...prev, response];
-      }
-    });
-  }, []);
+  // Refetch configs from server after mutations
+  const refreshConfigs = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -157,8 +146,7 @@ export default function SavedReportsClient() {
       });
       setIsCreateDialogOpen(false);
       form.reset();
-      // Update local state from backend response
-      updateConfigsFromResponse(response);
+      refreshConfigs();
     } catch (error) {
       console.error('Failed to create report config:', error);
     }
@@ -168,7 +156,7 @@ export default function SavedReportsClient() {
     if (!editingConfig) return;
 
     try {
-      const response = await updateReportConfig(editingConfig.id, {
+      await updateReportConfig(editingConfig.id, {
         name: data.name,
         description: data.description || undefined,
         reportType: data.reportType,
@@ -178,8 +166,7 @@ export default function SavedReportsClient() {
       });
       setEditingConfig(null);
       form.reset();
-      // Update local state from backend response
-      updateConfigsFromResponse(response);
+      refreshConfigs();
     } catch (error) {
       console.error('Failed to update report config:', error);
     }
@@ -189,8 +176,7 @@ export default function SavedReportsClient() {
     try {
       await deleteReportConfig(id);
       setDeletingId(null);
-      // Remove from local state
-      setConfigs(prev => prev.filter(c => c.id !== id));
+      refreshConfigs();
     } catch (error) {
       console.error('Failed to delete report config:', error);
     }

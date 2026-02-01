@@ -37,7 +37,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.id == request_id,
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -144,7 +144,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
             stmt = select(ServiceRequest).where(
                 ~assigned_exists,
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
 
         elif view_type == "all_unsolved":
@@ -159,7 +159,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
             stmt = select(ServiceRequest).where(
                 ServiceRequest.status_id.notin_(solved_subquery),
-                ServiceRequest.is_deleted == False,
+                ServiceRequest.is_deleted.is_(False),
                 assigned_exists
             )
 
@@ -177,7 +177,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.id.in_(my_requests_subquery),
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted == False
+                    ServiceRequest.is_deleted.is_(False)
                 )
             )
 
@@ -186,7 +186,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                           "pending_subtask", "new_today", "in_progress"):
             # For other views, use a simpler base (they all have similar structure)
             # This is a fallback - specific logic can be added per view if needed
-            stmt = select(ServiceRequest).where(ServiceRequest.is_deleted == False)
+            stmt = select(ServiceRequest).where(ServiceRequest.is_deleted.is_(False))
 
             # Add view-specific filters
             if view_type == "recently_solved":
@@ -202,7 +202,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             )
             stmt = select(ServiceRequest).where(
                 ~assigned_exists,
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
 
         # Apply region filter
@@ -245,7 +245,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ~assigned_exists,
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -321,7 +321,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id.notin_(solved_subquery),
-                ServiceRequest.is_deleted == False,
+                ServiceRequest.is_deleted.is_(False),
                 assigned_exists  # Only requests with assignees
             )
             .options(
@@ -396,7 +396,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.id.in_(my_requests_subquery),
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted == False
+                    ServiceRequest.is_deleted.is_(False)
                 )
             )
             .options(
@@ -457,7 +457,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         """
         stmt = (
             select(ServiceRequest)
-            .where(ServiceRequest.is_deleted == False)
+            .where(ServiceRequest.is_deleted.is_(False))
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
@@ -522,7 +522,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id.in_(solved_subquery),
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -587,7 +587,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.id.in_(my_requests_subquery),
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -644,7 +644,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.priority_id.in_([1, 2]),  # Critical=1, High=2
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted == False
+                    ServiceRequest.is_deleted.is_(False)
                 )
             )
             .options(
@@ -700,7 +700,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id == 7,  # pending-requester-response
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -763,7 +763,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             .where(
                 and_(
                     ServiceRequest.parent_task_id.isnot(None),  # This is a sub-task
-                    ServiceRequest.is_deleted == False,
+                    ServiceRequest.is_deleted.is_(False),
                     ServiceRequest.status_id.notin_(solved_subquery),
                 )
             )
@@ -774,7 +774,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.id.in_(incomplete_subtasks_subquery),
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -833,7 +833,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.created_at >= today_start,
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -888,7 +888,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id == 8,  # in-progress
-                ServiceRequest.is_deleted == False
+                ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -965,7 +965,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             .where(
                 and_(
                     ServiceRequest.parent_task_id.isnot(None),  # This is a sub-task
-                    ServiceRequest.is_deleted == False,
+                    ServiceRequest.is_deleted.is_(False),
                     ServiceRequest.status_id.notin_(solved_subquery),
                 )
             )
@@ -1046,7 +1046,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 case((ServiceRequest.status_id == 8, 1))
             ).label("in_progress"),
         ).select_from(ServiceRequest).where(
-            ServiceRequest.is_deleted == False  # CRITICAL: Exclude deleted requests from all counts
+            ServiceRequest.is_deleted.is_(False)  # CRITICAL: Exclude deleted requests from all counts
         )
 
         # Apply region filter to all counts
@@ -1154,7 +1154,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                         return [], 0
 
         # Build view-specific filter conditions for ServiceRequest
-        view_conditions = [ServiceRequest.is_deleted == False]
+        view_conditions = [ServiceRequest.is_deleted.is_(False)]
 
         if view:
             # Subquery for solved statuses (where count_as_solved = True)
@@ -1176,7 +1176,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 .where(
                     and_(
                         ServiceRequest.parent_task_id.isnot(None),
-                        ServiceRequest.is_deleted == False,
+                        ServiceRequest.is_deleted.is_(False),
                         ServiceRequest.status_id.notin_(solved_subquery),
                     )
                 )
@@ -1226,8 +1226,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             )
             .outerjoin(ServiceRequest, join_condition)
             .where(
-                BusinessUnit.is_active == True,
-                BusinessUnit.is_deleted == False,
+                BusinessUnit.is_active.is_(True),
+                BusinessUnit.is_deleted.is_(False),
             )
             .group_by(BusinessUnit.id, BusinessUnit.name)
             .order_by(func.count(ServiceRequest.id).desc(), BusinessUnit.name)
@@ -1279,7 +1279,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
         # Base query with region filter
         base_stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.is_deleted == False
+            ServiceRequest.is_deleted.is_(False)
         )
         if region_filter is not None:
             base_stmt = base_stmt.where(region_filter)

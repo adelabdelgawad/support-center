@@ -26,6 +26,14 @@ export class ApiError extends Error {
   get isForbidden() { return this.status === 403; }
   get isNotFound() { return this.status === 404; }
   get isTooManyRequests() { return this.status === 429; }
+
+  get detail(): string | undefined {
+    if (this.data && typeof this.data === 'object') {
+      const obj = this.data as Record<string, unknown>;
+      if (typeof obj.detail === 'string') return obj.detail;
+    }
+    return undefined;
+  }
 }
 
 export function extractErrorMessage(data: unknown): string {

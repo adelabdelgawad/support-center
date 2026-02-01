@@ -107,7 +107,9 @@ export function useAsyncData<T>(
   return {
     data,
     isLoading,
-    error,
+    isValidating: isLoading,
+    error: error ?? undefined,
     refetch,
+    mutate: refetch,
   };
 }

@@ -19,8 +19,6 @@ import os
 from typing import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
-from core.cache import cache_manager_class
-
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -122,7 +120,7 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 def mock_cache():
     """Mock Redis cache manager."""
-    cache = MagicMock(spec=cache_manager_class)
+    cache = MagicMock()
     cache.get = AsyncMock(return_value=None)
     cache.set = AsyncMock(return_value=True)
     cache.delete = AsyncMock(return_value=True)

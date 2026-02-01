@@ -32,15 +32,6 @@ export function JobsTab({ initialData }: JobsTabProps) {
     }
   }, [initialData]);
 
-  // Auto-refresh every 10 seconds for job status updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      handleRefresh();
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, [handleRefresh]);
-
   const allJobs = data.jobs;
 
   // Paginate the jobs
@@ -70,6 +61,15 @@ export function JobsTab({ initialData }: JobsTabProps) {
       setIsLoading(false);
     }
   }, []);
+
+  // Auto-refresh every 10 seconds for job status updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefresh();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
 
   /**
    * Manual refresh with toast

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Download, AlertCircle, Calendar } from "lucide-react";
-import type { ClientVersion } from "@/types/client-version";
+import type { ClientVersion } from "@/types/client-versions";
 
 interface PortalDownloadClientProps {
   latestVersion: ClientVersion | null;
@@ -82,11 +82,6 @@ export default function PortalDownloadClient({
             </Button>
 
             {/* File Info */}
-            {latestVersion.installerSize && (
-              <p className="text-center text-xs text-muted-foreground">
-                File size: {(latestVersion.installerSize / (1024 * 1024)).toFixed(2)} MB
-              </p>
-            )}
           </CardContent>
         </Card>
       ) : (
