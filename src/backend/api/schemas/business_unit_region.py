@@ -46,6 +46,13 @@ class BusinessUnitRegionListResponse(HTTPSchemaModel):
     inactive_count: int
 
 
+class BusinessUnitRegionCountsResponse(HTTPSchemaModel):
+    """Business unit region count statistics."""
+    total: int
+    active_count: int
+    inactive_count: int
+
+
 class BulkBusinessUnitRegionStatusUpdate(HTTPSchemaModel):
     """Bulk status update request."""
     region_ids: List[int]

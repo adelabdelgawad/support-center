@@ -31,7 +31,7 @@ import type { CategoryCreateRequest, CategoryResponse } from "@/types/categories
 interface AddCategorySheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd?: (newCategory: CategoryResponse) => Promise<void>;
+  onAdd?: (newCategory: CategoryResponse) => void;
 }
 
 const createCategorySchema = z.object({

@@ -269,28 +269,13 @@ function UsersTable({
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   /**
-   * Update users in state - updates specific users and refreshes to get accurate counts
-   * Use this for updates where we already have the new data from API response
+   * Update users in state with local count computation
+   * Uses the returned records from API to update rows and compute count deltas
    */
   const updateUsers = useCallback(
-    async (updatedUsers: UserWithRolesResponse[]) => {
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('⚡ [updateUsers] OPTIMISTIC UPDATE');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('Updated users count:', updatedUsers.length);
-      console.log('Updated users:', updatedUsers.map(u => ({
-        id: u.id,
-        username: u.username,
-        isActive: u.isActive,
-        isTechnician: u.isTechnician
-      })));
-
+    (updatedUsers: UserWithRolesResponse[]) => {
       const currentData = data;
-      if (!currentData) {
-        console.log('❌ No current data, skipping optimistic update');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-        return;
-      }
+      if (!currentData) return;
 
       const updatedMap = new Map(updatedUsers.map((u) => [u.id, u]));
 
@@ -299,35 +284,44 @@ function UsersTable({
         updatedMap.has(user.id) ? updatedMap.get(user.id)! : user
       );
 
-      console.log('Updating state with updated users (will refresh to get fresh counts)');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      // Compute count deltas from changed users
+      let activeCountDelta = 0;
+      let technicianCountDelta = 0;
+      for (const updated of updatedUsers) {
+        const original = currentData.users.find((u) => u.id === updated.id);
+        if (!original) continue;
+        if (original.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+        if (original.isTechnician !== updated.isTechnician) {
+          technicianCountDelta += updated.isTechnician ? 1 : -1;
+        }
+      }
 
-      // Update state immediately with new user data
       setData({
         ...currentData,
         users: updatedUsersList,
+        activeCount: currentData.activeCount + activeCountDelta,
+        inactiveCount: currentData.inactiveCount - activeCountDelta,
+        technicianCount: currentData.technicianCount + technicianCountDelta,
+        userCount: currentData.userCount - technicianCountDelta,
       });
-
-      // Then refresh to get accurate counts from backend
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   /**
-   * Add new user to state
+   * Add new user to state with local count computation
    */
   const addUser = useCallback(
-    async (newUser: UserWithRolesResponse) => {
+    (newUser: UserWithRolesResponse) => {
       const currentData = data;
       if (!currentData) return;
 
-      // Add user to list
       setData({
         ...currentData,
         users: [newUser, ...currentData.users],
         total: currentData.total + 1,
-        // These will be refreshed from backend on refresh
         globalTotal: currentData.globalTotal + 1,
         technicianCount: newUser.isTechnician
           ? currentData.technicianCount + 1
@@ -342,11 +336,8 @@ function UsersTable({
           ? currentData.inactiveCount + 1
           : currentData.inactiveCount,
       });
-
-      // Refresh to get accurate counts from backend
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   /**

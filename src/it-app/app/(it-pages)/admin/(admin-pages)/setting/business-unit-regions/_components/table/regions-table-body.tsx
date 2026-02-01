@@ -16,7 +16,7 @@ interface RegionsTableBodyProps {
   total: number;
   isLoading?: boolean;
   refetch: () => void;
-  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => Promise<void>;
+  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => void;
   activeCount: number;
   inactiveCount: number;
 }

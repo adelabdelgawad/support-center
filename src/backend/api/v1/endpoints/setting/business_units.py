@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from db import BusinessUnit, User
 from api.schemas.business_unit import (
     BusinessUnitCreate,
+    BusinessUnitCountsResponse,
     BusinessUnitListResponse,
     BulkBusinessUnitStatusUpdate,
     BusinessUnitRead,
@@ -56,14 +57,14 @@ async def list_business_units(
         Tuple of (list of business units, total, active_count, inactive_count)
     """
     # Build main query
-    stmt = select(BusinessUnit).where(not BusinessUnit.is_deleted)
+    stmt = select(BusinessUnit).where(BusinessUnit.is_deleted.is_(False))
 
     # Build total count query - ALWAYS get total counts from database (no filters)
     total_count_stmt = select(
         func.count(BusinessUnit.id).label("total"),
         func.count(case((BusinessUnit.is_active.is_(True), 1))).label("active_count"),
         func.count(case((BusinessUnit.is_active.is_(False), 1))).label("inactive_count"),
-    ).where(not BusinessUnit.is_deleted)
+    ).where(BusinessUnit.is_deleted.is_(False))
 
     # Get total counts (unfiltered)
     total_count_result = await db.execute(total_count_stmt)
@@ -132,7 +133,7 @@ async def get_business_unit_by_ip(
 
     # Get all business units with network defined and not deleted
     stmt = select(BusinessUnit).where(
-        (BusinessUnit.network.isnot(None)) & (not BusinessUnit.is_deleted)
+        (BusinessUnit.network.isnot(None)) & (BusinessUnit.is_deleted.is_(False))
     )
     result = await db.execute(stmt)
     business_units = result.scalars().all()
@@ -255,7 +256,7 @@ async def list_business_units_endpoint(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
-@router.get("/counts")
+@router.get("/counts", response_model=BusinessUnitCountsResponse)
 async def get_business_unit_counts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),

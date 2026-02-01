@@ -8,7 +8,7 @@ import { AddSystemEventSheet } from "../modal";
 
 interface AddEventButtonProps {
   onAdd: () => void;
-  addEvent?: (newEvent: SystemEventResponse) => Promise<void>;
+  addEvent?: (newEvent: SystemEventResponse) => void;
 }
 
 export function AddEventButton({ onAdd, addEvent }: AddEventButtonProps) {

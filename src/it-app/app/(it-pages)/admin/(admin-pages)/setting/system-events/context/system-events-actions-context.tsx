@@ -9,11 +9,11 @@ import {
 import { toast } from 'sonner';
 
 interface SystemEventsActionsContextType {
-  updateEventsOptimistic: (events: SystemEventResponse[]) => Promise<void>;
-  addEventToCache: (event: SystemEventResponse) => Promise<void>;
-  handleToggleStatus: (id: string) => Promise<void>;
-  handleDelete: (id: string) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateEventsOptimistic: (events: SystemEventResponse[]) => void;
+  addEventToCache: (event: SystemEventResponse) => void;
+  handleToggleStatus: (id: string) => void;
+  handleDelete: (id: string) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number };
 }
 
@@ -30,9 +30,9 @@ export function useSystemEventsActions() {
 interface SystemEventsActionsProviderProps {
   children: React.ReactNode;
   initialData: SystemEventListResponse;
-  onUpdateOptimistic: (events: SystemEventResponse[]) => Promise<void>;
-  onAddToCache: (event: SystemEventResponse) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (events: SystemEventResponse[]) => void;
+  onAddToCache: (event: SystemEventResponse) => void;
+  onRefetch: () => void;
 }
 
 export function SystemEventsActionsProvider({

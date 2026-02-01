@@ -6,7 +6,7 @@ import type { UserWithRolesResponse } from "@/types/users.d";
 
 interface UsersTableActionsProps {
   users: UserWithRolesResponse[];
-  updateUsers: (updatedUsers: UserWithRolesResponse[]) => Promise<void>;
+  updateUsers: (updatedUsers: UserWithRolesResponse[]) => void;
   refetch: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: (ids?: number[]) => void;

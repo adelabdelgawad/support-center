@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 interface MobileUsersListProps {
   users: UserWithRolesResponse[];
   refetch: () => void;
-  updateUsers: (updatedUsers: UserWithRolesResponse[]) => Promise<void>;
+  updateUsers: (updatedUsers: UserWithRolesResponse[]) => void;
 }
 
 /**

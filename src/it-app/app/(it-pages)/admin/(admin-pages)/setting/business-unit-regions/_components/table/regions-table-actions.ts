@@ -4,7 +4,7 @@ import { useRegionsActions } from "../../context/regions-actions-context";
 
 interface UseRegionsTableActionsProps {
   regions: BusinessUnitRegionResponse[];
-  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => Promise<void>;
+  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => void;
   refetch: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: (ids?: number[]) => void;

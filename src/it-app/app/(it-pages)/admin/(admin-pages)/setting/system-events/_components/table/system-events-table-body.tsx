@@ -17,8 +17,8 @@ interface SystemEventsTableBodyProps {
   total: number;
   isLoading?: boolean;
   refetch: () => void;
-  updateEvents: (updatedEvents: SystemEventResponse[]) => Promise<void>;
-  addEvent?: (newEvent: SystemEventResponse) => Promise<void>;
+  updateEvents: (updatedEvents: SystemEventResponse[]) => void;
+  addEvent?: (newEvent: SystemEventResponse) => void;
   activeCount: number;
   inactiveCount: number;
 }

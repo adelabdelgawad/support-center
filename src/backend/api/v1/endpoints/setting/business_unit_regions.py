@@ -17,7 +17,8 @@ from db.database import get_session
 from core.dependencies import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from db import User
-from api.schemas.business_unit_region import (BusinessUnitRegionCreate, BusinessUnitRegionListResponse,
+from api.schemas.business_unit_region import (BusinessUnitRegionCreate, BusinessUnitRegionCountsResponse,
+                                          BusinessUnitRegionListResponse,
                                           BulkBusinessUnitRegionStatusUpdate, BusinessUnitRegionRead,
                                           BusinessUnitRegionUpdate)
 from api.services.business_unit_region_service import BusinessUnitRegionService
@@ -115,7 +116,7 @@ async def list_business_unit_regions(
     )
 
 
-@router.get("/counts")
+@router.get("/counts", response_model=BusinessUnitRegionCountsResponse)
 async def get_business_unit_region_counts(db: AsyncSession = Depends(get_session)):
     """
     Get business unit region count statistics.

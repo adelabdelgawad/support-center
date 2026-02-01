@@ -91,14 +91,12 @@ function ClientVersionsTable({
   const enforcedCount = data?.enforcedCount ?? initialData?.enforcedCount ?? 0;
 
   /**
-   * Update versions in state - updates specific versions and refreshes to get accurate counts
+   * Update versions in state with local count computation
    */
   const updateVersions = useCallback(
-    async (updatedVersions: ClientVersion[]) => {
+    (updatedVersions: ClientVersion[]) => {
       const currentData = data;
-      if (!currentData) {
-        return;
-      }
+      if (!currentData) return;
 
       const updatedMap = new Map(updatedVersions.map((v) => [v.id, v]));
 
@@ -107,23 +105,35 @@ function ClientVersionsTable({
         updatedMap.has(version.id) ? updatedMap.get(version.id)! : version
       );
 
-      // Update state immediately with new version data
+      // Compute count deltas
+      let latestDelta = 0;
+      let enforcedDelta = 0;
+      for (const updated of updatedVersions) {
+        const original = currentData.versions.find((v) => v.id === updated.id);
+        if (!original) continue;
+        if (original.isLatest !== updated.isLatest) {
+          latestDelta += updated.isLatest ? 1 : -1;
+        }
+        if (original.isEnforced !== updated.isEnforced) {
+          enforcedDelta += updated.isEnforced ? 1 : -1;
+        }
+      }
+
       setData({
         ...currentData,
         versions: updatedVersionsList,
+        latestCount: currentData.latestCount + latestDelta,
+        enforcedCount: currentData.enforcedCount + enforcedDelta,
       });
-
-      // Then refresh to get accurate counts from backend
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   /**
-   * Add new version to state
+   * Add new version to state with local count computation
    */
   const addVersion = useCallback(
-    async (newVersion: ClientVersion) => {
+    (newVersion: ClientVersion) => {
       const currentData = data;
       if (!currentData) return;
 
@@ -134,18 +144,15 @@ function ClientVersionsTable({
           : v
       );
 
-      // Add version to list
       setData({
         ...currentData,
         versions: [newVersion, ...updatedVersions],
         total: currentData.total + 1,
         latestCount: currentData.latestCount + 1,
+        enforcedCount: currentData.enforcedCount + (newVersion.isEnforced ? 1 : 0),
       });
-
-      // Refresh to get accurate counts from backend
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   /**

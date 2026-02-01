@@ -12,7 +12,7 @@ import { X, CheckCircle2, XCircle } from "lucide-react";
 interface MobileStatusesListProps {
   statuses: RequestStatusResponse[];
   refetch: () => void;
-  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => Promise<void>;
+  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => void;
 }
 
 /**

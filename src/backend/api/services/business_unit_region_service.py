@@ -45,14 +45,14 @@ class BusinessUnitRegionService:
             Tuple of (list of regions, total, active_count, inactive_count)
         """
         # Build main query
-        stmt = select(BusinessUnitRegion).where(not BusinessUnitRegion.is_deleted)
+        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.is_deleted.is_(False))
 
         # Build total count query - ALWAYS get total counts from database (no filters)
         total_count_stmt = select(
             func.count(BusinessUnitRegion.id).label("total"),
             func.count(case((BusinessUnitRegion.is_active.is_(True), 1))).label("active_count"),
             func.count(case((BusinessUnitRegion.is_active.is_(False), 1))).label("inactive_count"),
-        ).where(not BusinessUnitRegion.is_deleted)
+        ).where(BusinessUnitRegion.is_deleted.is_(False))
 
         # Get total counts (unfiltered)
         total_count_result = await db.execute(total_count_stmt)

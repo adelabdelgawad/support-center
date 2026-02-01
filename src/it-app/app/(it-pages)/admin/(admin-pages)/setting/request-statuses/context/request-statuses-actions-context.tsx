@@ -10,12 +10,12 @@ import {
 import { toast } from 'sonner';
 
 interface RequestStatusesActionsContextType {
-  updateStatusesOptimistic: (statuses: RequestStatusResponse[]) => Promise<void>;
-  addStatusToCache: (status: RequestStatusResponse) => Promise<void>;
-  handleToggleStatus: (id: string) => Promise<void>;
-  handleBulkUpdate: (ids: string[], isActive: boolean) => Promise<void>;
-  handleDelete: (id: string) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateStatusesOptimistic: (statuses: RequestStatusResponse[]) => void;
+  addStatusToCache: (status: RequestStatusResponse) => void;
+  handleToggleStatus: (id: string) => void;
+  handleBulkUpdate: (ids: string[], isActive: boolean) => void;
+  handleDelete: (id: string) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number; readonlyCount: number };
 }
 
@@ -32,9 +32,9 @@ export function useRequestStatusesActions() {
 interface RequestStatusesActionsProviderProps {
   children: React.ReactNode;
   initialData: RequestStatusListResponse;
-  onUpdateOptimistic: (statuses: RequestStatusResponse[]) => Promise<void>;
-  onAddToCache: (status: RequestStatusResponse) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (statuses: RequestStatusResponse[]) => void;
+  onAddToCache: (status: RequestStatusResponse) => void;
+  onRefetch: () => void;
 }
 
 export function RequestStatusesActionsProvider({

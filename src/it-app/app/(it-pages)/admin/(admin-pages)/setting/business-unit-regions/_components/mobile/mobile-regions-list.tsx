@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 interface MobileRegionsListProps {
   regions: BusinessUnitRegionResponse[];
   refetch: () => void;
-  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => Promise<void>;
+  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => void;
 }
 
 /**

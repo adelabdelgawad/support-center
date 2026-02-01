@@ -26,8 +26,8 @@ interface SystemMessagesTableBodyProps {
   total: number;
   isLoading?: boolean;
   refetch: () => void;
-  updateMessages: (updatedMessages: SystemMessageResponse[]) => Promise<void>;
-  addMessage?: (newMessage: SystemMessageResponse) => Promise<void>;
+  updateMessages: (updatedMessages: SystemMessageResponse[]) => void;
+  addMessage?: (newMessage: SystemMessageResponse) => void;
   activeCount: number;
   inactiveCount: number;
 }

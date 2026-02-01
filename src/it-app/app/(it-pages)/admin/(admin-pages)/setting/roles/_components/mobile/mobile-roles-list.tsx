@@ -14,7 +14,7 @@ import type { AuthUserResponse } from "@/types/users";
 interface MobileRolesListProps {
   roles: RoleResponse[];
   refetch: () => void;
-  updateRoles: (updatedRoles: RoleResponse[]) => Promise<void>;
+  updateRoles: (updatedRoles: RoleResponse[]) => void;
   preloadedPages: PageResponse[];
   preloadedUsers: AuthUserResponse[];
 }

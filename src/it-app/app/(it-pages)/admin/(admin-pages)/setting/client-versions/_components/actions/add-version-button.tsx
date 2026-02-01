@@ -10,7 +10,7 @@ import type { ClientVersion, ClientVersionCreate } from "@/types/client-versions
 
 interface AddVersionButtonProps {
   onAdd: () => void;
-  addVersion?: (newVersion: ClientVersion) => Promise<void>;
+  addVersion?: (newVersion: ClientVersion) => void;
 }
 
 export const AddVersionButton: React.FC<AddVersionButtonProps> = ({ onAdd, addVersion }) => {

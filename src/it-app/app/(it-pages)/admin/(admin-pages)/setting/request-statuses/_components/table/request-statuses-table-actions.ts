@@ -4,7 +4,7 @@ import { useRequestStatusesActions } from "../../context/request-statuses-action
 
 interface UseRequestStatusesTableActionsProps {
   statuses: RequestStatusResponse[];
-  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => Promise<void>;
+  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => void;
   refetch: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: (ids?: number[]) => void;

@@ -25,7 +25,7 @@ interface RequestStatusesTableBodyProps {
   total: number;
   isLoading?: boolean;
   refetch: () => void;
-  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => Promise<void>;
+  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => void;
   activeCount: number;
   inactiveCount: number;
   readonlyCount: number;

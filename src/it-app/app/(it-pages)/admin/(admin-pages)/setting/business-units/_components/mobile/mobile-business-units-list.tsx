@@ -15,7 +15,7 @@ interface MobileBusinessUnitsListProps {
   businessUnits: BusinessUnitResponse[];
   regions: BusinessUnitRegionResponse[];
   refetch: () => void;
-  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => Promise<void>;
+  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => void;
 }
 
 /**

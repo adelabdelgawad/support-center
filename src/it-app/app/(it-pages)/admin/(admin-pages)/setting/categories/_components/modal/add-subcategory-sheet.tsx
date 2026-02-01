@@ -26,13 +26,13 @@ import { Loader2, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import type { SubcategoryCreateRequest } from "@/types/categories";
+import type { SubcategoryCreateRequest, SubcategoryResponse } from "@/types/categories";
 
 interface AddSubcategorySheetProps {
   open?: boolean;
   categoryId: number;
   onOpenChange: (open: boolean) => void;
-  onAdd?: () => void;
+  onAdd?: (categoryId: number, newSubcategory: SubcategoryResponse) => void;
 }
 
 const createSubcategorySchema = z.object({
@@ -100,11 +100,11 @@ export function AddSubcategorySheet({
         isActive: true,
       };
 
-      await createSubcategory(subcategoryData);
+      const created = await createSubcategory(subcategoryData);
       toastSuccess("Subcategory created successfully");
 
       if (onAdd) {
-        onAdd();
+        onAdd(categoryId, created);
       }
 
       onOpenChange(false);

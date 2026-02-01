@@ -8,8 +8,6 @@ import type { BusinessUnitRegionResponse } from '@/types/business-unit-regions';
 import { useCallback, useState, useEffect } from 'react';
 import { BusinessUnitsActionsProvider } from '../../context/business-units-actions-context';
 import { MobileBusinessUnitsView } from '../mobile';
-import { getBusinessUnitCounts } from '@/lib/api/business-units';
-
 interface BusinessUnitsTableProps {
   initialData: BusinessUnitListResponse;
   regions: BusinessUnitRegionResponse[];
@@ -33,11 +31,10 @@ function BusinessUnitsTable({ initialData, regions }: BusinessUnitsTableProps) {
   const totalItems = data.total;
 
   /**
-   * Update business units with backend-returned data
-   * Uses the returned record from API and fetches fresh counts from backend
+   * Update business units with backend-returned data and compute counts locally
    */
   const updateBusinessUnitsOptimistic = useCallback(
-    async (updatedUnits: BusinessUnitResponse[]) => {
+    (updatedUnits: BusinessUnitResponse[]) => {
       const updatedMap = new Map(updatedUnits.map((u) => [u.id, u]));
 
       // Update only the affected rows with backend-returned data
@@ -45,55 +42,37 @@ function BusinessUnitsTable({ initialData, regions }: BusinessUnitsTableProps) {
         updatedMap.has(unit.id) ? updatedMap.get(unit.id)! : unit
       );
 
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getBusinessUnitCounts();
-        const newData: BusinessUnitListResponse = {
-          ...data,
-          businessUnits: updatedUnitsList,
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, still update the rows but keep existing counts
-        const newData: BusinessUnitListResponse = {
-          ...data,
-          businessUnits: updatedUnitsList,
-        };
-        setData(newData);
+      // Compute count deltas from changed units
+      let activeCountDelta = 0;
+      for (const updated of updatedUnits) {
+        const original = data.businessUnits.find((u) => u.id === updated.id);
+        if (original && original.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
       }
+
+      setData({
+        ...data,
+        businessUnits: updatedUnitsList,
+        activeCount: data.activeCount + activeCountDelta,
+        inactiveCount: data.inactiveCount - activeCountDelta,
+      });
     },
     [data]
   );
 
   /**
    * Add new business unit to cache with backend-returned data
-   * Fetches fresh counts from backend
    */
   const addBusinessUnitToCache = useCallback(
-    async (newUnit: BusinessUnitResponse) => {
-      // Fetch fresh counts from backend (no frontend calculation)
-      try {
-        const counts = await getBusinessUnitCounts();
-        const newData: BusinessUnitListResponse = {
-          ...data,
-          businessUnits: [newUnit, ...data.businessUnits],
-          total: counts.total,
-          activeCount: counts.activeCount,
-          inactiveCount: counts.inactiveCount,
-        };
-        setData(newData);
-      } catch {
-        // If counts fetch fails, add the unit but keep existing counts
-        const newData: BusinessUnitListResponse = {
-          ...data,
-          businessUnits: [newUnit, ...data.businessUnits],
-          total: data.total + 1,
-        };
-        setData(newData);
-      }
+    (newUnit: BusinessUnitResponse) => {
+      setData({
+        ...data,
+        businessUnits: [newUnit, ...data.businessUnits],
+        total: data.total + 1,
+        activeCount: data.activeCount + (newUnit.isActive ? 1 : 0),
+        inactiveCount: data.inactiveCount + (newUnit.isActive ? 0 : 1),
+      });
     },
     [data]
   );

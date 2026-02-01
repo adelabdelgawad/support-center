@@ -1568,6 +1568,7 @@ class DatabaseSetup:
                 "description": "Request is on hold waiting for something",
                 "color": "yellow",
                 "count_as_solved": False,
+                "visible_on_requester_page": False,
             },
             {
                 "name": "Solved",
@@ -1586,6 +1587,7 @@ class DatabaseSetup:
                 "description": "Request is archived",
                 "color": "gray",
                 "count_as_solved": False,
+                "visible_on_requester_page": False,
             },
             {
                 "name": "Canceled",
@@ -1595,25 +1597,7 @@ class DatabaseSetup:
                 "description": "Request is canceled",
                 "color": "red",
                 "count_as_solved": False,
-            },
-            # New statuses for workflow
-            {
-                "name": "pending-subtask",
-                "name_en": "Pending Sub-Task",
-                "name_ar": "في انتظار مهمة فرعية",
-                "id": 6,
-                "description": "Request is waiting for a sub-task to be completed",
-                "color": "orange",
-                "count_as_solved": False,
-            },
-            {
-                "name": "pending-requester-response",
-                "name_en": "Pending Requester Response",
-                "name_ar": "في انتظار رد مقدم الطلب",
-                "id": 7,
-                "description": "Request is waiting for requester to respond",
-                "color": "purple",
-                "count_as_solved": False,
+                "visible_on_requester_page": False,
             },
             {
                 "name": "in-progress",
@@ -1655,6 +1639,9 @@ class DatabaseSetup:
                             "count_as_solved", False
                         )
                         updated = True
+                    if "visible_on_requester_page" in status_data and existing_status.visible_on_requester_page != status_data["visible_on_requester_page"]:
+                        existing_status.visible_on_requester_page = status_data["visible_on_requester_page"]
+                        updated = True
 
                     if updated:
                         logger.info(
@@ -1675,6 +1662,7 @@ class DatabaseSetup:
                     description=status_data.get("description"),
                     color=status_data.get("color"),
                     count_as_solved=status_data.get("count_as_solved", False),
+                    visible_on_requester_page=status_data.get("visible_on_requester_page", True),
                     readonly=True,  # All default statuses are readonly
                     is_active=True,  # All default statuses are active
                     created_by=admin_user.id,
@@ -1830,14 +1818,6 @@ class DatabaseSetup:
             "Solved": {"en": "Solved", "ar": "محلول"},
             "Archived": {"en": "Archived", "ar": "مؤرشف"},
             "Canceled": {"en": "Canceled", "ar": "ملغي"},
-            "pending-subtask": {
-                "en": "Pending Sub-Task",
-                "ar": "في انتظار مهمة فرعية",
-            },
-            "pending-requester-response": {
-                "en": "Pending Requester Response",
-                "ar": "في انتظار رد مقدم الطلب",
-            },
             "in-progress": {"en": "In Progress", "ar": "قيد التنفيذ"},
         }
 

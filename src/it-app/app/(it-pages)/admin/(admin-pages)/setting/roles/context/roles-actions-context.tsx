@@ -4,14 +4,14 @@ import { createContext, useContext, ReactNode } from "react";
 import type { RoleResponse } from "@/types/roles";
 
 export interface RolesActionsContextType {
-  handleToggleStatus: (roleId: string, newStatus: boolean) => Promise<void>;
-  handleUpdateRole: (roleId: string, updatedRole: RoleResponse) => Promise<void>;
+  handleToggleStatus: (roleId: string, newStatus: boolean) => void;
+  handleUpdateRole: (roleId: string, updatedRole: RoleResponse) => void;
   mutate: () => void;
-  updateCounts: () => Promise<void>;
+  updateCounts: () => void;
   markUpdating: (ids: string[]) => void;
   clearUpdating: () => void;
-  updateRoles: (updatedRoles: RoleResponse[]) => Promise<void>;
-  addRole: (newRole: RoleResponse) => Promise<void>;
+  updateRoles: (updatedRoles: RoleResponse[]) => void;
+  addRole: (newRole: RoleResponse) => void;
 }
 
 // Note: roleId is the role's UUID (role.id field)

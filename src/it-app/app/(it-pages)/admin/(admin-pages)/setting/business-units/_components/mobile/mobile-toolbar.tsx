@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 interface MobileToolbarProps {
   onRefresh: () => void;
-  addBusinessUnit?: (newUnit: BusinessUnitResponse) => Promise<void>;
+  addBusinessUnit?: (newUnit: BusinessUnitResponse) => void;
   regions: BusinessUnitRegionResponse[];
   isRefreshing?: boolean;
 }

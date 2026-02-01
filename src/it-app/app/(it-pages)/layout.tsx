@@ -29,7 +29,7 @@ import {
   getNavigationCookieName,
   parseNavigationCookie,
 } from "@/lib/utils/navigation-cookies";
-import { serverFetch } from "@/lib/api/server-fetch";
+import { getUserPagesCached } from "@/lib/actions/users.actions";
 import { HorizontalTopbar } from "@/components/navbar/horizontal-topbar";
 
 import { cookies, headers } from "next/headers";
@@ -76,11 +76,9 @@ async function getCachedNavigation(userId: string): Promise<Page[]> {
     }
 
     // No cache - fetch from backend (first visit or cache expired)
-    // This blocks initial render but ensures navbar is visible
+    // Uses React cache() so nested layouts calling the same function are deduplicated
     try {
-      const pages = await serverFetch<Page[]>(`/users/${userId}/pages`, {
-        cache: 'no-store', // Don't cache since we have our own cookie cache
-      });
+      const pages = await getUserPagesCached(userId);
       return pages || [];
     } catch (fetchError) {
       // If fetch fails (e.g., no auth), return empty - SWR will retry client-side

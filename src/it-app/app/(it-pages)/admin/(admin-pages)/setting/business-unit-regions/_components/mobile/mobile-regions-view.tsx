@@ -15,7 +15,7 @@ interface MobileRegionsViewProps {
   activeCount: number;
   inactiveCount: number;
   refetch: () => void;
-  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => Promise<void>;
+  updateRegions: (updatedRegions: BusinessUnitRegionResponse[]) => void;
   isValidating?: boolean;
 }
 

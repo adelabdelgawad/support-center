@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface MobileToolbarProps {
   onRefresh: () => void;
-  addType: (newType: RequestType) => Promise<void>;
+  addType: (newType: RequestType) => void;
   isRefreshing?: boolean;
 }
 

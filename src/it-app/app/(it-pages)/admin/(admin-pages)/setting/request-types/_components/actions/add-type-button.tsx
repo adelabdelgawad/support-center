@@ -8,7 +8,7 @@ import type { RequestType } from "@/types/request-types";
 
 interface AddTypeButtonProps {
   onAdd: () => void;
-  addType?: (newType: RequestType) => Promise<void>;
+  addType?: (newType: RequestType) => void;
 }
 
 export function AddTypeButton({ onAdd, addType }: AddTypeButtonProps) {

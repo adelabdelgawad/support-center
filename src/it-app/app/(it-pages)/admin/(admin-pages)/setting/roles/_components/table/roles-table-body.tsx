@@ -22,8 +22,8 @@ interface RolesTableBodyProps {
   roles: RoleResponse[];
   page: number;
   refetch: () => void;
-  updateRoles: (updatedRoles: RoleResponse[]) => Promise<void>;
-  addRole: (newRole: RoleResponse) => Promise<void>;
+  updateRoles: (updatedRoles: RoleResponse[]) => void;
+  addRole: (newRole: RoleResponse) => void;
   preloadedPages: PageResponse[];
   preloadedUsers: AuthUserResponse[];
   isValidating?: boolean;
@@ -359,9 +359,9 @@ export function RolesTableBody({
     await updateRoles([updatedRole]);
   };
 
-  // Update counts - refetch to get fresh data
+  // Update counts - no-op since counts are computed locally in updateRoles
   const updateCounts = async () => {
-    refetch();
+    // Counts are recomputed locally when roles are updated
   };
 
   // Create actions object for context provider

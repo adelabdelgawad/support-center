@@ -118,3 +118,6 @@ dependencies = [
 dev = [
     "aiosqlite>=0.22.0",
 ]
+
+[tool.ruff.lint]
+ignore = ["E712"]

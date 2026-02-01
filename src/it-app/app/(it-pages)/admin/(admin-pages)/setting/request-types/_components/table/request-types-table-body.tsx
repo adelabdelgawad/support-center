@@ -25,7 +25,7 @@ interface RequestTypesTableBodyProps {
   total: number;
   isLoading?: boolean;
   refetch: () => void;
-  updateTypes: (updatedTypes: RequestType[]) => Promise<void>;
+  updateTypes: (updatedTypes: RequestType[]) => void;
   activeCount: number;
   inactiveCount: number;
 }

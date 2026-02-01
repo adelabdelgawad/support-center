@@ -10,12 +10,12 @@ import {
 import { toast } from 'sonner';
 
 interface RequestTypesActionsContextType {
-  updateTypesOptimistic: (types: RequestType[]) => Promise<void>;
-  addTypeToCache: (type: RequestType) => Promise<void>;
-  handleToggleStatus: (id: string) => Promise<void>;
-  handleBulkUpdate: (ids: string[], isActive: boolean) => Promise<void>;
-  handleDelete: (id: string) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateTypesOptimistic: (types: RequestType[]) => void;
+  addTypeToCache: (type: RequestType) => void;
+  handleToggleStatus: (id: string) => void;
+  handleBulkUpdate: (ids: string[], isActive: boolean) => void;
+  handleDelete: (id: string) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number };
 }
 
@@ -32,9 +32,9 @@ export function useRequestTypesActions() {
 interface RequestTypesActionsProviderProps {
   children: React.ReactNode;
   initialData: RequestTypeListResponse;
-  onUpdateOptimistic: (types: RequestType[]) => Promise<void>;
-  onAddToCache: (type: RequestType) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (types: RequestType[]) => void;
+  onAddToCache: (type: RequestType) => void;
+  onRefetch: () => void;
 }
 
 export function RequestTypesActionsProvider({

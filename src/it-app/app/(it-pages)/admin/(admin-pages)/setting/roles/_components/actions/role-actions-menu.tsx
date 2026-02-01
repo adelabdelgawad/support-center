@@ -142,46 +142,50 @@ export function RoleActions({
       )}
 
       {/* Edit Pages Sheet */}
-      <EditRolePagesSheet
-        role={role}
-        currentPages={currentRolePages}
-        availablePages={preloadedPages}
-        open={editPagesOpen}
-        onOpenChange={(open) => {
-          setEditPagesOpen(open);
-          if (!open) {
-            setTimeout(() => {
-              if (typeof document !== 'undefined') {
-                (document.activeElement as HTMLElement | null)?.blur();
-              }
-            }, 100);
-          }
-        }}
-        onMutate={async (updatedRole: RoleResponse) => {
-          await handleUpdateRole(role.id, updatedRole);
-        }}
-      />
+      {editPagesOpen && (
+        <EditRolePagesSheet
+          role={role}
+          currentPages={currentRolePages}
+          availablePages={preloadedPages}
+          open={editPagesOpen}
+          onOpenChange={(open) => {
+            setEditPagesOpen(open);
+            if (!open) {
+              setTimeout(() => {
+                if (typeof document !== 'undefined') {
+                  (document.activeElement as HTMLElement | null)?.blur();
+                }
+              }, 100);
+            }
+          }}
+          onMutate={async (updatedRole: RoleResponse) => {
+            await handleUpdateRole(role.id, updatedRole);
+          }}
+        />
+      )}
 
       {/* Edit Users Sheet */}
-      <EditRoleUsersSheet
-        role={role}
-        currentUsers={currentRoleUsers}
-        availableUsers={preloadedUsers}
-        open={editUsersOpen}
-        onOpenChange={(open) => {
-          setEditUsersOpen(open);
-          if (!open) {
-            setTimeout(() => {
-              if (typeof document !== 'undefined') {
-                (document.activeElement as HTMLElement | null)?.blur();
-              }
-            }, 100);
-          }
-        }}
-        onMutate={async (updatedRole: RoleResponse) => {
-          await handleUpdateRole(role.id, updatedRole);
-        }}
-      />
+      {editUsersOpen && (
+        <EditRoleUsersSheet
+          role={role}
+          currentUsers={currentRoleUsers}
+          availableUsers={preloadedUsers}
+          open={editUsersOpen}
+          onOpenChange={(open) => {
+            setEditUsersOpen(open);
+            if (!open) {
+              setTimeout(() => {
+                if (typeof document !== 'undefined') {
+                  (document.activeElement as HTMLElement | null)?.blur();
+                }
+              }, 100);
+            }
+          }}
+          onMutate={async (updatedRole: RoleResponse) => {
+            await handleUpdateRole(role.id, updatedRole);
+          }}
+        />
+      )}
     </>
   );
 }

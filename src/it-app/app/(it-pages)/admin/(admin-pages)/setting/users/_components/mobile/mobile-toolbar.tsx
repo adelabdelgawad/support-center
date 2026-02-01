@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface MobileToolbarProps {
   onRefresh: () => void;
-  addUser: (newUser: UserWithRolesResponse) => Promise<void>;
+  addUser: (newUser: UserWithRolesResponse) => void;
   isRefreshing?: boolean;
 }
 

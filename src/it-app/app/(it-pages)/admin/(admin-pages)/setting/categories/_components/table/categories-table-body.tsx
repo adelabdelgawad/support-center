@@ -24,8 +24,8 @@ import type { CategoryResponse, SubcategoryResponse } from "@/types/categories";
 interface CategoriesTableBodyProps {
   categories: CategoryResponse[];
   refetch: () => void;
-  updateCategories: (updatedCategories: CategoryResponse[]) => Promise<void>;
-  addCategory: (newCategory: CategoryResponse) => Promise<void>;
+  updateCategories: (updatedCategories: CategoryResponse[]) => void;
+  addCategory: (newCategory: CategoryResponse) => void;
   isValidating?: boolean;
   activeCount: number;
   inactiveCount: number;

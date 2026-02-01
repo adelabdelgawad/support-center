@@ -8,7 +8,7 @@ import type { SystemMessageResponse } from "@/types/system-messages";
 
 interface AddMessageButtonProps {
   onAdd?: () => void;
-  addMessage?: (newMessage: SystemMessageResponse) => Promise<void>;
+  addMessage?: (newMessage: SystemMessageResponse) => void;
 }
 
 export function AddMessageButton({ onAdd, addMessage }: AddMessageButtonProps) {

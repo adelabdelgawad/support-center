@@ -20,8 +20,8 @@ interface ClientVersionsActionsContextType {
   onSetLatest: (versionId: number) => Promise<ActionResult>;
   onToggleEnforcement: (versionId: number, isEnforced: boolean) => Promise<ActionResult>;
   onUpdateVersion: (versionId: number, updatedVersion: ClientVersionUpdate) => Promise<ActionResult>;
-  updateVersions: (updatedVersions: ClientVersion[]) => Promise<void>;
-  addVersion: (newVersion: ClientVersion) => Promise<void>;
+  updateVersions: (updatedVersions: ClientVersion[]) => void;
+  addVersion: (newVersion: ClientVersion) => void;
   onDeleteVersion: (versionId: number) => Promise<ActionResult>;
   onRefreshVersions: () => Promise<ActionResult>;
   refetch: () => void;

@@ -13,8 +13,8 @@ interface ClientVersionsTableBodyProps {
   page: number;
   limit: number;
   refetch: () => void;
-  updateVersions: (updatedVersions: ClientVersion[]) => Promise<void>;
-  addVersion: (newVersion: ClientVersion) => Promise<void>;
+  updateVersions: (updatedVersions: ClientVersion[]) => void;
+  addVersion: (newVersion: ClientVersion) => void;
   isValidating?: boolean;
   totalCount: number;
 }

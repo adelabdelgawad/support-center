@@ -168,9 +168,8 @@ function CategoriesTable({ initialData }: CategoriesTableProps) {
       };
 
       setData(newData);
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   /**
@@ -222,11 +221,11 @@ function CategoriesTable({ initialData }: CategoriesTableProps) {
   );
 
   /**
-   * Update counts - refetch to get fresh data
+   * Update counts - no-op since counts are computed locally in updateCategories
    */
   const updateCounts = useCallback(async () => {
-    await refresh();
-  }, [refresh]);
+    // Counts are already recomputed locally when categories are updated
+  }, []);
 
   /**
    * Load subcategories for a specific category

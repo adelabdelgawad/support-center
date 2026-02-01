@@ -16,8 +16,8 @@ interface MobileRequestTypesViewProps {
   activeCount: number;
   inactiveCount: number;
   refetch: () => void;
-  updateTypes: (updatedTypes: RequestType[]) => Promise<void>;
-  addType: (newType: RequestType) => Promise<void>;
+  updateTypes: (updatedTypes: RequestType[]) => void;
+  addType: (newType: RequestType) => void;
   isValidating?: boolean;
 }
 

@@ -21,8 +21,8 @@ interface MobileRolesViewProps {
   activeCount: number;
   inactiveCount: number;
   refetch: () => void;
-  updateRoles: (updatedRoles: RoleResponse[]) => Promise<void>;
-  addRole: (newRole: RoleResponse) => Promise<void>;
+  updateRoles: (updatedRoles: RoleResponse[]) => void;
+  addRole: (newRole: RoleResponse) => void;
   preloadedPages: PageResponse[];
   preloadedUsers: AuthUserResponse[];
   isValidating?: boolean;

@@ -4,7 +4,7 @@ import { useRequestTypesActions } from "../../context/request-types-actions-cont
 
 interface UseRequestTypesTableActionsProps {
   types: RequestType[];
-  updateTypes: (updatedTypes: RequestType[]) => Promise<void>;
+  updateTypes: (updatedTypes: RequestType[]) => void;
   refetch: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: (ids?: number[]) => void;

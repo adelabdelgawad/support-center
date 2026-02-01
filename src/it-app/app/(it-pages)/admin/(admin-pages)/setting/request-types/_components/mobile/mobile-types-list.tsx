@@ -12,7 +12,7 @@ import { X, CheckCircle2, XCircle } from "lucide-react";
 interface MobileTypesListProps {
   types: RequestType[];
   refetch: () => void;
-  updateTypes: (updatedTypes: RequestType[]) => Promise<void>;
+  updateTypes: (updatedTypes: RequestType[]) => void;
 }
 
 /**

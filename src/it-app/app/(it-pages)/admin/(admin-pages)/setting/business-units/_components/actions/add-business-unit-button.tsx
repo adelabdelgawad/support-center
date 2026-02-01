@@ -9,7 +9,7 @@ import { AddBusinessUnitSheet } from "../modal";
 
 interface AddBusinessUnitButtonProps {
   onAdd: () => void;
-  addBusinessUnit?: (newUnit: BusinessUnitResponse) => Promise<void>;
+  addBusinessUnit?: (newUnit: BusinessUnitResponse) => void;
   regions: BusinessUnitRegionResponse[];
 }
 

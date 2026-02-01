@@ -26,8 +26,8 @@ interface UsersActionsContextType {
     title?: string | null;
     roleIds: string[];
   }) => Promise<ActionResult>;
-  updateUsers: (updatedUsers: UserWithRolesResponse[]) => Promise<void>;
-  addUser: (newUser: UserWithRolesResponse) => Promise<void>;
+  updateUsers: (updatedUsers: UserWithRolesResponse[]) => void;
+  addUser: (newUser: UserWithRolesResponse) => void;
   onBulkUpdateStatus: (userIds: number[], isActive: boolean) => Promise<ActionResult>;
   onBulkUpdateTechnician: (userIds: number[], isTechnician: boolean) => Promise<ActionResult>;
   onRefreshUsers: () => Promise<ActionResult>;

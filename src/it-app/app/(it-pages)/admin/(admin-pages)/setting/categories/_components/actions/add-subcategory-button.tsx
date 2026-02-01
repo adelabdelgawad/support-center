@@ -5,9 +5,11 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { AddSubcategorySheet } from "../modal";
 
+import type { SubcategoryResponse } from "@/types/categories";
+
 interface AddSubcategoryButtonProps {
   categoryId: number;
-  onAdd?: () => void;
+  onAdd?: (categoryId: number, newSubcategory: SubcategoryResponse) => void;
 }
 
 export function AddSubcategoryButton({ categoryId, onAdd }: AddSubcategoryButtonProps) {

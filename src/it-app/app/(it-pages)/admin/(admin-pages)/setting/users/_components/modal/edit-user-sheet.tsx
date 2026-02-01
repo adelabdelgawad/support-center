@@ -174,6 +174,8 @@ export function EditUserSheet({
       const rolesChanged = !areRolesEqual(selectedRoles, initialValues.current.roles);
       const statusChanged = isActive !== initialValues.current.isActive;
 
+      let updatedUser: UserWithRolesResponse | null = null;
+
       // Update roles if changed
       if (rolesChanged) {
         const originalRoleIds = initialValues.current.roles.map((role: OptionType) => role.value);
@@ -185,26 +187,27 @@ export function EditUserSheet({
         });
       }
 
-      // Toggle status if changed
+      // Toggle status if changed — use the response which has the latest user state
       if (statusChanged) {
-        await toggleUserStatus(user.id, isActive);
+        updatedUser = await toggleUserStatus(user.id, isActive);
       }
 
       toast.success("User updated successfully");
       setIsDirty(false);
       onOpenChange(false);
 
-      // Create updated user object with new roles and status
-      const updatedRoleIds = selectedRoles.map((role: OptionType) => role.value);
-      const updatedRoleObjects = (roles || []).filter(r => updatedRoleIds.includes(r.id));
-      const updatedUser: UserWithRolesResponse = {
-        ...user,
-        isActive: isActive,
-        roleIds: updatedRoleIds,
-        roles: updatedRoleObjects.map(r => ({ id: String(r.id) || '0', name: r.name })),
-      };
+      // Build updated user from API response or local state
+      if (!updatedUser) {
+        const updatedRoleIds = selectedRoles.map((role: OptionType) => role.value);
+        const updatedRoleObjects = (roles || []).filter(r => updatedRoleIds.includes(r.id));
+        updatedUser = {
+          ...user,
+          isActive: isActive,
+          roleIds: updatedRoleIds,
+          roles: updatedRoleObjects.map(r => ({ id: String(r.id) || '0', name: r.name })),
+        };
+      }
 
-      // If onUserUpdated is provided, use it instead of onSuccess
       if (onUserUpdated) {
         onUserUpdated(updatedUser);
       } else {

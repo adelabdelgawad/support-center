@@ -105,14 +105,21 @@ function RolesTable({
         updatedMap.has(role.id) ? updatedMap.get(role.id)! : role
       );
 
-      // Create new data object with updated roles
-      const newData: SettingRolesResponse = {
+      // Compute count deltas from changed roles
+      let activeCountDelta = 0;
+      for (const updated of updatedRoles) {
+        const original = currentData.roles.find((r) => r.id === updated.id);
+        if (original && original.isActive !== updated.isActive) {
+          activeCountDelta += updated.isActive ? 1 : -1;
+        }
+      }
+
+      setData({
         ...currentData,
         roles: updatedRolesList,
-      };
-
-      // Update state without background refetch - API already returned fresh data
-      setData(newData);
+        activeCount: currentData.activeCount + activeCountDelta,
+        inactiveCount: currentData.inactiveCount - activeCountDelta,
+      });
     },
     [data]
   );
@@ -138,12 +145,9 @@ function RolesTable({
           : currentData.inactiveCount,
       };
 
-      // Update state
       setData(newData);
-      // Refresh to get accurate pagination from backend
-      await refresh();
     },
-    [data, refresh]
+    [data]
   );
 
   // Error state with retry button

@@ -8,7 +8,7 @@ import type { RequestStatusResponse } from "@/types/request-statuses";
 
 interface AddStatusButtonProps {
   onAdd: () => void;
-  addStatus?: (newStatus: RequestStatusResponse) => Promise<void>;
+  addStatus?: (newStatus: RequestStatusResponse) => void;
 }
 
 export function AddStatusButton({ onAdd, addStatus }: AddStatusButtonProps) {

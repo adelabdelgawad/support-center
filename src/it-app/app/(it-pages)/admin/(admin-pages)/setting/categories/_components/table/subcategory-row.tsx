@@ -25,8 +25,8 @@ export function SubcategoryRow({
 }: SubcategoryRowProps) {
   const [updatingIds, setUpdatingIds] = useState<Set<number>>(new Set());
 
-  // Use context's toggle handler for optimistic updates
-  const { handleToggleSubcategoryStatus } = useCategoriesActions();
+  // Use context's handlers for optimistic updates
+  const { handleToggleSubcategoryStatus, handleAddSubcategory } = useCategoriesActions();
 
   return (
     <tr>
@@ -40,7 +40,7 @@ export function SubcategoryRow({
                 Subcategories for &ldquo;{categoryName}&rdquo;
               </span>
             </div>
-            <AddSubcategoryButton categoryId={categoryId} onAdd={onRefresh} />
+            <AddSubcategoryButton categoryId={categoryId} onAdd={handleAddSubcategory} />
           </div>
 
           {/* Subcategories Table or Empty State */}

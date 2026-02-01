@@ -218,6 +218,13 @@ class BusinessUnitListResponse(HTTPSchemaModel):
     inactive_count: int
 
 
+class BusinessUnitCountsResponse(HTTPSchemaModel):
+    """Business unit count statistics."""
+    total: int
+    active_count: int
+    inactive_count: int
+
+
 class BulkBusinessUnitStatusUpdate(HTTPSchemaModel):
     """Bulk status update request."""
     business_unit_ids: List[int]

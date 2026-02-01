@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from "react";
 import type { DateRangePreset } from "@/types/reports";
 
 interface ReportFiltersState {
@@ -42,23 +42,26 @@ export function ReportsFilterProvider({ children }: { children: ReactNode }) {
   const [filters, setFilters] = useState<ReportFiltersState>({});
   const [exportInfo, setExportInfo] = useState<ExportInfo | null>(null);
 
-  const handlePresetChange = (preset: DateRangePreset) => {
+  const registerExport = useCallback((info: ExportInfo) => setExportInfo(info), []);
+  const clearExport = useCallback(() => setExportInfo(null), []);
+
+  const handlePresetChange = useCallback((preset: DateRangePreset) => {
     setDatePreset(preset);
     if (preset !== "custom") {
       setCustomStartDate(undefined);
       setCustomEndDate(undefined);
     }
-  };
+  }, []);
 
-  const handleCustomRangeChange = (startDate: string, endDate: string) => {
+  const handleCustomRangeChange = useCallback((startDate: string, endDate: string) => {
     setCustomStartDate(startDate);
     setCustomEndDate(endDate);
     setDatePreset("custom");
-  };
+  }, []);
 
-  const handleFiltersChange = (newFilters: ReportFiltersState) => {
+  const handleFiltersChange = useCallback((newFilters: ReportFiltersState) => {
     setFilters(newFilters);
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -74,10 +77,10 @@ export function ReportsFilterProvider({ children }: { children: ReactNode }) {
       handleCustomRangeChange,
       handleFiltersChange,
       exportInfo,
-      registerExport: setExportInfo,
-      clearExport: () => setExportInfo(null),
+      registerExport,
+      clearExport,
     }),
-    [datePreset, customStartDate, customEndDate, filters, exportInfo]
+    [datePreset, customStartDate, customEndDate, filters, exportInfo, handlePresetChange, handleCustomRangeChange, handleFiltersChange, registerExport, clearExport]
   );
 
   return (

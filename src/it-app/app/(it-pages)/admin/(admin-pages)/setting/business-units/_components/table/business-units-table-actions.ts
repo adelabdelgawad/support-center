@@ -4,7 +4,7 @@ import { useBusinessUnitsActions } from "../../context/business-units-actions-co
 
 interface UseBusinessUnitsTableActionsProps {
   businessUnits: BusinessUnitResponse[];
-  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => Promise<void>;
+  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => void;
   refetch: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: (ids?: number[]) => void;

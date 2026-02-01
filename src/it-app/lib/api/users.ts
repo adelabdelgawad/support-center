@@ -92,9 +92,9 @@ export async function getDomainUsers(
 /**
  * Creates a new user with role assignments
  */
-export async function createUser(userData: UserCreate) {
+export async function createUser(userData: UserCreate): Promise<UserWithRolesResponse> {
   try {
-    return await apiClient.post('/api/setting/users', userData);
+    return await apiClient.post<UserWithRolesResponse>('/api/setting/users', userData);
   } catch (error) {
     throw new Error(getErrorMessage(error));
   }

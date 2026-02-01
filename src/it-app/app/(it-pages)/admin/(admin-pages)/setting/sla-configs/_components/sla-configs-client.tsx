@@ -164,10 +164,10 @@ export default function SLAConfigsClient() {
 
   const handleCreate = async (data: FormData) => {
     try {
-      await createSLAConfig(data);
+      const newConfig = await createSLAConfig(data);
+      setConfigs((prev) => [...prev, newConfig]);
       setIsCreateDialogOpen(false);
       form.reset();
-      await refresh();
     } catch (error) {
       console.error('Failed to create SLA config:', error);
     }
@@ -177,10 +177,12 @@ export default function SLAConfigsClient() {
     if (!editingConfig) return;
 
     try {
-      await updateSLAConfig(editingConfig.id, data);
+      const updatedConfig = await updateSLAConfig(editingConfig.id, data);
+      setConfigs((prev) =>
+        prev.map((c) => (c.id === editingConfig.id ? updatedConfig : c))
+      );
       setEditingConfig(null);
       form.reset();
-      await refresh();
     } catch (error) {
       console.error('Failed to update SLA config:', error);
     }
@@ -189,8 +191,8 @@ export default function SLAConfigsClient() {
   const handleDelete = async (id: number) => {
     try {
       await deleteSLAConfig(id);
+      setConfigs((prev) => prev.filter((c) => c.id !== id));
       setDeletingId(null);
-      await refresh();
     } catch (error) {
       console.error('Failed to delete SLA config:', error);
     }

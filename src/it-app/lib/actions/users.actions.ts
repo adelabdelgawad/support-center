@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { serverGet, serverPost, serverPut } from "@/lib/fetch";
 import type {
   SettingUsersResponse,
@@ -134,38 +135,24 @@ export async function toggleUserStatus(
 
 /**
  * Fetches pages associated with a user
- * @deprecated Use getUserPagesCached for layout-level fetching with Next.js cache
- *
- * Cache: NO_CACHE (deprecated function, use getUserPagesCached instead)
+ * @deprecated Use getUserPagesCached for layout-level fetching
  */
 export async function getUserPages(userId: string): Promise<Array<Page>> {
-  return serverGet<Page[]>(
-    `/users/${userId}/pages`,
-    { revalidate: 0 }
-  );
+  return getUserPagesCached(userId);
 }
 
 /**
- * Fetches pages associated with a user with Next.js cache semantics
+ * Fetches pages associated with a user, deduplicated per request via React cache().
  *
- * Uses time-based revalidation (5 minutes) and cache tags for precise invalidation.
- * This is the preferred method for layout-level data fetching as it:
- * - Reduces navigation blocking
- * - Caches per-user (scoped tags prevent cross-user cache sharing)
- * - Allows precise cache invalidation via revalidateTag()
- *
- * Cache invalidation (Next.js 16+):
- * ```typescript
- * import { revalidateTag } from 'next/cache';
- * revalidateTag(`user-pages:${userId}`, {});
- * ```
+ * Multiple layouts (parent + admin) call this for the same userId within a single
+ * server render. React cache() ensures only ONE backend call is made per request.
  */
-export async function getUserPagesCached(userId: string): Promise<Array<Page>> {
+export const getUserPagesCached = cache(async (userId: string): Promise<Array<Page>> => {
   return serverGet<Page[]>(
     `/users/${userId}/pages`,
     { revalidate: 0 }
   );
-}
+});
 
 /**
  * Updates status for multiple users (bulk operation)

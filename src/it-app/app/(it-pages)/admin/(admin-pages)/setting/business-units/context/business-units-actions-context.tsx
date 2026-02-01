@@ -10,12 +10,12 @@ import {
 import { toast } from 'sonner';
 
 interface BusinessUnitsActionsContextType {
-  updateBusinessUnitsOptimistic: (units: BusinessUnitResponse[]) => Promise<void>;
-  addBusinessUnitToCache: (unit: BusinessUnitResponse) => Promise<void>;
-  handleToggleStatus: (id: number) => Promise<void>;
-  handleBulkUpdate: (ids: number[], isActive: boolean) => Promise<void>;
-  handleDelete: (id: number) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateBusinessUnitsOptimistic: (units: BusinessUnitResponse[]) => void;
+  addBusinessUnitToCache: (unit: BusinessUnitResponse) => void;
+  handleToggleStatus: (id: number) => void;
+  handleBulkUpdate: (ids: number[], isActive: boolean) => void;
+  handleDelete: (id: number) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number };
 }
 
@@ -32,9 +32,9 @@ export function useBusinessUnitsActions() {
 interface BusinessUnitsActionsProviderProps {
   children: React.ReactNode;
   initialData: BusinessUnitListResponse;
-  onUpdateOptimistic: (units: BusinessUnitResponse[]) => Promise<void>;
-  onAddToCache: (unit: BusinessUnitResponse) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (units: BusinessUnitResponse[]) => void;
+  onAddToCache: (unit: BusinessUnitResponse) => void;
+  onRefetch: () => void;
 }
 
 export function BusinessUnitsActionsProvider({
@@ -48,7 +48,7 @@ export function BusinessUnitsActionsProvider({
     async (id: number) => {
       try {
         const updated = await toggleBusinessUnitStatus(id);
-        await onUpdateOptimistic([updated]);
+        onUpdateOptimistic([updated]);
         toast.success('Business unit status updated');
       } catch (error) {
         toast.error('Failed to update business unit status');
@@ -65,7 +65,7 @@ export function BusinessUnitsActionsProvider({
           businessUnitIds: ids,
           isActive,
         });
-        await onUpdateOptimistic(updated);
+        onUpdateOptimistic(updated);
         toast.success(`${ids.length} business units updated`);
       } catch (error) {
         toast.error('Failed to update business units');

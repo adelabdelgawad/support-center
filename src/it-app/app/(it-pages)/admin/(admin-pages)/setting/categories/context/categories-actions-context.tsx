@@ -4,23 +4,23 @@ import { createContext, useContext, ReactNode } from "react";
 import type { CategoryResponse, SubcategoryResponse } from "@/types/categories";
 
 interface CategoriesActions {
-  handleToggleStatus: (categoryId: number, newStatus: boolean) => Promise<void>;
-  handleUpdateCategory: (categoryId: number, updatedCategory: CategoryResponse) => Promise<void>;
+  handleToggleStatus: (categoryId: number, newStatus: boolean) => void;
+  handleUpdateCategory: (categoryId: number, updatedCategory: CategoryResponse) => void;
   mutate: () => void;
-  updateCounts: () => Promise<void>;
+  updateCounts: () => void;
   markUpdating: (ids: number[]) => void;
   clearUpdating: () => void;
-  updateCategories: (updatedCategories: CategoryResponse[]) => Promise<void>;
-  addCategory: (newCategory: CategoryResponse) => Promise<void>;
+  updateCategories: (updatedCategories: CategoryResponse[]) => void;
+  addCategory: (newCategory: CategoryResponse) => void;
 
   // Subcategory management
   subcategoriesMap: Map<number, SubcategoryResponse[]>;
   loadingSubcategories: Set<number>;
-  loadSubcategories: (categoryId: number) => Promise<void>;
+  loadSubcategories: (categoryId: number) => void;
   handleAddSubcategory: (categoryId: number, newSubcategory: SubcategoryResponse) => void;
   handleUpdateSubcategory: (subcategoryId: number, updatedData: SubcategoryResponse) => void;
-  handleToggleSubcategoryStatus: (subcategoryId: number, categoryId: number, newStatus: boolean) => Promise<void>;
-  refreshSubcategories: (categoryId: number) => Promise<void>;
+  handleToggleSubcategoryStatus: (subcategoryId: number, categoryId: number, newStatus: boolean) => void;
+  refreshSubcategories: (categoryId: number) => void;
 }
 
 const CategoriesActionsContext = createContext<CategoriesActions | null>(null);

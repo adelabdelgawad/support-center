@@ -9,11 +9,11 @@ import {
 import { toast } from 'sonner';
 
 interface SystemMessagesActionsContextType {
-  updateMessagesOptimistic: (messages: SystemMessageResponse[]) => Promise<void>;
-  addMessageToCache: (message: SystemMessageResponse) => Promise<void>;
-  handleToggleStatus: (id: string) => Promise<void>;
-  handleDelete: (id: string) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateMessagesOptimistic: (messages: SystemMessageResponse[]) => void;
+  addMessageToCache: (message: SystemMessageResponse) => void;
+  handleToggleStatus: (id: string) => void;
+  handleDelete: (id: string) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number };
 }
 
@@ -30,9 +30,9 @@ export function useSystemMessagesActions() {
 interface SystemMessagesActionsProviderProps {
   children: React.ReactNode;
   initialData: SystemMessageListResponse;
-  onUpdateOptimistic: (messages: SystemMessageResponse[]) => Promise<void>;
-  onAddToCache: (message: SystemMessageResponse) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (messages: SystemMessageResponse[]) => void;
+  onAddToCache: (message: SystemMessageResponse) => void;
+  onRefetch: () => void;
 }
 
 export function SystemMessagesActionsProvider({

@@ -28,8 +28,8 @@ interface MobileUsersViewProps {
   roles?: RoleResponse[];
   roleCounts?: Record<string, number>;
   refetch: () => void;
-  updateUsers: (updatedUsers: UserWithRolesResponse[]) => Promise<void>;
-  addUser: (newUser: UserWithRolesResponse) => Promise<void>;
+  updateUsers: (updatedUsers: UserWithRolesResponse[]) => void;
+  addUser: (newUser: UserWithRolesResponse) => void;
   isValidating?: boolean;
 }
 

@@ -66,7 +66,7 @@ class RequestService:
         from db import BusinessUnit
 
         stmt = select(BusinessUnit).where(
-            (BusinessUnit.network.isnot(None)) & (not BusinessUnit.is_deleted)
+            (BusinessUnit.network.isnot(None)) & (BusinessUnit.is_deleted.is_(False))
         )
         result = await db.execute(stmt)
         business_units = result.scalars().all()

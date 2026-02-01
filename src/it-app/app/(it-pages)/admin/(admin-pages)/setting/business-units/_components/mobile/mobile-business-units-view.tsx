@@ -17,8 +17,8 @@ interface MobileBusinessUnitsViewProps {
   activeCount: number;
   inactiveCount: number;
   refetch: () => void;
-  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => Promise<void>;
-  addBusinessUnit?: (newUnit: BusinessUnitResponse) => Promise<void>;
+  updateBusinessUnits: (updatedUnits: BusinessUnitResponse[]) => void;
+  addBusinessUnit?: (newUnit: BusinessUnitResponse) => void;
   isValidating?: boolean;
 }
 

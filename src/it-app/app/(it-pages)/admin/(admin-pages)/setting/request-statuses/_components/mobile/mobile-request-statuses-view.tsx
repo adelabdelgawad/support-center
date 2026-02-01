@@ -17,8 +17,8 @@ interface MobileRequestStatusesViewProps {
   inactiveCount: number;
   readonlyCount: number;
   refetch: () => void;
-  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => Promise<void>;
-  addStatus: (newStatus: RequestStatusResponse) => Promise<void>;
+  updateStatuses: (updatedStatuses: RequestStatusResponse[]) => void;
+  addStatus: (newStatus: RequestStatusResponse) => void;
   isValidating?: boolean;
 }
 

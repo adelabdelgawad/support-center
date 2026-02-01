@@ -32,7 +32,7 @@ import type { RoleCreateRequest, RoleResponse } from "@/types/roles";
 interface AddRoleSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd?: (newRole: RoleResponse) => Promise<void>;
+  onAdd?: (newRole: RoleResponse) => void;
 }
 
 export function AddRoleSheet({

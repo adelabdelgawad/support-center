@@ -10,12 +10,12 @@ import {
 import { toast } from 'sonner';
 
 interface RegionsActionsContextType {
-  updateRegionsOptimistic: (regions: BusinessUnitRegionResponse[]) => Promise<void>;
-  addRegionToCache: (region: BusinessUnitRegionResponse) => Promise<void>;
-  handleToggleStatus: (id: number) => Promise<void>;
-  handleBulkUpdate: (ids: number[], isActive: boolean) => Promise<void>;
-  handleDelete: (id: number) => Promise<void>;
-  refetch: () => Promise<void>;
+  updateRegionsOptimistic: (regions: BusinessUnitRegionResponse[]) => void;
+  addRegionToCache: (region: BusinessUnitRegionResponse) => void;
+  handleToggleStatus: (id: number) => void;
+  handleBulkUpdate: (ids: number[], isActive: boolean) => void;
+  handleDelete: (id: number) => void;
+  refetch: () => void;
   counts: { total: number; activeCount: number; inactiveCount: number };
 }
 
@@ -32,9 +32,9 @@ export function useRegionsActions() {
 interface RegionsActionsProviderProps {
   children: React.ReactNode;
   initialData: BusinessUnitRegionListResponse;
-  onUpdateOptimistic: (regions: BusinessUnitRegionResponse[]) => Promise<void>;
-  onAddToCache: (region: BusinessUnitRegionResponse) => Promise<void>;
-  onRefetch: () => Promise<void>;
+  onUpdateOptimistic: (regions: BusinessUnitRegionResponse[]) => void;
+  onAddToCache: (region: BusinessUnitRegionResponse) => void;
+  onRefetch: () => void;
 }
 
 export function RegionsActionsProvider({

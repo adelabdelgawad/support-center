@@ -10,7 +10,7 @@ import type { UserCreate, UserWithRolesResponse } from "@/types/users";
 
 interface AddUserButtonProps {
   onAdd: () => void;
-  addUser?: (newUser: UserWithRolesResponse) => Promise<void>;
+  addUser?: (newUser: UserWithRolesResponse) => void;
 }
 
 export const AddUserButton: React.FC<AddUserButtonProps> = ({ onAdd, addUser }) => {
@@ -21,8 +21,8 @@ export const AddUserButton: React.FC<AddUserButtonProps> = ({ onAdd, addUser }) 
       const createdUser = await createUser(user);
 
       // Use optimistic update if available, otherwise fallback to refetch
-      if (addUser && createdUser && typeof createdUser === 'object' && 'id' in createdUser) {
-        await addUser(createdUser as any);
+      if (addUser && createdUser) {
+        addUser(createdUser);
       } else {
         onAdd();
       }
