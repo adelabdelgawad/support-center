@@ -18,7 +18,6 @@ class ActiveDirectoryConfigBase(HTTPSchemaModel):
     use_ssl: bool = True
     ldap_username: str
     base_dn: str
-    desired_ous: Optional[List[str]] = None
 
     @field_validator("name")
     @classmethod
@@ -90,7 +89,6 @@ class ActiveDirectoryConfigUpdate(HTTPSchemaModel):
     ldap_username: Optional[str] = None
     password: Optional[str] = None  # Only include if changing password
     base_dn: Optional[str] = None
-    desired_ous: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
     @field_validator("name")
@@ -136,11 +134,12 @@ class ActiveDirectoryConfigRead(ActiveDirectoryConfigBase):
     id: UUID
     is_active: bool
     has_password: bool  # Computed field indicating password exists
+    organizational_units: List[str] = []
     created_at: datetime
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, model):
+    def from_model(cls, model, organizational_units: Optional[List[str]] = None):
         """Create from database model."""
         return cls(
             id=model.id,
@@ -151,9 +150,9 @@ class ActiveDirectoryConfigRead(ActiveDirectoryConfigBase):
             use_ssl=model.use_ssl,
             ldap_username=model.ldap_username,
             base_dn=model.base_dn,
-            desired_ous=model.desired_ous if model.desired_ous else None,
             is_active=model.is_active,
             has_password=bool(model.encrypted_password),
+            organizational_units=organizational_units or [],
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

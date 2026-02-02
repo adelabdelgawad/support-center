@@ -5447,11 +5447,6 @@ class ActiveDirectoryConfig(TableModel, table=True):
         sa_column=Column(String(500), nullable=False),
         description="Base DN for LDAP searches (e.g. 'DC=example,DC=com')",
     )
-    desired_ous: Optional[List[str]] = Field(
-        default=None,
-        sa_column=Column(JSON, nullable=True),
-        description='List of OU names to sync, or ["*"] for all OUs',
-    )
     is_active: bool = Field(
         default=False,
         sa_column=Column(Boolean, nullable=False),

@@ -168,7 +168,15 @@ export function AWSStyleConfig({ initialConfig }: AWSStyleConfigProps) {
     );
   }
 
-  const ouCount = config.desiredOus?.length ?? 0;
+  const [organizationalUnits, setOrganizationalUnits] = useState<string[]>(
+    config.organizationalUnits ?? []
+  );
+
+  const handleOUsSaved = (updatedOUs: string[]) => {
+    setOrganizationalUnits(updatedOUs);
+  };
+
+  const ouCount = organizationalUnits.length;
 
   return (
     <>
@@ -378,14 +386,14 @@ export function AWSStyleConfig({ initialConfig }: AWSStyleConfigProps) {
                     Synchronizing {ouCount} unit{ouCount !== 1 ? "s" : ""}
                   </Badge>
                 )}
-                <OUTreeDiscoveryDialog />
+                <OUTreeDiscoveryDialog onSave={handleOUsSaved} />
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            {config.desiredOus && config.desiredOus.length > 0 ? (
+            {organizationalUnits.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {config.desiredOus.map((ou) => (
+                {organizationalUnits.map((ou) => (
                   <Badge
                     key={ou}
                     variant="secondary"

@@ -54,14 +54,19 @@ class DiscoverOUsResponse(HTTPSchemaModel):
     count: int = Field(..., description="Number of OUs discovered")
 
 
+class OUSyncAddedItem(HTTPSchemaModel):
+    """Schema for an OU to add during sync."""
+    ou_name: str = Field(..., description="OU short name")
+    ou_dn: str = Field(..., description="OU distinguished name")
+
+
 class OUSyncRequest(HTTPSchemaModel):
-    """Schema for OU synchronization request."""
-    force_sync: bool = Field(default=False, description="Force full synchronization")
+    """Schema for OU bulk sync request."""
+    added: List[OUSyncAddedItem] = Field(default_factory=list, description="OUs to add")
+    removed: List[str] = Field(default_factory=list, description="OU names to remove")
 
 
 class OUSyncResponse(HTTPSchemaModel):
     """Schema for OU synchronization response."""
-    synced_count: int = Field(..., description="Number of OUs synchronized")
-    added_count: int = Field(default=0, description="Number of new OUs added")
-    updated_count: int = Field(default=0, description="Number of OUs updated")
-    message: str = Field(..., description="Sync operation message")
+    created_count: int = Field(default=0, description="Number of new OUs created")
+    deleted_count: int = Field(default=0, description="Number of OUs deleted")

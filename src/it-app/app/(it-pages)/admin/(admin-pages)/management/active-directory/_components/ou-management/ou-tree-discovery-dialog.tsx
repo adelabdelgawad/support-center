@@ -25,10 +25,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { OUTreeView } from "../ou-tree/ou-tree-view";
-import { syncOrganizationalUnits } from "@/lib/actions/organizational-units.actions";
+import { syncOrganizationalUnits, getOrganizationalUnits } from "@/lib/actions/organizational-units.actions";
 import { api } from "@/lib/fetch/client";
 
-export function OUTreeDiscoveryDialog() {
+interface OUTreeDiscoveryDialogProps {
+  onSave?: (ouNames: string[]) => void;
+}
+
+export function OUTreeDiscoveryDialog({ onSave }: OUTreeDiscoveryDialogProps) {
   const [open, setOpen] = useState(false);
   const [configId, setConfigId] = useState<string | null>(null);
   const [configName, setConfigName] = useState<string>("");
@@ -133,7 +137,14 @@ export function OUTreeDiscoveryDialog() {
       setOpen(false);
       setSelectedOUs([]);
       setInitialOUMap(new Map());
-      window.location.reload();
+
+      if (onSave) {
+        const updatedData = await getOrganizationalUnits();
+        const enabledNames = updatedData.organizationalUnits
+          .filter((ou) => ou.isEnabled)
+          .map((ou) => ou.ouName);
+        onSave(enabledNames);
+      }
     } catch (error: any) {
       toast.error(error.message || "Failed to sync OUs");
     } finally {

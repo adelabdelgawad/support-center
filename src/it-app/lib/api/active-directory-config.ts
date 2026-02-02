@@ -69,15 +69,3 @@ export async function testADConnection(
 export async function getOUTree(id: string): Promise<OUTreeNode[]> {
   return api.get<OUTreeNode[]>(`${BASE_PATH}/${id}/ou-tree`);
 }
-
-/**
- * Update desired OUs for AD configuration
- */
-export async function updateDesiredOUs(
-  id: string,
-  desiredOus: string[]
-): Promise<ActiveDirectoryConfig> {
-  return api.put<ActiveDirectoryConfig>(`${BASE_PATH}/${id}`, {
-    desiredOus,
-  });
-}

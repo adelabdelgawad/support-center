@@ -27,6 +27,12 @@ class ActiveDirectoryConfigService:
     """Service for managing Active Directory configurations."""
 
     @staticmethod
+    async def _get_enabled_ou_names(db: AsyncSession) -> List[str]:
+        """Get list of enabled OU names from organizational_units table."""
+        ous = await OrganizationalUnitCRUD.get_all(db, enabled_only=True)
+        return [ou.ou_name for ou in ous]
+
+    @staticmethod
     async def get_all_configs(
         db: AsyncSession,
         skip: int = 0,
@@ -51,9 +57,12 @@ class ActiveDirectoryConfigService:
             db, page=page, per_page=per_page
         )
 
+        ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
+
         # Convert to read schemas (excludes encrypted password)
         read_configs = [
-            ActiveDirectoryConfigRead.from_model(config) for config in configs
+            ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
+            for config in configs
         ]
 
         return read_configs, total
@@ -76,7 +85,8 @@ class ActiveDirectoryConfigService:
         if not config:
             return None
 
-        return ActiveDirectoryConfigRead.from_model(config)
+        ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
+        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
 
     @staticmethod
     async def get_active_config(
@@ -95,7 +105,8 @@ class ActiveDirectoryConfigService:
         if not config:
             return None
 
-        return ActiveDirectoryConfigRead.from_model(config)
+        ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
+        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
 
     @staticmethod
     async def create_config(
@@ -129,7 +140,8 @@ class ActiveDirectoryConfigService:
         config = await base_crud.create(db, ActiveDirectoryConfig, obj_in=config_dict)
 
         logger.info(f"Created AD configuration: {config.name} (ID: {config.id})")
-        return ActiveDirectoryConfigRead.from_model(config)
+        ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
+        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
 
     @staticmethod
     async def update_config(
@@ -171,7 +183,8 @@ class ActiveDirectoryConfigService:
         )
 
         logger.info(f"Updated AD configuration: {updated_config.name} (ID: {config_id})")
-        return ActiveDirectoryConfigRead.from_model(updated_config)
+        ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
+        return ActiveDirectoryConfigRead.from_model(updated_config, organizational_units=ou_names)
 
     @staticmethod
     async def delete_config(db: AsyncSession, config_id: UUID) -> bool:

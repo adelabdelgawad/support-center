@@ -11,7 +11,7 @@ export interface ActiveDirectoryConfig {
   useSsl: boolean;
   ldapUsername: string;
   baseDn: string;
-  desiredOus?: string[];
+  organizationalUnits: string[];
   isActive: boolean;
   hasPassword: boolean;
   createdAt: string;
@@ -27,7 +27,6 @@ export interface CreateActiveDirectoryConfigRequest {
   ldapUsername: string;
   password: string;
   baseDn: string;
-  desiredOus?: string[];
   isActive: boolean;
 }
 
@@ -40,7 +39,6 @@ export interface UpdateActiveDirectoryConfigRequest {
   ldapUsername?: string;
   password?: string; // Only include if changing password
   baseDn?: string;
-  desiredOus?: string[];
   isActive?: boolean;
 }
 
