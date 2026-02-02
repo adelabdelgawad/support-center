@@ -83,6 +83,13 @@ class SessionLogger {
   }
 
   /**
+   * Log a DEBUG level message (mapped to INFO)
+   */
+  debug(subsystem: LogSubsystem, message: string, context?: Record<string, unknown>): void {
+    this.log('INFO', subsystem, message, context);
+  }
+
+  /**
    * Initialize the logging system
    * Should be called once at app startup
    */

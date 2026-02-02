@@ -456,6 +456,12 @@ function createRemoteAccessStore() {
           // Clean up on disconnect
           if (connectionState === "disconnected" || connectionState === "failed" || connectionState === "closed") {
             console.log("[RemoteAccess] Session ended:", connectionState);
+            // Stop the host before nulling the reference to release resources
+            if (webrtcHost) {
+              webrtcHost.stop().catch((err) => {
+                console.warn("[RemoteAccess] Error stopping webrtcHost on disconnect:", err);
+              });
+            }
             webrtcHost = null;
             setState({ activeSession: null, controlEnabled: false });
           }

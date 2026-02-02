@@ -109,6 +109,9 @@ export default function RemoteSessionClient({
   // Track if SignalR was ever connected - we only react to disconnects after first connection
   const wasSignalingConnectedRef = useRef(false);
 
+  // Guard against concurrent cleanup calls
+  const isCleaningUpRef = useRef(false);
+
   // SignalR-based signaling
   const {
     signalingState,
@@ -1105,6 +1108,10 @@ export default function RemoteSessionClient({
   };
 
   const cleanup = () => {
+    // Prevent concurrent cleanup calls
+    if (isCleaningUpRef.current) return;
+    isCleaningUpRef.current = true;
+
     pendingIceCandidatesRef.current = [];
     signalingCompleteRef.current = false;
     wasSignalingConnectedRef.current = false;
@@ -1130,6 +1137,8 @@ export default function RemoteSessionClient({
 
     // Clear tracked session for auto-rejoin
     signalRRemoteAccess.clearCurrentRemoteSession();
+
+    isCleaningUpRef.current = false;
   };
 
   // Session ended state

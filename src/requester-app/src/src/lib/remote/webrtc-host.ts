@@ -1271,28 +1271,34 @@ export class WebRTCHost {
     try {
       await fetchClient.post(`/remote-access/${this.sessionId}/heartbeat`);
 
-      logger.debug('remote-support', 'Heartbeat sent successfully', {
+      logger.info('remote-support', 'Heartbeat sent successfully', {
         sessionId: this.sessionId,
       });
     } catch (error) {
-      if (error instanceof APIError && (error.status === 404 || error.status === 400)) {
-        logger.warn('remote-support', 'Heartbeat failed - session no longer active', {
-          sessionId: this.sessionId,
-          status: error.status,
-        });
-        console.warn("[WebRTCHost] ⚠️ Heartbeat failed - session may have ended");
-      } else if (error instanceof APIError) {
-        logger.error('remote-support', 'Heartbeat failed with error', {
-          sessionId: this.sessionId,
-          status: error.status,
-        });
-      } else {
-        // Network error or API unavailable - this is non-fatal
-        logger.warn('remote-support', 'Heartbeat request failed', {
-          sessionId: this.sessionId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        console.warn("[WebRTCHost] ⚠️ Heartbeat request failed:", error);
+      try {
+        if (error instanceof APIError && (error.status === 404 || error.status === 400)) {
+          logger.warn('remote-support', 'Heartbeat failed - session no longer active, stopping', {
+            sessionId: this.sessionId,
+            status: error.status,
+          });
+          console.warn("[WebRTCHost] ⚠️ Heartbeat: session no longer active - stopping");
+          this.stop();
+        } else if (error instanceof APIError) {
+          logger.error('remote-support', 'Heartbeat failed with error', {
+            sessionId: this.sessionId,
+            status: error.status,
+          });
+        } else {
+          // Network error or API unavailable - this is non-fatal
+          logger.warn('remote-support', 'Heartbeat request failed', {
+            sessionId: this.sessionId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          console.warn("[WebRTCHost] ⚠️ Heartbeat request failed:", error);
+        }
+      } catch (innerError) {
+        // Never let heartbeat error handling crash the interval
+        console.warn("[WebRTCHost] Error in heartbeat error handler:", innerError);
       }
     }
   }
