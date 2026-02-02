@@ -20,6 +20,7 @@ import type { HubConnection } from '@microsoft/signalr';
 import * as signalR from '@microsoft/signalr';
 import { logger } from '@/logging/logger';
 import { RuntimeConfig } from '../runtime-config';
+import fetchClient, { APIError } from '@/api/fetch-client';
 
 interface SignalingMessage {
   type: string;
@@ -1268,45 +1269,31 @@ export class WebRTCHost {
    */
   private async sendHeartbeat(): Promise<void> {
     try {
-      // Get runtime API URL (handles network detection)
-      const apiBaseUrl = RuntimeConfig.getServerAddress();
+      await fetchClient.post(`/remote-access/${this.sessionId}/heartbeat`);
 
-      // Call backend heartbeat endpoint
-      const response = await fetch(
-        `${apiBaseUrl}/remote-access/${this.sessionId}/heartbeat`,
-        {
-          method: 'POST',
-          credentials: 'include',
-        }
-      );
-
-      if (!response.ok) {
-        // Session may have ended or been cleaned up
-        if (response.status === 404 || response.status === 400) {
-          logger.warn('remote-support', 'Heartbeat failed - session no longer active', {
-            sessionId: this.sessionId,
-            status: response.status,
-          });
-          console.warn("[WebRTCHost] ⚠️ Heartbeat failed - session may have ended");
-          // Don't stop here - let other mechanisms handle session end
-        } else {
-          logger.error('remote-support', 'Heartbeat failed with error', {
-            sessionId: this.sessionId,
-            status: response.status,
-          });
-        }
-      } else {
-        logger.debug('remote-support', 'Heartbeat sent successfully', {
-          sessionId: this.sessionId,
-        });
-      }
-    } catch (error) {
-      // Network error or API unavailable - this is non-fatal
-      logger.warn('remote-support', 'Heartbeat request failed', {
+      logger.debug('remote-support', 'Heartbeat sent successfully', {
         sessionId: this.sessionId,
-        error: error instanceof Error ? error.message : String(error),
       });
-      console.warn("[WebRTCHost] ⚠️ Heartbeat request failed:", error);
+    } catch (error) {
+      if (error instanceof APIError && (error.status === 404 || error.status === 400)) {
+        logger.warn('remote-support', 'Heartbeat failed - session no longer active', {
+          sessionId: this.sessionId,
+          status: error.status,
+        });
+        console.warn("[WebRTCHost] ⚠️ Heartbeat failed - session may have ended");
+      } else if (error instanceof APIError) {
+        logger.error('remote-support', 'Heartbeat failed with error', {
+          sessionId: this.sessionId,
+          status: error.status,
+        });
+      } else {
+        // Network error or API unavailable - this is non-fatal
+        logger.warn('remote-support', 'Heartbeat request failed', {
+          sessionId: this.sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        console.warn("[WebRTCHost] ⚠️ Heartbeat request failed:", error);
+      }
     }
   }
 
