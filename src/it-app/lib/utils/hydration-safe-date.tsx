@@ -3,8 +3,23 @@
 import { useEffect, useState } from 'react';
 import {
   formatTicketTimestamp as baseFormatTicketTimestamp,
-  formatShortDateTime,
 } from './date-formatting';
+
+/**
+ * Format date with explicit UTC timezone for SSR consistency.
+ * Both server and client will produce the same string during hydration.
+ */
+function formatShortDateTimeUTC(isoString: string): string {
+  const date = new Date(isoString);
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'UTC',
+  }).format(date);
+}
 
 /**
  * Hydration-safe date formatting hook.
@@ -23,8 +38,8 @@ export function useFormattedDate(
 ): string {
   const [isHydrated, setIsHydrated] = useState(false);
   const [formattedDate, setFormattedDate] = useState(() =>
-    // Use absolute formatting during SSR to ensure consistency
-    formatShortDateTime(dateString)
+    // Use UTC formatting during SSR to ensure server/client produce identical strings
+    formatShortDateTimeUTC(dateString)
   );
 
   useEffect(() => {
@@ -75,10 +90,10 @@ function formatDueDateInternal(
   const now = new Date();
   const isOverdue = date < now;
 
-  // During SSR or before hydration, use absolute formatting
+  // During SSR or before hydration, use UTC formatting for consistency
   if (!useRelative) {
     return {
-      text: formatShortDateTime(dateString),
+      text: formatShortDateTimeUTC(dateString),
       isOverdue,
     };
   }

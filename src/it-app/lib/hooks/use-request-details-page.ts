@@ -23,6 +23,7 @@ interface UseRequestDetailsPageResult {
   data: RequestDetailsPageData | null;
   isLoading: boolean;
   isValidating: boolean;
+  hasFetched: boolean;
   error: Error | undefined;
   refresh: () => Promise<void>;
 }
@@ -40,6 +41,7 @@ export function useRequestDetailsPage(
   const [isLoading, setIsLoading] = useState(!!requestId);
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<Error | undefined>(undefined);
+  const [hasFetched, setHasFetched] = useState(false);
 
   // Track if component is mounted
   const isMountedRef = useRef(true);
@@ -78,6 +80,7 @@ export function useRequestDetailsPage(
         if (isMountedRef.current) {
           setIsLoading(false);
           setIsValidating(false);
+          setHasFetched(true);
         }
       }
     };
@@ -104,6 +107,7 @@ export function useRequestDetailsPage(
     data,
     isLoading,
     isValidating,
+    hasFetched,
     error,
     refresh,
   };

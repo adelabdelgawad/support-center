@@ -12,7 +12,7 @@
  * don't cause re-renders in components that only consume metadata.
  */
 
-import { useRef, useEffect, useMemo, createContext, useState } from 'react';
+import { useMemo, createContext, useState } from 'react';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/metadata';
 import type { ChatMessage, TaskStatusChangedEvent } from '@/lib/signalr/types';
@@ -109,10 +109,6 @@ export function RequestDetailProvider({
       : undefined;
   }, [session]);
 
-  // **SCROLL HANDLER REGISTRATION** - Shared between contexts
-  const scrollHandlerRef = useRef<(() => void) | null>(null);
-  const forceScrollHandlerRef = useRef<(() => void) | null>(null);
-
   // Build combined context value
   const value: RequestDetailsContextType = useMemo(
     () => ({
@@ -130,6 +126,8 @@ export function RequestDetailProvider({
       isChatDisabled,
       handleTicketUpdateEvent,
       handleTaskStatusChangedEvent,
+      scrollHandlerRef,
+      forceScrollHandlerRef,
     } = useRequestDetailMetadata();
 
     return (

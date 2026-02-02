@@ -130,6 +130,7 @@ export function RequestDetailChatProvider({
   const handleNewMessageWithScroll = useCallback((message: any) => {
     handleNewMessage(message);
     // Trigger scroll for new messages
+    console.log('[ChatScroll][ChatContext] incoming message, scrollHandler registered:', !!scrollHandlerRef.current);
     scrollHandlerRef.current?.();
   }, [handleNewMessage, scrollHandlerRef]);
 
@@ -163,8 +164,10 @@ export function RequestDetailChatProvider({
 
     // CRITICAL: Trigger force scroll after optimistic message is added
     if (tempId) {
+      console.log('[ChatScroll][ChatContext] outgoing message, forceScrollHandler registered:', !!forceScrollHandlerRef.current);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          console.log('[ChatScroll][ChatContext] outgoing rAF firing, forceScrollHandler:', !!forceScrollHandlerRef.current);
           forceScrollHandlerRef.current?.();
         });
       });

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { RequestsListProvider } from './_context/requests-list-context';
 import { TicketsPageClient } from './_components/tickets-page-client';
@@ -95,15 +96,17 @@ export default async function RequestsPage({ searchParams }: PageProps) {
   };
 
   return (
-    <RequestsListProvider
-      initialData={safeTicketsData}
-      initialBusinessUnitsData={safeBusinessUnitsData}
-      initialView={view}
-      initialPage={page}
-      businessUnitIds={businessUnitIds}
-      visibleTabs={visibleTabs}
-    >
-      <TicketsPageClient />
-    </RequestsListProvider>
+    <Suspense>
+      <RequestsListProvider
+        initialData={safeTicketsData}
+        initialBusinessUnitsData={safeBusinessUnitsData}
+        initialView={view}
+        initialPage={page}
+        businessUnitIds={businessUnitIds}
+        visibleTabs={visibleTabs}
+      >
+        <TicketsPageClient />
+      </RequestsListProvider>
+    </Suspense>
   );
 }

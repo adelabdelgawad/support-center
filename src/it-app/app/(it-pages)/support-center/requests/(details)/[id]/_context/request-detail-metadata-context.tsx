@@ -92,6 +92,10 @@ export interface RequestDetailMetadataContextType {
   registerScrollHandler: (handler: (() => void) | null) => void;
   registerForceScrollHandler: (handler: (() => void) | null) => void;
 
+  // Scroll handler refs (used by chat context for auto-scroll)
+  scrollHandlerRef: React.MutableRefObject<(() => void) | null>;
+  forceScrollHandlerRef: React.MutableRefObject<(() => void) | null>;
+
   // Refs for external access (used by chat context)
   mutateTicketRef: React.MutableRefObject<(() => Promise<void>) | null>;
   statusesDataRef: React.MutableRefObject<RequestStatus[]>;
@@ -545,6 +549,8 @@ export function RequestDetailMetadataProvider({
       initialSubTasks,
       registerScrollHandler,
       registerForceScrollHandler,
+      scrollHandlerRef,
+      forceScrollHandlerRef,
       mutateTicketRef,
       statusesDataRef,
       handleTicketUpdateEvent,

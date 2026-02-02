@@ -33,7 +33,7 @@ export function RequestDetailsWrapper({
   initialData,
 }: RequestDetailsWrapperProps) {
   // Fetch data with SWR (uses initialData if provided, fetches in background)
-  const { data, isLoading, error } = useRequestDetailsPage(requestId, {
+  const { data, isLoading, hasFetched, error } = useRequestDetailsPage(requestId, {
     currentUserId,
     currentUserIsTechnician,
   });
@@ -52,7 +52,12 @@ export function RequestDetailsWrapper({
     );
   }
 
-  // Show error if request not found
+  // Show skeleton while loading or before first fetch completes
+  if (!pageData && !hasFetched) {
+    return <RequestDetailsSkeleton />;
+  }
+
+  // Show error if request not found (fetch completed but no data)
   if (!pageData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

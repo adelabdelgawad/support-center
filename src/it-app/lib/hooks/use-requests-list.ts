@@ -24,22 +24,16 @@ export function useRequestsList(
   initialData?: TechnicianViewsResponse,
   businessUnitIds?: number[]
 ) {
-  // Check if initial data is empty (no tickets and total is 0) - if so, we need to fetch on mount
-  const hasRealInitialData = initialData && (initialData.data.length > 0 || initialData.total > 0);
-
   const { data, error, isLoading, mutate, isValidating } = useSWR<TechnicianViewsResponse>(
     cacheKeys.technicianViews(view, page, perPage, businessUnitIds),
     () => getTechnicianViews(view, page, perPage, businessUnitIds),
     {
       fallbackData: initialData,
-      // Fetch on mount if no real initial data (e.g., came from empty fallback)
-      revalidateOnMount: !hasRealInitialData,
-      revalidateIfStale: false, // Don't refetch on stale - use refreshInterval instead
-      revalidateOnFocus: false, // Don't refetch on focus - prevents initial load spinner
-      revalidateOnReconnect: false, // Don't refetch on reconnect - prevents initial load spinner
-      refreshInterval: 60000, // Auto-revalidate every 60 seconds (changed from 30s)
-      dedupingInterval: 2000, // Dedupe requests within 2 seconds
-      keepPreviousData: true, // Keep previous data while loading new data
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      refreshInterval: 60000,
+      dedupingInterval: 2000,
+      keepPreviousData: true,
     }
   );
 

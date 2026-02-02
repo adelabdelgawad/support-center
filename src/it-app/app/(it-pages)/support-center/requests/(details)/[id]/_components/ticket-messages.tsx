@@ -110,6 +110,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
 
   // Keep ref in sync with state (for WebSocket handler)
   useEffect(() => {
+    console.log('[ChatScroll][State] isOnBottom changed:', isOnBottomRef.current, '→', isOnBottom);
     isOnBottomRef.current = isOnBottom;
   }, [isOnBottom]);
 
@@ -143,15 +144,18 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
       return;
     }
 
+    console.log('[ChatScroll][Initial] starting, retry:', initialScrollRetryCountRef.current);
+
     const container = containerRef.current;
 
     // Guard: no container
     if (!container) {
+      console.log('[ChatScroll][Initial] no container, retry:', initialScrollRetryCountRef.current);
       if (initialScrollRetryCountRef.current < MAX_INITIAL_SCROLL_RETRIES) {
         initialScrollRetryCountRef.current++;
         setTimeout(() => performInitialScrollRef.current?.(), 16);
       } else {
-        // Force complete to unblock
+        console.log('[ChatScroll][Initial] force-complete (no container after retries)');
         hasPerformedInitialScrollRef.current = true;
         setInitialScrollDone(true);
         setIsOnBottom(true);
@@ -163,11 +167,12 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
 
     // Guard: scrollHeight === 0 means DOM not painted yet
     if (scrollHeight === 0) {
+      console.log('[ChatScroll][Initial] scrollHeight=0, retry:', initialScrollRetryCountRef.current);
       if (initialScrollRetryCountRef.current < MAX_INITIAL_SCROLL_RETRIES) {
         initialScrollRetryCountRef.current++;
         setTimeout(() => performInitialScrollRef.current?.(), 32);
       } else {
-        // Force complete to unblock
+        console.log('[ChatScroll][Initial] force-complete (scrollHeight=0 after retries)');
         hasPerformedInitialScrollRef.current = true;
         setInitialScrollDone(true);
         setIsOnBottom(true);
@@ -177,6 +182,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
 
     // Container is ready - perform the scroll
     isScrollingProgrammaticallyRef.current = true;
+    console.log('[ChatScroll][Programmatic] ENABLE (initial scroll)');
 
     // Instant scroll to bottom (no smooth animation for initial load)
     container.scrollTop = scrollHeight;
@@ -187,9 +193,17 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     setIsOnBottom(true);
     setNewMessagesWhileScrolledUp(0);
 
+    console.log('[ChatScroll][Initial] completed', {
+      scrollTop: container.scrollTop,
+      scrollHeight: container.scrollHeight,
+      clientHeight: container.clientHeight,
+      isOnBottom: true,
+    });
+
     // Reset programmatic flag
     setTimeout(() => {
       isScrollingProgrammaticallyRef.current = false;
+      console.log('[ChatScroll][Programmatic] RESET (initial scroll)');
     }, 0);
   }, []);
 
@@ -205,21 +219,34 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     const container = containerRef.current;
 
     if (!container) {
+      console.log('[ChatScroll][scrollToBottom] no container');
       return;
     }
 
     // Guard: scrollHeight === 0 means container not ready
     if (container.scrollHeight === 0) {
+      console.log('[ChatScroll][scrollToBottom] scrollHeight=0');
       return;
     }
 
     // Check if should scroll (unless forced) - read from ref for latest value
     if (!force && !isOnBottomRef.current) {
+      console.log('[ChatScroll][scrollToBottom] SKIP: force=false, isOnBottom=false');
       return;
     }
 
+    console.log('[ChatScroll][scrollToBottom] EXECUTING', {
+      smooth,
+      force,
+      isOnBottom: isOnBottomRef.current,
+      scrollHeight: container.scrollHeight,
+      scrollTop: container.scrollTop,
+      clientHeight: container.clientHeight,
+    });
+
     // Set programmatic scroll flag to prevent handleScroll from firing
     isScrollingProgrammaticallyRef.current = true;
+    console.log('[ChatScroll][Programmatic] ENABLE (scrollToBottom)');
 
     // Scroll to bottom
     if (smooth) {
@@ -237,6 +264,7 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
     // Browser smooth scroll can take 300-500ms depending on distance and system
     setTimeout(() => {
       isScrollingProgrammaticallyRef.current = false;
+      console.log('[ChatScroll][Programmatic] RESET (scrollToBottom, smooth=' + smooth + ')');
     }, smooth ? 500 : 50);
   }, []); // Empty deps - uses refs for current values
 
@@ -273,6 +301,17 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
 
       // Read from ref to avoid stale closure (isOnBottom state would be captured at callback creation)
       const prevIsOnBottom = isOnBottomRef.current;
+
+      if (prevIsOnBottom !== isAtBottom) {
+        console.log('[ChatScroll][Scroll] state change', {
+          distanceFromBottom,
+          isAtBottom,
+          prevIsOnBottom,
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+        });
+      }
 
       // Update scroll state based on position
       if (prevIsOnBottom !== isAtBottom) {
@@ -369,17 +408,31 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   // This prevents handler re-registration which can cause scroll instability
   const initialScrollDoneRef = useRef(initialScrollDone);
   useEffect(() => {
+    console.log('[ChatScroll][State] initialScrollDone changed:', initialScrollDoneRef.current, '→', initialScrollDone);
     initialScrollDoneRef.current = initialScrollDone;
   }, [initialScrollDone]);
 
   const handleNewMessageScroll = useCallback(() => {
+    console.log('[ChatScroll][Incoming] handler called', {
+      initialScrollDone: initialScrollDoneRef.current,
+      isOnBottom: isOnBottomRef.current,
+      programmatic: isScrollingProgrammaticallyRef.current,
+    });
+
     // Only handle new messages after initial scroll is done (read from ref)
     if (!initialScrollDoneRef.current) {
+      console.log('[ChatScroll][Incoming] SKIP: initialScrollDone=false');
       return;
     }
 
     // Read current scroll state from ref (not stale closure)
     const wasScrolledUp = !isOnBottomRef.current;
+
+    if (wasScrolledUp) {
+      console.log('[ChatScroll][Incoming] isOnBottom=false → will SKIP scroll (not forced)');
+    } else {
+      console.log('[ChatScroll][Incoming] isOnBottom=true → will scroll');
+    }
 
     // Auto-scroll to bottom when new message arrives (if user is at bottom)
     // Use double requestAnimationFrame to ensure DOM has fully updated (React reconciliation)
@@ -399,6 +452,10 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   // FORCE SCROLL HANDLER: When user sends their own message (always scroll)
   // ============================================================================
   const handleForceScrollToBottom = useCallback(() => {
+    console.log('[ChatScroll][Outgoing] force scroll called', {
+      isOnBottom: isOnBottomRef.current,
+      programmatic: isScrollingProgrammaticallyRef.current,
+    });
     // Force scroll to bottom regardless of current scroll position
     scrollToBottom(true, true); // smooth=true, force=true
   }, [scrollToBottom]);
@@ -421,12 +478,14 @@ export function TicketMessages({ messages, isLoading = false, onRetryMessage }: 
   // REGISTER SCROLL HANDLERS WITH CONTEXT (for WebSocket auto-scroll)
   // ============================================================================
   useEffect(() => {
+    console.log('[ChatScroll][Register] registering scroll handlers');
     // Register handlers on mount
     registerScrollHandler(handleNewMessageScroll);
     registerForceScrollHandler(handleForceScrollToBottom);
 
     // Unregister on unmount
     return () => {
+      console.log('[ChatScroll][Register] UNregistering scroll handlers');
       registerScrollHandler(null);
       registerForceScrollHandler(null);
     };
