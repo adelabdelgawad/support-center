@@ -1,0 +1,22 @@
+services:
+  frontend:
+    build:
+      context: ./src/it-app
+      dockerfile: ../../docker/frontend/Dockerfile.frontend.dev
+    container_name: supportcenter-frontend-dev
+    command: bun run dev
+    ports:
+      - "3010:3010"
+    volumes:
+      - ./src/it-app:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      API_URL: http://supportcenter-nginx:80
+      ALLOWED_DEV_ORIGINS: "supportcenter.andalusiagroup.net"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "10.25.10.50:host-gateway"
+    restart: unless-stopped

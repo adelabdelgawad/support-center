@@ -2008,199 +2008,294 @@ class DatabaseSetup:
             return False
 
     async def seed_scheduler_data(self, db: AsyncSession) -> bool:
-        """Seed scheduler job types and task functions."""
+        """Seed scheduler job types, task functions, and scheduled jobs."""
         try:
-            # Import here to avoid circular imports
             from db.models import (
                 SchedulerJobType,
                 TaskFunction,
+                ScheduledJob,
             )
+            from uuid import UUID as _UUID
 
             logger.info("🕐 Seeding scheduler data...")
 
-            # Check if already seeded
+            # --- Phase 1: Seed job types (skip if already exist) ---
             job_types_result = await db.execute(select(SchedulerJobType).limit(1))
-            if job_types_result.scalar_one_or_none() is not None:
-                logger.info("✅ Scheduler data already seeded, skipping")
+            if job_types_result.scalar_one_or_none() is None:
+                job_types_data = [
+                    {
+                        "name": "interval",
+                        "display_name": "Interval Schedule",
+                        "description": "Run at regular intervals (seconds, minutes, hours)",
+                        "is_active": True,
+                    },
+                    {
+                        "name": "cron",
+                        "display_name": "Cron Schedule",
+                        "description": "Run using cron expression (second, minute, hour, day, month, day_of_week)",
+                        "is_active": True,
+                    },
+                ]
+                for jt_data in job_types_data:
+                    db.add(SchedulerJobType(**jt_data))
+                await db.commit()
+                logger.info(f"✅ Created {len(job_types_data)} job types")
+            else:
+                logger.info("✅ Scheduler job types already exist, skipping")
+
+            # --- Phase 2: Seed task functions (skip if already exist) ---
+            tf_result = await db.execute(select(TaskFunction).limit(1))
+            if tf_result.scalar_one_or_none() is None:
+                all_task_functions = [
+                    {
+                        "name": "sync_domain_users",
+                        "display_name": "Sync Domain Users",
+                        "description": "Synchronize domain users from Active Directory",
+                        "handler_path": "tasks.ad_sync_tasks.sync_domain_users_task",
+                        "handler_type": "celery_task",
+                        "queue": "ad_queue",
+                        "default_timeout_seconds": 300,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_expired_tokens",
+                        "display_name": "Cleanup Expired Tokens",
+                        "description": "Clean up expired authentication tokens and sessions",
+                        "handler_path": "tasks.maintenance_tasks.cleanup_expired_sessions_task",
+                        "handler_type": "async_function",
+                        "queue": None,
+                        "default_timeout_seconds": 60,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_stale_desktop_sessions",
+                        "display_name": "Cleanup Stale Desktop Sessions",
+                        "description": "Mark stale desktop sessions as inactive",
+                        "handler_path": "tasks.maintenance_tasks.cleanup_stale_desktop_sessions_task",
+                        "handler_type": "async_function",
+                        "queue": None,
+                        "default_timeout_seconds": 60,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_stale_deployment_jobs",
+                        "display_name": "Cleanup Stale Deployment Jobs",
+                        "description": "Clean up stale deployment jobs",
+                        "handler_path": "tasks.maintenance_tasks.cleanup_stale_deployment_jobs_task",
+                        "handler_type": "async_function",
+                        "queue": None,
+                        "default_timeout_seconds": 60,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_old_executions",
+                        "display_name": "Cleanup Old Job Executions",
+                        "description": "Remove job execution records older than 90 days",
+                        "handler_path": "tasks.maintenance_tasks.cleanup_old_job_executions_task",
+                        "handler_type": "async_function",
+                        "queue": None,
+                        "default_timeout_seconds": 120,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "timeout_stale_job_executions",
+                        "display_name": "Timeout Stale Job Executions",
+                        "description": "Mark long-running job executions as timed out",
+                        "handler_path": "tasks.maintenance_tasks.timeout_stale_job_executions_task",
+                        "handler_type": "async_function",
+                        "queue": None,
+                        "default_timeout_seconds": 60,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_orphaned_remote_sessions",
+                        "display_name": "Cleanup Orphaned Remote Sessions",
+                        "description": "Clean up remote access sessions with no heartbeat",
+                        "handler_path": "tasks.remote_access_tasks.cleanup_orphaned_remote_sessions",
+                        "handler_type": "celery_task",
+                        "queue": "celery",
+                        "default_timeout_seconds": 60,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "cleanup_expired_files",
+                        "display_name": "Cleanup Expired Files",
+                        "description": "Remove expired temporary files from MinIO storage",
+                        "handler_path": "tasks.minio_file_tasks.cleanup_expired_files",
+                        "handler_type": "celery_task",
+                        "queue": "celery",
+                        "default_timeout_seconds": 120,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                    {
+                        "name": "retry_pending_uploads",
+                        "display_name": "Retry Pending Uploads",
+                        "description": "Retry file uploads that are stuck in pending state",
+                        "handler_path": "tasks.minio_file_tasks.retry_pending_uploads",
+                        "handler_type": "celery_task",
+                        "queue": "celery",
+                        "default_timeout_seconds": 120,
+                        "is_active": True,
+                        "is_system": True,
+                    },
+                ]
+                for tf_data in all_task_functions:
+                    db.add(TaskFunction(**tf_data))
+                await db.commit()
+                logger.info(f"✅ Created {len(all_task_functions)} task functions")
+            else:
+                logger.info("✅ Task functions already exist, skipping")
+
+            # --- Phase 2: Seed scheduled jobs (separate check) ---
+            jobs_result = await db.execute(select(ScheduledJob).limit(1))
+            if jobs_result.scalar_one_or_none() is not None:
+                logger.info("✅ Scheduled jobs already exist, skipping")
                 return True
 
-            # Create job types
-            job_types_data = [
-                {
-                    "name": "interval",
-                    "display_name": "Interval Schedule",
-                    "description": "Run at regular intervals (seconds, minutes, hours)",
-                    "is_active": True,
-                },
-                {
-                    "name": "cron",
-                    "display_name": "Cron Schedule",
-                    "description": "Run using cron expression (second, minute, hour, day, month, day_of_week)",
-                    "is_active": True,
-                },
-            ]
+            logger.info("🕐 Seeding scheduled jobs...")
 
-            for jt_data in job_types_data:
-                job_type = SchedulerJobType(**jt_data)
-                db.add(job_type)
-
-            await db.commit()
-            logger.info(f"✅ Created {len(job_types_data)} job types")
-
-            # Get job type IDs for task functions
+            # Look up the interval job type
             interval_result = await db.execute(
                 select(SchedulerJobType).where(SchedulerJobType.name == "interval")
             )
-            interval_type = interval_result.scalar_one()
+            interval_type = interval_result.scalar_one_or_none()
+            if not interval_type:
+                logger.error("❌ Interval job type not found, cannot seed scheduled jobs")
+                return False
 
-            cron_result = await db.execute(
-                select(SchedulerJobType).where(SchedulerJobType.name == "cron")
-            )
-            cron_type = cron_result.scalar_one()
+            # Build task function name -> id mapping
+            tf_result = await db.execute(select(TaskFunction))
+            task_functions = {tf.name: tf.id for tf in tf_result.scalars().all()}
 
-            # Create task functions (system tasks that cannot be deleted)
-            task_functions_data = [
+            # Default scheduled jobs (matching migration UUIDs for idempotency)
+            default_jobs = [
                 {
-                    "name": "sync_domain_users",
-                    "display_name": "Sync Domain Users from AD",
-                    "description": "Synchronize enabled users from Active Directory",
-                    "handler_path": "tasks.ad_sync_tasks.sync_domain_users_task",
-                    "handler_type": "celery_task",
-                    "queue": "ad_queue",
-                    "default_timeout_seconds": 600,
-                    "is_active": True,
-                    "is_system": True,
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440001"),
+                    "name": "Domain User Sync (Hourly)",
+                    "description": "Synchronize enabled users from Active Directory every hour",
+                    "task_function_name": "sync_domain_users",
+                    "schedule_config": {"hours": 1, "minutes": 0, "seconds": 0},
+                    "task_args": None,
+                    "timeout_seconds": 300,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
                 },
                 {
-                    "name": "cleanup_expired_sessions",
-                    "display_name": "Cleanup Expired Sessions",
-                    "description": "Remove expired desktop and web sessions from database",
-                    "handler_path": "tasks.maintenance_tasks.cleanup_expired_sessions_task",
-                    "handler_type": "async_function",
-                    "queue": None,
-                    "default_timeout_seconds": 300,
-                    "is_active": True,
-                    "is_system": True,
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440002"),
+                    "name": "Token Cleanup (Daily)",
+                    "description": "Clean up expired tokens and sessions daily",
+                    "task_function_name": "cleanup_expired_tokens",
+                    "schedule_config": {"hours": 24, "minutes": 0, "seconds": 0},
+                    "task_args": {"retention_days": 7},
+                    "timeout_seconds": 60,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
                 },
                 {
-                    "name": "cleanup_old_executions",
-                    "display_name": "Cleanup Old Job Executions",
-                    "description": "Remove job execution records older than 90 days",
-                    "handler_path": "tasks.maintenance_tasks.cleanup_old_job_executions_task",
-                    "handler_type": "async_function",
-                    "queue": None,
-                    "default_timeout_seconds": 600,
-                    "is_active": True,
-                    "is_system": True,
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440003"),
+                    "name": "Desktop Session Cleanup (Every Minute)",
+                    "description": "Clean up stale desktop sessions every minute",
+                    "task_function_name": "cleanup_stale_desktop_sessions",
+                    "schedule_config": {"hours": 0, "minutes": 1, "seconds": 0},
+                    "task_args": {"timeout_minutes": 2},
+                    "timeout_seconds": 60,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
                 },
                 {
-                    "name": "timeout_stale_executions",
-                    "display_name": "Timeout Stale Job Executions",
-                    "description": "Mark stuck job executions as timed out (uses job-level timeout_seconds, default 5 minutes)",
-                    "handler_path": "tasks.maintenance_tasks.timeout_stale_job_executions_task",
-                    "handler_type": "async_function",
-                    "queue": None,
-                    "default_timeout_seconds": 300,
-                    "is_active": True,
-                    "is_system": True,
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440004"),
+                    "name": "Deployment Job Cleanup (30s)",
+                    "description": "Clean up stale deployment jobs every 30 seconds",
+                    "task_function_name": "cleanup_stale_deployment_jobs",
+                    "schedule_config": {"hours": 0, "minutes": 0, "seconds": 30},
+                    "task_args": None,
+                    "timeout_seconds": 60,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
+                },
+                {
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440005"),
+                    "name": "Timeout Stale Executions (10m)",
+                    "description": "Mark stuck job executions as timed out every 10 minutes",
+                    "task_function_name": "timeout_stale_job_executions",
+                    "schedule_config": {"hours": 0, "minutes": 10, "seconds": 0},
+                    "task_args": None,
+                    "timeout_seconds": 60,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
+                },
+                {
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440006"),
+                    "name": "Cleanup Orphaned Remote Sessions (1m)",
+                    "description": "Clean up orphaned remote sessions every minute",
+                    "task_function_name": "cleanup_orphaned_remote_sessions",
+                    "schedule_config": {"hours": 0, "minutes": 1, "seconds": 0},
+                    "task_args": None,
+                    "timeout_seconds": 60,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
+                },
+                {
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440007"),
+                    "name": "Cleanup Expired Files (1h)",
+                    "description": "Clean up expired files from storage every hour",
+                    "task_function_name": "cleanup_expired_files",
+                    "schedule_config": {"hours": 1, "minutes": 0, "seconds": 0},
+                    "task_args": None,
+                    "timeout_seconds": 120,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
+                },
+                {
+                    "id": _UUID("550e8400-e29b-41d4-a716-446655440008"),
+                    "name": "Retry Pending Uploads (15m)",
+                    "description": "Retry pending file uploads every 15 minutes",
+                    "task_function_name": "retry_pending_uploads",
+                    "schedule_config": {"hours": 0, "minutes": 15, "seconds": 0},
+                    "task_args": None,
+                    "timeout_seconds": 120,
+                    "retry_count": 3,
+                    "retry_delay_seconds": 60,
                 },
             ]
 
-            # Get the task function and job type references
-            sync_task_result = await db.execute(
-                select(TaskFunction).where(TaskFunction.name == "sync_domain_users")
-            )
-            sync_task = sync_task_result.scalar_one()
+            created_count = 0
+            for job_data in default_jobs:
+                tf_id = task_functions.get(job_data["task_function_name"])
+                if tf_id is None:
+                    logger.warning(
+                        f"⚠️ Task function '{job_data['task_function_name']}' not found, "
+                        f"skipping job '{job_data['name']}'"
+                    )
+                    continue
 
-            cron_type_result = await db.execute(
-                select(SchedulerJobType).where(SchedulerJobType.name == "cron")
-            )
-            cron_type = cron_type_result.scalar_one()
-
-            # Create default scheduled job for AD sync
-            from db.models import ScheduledJob
-
-            ad_sync_job = ScheduledJob(
-                name="ad_sync_job",
-                description="Scheduled synchronization of domain users from Active Directory",
-                task_function_id=sync_task.id,
-                job_type_id=cron_type.id,
-                schedule_config={
-                    "cron": "0 */6 * * *",  # Every 6 hours
-                    "timezone": "UTC"
-                },
-                max_instances=1,
-                timeout_seconds=600,
-                retry_count=3,
-                retry_delay_seconds=60,
-                is_enabled=True,
-            )
-            db.add(ad_sync_job)
-
-            # Add task functions and get their IDs for scheduled jobs
-            for tf_data in task_functions_data:
-                task_function = TaskFunction(**tf_data)
-                db.add(task_function)
-
-            await db.commit()
-            logger.info(f"✅ Created {len(task_functions_data)} task functions")
-
-            # Get task function references for scheduled jobs
-            cleanup_executions_result = await db.execute(
-                select(TaskFunction).where(TaskFunction.name == "cleanup_old_executions")
-            )
-            cleanup_executions_task = cleanup_executions_result.scalar_one_or_none()
-
-            timeout_executions_result = await db.execute(
-                select(TaskFunction).where(TaskFunction.name == "timeout_stale_executions")
-            )
-            timeout_executions_task = timeout_executions_result.scalar_one_or_none()
-
-            # Create scheduled job for timeout check (every 1 minute)
-            if timeout_executions_task:
-                timeout_check_job = ScheduledJob(
-                    name="timeout_stale_executions_check",
-                    description="Check every 1 minute for job executions that have exceeded their timeout (default 5 minutes)",
-                    task_function_id=timeout_executions_task.id,
+                job = ScheduledJob(
+                    id=job_data["id"],
+                    name=job_data["name"],
+                    description=job_data["description"],
+                    task_function_id=tf_id,
                     job_type_id=interval_type.id,
-                    schedule_config={
-                        "hours": 0,
-                        "minutes": 1,
-                        "seconds": 0,
-                    },
+                    schedule_config=job_data["schedule_config"],
+                    task_args=job_data["task_args"],
                     max_instances=1,
-                    timeout_seconds=300,
-                    retry_count=1,
-                    retry_delay_seconds=30,
+                    timeout_seconds=job_data["timeout_seconds"],
+                    retry_count=job_data["retry_count"],
+                    retry_delay_seconds=job_data["retry_delay_seconds"],
                     is_enabled=True,
                 )
-                db.add(timeout_check_job)
-
-            # Create scheduled job for cleanup of old executions (weekly)
-            if cleanup_executions_task:
-                cleanup_old_executions_job = ScheduledJob(
-                    name="cleanup_old_executions_weekly",
-                    description="Weekly cleanup of job execution records older than 90 days",
-                    task_function_id=cleanup_executions_task.id,
-                    job_type_id=cron_type.id,
-                    schedule_config={
-                        "cron": "0 2 * * 0",  # Sunday at 2 AM UTC
-                        "timezone": "UTC"
-                    },
-                    max_instances=1,
-                    timeout_seconds=600,
-                    retry_count=1,
-                    retry_delay_seconds=60,
-                    is_enabled=True,
-                )
-                db.add(cleanup_old_executions_job)
+                db.add(job)
+                created_count += 1
 
             await db.commit()
-            logger.info("✅ Scheduler data seeded successfully")
-
-            # Create the default AD sync job after seeding
-            await db.commit()
-            logger.info("✅ Created default AD sync scheduled job")
+            logger.info(f"✅ Created {created_count} scheduled jobs")
             return True
 
         except Exception as e:
@@ -2280,7 +2375,6 @@ class DatabaseSetup:
                 ldap_username=settings.active_directory.ldap_username,
                 encrypted_password=encrypted_password,
                 base_dn=settings.active_directory.base_dn,
-                desired_ous=settings.active_directory.desired_ous,
                 is_active=True,
             )
 

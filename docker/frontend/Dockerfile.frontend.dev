@@ -1,0 +1,19 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+# Needed for some native deps
+RUN apk add --no-cache libc6-compat 2>/dev/null || true
+
+# Install deps once (will be preserved via anonymous volume)
+COPY package.json bun.lock* ./
+RUN bun install
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3010
+ENV HOSTNAME=0.0.0.0
+
+EXPOSE 3010
+
+CMD ["bun", "run", "dev"]

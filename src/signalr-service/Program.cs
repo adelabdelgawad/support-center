@@ -38,25 +38,48 @@ if (!string.IsNullOrEmpty(redisUrl))
 
         // Handle redis:// URL format with password but no username
         // Expected format: redis://:password@host:port or redis://:password@host:port/db
+        // Note: Password may contain special chars (/, +, =) that break Uri parsing,
+        // so we parse manually using the last '@' as the delimiter.
         if (redisUrl.StartsWith("redis://"))
         {
-            // Parse the URL and convert to StackExchange.Redis format
-            var uri = new Uri(redisUrl);
+            var withoutScheme = redisUrl.Substring("redis://".Length);
 
-            // Extract password from UserInfo (format is ":password")
             var password = string.Empty;
-            if (!string.IsNullOrEmpty(uri.UserInfo))
+            string hostPart;
+
+            // Find the last '@' to split credentials from host (password may contain '@')
+            var atIndex = withoutScheme.LastIndexOf('@');
+            if (atIndex >= 0)
             {
-                // UserInfo starts with ':' for password-only auth
-                password = uri.UserInfo.StartsWith(":")
-                    ? uri.UserInfo.Substring(1)
-                    : uri.UserInfo;
+                var credentials = withoutScheme.Substring(0, atIndex);
+                hostPart = withoutScheme.Substring(atIndex + 1);
+
+                // credentials is ":password" or "user:password"
+                var colonIndex = credentials.IndexOf(':');
+                if (colonIndex >= 0)
+                {
+                    password = credentials.Substring(colonIndex + 1);
+                }
+            }
+            else
+            {
+                hostPart = withoutScheme;
+            }
+
+            // Parse host:port/db from hostPart
+            var dbIndex = hostPart.IndexOf('/');
+            var endpoint = dbIndex >= 0 ? hostPart.Substring(0, dbIndex) : hostPart;
+            var defaultDb = 0;
+            if (dbIndex >= 0 && int.TryParse(hostPart.Substring(dbIndex + 1), out var parsedDb))
+            {
+                defaultDb = parsedDb;
             }
 
             configOptions = new ConfigurationOptions
             {
-                EndPoints = { { uri.Host, uri.Port } },
+                EndPoints = { endpoint },
                 Password = password,
+                DefaultDatabase = defaultDb,
                 AbortOnConnectFail = false,
                 ConnectRetry = 3,
                 ConnectTimeout = 5000,

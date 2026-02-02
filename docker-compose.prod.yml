@@ -111,12 +111,13 @@ services:
   # APPLICATION SERVICES
   # ============================================================================
 
-  # Backend Instance 1
+  # Backend Instance 1 (single instance for development)
   backend-1:
     build:
       context: ./src/backend
       dockerfile: ../../docker/backend/Dockerfile
     container_name: supportcenter-backend-1
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
       - INSTANCE_ID=backend-1
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -124,72 +125,8 @@ services:
     env_file:
       - docker/env/.env.backend
     volumes:
-      - ~/workspace/docker/support-center/backend/uploads:/app/uploads
-      - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - supportcenter-network
-      - supportcenter-minio-network
-    restart: unless-stopped
-
-  # Backend Instance 2
-  backend-2:
-    build:
-      context: ./src/backend
-      dockerfile: ../../docker/backend/Dockerfile
-    container_name: supportcenter-backend-2
-    environment:
-      - INSTANCE_ID=backend-2
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENCODED}@redis:6379/0
-    env_file:
-      - docker/env/.env.backend
-    volumes:
-      - ~/workspace/docker/support-center/backend/uploads:/app/uploads
-      - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - supportcenter-network
-      - supportcenter-minio-network
-    restart: unless-stopped
-
-  # Backend Instance 3
-  backend-3:
-    build:
-      context: ./src/backend
-      dockerfile: ../../docker/backend/Dockerfile
-    container_name: supportcenter-backend-3
-    environment:
-      - INSTANCE_ID=backend-3
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENCODED}@redis:6379/0
-    env_file:
-      - docker/env/.env.backend
-    volumes:
+      - ./src/backend:/app
+      - backend-venv:/app/.venv
       - ~/workspace/docker/support-center/backend/uploads:/app/uploads
       - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
     depends_on:
@@ -258,8 +195,6 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
     depends_on:
       - backend-1
-      - backend-2
-      - backend-3
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3010 || exit 1"]
       interval: 30s
@@ -345,8 +280,6 @@ services:
       - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
     depends_on:
       - backend-1
-      - backend-2
-      - backend-3
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/healthy || exit 1"]
       interval: 30s
@@ -394,8 +327,6 @@ services:
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend-1
-      - backend-2
-      - backend-3
       - frontend
       - grafana
     healthcheck:
@@ -418,3 +349,9 @@ networks:
   # Isolated network for MinIO (backend and celery only)
   supportcenter-minio-network:
     driver: bridge
+
+# ============================================================================
+# VOLUMES
+# ============================================================================
+volumes:
+  backend-venv:
