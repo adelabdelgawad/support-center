@@ -61,23 +61,14 @@ function formatChatTimestamp(dateString?: string): string {
   const date = new Date(normalizedDateString);
   if (isNaN(date.getTime())) return "";
 
-  const now = new Date();
-  const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+  // Always show full date and time: DD/MM/YYYY HH:MM
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
 
-  if (diffInHours < 24) {
-    // Within 24 hours: show time in HH:MM format (local timezone)
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-  } else {
-    // Older than 24 hours: show date (local timezone)
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-  }
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
 /**

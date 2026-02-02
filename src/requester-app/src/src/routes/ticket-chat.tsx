@@ -853,9 +853,14 @@ function TicketChatPageInner() {
     prevMessageCount = newMessages.length;
     setMergedMessages(newMessages);
 
-    // NOTE: Scroll logic REMOVED from merge effect to match IT app behavior
-    // IT app triggers scroll from onNewMessage callback, not from state changes
-    // This prevents duplicate scroll triggers
+    // Re-sync scroll position after data merge (handles cached→fresh transition)
+    // When cache loads first and fresh data replaces it, DOM height changes
+    // but no scroll event fires, leaving the user not at bottom despite isAtBottomRef being true.
+    if (initialScrollDone() && isAtBottomRef() && !scrollLock) {
+      requestAnimationFrame(() => {
+        requestScroll('new-message', { force: false, smooth: false });
+      });
+    }
   });
 
   // Stable reference to messages
@@ -1630,6 +1635,11 @@ function TicketChatPageInner() {
     }
 
     onCleanup(() => {
+      // Mark all messages as read before leaving (catches any debounce-pending messages)
+      if (id) {
+        if (markAsReadTimer) clearTimeout(markAsReadTimer);
+        markMessagesAsRead(id).catch(() => {});
+      }
       notificationWs.setActiveChat(null);
     });
   });
@@ -1676,6 +1686,8 @@ function TicketChatPageInner() {
   // 2. Update sequence number
   // 3. Handle scroll behavior
   // DO NOT add to localMessages - this would cause duplicate merge and flicker
+  let markAsReadTimer: ReturnType<typeof setTimeout> | null = null;
+
   const handleNewMessage = (message: ChatMessage) => {
     // Check if this is an optimistic message replacement
     const isOptimisticReplacement = message.clientTempId &&
@@ -1719,6 +1731,17 @@ function TicketChatPageInner() {
     const isFromOtherUser = currentUser && message.senderId !== currentUser.id;
     if (!wasAtBottom && isFromOtherUser) {
       setNewMessagesWhileScrolledUp(prev => prev + 1);
+    }
+
+    // Mark as read on backend if from another user (debounced to avoid API spam)
+    if (isFromOtherUser) {
+      if (markAsReadTimer) clearTimeout(markAsReadTimer);
+      markAsReadTimer = setTimeout(() => {
+        const id = ticketId();
+        if (id) {
+          markMessagesAsRead(id).catch(() => {});
+        }
+      }, 1000);
     }
   };
 
