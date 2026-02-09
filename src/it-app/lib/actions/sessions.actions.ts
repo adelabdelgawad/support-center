@@ -12,8 +12,8 @@ import type {
 } from "@/types/sessions";
 
 // Session status thresholds (must align with backend cleanup: 2 min timeout)
-const STALE_THRESHOLD_MS = 1 * 60 * 1000; // 1 minute - warning state
-const DISCONNECTED_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes - matches backend cleanup
+const STALE_THRESHOLD_MS = 6 * 60 * 1000; // 6 minutes - warning state (heartbeat is every 5m)
+const DISCONNECTED_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes - matches backend cleanup
 
 /**
  * Derive session status from last heartbeat timestamp

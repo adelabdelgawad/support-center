@@ -2,12 +2,12 @@
  * Session Presence Service
  *
  * Manages desktop session presence using SignalR lifecycle events.
- * - Sends heartbeat every 30 seconds while SignalR is connected
+ * - Sends heartbeat every 5 minutes while SignalR is connected (configurable via VITE_HEARTBEAT_INTERVAL_MS)
  * - Notifies backend on disconnect (app close, network loss)
  * - Uses HTTP endpoints for durability (FastAPI is source of truth)
  *
  * Key Design:
- * - NO aggressive timers (30s interval)
+ * - Low-frequency timer (5m default, configurable)
  * - SignalR connection state drives heartbeat
  * - FastAPI owns session state, SignalR signals lifecycle changes
  * - STRICT UUID validation to prevent 422 errors from legacy numeric IDs
@@ -17,11 +17,11 @@ import { RuntimeConfig } from '@/lib/runtime-config';
 import { authStore } from '@/stores/auth-store';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
-// Heartbeat interval: 30 seconds (responsive presence without excessive load)
-const HEARTBEAT_INTERVAL_MS = 30_000;
+// Heartbeat interval: 5 minutes default, configurable via VITE_HEARTBEAT_INTERVAL_MS
+const HEARTBEAT_INTERVAL_MS = Number(import.meta.env.VITE_HEARTBEAT_INTERVAL_MS) || 300_000;
 
-// Minimum time between heartbeats (debounce rapid calls)
-const MIN_HEARTBEAT_GAP_MS = 20_000;
+// Minimum time between heartbeats (debounce rapid calls) - 2/3 of the interval
+const MIN_HEARTBEAT_GAP_MS = Math.floor(HEARTBEAT_INTERVAL_MS * 2 / 3);
 
 // UUID v4 pattern for strict validation
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

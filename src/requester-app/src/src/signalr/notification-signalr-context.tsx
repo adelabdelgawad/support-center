@@ -196,7 +196,7 @@ export const NotificationSignalRProvider: ParentComponent = (props) => {
         setState(SignalRState.CONNECTED);
         setError(null);
 
-        // Start session presence heartbeat (low-frequency, 45s interval)
+        // Start session presence heartbeat (configurable via VITE_HEARTBEAT_INTERVAL_MS, default 5m)
         sessionPresence.start();
 
         // Refresh subscriptions on connect

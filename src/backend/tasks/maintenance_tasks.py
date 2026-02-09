@@ -59,14 +59,14 @@ async def cleanup_expired_sessions_task(retention_days: int = 7) -> Dict[str, An
         return result
 
 
-async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 2) -> Dict[str, Any]:
+async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 10) -> Dict[str, Any]:
     """
     Mark stale desktop sessions as inactive.
 
     Wrapper for DesktopSessionService.cleanup_stale_sessions()
 
     Args:
-        timeout_minutes: Inactivity timeout in minutes (default: 2)
+        timeout_minutes: Inactivity timeout in minutes (default: 10, must exceed heartbeat interval of 5m)
 
     Returns:
         dict: Cleanup statistics with keys:
