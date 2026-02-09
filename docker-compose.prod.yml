@@ -111,7 +111,7 @@ services:
   # APPLICATION SERVICES
   # ============================================================================
 
-  # Backend Instance 1 (single instance for development)
+  # Backend Instance 1
   backend-1:
     build:
       context: ./src/backend
@@ -126,7 +126,79 @@ services:
       - docker/env/.env.backend
     volumes:
       - ./src/backend:/app
-      - backend-venv:/app/.venv
+      - backend-venv-1:/app/.venv
+      - ~/workspace/docker/support-center/backend/uploads:/app/uploads
+      - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - supportcenter-network
+      - supportcenter-minio-network
+    restart: unless-stopped
+
+  # Backend Instance 2
+  backend-2:
+    build:
+      context: ./src/backend
+      dockerfile: ../../docker/backend/Dockerfile
+    container_name: supportcenter-backend-2
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - INSTANCE_ID=backend-2
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENCODED}@redis:6379/0
+    env_file:
+      - docker/env/.env.backend
+    volumes:
+      - ./src/backend:/app
+      - backend-venv-2:/app/.venv
+      - ~/workspace/docker/support-center/backend/uploads:/app/uploads
+      - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - supportcenter-network
+      - supportcenter-minio-network
+    restart: unless-stopped
+
+  # Backend Instance 3
+  backend-3:
+    build:
+      context: ./src/backend
+      dockerfile: ../../docker/backend/Dockerfile
+    container_name: supportcenter-backend-3
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - INSTANCE_ID=backend-3
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_URL=redis://:${REDIS_PASSWORD_URLENCODED}@redis:6379/0
+    env_file:
+      - docker/env/.env.backend
+    volumes:
+      - ./src/backend:/app
+      - backend-venv-3:/app/.venv
       - ~/workspace/docker/support-center/backend/uploads:/app/uploads
       - ~/workspace/docker/support-center/backend/temp_uploads:/app/temp_uploads
     depends_on:
@@ -209,14 +281,33 @@ services:
   # REAL-TIME SERVICES
   # ============================================================================
 
-  # SignalR Real-time Communication Service
+  # SignalR Real-time Communication Service - Instance 1
   signalr-service:
     build:
       context: ./src/signalr-service
       dockerfile: ../../docker/signalr-service/Dockerfile
-    container_name: supportcenter-signalr
-    ports:
-      - "5000:5000"
+    container_name: supportcenter-signalr-1
+    env_file:
+      - docker/env/.env.signalr
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - supportcenter-network
+    restart: unless-stopped
+
+  # SignalR Real-time Communication Service - Instance 2
+  signalr-service-2:
+    build:
+      context: ./src/signalr-service
+      dockerfile: ../../docker/signalr-service/Dockerfile
+    container_name: supportcenter-signalr-2
     env_file:
       - docker/env/.env.signalr
     depends_on:
@@ -241,6 +332,7 @@ services:
       - docker/env/.env.coturn
     volumes:
       - ./docker/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - coturn-logs:/var/log/coturn
     restart: unless-stopped
     command:
       - "-c"
@@ -327,7 +419,10 @@ services:
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend-1
-      - frontend
+      - backend-2
+      - backend-3
+      - signalr-service
+      - signalr-service-2
       - grafana
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1/health || exit 1"]
@@ -354,4 +449,7 @@ networks:
 # VOLUMES
 # ============================================================================
 volumes:
-  backend-venv:
+  backend-venv-1:
+  backend-venv-2:
+  backend-venv-3:
+  coturn-logs:
