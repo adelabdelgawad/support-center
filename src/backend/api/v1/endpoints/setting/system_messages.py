@@ -162,7 +162,11 @@ async def update_system_message(
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
 
-    update_dict = message_data.model_dump(exclude_unset=True)
+    update_dict = {
+        k: v
+        for k, v in message_data.model_dump(exclude_unset=True).items()
+        if v is not None
+    }
     for field, value in update_dict.items():
         setattr(message, field, value)
 

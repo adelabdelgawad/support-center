@@ -272,7 +272,11 @@ async def update_system_event(
         if not event:
             raise HTTPException(status_code=404, detail="System event not found")
 
-        update_dict = event_data.model_dump(exclude_unset=True)
+        update_dict = {
+            k: v
+            for k, v in event_data.model_dump(exclude_unset=True).items()
+            if v is not None
+        }
 
         # Verify new system_message if provided
         if "system_message_id" in update_dict and update_dict["system_message_id"]:

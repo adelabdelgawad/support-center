@@ -50,17 +50,16 @@ export function EditSystemEventSheet({
   const { updateEventsOptimistic } = useSystemEventsActions();
 
   const handleSubmit = async (data: SystemEventFormData) => {
-    const updateData: SystemEventUpdate = {
-      eventNameEn: data.eventNameEn !== event.eventNameEn ? data.eventNameEn : null,
-      eventNameAr: data.eventNameAr !== event.eventNameAr ? data.eventNameAr : null,
-      descriptionEn: data.descriptionEn !== event.descriptionEn ? (data.descriptionEn || null) : null,
-      descriptionAr: data.descriptionAr !== event.descriptionAr ? (data.descriptionAr || null) : null,
-      systemMessageId: data.systemMessageId !== event.systemMessageId ? (data.systemMessageId || null) : null,
-      triggerTiming: data.triggerTiming !== event.triggerTiming ? data.triggerTiming : null,
-      isActive: data.isActive !== event.isActive ? data.isActive : null,
-    };
+    const updateData: Partial<SystemEventUpdate> = {};
+    if (data.eventNameEn !== event.eventNameEn) updateData.eventNameEn = data.eventNameEn;
+    if (data.eventNameAr !== event.eventNameAr) updateData.eventNameAr = data.eventNameAr;
+    if (data.descriptionEn !== event.descriptionEn) updateData.descriptionEn = data.descriptionEn || null;
+    if (data.descriptionAr !== event.descriptionAr) updateData.descriptionAr = data.descriptionAr || null;
+    if (data.systemMessageId !== event.systemMessageId) updateData.systemMessageId = data.systemMessageId || null;
+    if (data.triggerTiming !== event.triggerTiming) updateData.triggerTiming = data.triggerTiming;
+    if (data.isActive !== event.isActive) updateData.isActive = data.isActive;
 
-    const updatedEvent = await updateSystemEvent(String(event.id), updateData);
+    const updatedEvent = await updateSystemEvent(String(event.id), updateData as SystemEventUpdate);
     await updateEventsOptimistic([updatedEvent]);
   };
 

@@ -40,15 +40,14 @@ export function EditRequestTypeSheet({
   const { updateTypesOptimistic } = useRequestTypesActions();
 
   const handleSubmit = async (data: RequestTypeFormData) => {
-    const updateData: RequestTypeUpdate = {
-      nameEn: data.nameEn !== type.nameEn ? data.nameEn : null,
-      nameAr: data.nameAr !== type.nameAr ? data.nameAr : null,
-      briefEn: data.briefEn !== type.briefEn ? (data.briefEn || null) : null,
-      briefAr: data.briefAr !== type.briefAr ? (data.briefAr || null) : null,
-      isActive: data.isActive !== type.isActive ? data.isActive : null,
-    };
+    const updateData: Partial<RequestTypeUpdate> = {};
+    if (data.nameEn !== type.nameEn) updateData.nameEn = data.nameEn;
+    if (data.nameAr !== type.nameAr) updateData.nameAr = data.nameAr;
+    if (data.briefEn !== type.briefEn) updateData.briefEn = data.briefEn || null;
+    if (data.briefAr !== type.briefAr) updateData.briefAr = data.briefAr || null;
+    if (data.isActive !== type.isActive) updateData.isActive = data.isActive;
 
-    const updatedType = await updateRequestType(type.id.toString(), updateData);
+    const updatedType = await updateRequestType(type.id.toString(), updateData as RequestTypeUpdate);
     await updateTypesOptimistic([updatedType]);
   };
 

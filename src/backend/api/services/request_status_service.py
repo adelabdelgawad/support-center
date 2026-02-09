@@ -230,8 +230,12 @@ class RequestStatusService:
         ):
             raise ValueError("Cannot modify name, description, or color of readonly request status")
 
-        # Update fields
-        update_dict = update_data.model_dump(exclude_unset=True)
+        # Update fields (filter None to protect NOT NULL columns)
+        update_dict = {
+            k: v
+            for k, v in update_data.model_dump(exclude_unset=True).items()
+            if v is not None
+        }
         for field, value in update_dict.items():
             setattr(status, field, value)
 

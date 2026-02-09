@@ -37,12 +37,11 @@ export function EditRegionSheet({
   const { updateRegionsOptimistic } = useRegionsActions();
 
   const handleSubmit = async (data: RegionFormData) => {
-    const updateData: BusinessUnitRegionUpdate = {
-      name: data.name !== region.name ? data.name : null,
-      description: data.description !== region.description ? (data.description || null) : null,
-    };
+    const updateData: Partial<BusinessUnitRegionUpdate> = {};
+    if (data.name !== region.name) updateData.name = data.name;
+    if (data.description !== region.description) updateData.description = data.description || null;
 
-    const updatedRegion = await updateBusinessUnitRegion(region.id, updateData);
+    const updatedRegion = await updateBusinessUnitRegion(region.id, updateData as BusinessUnitRegionUpdate);
     await updateRegionsOptimistic([updatedRegion]);
   };
 

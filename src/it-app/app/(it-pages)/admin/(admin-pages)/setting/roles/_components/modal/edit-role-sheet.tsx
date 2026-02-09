@@ -36,12 +36,11 @@ export function EditRoleSheet({
   const { handleUpdateRole } = useRolesActions();
 
   const handleSubmit = async (data: RoleFormData) => {
-    const updateData: RoleUpdateRequest = {
-      name: data.name !== role.name ? data.name : null,
-      description: data.description !== role.description ? (data.description || null) : null,
-    };
+    const updateData: Partial<RoleUpdateRequest> = {};
+    if (data.name !== role.name) updateData.name = data.name;
+    if (data.description !== role.description) updateData.description = data.description || null;
 
-    const updatedRole = await updateRole(role.id, updateData);
+    const updatedRole = await updateRole(role.id, updateData as RoleUpdateRequest);
     handleUpdateRole(role.id, updatedRole);
   };
 

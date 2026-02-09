@@ -45,18 +45,17 @@ export function EditRequestStatusSheet({
   const { updateStatusesOptimistic } = useRequestStatusesActions();
 
   const handleSubmit = async (data: RequestStatusFormData) => {
-    const updateData: RequestStatusUpdate = {
-      name: data.name !== status.name ? data.name : null,
-      nameEn: data.nameEn !== status.nameEn ? data.nameEn : null,
-      nameAr: data.nameAr !== status.nameAr ? data.nameAr : null,
-      description: data.description !== status.description ? (data.description || null) : null,
-      color: data.color !== status.color ? (data.color || null) : null,
-      countAsSolved: data.countAsSolved !== status.countAsSolved ? data.countAsSolved : null,
-      visibleOnRequesterPage: data.visibleOnRequesterPage !== status.visibleOnRequesterPage ? data.visibleOnRequesterPage : null,
-      isActive: data.isActive !== status.isActive ? data.isActive : null,
-    };
+    const updateData: Partial<RequestStatusUpdate> = {};
+    if (data.name !== status.name) updateData.name = data.name;
+    if (data.nameEn !== status.nameEn) updateData.nameEn = data.nameEn;
+    if (data.nameAr !== status.nameAr) updateData.nameAr = data.nameAr;
+    if (data.description !== status.description) updateData.description = data.description || null;
+    if (data.color !== status.color) updateData.color = data.color || null;
+    if (data.countAsSolved !== status.countAsSolved) updateData.countAsSolved = data.countAsSolved;
+    if (data.visibleOnRequesterPage !== status.visibleOnRequesterPage) updateData.visibleOnRequesterPage = data.visibleOnRequesterPage;
+    if (data.isActive !== status.isActive) updateData.isActive = data.isActive;
 
-    const updatedStatus = await updateRequestStatus(status.id.toString(), updateData);
+    const updatedStatus = await updateRequestStatus(status.id.toString(), updateData as RequestStatusUpdate);
     await updateStatusesOptimistic([updatedStatus]);
   };
 

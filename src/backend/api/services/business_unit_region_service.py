@@ -159,7 +159,11 @@ class BusinessUnitRegionService:
         if not region:
             return None
 
-        update_dict = update_data.model_dump(exclude_unset=True)
+        update_dict = {
+            k: v
+            for k, v in update_data.model_dump(exclude_unset=True).items()
+            if v is not None
+        }
         for field, value in update_dict.items():
             setattr(region, field, value)
 

@@ -39,13 +39,12 @@ export function EditSystemMessageSheet({
   const { updateMessagesOptimistic } = useSystemMessagesActions();
 
   const handleSubmit = async (data: SystemMessageFormData) => {
-    const updateData: SystemMessageUpdate = {
-      templateEn: data.templateEn !== message.templateEn ? data.templateEn : null,
-      templateAr: data.templateAr !== message.templateAr ? data.templateAr : null,
-      isActive: data.isActive !== message.isActive ? data.isActive : null,
-    };
+    const updateData: Partial<SystemMessageUpdate> = {};
+    if (data.templateEn !== message.templateEn) updateData.templateEn = data.templateEn;
+    if (data.templateAr !== message.templateAr) updateData.templateAr = data.templateAr;
+    if (data.isActive !== message.isActive) updateData.isActive = data.isActive;
 
-    const updatedMessage = await updateSystemMessage(String(message.id), updateData);
+    const updatedMessage = await updateSystemMessage(String(message.id), updateData as SystemMessageUpdate);
     await updateMessagesOptimistic([updatedMessage]);
   };
 
