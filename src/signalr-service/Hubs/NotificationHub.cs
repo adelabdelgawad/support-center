@@ -34,7 +34,8 @@ public class NotificationHub : Hub
             return;
         }
 
-        _connectionTracker.AddConnection(userId, Context.ConnectionId);
+        var sessionId = Context.GetHttpContext()?.Request.Query["sessionId"].FirstOrDefault();
+        await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId, sessionId);
 
         // Add user to their personal notification group
         var userGroup = GetUserNotificationGroup(userId);
@@ -51,7 +52,7 @@ public class NotificationHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
-        _connectionTracker.RemoveConnection(Context.ConnectionId);
+        await _connectionTracker.RemoveConnectionAsync(Context.ConnectionId);
 
         // Clean up active chat tracking
         lock (_activeChatLock)

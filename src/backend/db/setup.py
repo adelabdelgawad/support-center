@@ -2205,7 +2205,7 @@ class DatabaseSetup:
                     "description": "Clean up stale desktop sessions every minute",
                     "task_function_name": "cleanup_stale_desktop_sessions",
                     "schedule_config": {"hours": 0, "minutes": 1, "seconds": 0},
-                    "task_args": {"timeout_minutes": 2},
+                    "task_args": {"timeout_minutes": 1440},
                     "timeout_seconds": 60,
                     "retry_count": 3,
                     "retry_delay_seconds": 60,

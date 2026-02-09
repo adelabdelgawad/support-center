@@ -59,14 +59,18 @@ async def cleanup_expired_sessions_task(retention_days: int = 7) -> Dict[str, An
         return result
 
 
-async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 10) -> Dict[str, Any]:
+async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 1440) -> Dict[str, Any]:
     """
-    Mark stale desktop sessions as inactive.
+    Mark stale desktop sessions as inactive (DB hygiene only).
+
+    Redis TTL-based presence (via SignalR + heartbeat) is the authoritative
+    source for real-time online status. This cleanup only marks truly
+    abandoned sessions as inactive after 24h for database hygiene.
 
     Wrapper for DesktopSessionService.cleanup_stale_sessions()
 
     Args:
-        timeout_minutes: Inactivity timeout in minutes (default: 10, must exceed heartbeat interval of 5m)
+        timeout_minutes: Inactivity timeout in minutes (default: 1440 = 24h, DB hygiene only)
 
     Returns:
         dict: Cleanup statistics with keys:

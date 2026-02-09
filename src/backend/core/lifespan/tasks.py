@@ -131,6 +131,18 @@ async def shutdown_signalr_client():
         logger.warning(f"⚠️  SignalR client shutdown error: {e}")
 
 
+async def shutdown_presence_service():
+    """Close presence Redis client."""
+    logger = logging.getLogger("main")
+    try:
+        from api.services.presence_service import presence_service
+
+        await presence_service.close()
+        logger.info("Presence Redis client closed")
+    except Exception as e:
+        logger.warning(f"Presence Redis shutdown error: {e}")
+
+
 async def shutdown_database():
     """Close database connections."""
     from db.database import close_db

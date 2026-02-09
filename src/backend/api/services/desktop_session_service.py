@@ -187,6 +187,11 @@ class DesktopSessionService:
                 session_logger.session_updated(
                     existing_session.id, user_id, existing_session.last_heartbeat
                 )
+
+                # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
+                from api.services.presence_service import presence_service
+                await presence_service.set_present(existing_session.id, user_id)
+
                 return existing_session
 
         # Deactivate any existing active sessions for the same user + computer
@@ -276,6 +281,10 @@ class DesktopSessionService:
         )
         session_logger.session_created(user_id, session.id, 2, ip_address)  # type_id=2 for desktop
 
+        # Dual-write: set Redis presence for new session (non-blocking, fail-safe)
+        from api.services.presence_service import presence_service
+        await presence_service.set_present(session.id, user_id)
+
         return session
 
     @staticmethod
@@ -325,6 +334,11 @@ class DesktopSessionService:
         )
 
         session_logger.heartbeat_received(session_id, session.user_id, session.ip_address)
+
+        # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
+        from api.services.presence_service import presence_service
+        await presence_service.set_present(session_id, session.user_id)
+
         return session
 
     @staticmethod
@@ -364,6 +378,10 @@ class DesktopSessionService:
             f"User: {session.user_id} | Duration: {duration:.1f} minutes"
         )
         session_logger.session_disconnected(session_id, session.user_id, duration)
+
+        # Dual-write: remove Redis presence key (non-blocking, fail-safe)
+        from api.services.presence_service import presence_service
+        await presence_service.remove_present(session_id, session.user_id)
 
         return session
 
@@ -449,14 +467,17 @@ class DesktopSessionService:
     @transactional_database_operation("cleanup_stale_desktop_sessions")
     @log_database_operation("stale desktop session cleanup", level="info")
     async def cleanup_stale_sessions(
-        db: AsyncSession, timeout_minutes: int = 10
+        db: AsyncSession, timeout_minutes: int = 1440
     ) -> int:
         """
         Clean up stale desktop sessions (no heartbeat for > timeout_minutes).
 
+        DB hygiene only — Redis TTL-based presence (via SignalR + heartbeat)
+        is the authoritative source for real-time online status.
+
         Args:
             db: Database session
-            timeout_minutes: Minutes before considering session stale
+            timeout_minutes: Minutes before considering session stale (default: 1440 = 24h)
 
         Returns:
             Number of sessions cleaned up

@@ -258,7 +258,11 @@ class SignalRHubManager {
         }
 
         const baseUrl = RuntimeConfig.getSignalRAddress();
-        const hubUrl = `${baseUrl}/hubs/${this.hubType}`;
+        // Pass desktop sessionId for Redis presence tracking (Phase 3)
+        const desktopSessionId = authStore.state.sessionId;
+        const hubUrl = desktopSessionId
+          ? `${baseUrl}/hubs/${this.hubType}?sessionId=${encodeURIComponent(desktopSessionId)}`
+          : `${baseUrl}/hubs/${this.hubType}`;
 
         console.log(`[SignalR:${this.hubType}] Connecting to ${hubUrl}`);
 

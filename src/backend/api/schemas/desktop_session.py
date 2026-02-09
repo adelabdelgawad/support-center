@@ -71,6 +71,12 @@ class DesktopSessionWithUserRead(DesktopSessionRead):
     # Add sessionTypeId for frontend compatibility (always 2 for desktop)
     session_type_id: int = Field(default=2, description="Always 2 for desktop sessions")
 
+    # Real-time presence from Redis (Phase 4: authoritative online status)
+    is_live: Optional[bool] = Field(
+        default=None,
+        description="Real-time presence from Redis. True = user has active SignalR/heartbeat connection.",
+    )
+
     # Version policy fields (enriched at fetch time)
     version_status: Optional[str] = Field(
         default=None,

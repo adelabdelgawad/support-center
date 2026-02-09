@@ -98,6 +98,7 @@ async def get_active_desktop_sessions_with_users(db: AsyncSession = Depends(get_
         ordered by last_heartbeat descending
     """
     from api.services.version_policy_service import VersionPolicyService
+    from api.services.presence_service import presence_service
 
     # Fetch raw sessions
     sessions = await DesktopSessionService.get_active_sessions_with_users(db=db)
@@ -108,7 +109,10 @@ async def get_active_desktop_sessions_with_users(db: AsyncSession = Depends(get_
     # Fetch version registry once for all sessions (efficiency)
     version_registry = await VersionPolicyService.get_version_registry(db, "desktop")
 
-    # Enrich each session with version policy
+    # Batch-fetch Redis presence for all sessions (authoritative online status)
+    live_session_ids = await presence_service.get_all_present_session_ids()
+
+    # Enrich each session with version policy and live presence
     enriched_sessions = []
     for session in sessions:
         # Resolve version policy for this session
@@ -118,8 +122,6 @@ async def get_active_desktop_sessions_with_users(db: AsyncSession = Depends(get_
             version_registry=version_registry,
         )
 
-        # Create enriched response dict
-        # We need to convert session to dict, add policy fields, then return
         session_dict = {
             "id": session.id,
             "user_id": session.user_id,
@@ -139,6 +141,7 @@ async def get_active_desktop_sessions_with_users(db: AsyncSession = Depends(get_
                 "full_name": session.user.full_name,
             },
             "session_type_id": 2,
+            "is_live": str(session.id) in live_session_ids,
             "version_status": policy.version_status.value,
             "target_version": policy.target_version_string,
         }
@@ -182,34 +185,59 @@ async def get_desktop_session_stats(
     Returns:
         Dictionary with desktop session stats
     """
-    from datetime import datetime, timedelta
+    from api.services.presence_service import presence_service
 
-    # Get active desktop sessions only
-    desktop_sessions = await DesktopSessionService.get_active_sessions(db=db)
-
-    # Count unique users
-    unique_users = len({str(session.user_id) for session in desktop_sessions})
-
-    # Count truly active sessions (heartbeat within last 1 minute)
-    # Matches frontend STALE_THRESHOLD for consistent status reporting
-    now = datetime.utcnow()
-    active_threshold = now - timedelta(minutes=1)
-
-    active_count = sum(
-        1 for session in desktop_sessions
-        if session.last_heartbeat and session.last_heartbeat >= active_threshold
-    )
-
-    total_sessions = len(desktop_sessions)
+    redis_count = await presence_service.count_present_sessions()
+    redis_user_ids = await presence_service.get_present_user_ids()
 
     return {
-        "totalSessions": total_sessions,
-        "desktopSessions": total_sessions,
+        "totalSessions": redis_count,
+        "desktopSessions": redis_count,
         "webSessions": 0,
         "mobileSessions": 0,
-        "activeSessions": active_count,
-        "uniqueUsers": unique_users,
+        "activeSessions": redis_count,
+        "uniqueUsers": len(redis_user_ids),
         "avgSessionDuration": None,
+    }
+
+
+@router.get("/presence/parity")
+async def check_presence_parity(
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Compare DB-based active sessions vs Redis presence keys.
+    Used to validate Redis dual-write parity during Phase 1 migration.
+    """
+    from api.services.presence_service import presence_service
+
+    db_sessions = await DesktopSessionService.get_active_sessions(db=db)
+    db_session_ids = {str(s.id) for s in db_sessions}
+
+    redis_count = await presence_service.count_present_sessions()
+
+    return {
+        "dbActiveSessions": len(db_session_ids),
+        "redisPresenceKeys": redis_count,
+        "delta": len(db_session_ids) - redis_count,
+    }
+
+
+@router.get("/presence/user/{user_id}")
+async def check_user_presence(user_id: UUID):
+    """
+    Check if a specific user is currently present (has active Redis presence key).
+    Returns instantly from Redis without hitting DB.
+    """
+    from api.services.presence_service import presence_service
+
+    is_present = await presence_service.is_user_present(user_id)
+    sessions = await presence_service.get_user_sessions(user_id)
+
+    return {
+        "userId": str(user_id),
+        "present": is_present,
+        "activeSessions": len(sessions),
     }
 
 

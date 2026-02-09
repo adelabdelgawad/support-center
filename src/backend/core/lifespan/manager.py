@@ -61,6 +61,9 @@ async def lifespan(app: FastAPI):
     # Close SignalR HTTP client
     await tasks.shutdown_signalr_client()
 
+    # Close presence Redis client
+    await tasks.shutdown_presence_service()
+
     # Shutdown event coalescer (Feature 001)
     await tasks.shutdown_event_coalescer()
 

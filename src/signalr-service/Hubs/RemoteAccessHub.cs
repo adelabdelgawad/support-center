@@ -34,7 +34,8 @@ public class RemoteAccessHub : Hub
             return;
         }
 
-        _connectionTracker.AddConnection(userId, Context.ConnectionId);
+        var sessionId = Context.GetHttpContext()?.Request.Query["sessionId"].FirstOrDefault();
+        await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId, sessionId);
         _logger.LogInformation("RemoteAccessHub: User {UserId} connected with {ConnectionId}", userId, Context.ConnectionId);
 
         await base.OnConnectedAsync();
@@ -43,7 +44,7 @@ public class RemoteAccessHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
-        _connectionTracker.RemoveConnection(Context.ConnectionId);
+        await _connectionTracker.RemoveConnectionAsync(Context.ConnectionId);
 
         // Clean up session participation and notify other party
         await CleanupParticipant(Context.ConnectionId);

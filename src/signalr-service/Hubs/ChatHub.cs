@@ -31,7 +31,8 @@ public class ChatHub : Hub
             return;
         }
 
-        _connectionTracker.AddConnection(userId, Context.ConnectionId);
+        var sessionId = Context.GetHttpContext()?.Request.Query["sessionId"].FirstOrDefault();
+        await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId, sessionId);
 
         // Add user to their personal user:{userId} group for direct notifications
         // This matches NotificationHub's notifications:{userId} pattern
@@ -52,7 +53,7 @@ public class ChatHub : Hub
         // Remove from user group
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, userGroup);
 
-        _connectionTracker.RemoveConnection(Context.ConnectionId);
+        await _connectionTracker.RemoveConnectionAsync(Context.ConnectionId);
 
         if (exception != null)
         {

@@ -30,7 +30,8 @@ public class TicketHub : Hub
             return;
         }
 
-        _connectionTracker.AddConnection(userId, Context.ConnectionId);
+        var sessionId = Context.GetHttpContext()?.Request.Query["sessionId"].FirstOrDefault();
+        await _connectionTracker.AddConnectionAsync(userId, Context.ConnectionId, sessionId);
         _logger.LogInformation("TicketHub: User {UserId} connected with {ConnectionId}", userId, Context.ConnectionId);
 
         await base.OnConnectedAsync();
@@ -39,7 +40,7 @@ public class TicketHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var userId = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
-        _connectionTracker.RemoveConnection(Context.ConnectionId);
+        await _connectionTracker.RemoveConnectionAsync(Context.ConnectionId);
 
         if (exception != null)
         {

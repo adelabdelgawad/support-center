@@ -58,7 +58,7 @@ class TURNSettings(BaseSettings):
 
     enabled: bool = Field(default=True, description="Enable TURN server for WebRTC")
     urls: str = Field(
-        default="turn:supportcenter.andalusiagroup.net:3478",
+        default="turn:supportcenter.andalusiagroup.net:3478,turn:supportcenter.andalusiagroup.net:3478?transport=tcp",
         description="Comma-separated list of TURN server URLs"
     )
     username: str = Field(default="", description="Static TURN username (optional)")
@@ -505,6 +505,22 @@ class ZapierSettings(BaseSettings):
     )
 
 
+class PresenceSettings(BaseSettings):
+    """Redis TTL-based presence tracking configuration."""
+
+    ttl_seconds: int = Field(
+        default=660,
+        description="TTL for presence keys in Redis. Should be ~2x the heartbeat interval (5min=300s, so 660s).",
+    )
+
+    model_config = SettingsConfigDict(
+        env_prefix="PRESENCE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
 class VersionPolicySettings(BaseSettings):
     """Version Authority enforcement configuration settings.
 
@@ -614,6 +630,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = LoggingSettings()
     pagination: PaginationSettings = PaginationSettings()
     zapier: ZapierSettings = ZapierSettings()
+    presence: PresenceSettings = PresenceSettings()
     version_policy: VersionPolicySettings = VersionPolicySettings()
     deployment_worker: DeploymentWorkerSettings = DeploymentWorkerSettings()
     deployment: DeploymentSettings = DeploymentSettings()

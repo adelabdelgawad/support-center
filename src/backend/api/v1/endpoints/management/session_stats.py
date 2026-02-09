@@ -22,7 +22,6 @@ Mobile sessions are not yet implemented and always return 0.
 """
 
 import logging
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +30,6 @@ from db.database import get_session
 from core.dependencies import get_current_user
 from db import User
 from api.schemas.desktop_session import ActiveSessionStats
-from api.services.desktop_session_service import DesktopSessionService
 from api.services.web_session_service import WebSessionService
 
 router = APIRouter()
@@ -49,32 +47,24 @@ async def get_combined_session_stats(
     Returns:
         ActiveSessionStats with total sessions, breakdown by type, and unique users
     """
-    # Get active sessions from both types
-    desktop_sessions = await DesktopSessionService.get_active_sessions(db=db)
+    from api.services.presence_service import presence_service
+
+    # Desktop counts from Redis presence (authoritative)
+    redis_session_ids = await presence_service.get_all_present_session_ids()
+    redis_user_ids = await presence_service.get_present_user_ids()
+
+    # Web sessions still come from DB (no Redis presence for web yet)
     web_sessions = await WebSessionService.get_active_sessions(db=db)
+    web_user_ids = {str(s.user_id) for s in web_sessions}
 
-    # Count unique users across both session types
-    desktop_user_ids = {str(session.user_id) for session in desktop_sessions}
-    web_user_ids = {str(session.user_id) for session in web_sessions}
-    unique_users = len(desktop_user_ids | web_user_ids)
-
-    # Count truly active sessions (heartbeat within last 5 minutes)
-    now = datetime.utcnow()
-    active_threshold = now - timedelta(minutes=5)
-
-    active_count = 0
-    for session in desktop_sessions:
-        if session.last_heartbeat and session.last_heartbeat >= active_threshold:
-            active_count += 1
-    for session in web_sessions:
-        if session.last_heartbeat and session.last_heartbeat >= active_threshold:
-            active_count += 1
-
-    total_sessions = len(desktop_sessions) + len(web_sessions)
+    unique_users = len(redis_user_ids | web_user_ids)
+    desktop_count = len(redis_session_ids)
+    active_count = desktop_count + len(web_sessions)
+    total_sessions = desktop_count + len(web_sessions)
 
     stats = ActiveSessionStats(
         total_sessions=total_sessions,
-        desktop_sessions=len(desktop_sessions),
+        desktop_sessions=desktop_count,
         web_sessions=len(web_sessions),
         mobile_sessions=0,  # Not implemented yet
         active_sessions=active_count,

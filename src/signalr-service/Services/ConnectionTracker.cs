@@ -1,26 +1,46 @@
 using System.Collections.Concurrent;
+using StackExchange.Redis;
 
 namespace SignalRService.Services;
 
 /// <summary>
 /// Tracks active SignalR connections and user-to-connection mappings.
 /// Used for sending messages to specific users and monitoring connection state.
+///
+/// Also writes Redis presence keys for desktop sessions (Phase 3: SignalR presence).
+/// Key schema matches Python backend presence_service.py:
+///   presence:desktop:{sessionId} → userId (with TTL)
+///   presence:user:{userId}       → SET of sessionIds (with TTL)
 /// </summary>
 public class ConnectionTracker
 {
     private readonly ConcurrentDictionary<string, HashSet<string>> _userConnections = new();
     private readonly ConcurrentDictionary<string, string> _connectionToUser = new();
+    private readonly ConcurrentDictionary<string, string> _connectionToSession = new();
     private readonly ConcurrentDictionary<string, HashSet<string>> _roomSubscriptions = new();
     private readonly ILogger<ConnectionTracker> _logger;
+    private readonly IDatabase? _redisDb;
     private readonly object _lock = new();
 
-    public ConnectionTracker(ILogger<ConnectionTracker> logger)
+    // Redis presence key schema (matches Python backend presence_service.py)
+    private const string DesktopPresencePrefix = "presence:desktop:";
+    private const string UserPresencePrefix = "presence:user:";
+    private const int PresenceTtlSeconds = 660; // 11 min, matches backend PRESENCE_TTL_SECONDS
+
+    public ConnectionTracker(ILogger<ConnectionTracker> logger, IServiceProvider serviceProvider)
     {
         _logger = logger;
+        var redis = serviceProvider.GetService<IConnectionMultiplexer>();
+        _redisDb = redis?.GetDatabase();
+
+        if (_redisDb != null)
+            _logger.LogInformation("ConnectionTracker: Redis presence tracking enabled");
+        else
+            _logger.LogInformation("ConnectionTracker: Redis not available, presence tracking disabled");
     }
 
     /// <summary>
-    /// Register a new connection for a user.
+    /// Register a new connection for a user (in-memory only).
     /// </summary>
     public void AddConnection(string userId, string connectionId)
     {
@@ -42,7 +62,21 @@ public class ConnectionTracker
     }
 
     /// <summary>
-    /// Remove a connection when disconnected.
+    /// Register a new connection with optional desktop session for Redis presence.
+    /// </summary>
+    public async Task AddConnectionAsync(string userId, string connectionId, string? desktopSessionId = null)
+    {
+        AddConnection(userId, connectionId);
+
+        if (!string.IsNullOrEmpty(desktopSessionId))
+        {
+            _connectionToSession[connectionId] = desktopSessionId;
+            await SetPresenceAsync(userId, desktopSessionId);
+        }
+    }
+
+    /// <summary>
+    /// Remove a connection when disconnected (in-memory only).
     /// </summary>
     public void RemoveConnection(string connectionId)
     {
@@ -68,6 +102,24 @@ public class ConnectionTracker
 
                 _logger.LogInformation("Connection {ConnectionId} removed for user {UserId}", connectionId, userId);
             }
+        }
+    }
+
+    /// <summary>
+    /// Remove a connection and clean up Redis presence if user has no remaining connections.
+    /// </summary>
+    public async Task RemoveConnectionAsync(string connectionId)
+    {
+        // Capture userId and sessionId before in-memory removal
+        string? userId = GetUserId(connectionId);
+        _connectionToSession.TryRemove(connectionId, out var sessionId);
+
+        RemoveConnection(connectionId);
+
+        // Only remove Redis presence if user has NO remaining connections
+        if (userId != null && !IsUserConnected(userId))
+        {
+            await RemovePresenceAsync(userId, sessionId);
         }
     }
 
@@ -176,6 +228,56 @@ public class ConnectionTracker
                 UniqueUsers = _userConnections.Count,
                 ActiveRooms = _roomSubscriptions.Count
             };
+        }
+    }
+
+    /// <summary>
+    /// Write Redis presence keys for a desktop session.
+    /// Uses same key schema as Python backend presence_service.py.
+    /// </summary>
+    private async Task SetPresenceAsync(string userId, string sessionId)
+    {
+        if (_redisDb == null) return;
+
+        try
+        {
+            var ttl = TimeSpan.FromSeconds(PresenceTtlSeconds);
+
+            await Task.WhenAll(
+                _redisDb.StringSetAsync($"{DesktopPresencePrefix}{sessionId}", userId, ttl),
+                _redisDb.SetAddAsync($"{UserPresencePrefix}{userId}", sessionId),
+                _redisDb.KeyExpireAsync($"{UserPresencePrefix}{userId}", ttl)
+            );
+
+            _logger.LogDebug("Presence SET for session {SessionId} user {UserId} (TTL={Ttl}s)",
+                sessionId, userId, PresenceTtlSeconds);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Presence Redis SET failed (non-fatal)");
+        }
+    }
+
+    /// <summary>
+    /// Remove Redis presence keys for a desktop session.
+    /// </summary>
+    private async Task RemovePresenceAsync(string userId, string? sessionId)
+    {
+        if (_redisDb == null || string.IsNullOrEmpty(sessionId)) return;
+
+        try
+        {
+            await Task.WhenAll(
+                _redisDb.KeyDeleteAsync($"{DesktopPresencePrefix}{sessionId}"),
+                _redisDb.SetRemoveAsync($"{UserPresencePrefix}{userId}", sessionId)
+            );
+
+            _logger.LogDebug("Presence DEL for session {SessionId} user {UserId}",
+                sessionId, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Presence Redis DEL failed (non-fatal)");
         }
     }
 }
