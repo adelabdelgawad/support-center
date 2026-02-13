@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -21,6 +28,7 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { createCategory } from "@/lib/api/categories";
+import { getSections, type Section } from "@/lib/api/sections";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -51,6 +59,7 @@ const createCategorySchema = z.object({
     .string()
     .max(500, "Description must be 500 characters or less")
     .optional(),
+  sectionId: z.string().optional(),
 });
 
 type CreateCategoryFormData = z.infer<typeof createCategorySchema>;
@@ -68,12 +77,15 @@ export function AddCategorySheet({
       nameEn: "",
       nameAr: "",
       description: "",
+      sectionId: "",
     },
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [sections, setSections] = useState<Section[]>([]);
+  const [loadingSections, setLoadingSections] = useState(false);
 
-  // Reset form when sheet opens
+  // Fetch sections when sheet opens
   useEffect(() => {
     if (open) {
       form.reset({
@@ -81,7 +93,14 @@ export function AddCategorySheet({
         nameEn: "",
         nameAr: "",
         description: "",
+        sectionId: "",
       });
+
+      setLoadingSections(true);
+      getSections(true, false, false)
+        .then(setSections)
+        .catch(() => setSections([]))
+        .finally(() => setLoadingSections(false));
     }
   }, [open, form]);
 
@@ -93,6 +112,7 @@ export function AddCategorySheet({
         nameEn: data.nameEn,
         nameAr: data.nameAr,
         description: data.description || null,
+        sectionId: data.sectionId ? Number(data.sectionId) : null,
         isActive: true,
       };
 
@@ -128,6 +148,44 @@ export function AddCategorySheet({
             onSubmit={form.handleSubmit(handleSave)}
             className="space-y-4 p-4"
           >
+            <FormField
+              control={form.control}
+              name="sectionId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Section</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    disabled={loadingSections}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue
+                          placeholder={
+                            loadingSections
+                              ? "Loading sections..."
+                              : "Select a section (optional)"
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {sections.map((section) => (
+                        <SelectItem
+                          key={section.id}
+                          value={String(section.id)}
+                        >
+                          {section.shownNameEn}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="name"

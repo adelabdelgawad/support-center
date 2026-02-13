@@ -20,7 +20,15 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import Priority, RequestAssignee, RequestNote, RequestStatus, ServiceRequest, User
+from db import (
+    Priority,
+    RequestAssignee,
+    RequestNote,
+    RequestStatus,
+    RequestType,
+    ServiceRequest,
+    User,
+)
 from api.schemas.service_request import (
     ServiceRequestCreate,
     ServiceRequestCreateByRequester,
@@ -29,6 +37,7 @@ from api.schemas.service_request import (
     ServiceRequestUpdate,
     ServiceRequestUpdateByTechnician,
 )
+
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
 
@@ -78,7 +87,9 @@ class RequestService:
                 if ip_obj in network:
                     return bu
             except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid network CIDR for business unit {bu.id}: {bu.network} - {e}")
+                logger.warning(
+                    f"Invalid network CIDR for business unit {bu.id}: {bu.network} - {e}"
+                )
                 continue
 
         return None
@@ -100,9 +111,7 @@ class RequestService:
             ValueError: If resolution is required but not provided
         """
         if status_id == 3 and not resolution:
-            raise ValueError(
-                "Resolution is mandatory when changing status to Solved"
-            )
+            raise ValueError("Resolution is mandatory when changing status to Solved")
         if status_id == 5 and not resolution:
             raise ValueError(
                 "Cancellation reason is mandatory when changing status to Canceled"
@@ -127,7 +136,6 @@ class RequestService:
         # Note: This would need to check the category ID = 1, but we don't have access to it here
         # This validation should be done at the model level or with full request context
         pass
-
 
     @staticmethod
     def validate_category_change_allowed(
@@ -208,9 +216,7 @@ class RequestService:
             )
 
             # Set appropriate timestamps
-            RequestService._set_status_timestamps(
-                request, new_status_id, update_dict
-            )
+            RequestService._set_status_timestamps(request, new_status_id, update_dict)
 
         # Validate category changes if provided
         if "category_id" in update_dict:
@@ -247,12 +253,15 @@ class RequestService:
             new_values: Dictionary of new values for changed fields
             current_user: User who made the update
         """
-        status_changed = old_status_id is not None and old_status_id != request.status_id
+        status_changed = (
+            old_status_id is not None and old_status_id != request.status_id
+        )
 
         # Trigger status_changed event
         if status_changed and old_status_name_en and request.status:
             try:
                 from api.services.event_trigger_service import EventTriggerService
+
                 await EventTriggerService.trigger_status_changed(
                     db=db,
                     request_id=request.id,
@@ -263,37 +272,46 @@ class RequestService:
                     changed_by=current_user,
                 )
             except Exception as e:
-                logger.warning(f"Failed to trigger status_changed event for request {request.id}: {e}")
+                logger.warning(
+                    f"Failed to trigger status_changed event for request {request.id}: {e}"
+                )
 
         # Trigger request_solved event if status is now marked as solved
         if status_changed and request.status and request.status.count_as_solved:
             try:
                 from api.services.event_trigger_service import EventTriggerService
+
                 await EventTriggerService.trigger_request_solved(
-                    db=db,
-                    request_id=request.id,
-                    solver=current_user
+                    db=db, request_id=request.id, solver=current_user
                 )
             except Exception as e:
-                logger.warning(f"Failed to trigger request_solved event for request {request.id}: {e}")
+                logger.warning(
+                    f"Failed to trigger request_solved event for request {request.id}: {e}"
+                )
 
         # Broadcast task_status_changed if marked as solved
         if status_changed and request.status and request.status.count_as_solved:
             try:
                 from api.services.signalr_client import signalr_client
+
                 await signalr_client.broadcast_task_status_changed(
                     request_id=str(request.id),
                     status="solved",
                     changed_by=current_user.full_name or current_user.username,
                 )
-                logger.info(f"Task {request.id} marked as solved, closure event emitted")
+                logger.info(
+                    f"Task {request.id} marked as solved, closure event emitted"
+                )
             except Exception as e:
-                logger.warning(f"Failed to broadcast task_status_changed for request {request.id}: {e}")
+                logger.warning(
+                    f"Failed to broadcast task_status_changed for request {request.id}: {e}"
+                )
 
         # Broadcast ticket update if anything changed
         if changed_fields:
             try:
                 from api.services.signalr_client import signalr_client
+
                 await signalr_client.broadcast_ticket_update(
                     request_id=str(request.id),
                     update_type="fields_updated",
@@ -311,7 +329,9 @@ class RequestService:
 
                 # Broadcast to user ticket lists (requester + assignees)
                 user_ids_str = [str(request.requester_id)]
-                user_ids_str.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+                user_ids_str.extend(
+                    [str(a.assignee_id) for a in request.assignees if a.assignee_id]
+                )
                 await signalr_client.broadcast_user_ticket_update(
                     user_ids=list(set(user_ids_str)),  # Dedupe
                     request_id=str(request.id),
@@ -319,7 +339,9 @@ class RequestService:
                     update_data={"updatedFields": changed_fields},
                 )
             except Exception as e:
-                logger.warning(f"Failed to broadcast ticket update for request {request.id}: {e}")
+                logger.warning(
+                    f"Failed to broadcast ticket update for request {request.id}: {e}"
+                )
 
     @staticmethod
     @log_database_operation("update_service_request")
@@ -351,16 +373,16 @@ class RequestService:
             select(ServiceRequest)
             .options(
                 selectinload(ServiceRequest.subcategory),
-                selectinload(ServiceRequest.status),  # Load status for count_as_solved check
+                selectinload(
+                    ServiceRequest.status
+                ),  # Load status for count_as_solved check
             )
             .where(ServiceRequest.id == request_id)
         )
         request = result.scalar_one_or_none()
 
         if not request:
-            raise NotFoundError(
-                f"Service request with ID {request_id} not found"
-            )
+            raise NotFoundError(f"Service request with ID {request_id} not found")
 
         # Apply business rule validations and processing
         processed_updates = RequestService._validate_and_process_update(
@@ -434,20 +456,14 @@ class RequestService:
         # Business rule: Cannot change to resolved/closed without description
         new_status_id = update_dict.get("status_id")
         if new_status_id in [6, 8]:
-            final_description = (
-                update_dict.get("description") or request.description
-            )
+            final_description = update_dict.get("description") or request.description
             if not final_description:
                 raise ValueError(
                     "Description is required before changing status to resolved/closed"
                 )
-            final_resolution = (
-                update_dict.get("resolution") or request.resolution
-            )
+            final_resolution = update_dict.get("resolution") or request.resolution
             if not final_resolution:
-                raise ValueError(
-                    "Resolution is required for resolved/closed status"
-                )
+                raise ValueError("Resolution is required for resolved/closed status")
 
         # Update the request
         for key, value in update_dict.items():
@@ -559,23 +575,15 @@ class RequestService:
         base_query = select(ServiceRequest)
 
         if date_from:
-            base_query = base_query.where(
-                ServiceRequest.created_at >= date_from
-            )
+            base_query = base_query.where(ServiceRequest.created_at >= date_from)
         if date_to:
             base_query = base_query.where(ServiceRequest.created_at <= date_to)
         if category_id:
-            base_query = base_query.where(
-                ServiceRequest.category_id == category_id
-            )
+            base_query = base_query.where(ServiceRequest.category_id == category_id)
         if priority_id:
-            base_query = base_query.where(
-                ServiceRequest.priority_id == priority_id
-            )
+            base_query = base_query.where(ServiceRequest.priority_id == priority_id)
         if status_id:
-            base_query = base_query.where(
-                ServiceRequest.status_id == status_id
-            )
+            base_query = base_query.where(ServiceRequest.status_id == status_id)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -648,9 +656,7 @@ class RequestService:
         """
         # Validate mandatory subcategory for Software Issues
         if request_data.category_id == 1 and not request_data.subcategory_id:
-            raise ValueError(
-                "Subcategory is mandatory for Software Issues category"
-            )
+            raise ValueError("Subcategory is mandatory for Software Issues category")
 
         # Calculate due_date based on priority SLA
         due_date = None
@@ -660,7 +666,9 @@ class RequestService:
             )
             priority_obj = priority.scalar_one_or_none()
             if priority_obj and priority_obj.resolution_time_hours:
-                due_date = datetime.utcnow() + timedelta(hours=priority_obj.resolution_time_hours)
+                due_date = datetime.utcnow() + timedelta(
+                    hours=priority_obj.resolution_time_hours
+                )
 
         # Create the request
         service_request = ServiceRequest(
@@ -680,7 +688,9 @@ class RequestService:
         await db.flush()
         await db.refresh(service_request)
 
-        logger.info(f"Created new service request {service_request.id} with due_date={due_date}")
+        logger.info(
+            f"Created new service request {service_request.id} with due_date={due_date}"
+        )
         return service_request
 
     @staticmethod
@@ -736,7 +746,23 @@ class RequestService:
         )
         priority_obj = priority.scalar_one_or_none()
         if priority_obj and priority_obj.resolution_time_hours:
-            due_date = datetime.utcnow() + timedelta(hours=priority_obj.resolution_time_hours)
+            due_date = datetime.utcnow() + timedelta(
+                hours=priority_obj.resolution_time_hours
+            )
+
+        # Get request type to auto-populate assigned_to_section_id
+        request_type = await db.execute(
+            select(RequestType).where(RequestType.id == request_data.request_type_id)
+        )
+        request_type_obj = request_type.scalar_one_or_none()
+        assigned_to_section_id = (
+            request_type_obj.section_id if request_type_obj else None
+        )
+
+        if assigned_to_section_id:
+            logger.info(
+                f"Auto-assigned section {assigned_to_section_id} for request type {request_data.request_type_id}"
+            )
 
         # Create the request with minimal data
         service_request = ServiceRequest(
@@ -744,11 +770,11 @@ class RequestService:
             description=None,  # Technician will fill this later
             requester_id=requester_id,
             ip_address=client_ip,
-            business_unit_ids=business_unit_ids,
+            business_unit_id=business_unit_id,
             priority_id=3,  # Default to Medium priority
             status_id=1,  # Default to Open status
-            tag_id=request_data.tag_id,  # Tag selected by requester
             request_type_id=request_data.request_type_id,  # Request type selected by requester
+            assigned_to_section_id=assigned_to_section_id,  # Auto-assigned from request type
             due_date=due_date,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
@@ -760,6 +786,7 @@ class RequestService:
 
         # Create initial chat message with the request title
         from db import ChatMessage
+
         initial_message = ChatMessage(
             request_id=service_request.id,
             sender_id=requester_id,
@@ -806,7 +833,7 @@ class RequestService:
                     # Don't fail request creation if scheduling fails
                     logger.error(
                         f"Failed to schedule WhatsApp notification for request {service_request.id}: {e}",
-                        exc_info=True
+                        exc_info=True,
                     )
 
         logger.info(
@@ -817,13 +844,19 @@ class RequestService:
         # Trigger new_request system message event
         try:
             from api.services.event_trigger_service import EventTriggerService
-            await EventTriggerService.trigger_new_request(db=db, request=service_request)
+
+            await EventTriggerService.trigger_new_request(
+                db=db, request=service_request
+            )
         except Exception as e:
-            logger.warning(f"Failed to trigger new_request event for request {service_request.id}: {e}")
+            logger.warning(
+                f"Failed to trigger new_request event for request {service_request.id}: {e}"
+            )
 
         # Broadcast new ticket via SignalR
         try:
             from api.services.signalr_client import signalr_client
+
             await signalr_client.broadcast_new_ticket(
                 requester_id=str(service_request.requester_id),
                 assigned_to_id=None,
@@ -835,7 +868,9 @@ class RequestService:
                 request_id=str(service_request.id),
             )
         except Exception as e:
-            logger.warning(f"Failed to broadcast new ticket via SignalR for request {service_request.id}: {e}")
+            logger.warning(
+                f"Failed to broadcast new ticket via SignalR for request {service_request.id}: {e}"
+            )
 
         return service_request
 
@@ -858,9 +893,7 @@ class RequestService:
             select(ServiceRequest)
             .options(
                 selectinload(ServiceRequest.subcategory),
-                selectinload(ServiceRequest.notes).selectinload(
-                    RequestNote.creator
-                ),
+                selectinload(ServiceRequest.notes).selectinload(RequestNote.creator),
             )
             .where(ServiceRequest.id == request_id)
         )
@@ -868,9 +901,7 @@ class RequestService:
 
     @staticmethod
     @safe_database_query("get_service_request_detail", default_return=None)
-    async def get_service_request_detail(
-        db: AsyncSession, request_id: UUID
-    ):
+    async def get_service_request_detail(db: AsyncSession, request_id: UUID):
         """
         Get a service request by ID with nested relationships for detail view.
 
@@ -881,16 +912,15 @@ class RequestService:
         Returns:
             ServiceRequestDetailRead schema with nested requester, status, priority
         """
-        from db import Tag, Subcategory
+        from db import Subcategory
         from api.schemas.service_request import (
             ServiceRequestDetailRead,
             RequesterInfo,
             StatusInfo,
             PriorityInfo,
-            TagInfo,
             SubcategoryInfo,
         )
-        from api.schemas.tag import CategoryReadMinimal
+        from api.schemas.category import CategoryReadMinimal
 
         result = await db.execute(
             select(ServiceRequest)
@@ -898,8 +928,9 @@ class RequestService:
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .where(ServiceRequest.id == request_id)
         )
@@ -910,28 +941,8 @@ class RequestService:
 
         # Get manager name from eager-loaded relationship
         manager_name = (
-            request.requester.manager.full_name
-            if request.requester.manager
-            else None
+            request.requester.manager.full_name if request.requester.manager else None
         )
-
-        # Build tag info if available
-        tag_info = None
-        if request.tag:
-            category_info = None
-            if request.tag.category:
-                category_info = CategoryReadMinimal(
-                    id=request.tag.category.id,
-                    name=request.tag.category.name,
-                    name_en=request.tag.category.name_en,
-                    name_ar=request.tag.category.name_ar,
-                )
-            tag_info = TagInfo(
-                id=request.tag.id,
-                name_en=request.tag.name_en,
-                name_ar=request.tag.name_ar,
-                category=category_info,
-            )
 
         # Build subcategory info if available
         subcategory_info = None
@@ -959,7 +970,9 @@ class RequestService:
         if request.parent_task_id:
             # This request is a sub-task, fetch parent request info
             parent_result = await db.execute(
-                select(ServiceRequest).where(ServiceRequest.id == request.parent_task_id)
+                select(ServiceRequest).where(
+                    ServiceRequest.id == request.parent_task_id
+                )
             )
             parent_request = parent_result.scalar_one_or_none()
             if parent_request:
@@ -970,12 +983,14 @@ class RequestService:
         created_by_technician_info = None
         if request.parent_task_id and request.created_by:
             from db.models import User
+
             technician_result = await db.execute(
                 select(User).where(User.id == request.created_by)
             )
             technician = technician_result.scalar_one_or_none()
             if technician:
                 from api.schemas.service_request import TechnicianInfo
+
                 created_by_technician_info = TechnicianInfo(
                     id=technician.id,
                     username=technician.username,
@@ -992,7 +1007,6 @@ class RequestService:
             status_id=request.status_id,
             priority_id=request.priority_id,
             requester_id=request.requester_id,
-            tag_id=request.tag_id,
             subcategory_id=request.subcategory_id,
             created_at=request.created_at,
             updated_at=request.updated_at,
@@ -1023,7 +1037,6 @@ class RequestService:
                 manager_id=request.requester.manager_id,
                 manager_name=manager_name,
             ),
-            tag=tag_info,
             subcategory=subcategory_info,
             parent_request_id=parent_request_id,
             parent_request_title=parent_request_title,
@@ -1076,17 +1089,11 @@ class RequestService:
         if category_id:
             # Note: category_id parameter filters by subcategory_id
             # (naming kept for API backward compatibility)
-            base_query = base_query.where(
-                ServiceRequest.subcategory_id == category_id
-            )
+            base_query = base_query.where(ServiceRequest.subcategory_id == category_id)
         if priority_id:
-            base_query = base_query.where(
-                ServiceRequest.priority_id == priority_id
-            )
+            base_query = base_query.where(ServiceRequest.priority_id == priority_id)
         if status_id:
-            base_query = base_query.where(
-                ServiceRequest.status_id == status_id
-            )
+            base_query = base_query.where(ServiceRequest.status_id == status_id)
         if search:
             search_filter = or_(
                 ServiceRequest.title.ilike(f"%{search}%"),
@@ -1096,9 +1103,7 @@ class RequestService:
 
         # Filter by visible_on_requester_page if requester_view is enabled
         if requester_view:
-            base_query = base_query.where(
-                RequestStatus.visible_on_requester_page
-            )
+            base_query = base_query.where(RequestStatus.visible_on_requester_page)
 
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -1106,9 +1111,7 @@ class RequestService:
         total_count = count_result.scalar()
 
         # Apply sorting
-        sort_field = getattr(
-            ServiceRequest, sort_by, ServiceRequest.created_at
-        )
+        sort_field = getattr(ServiceRequest, sort_by, ServiceRequest.created_at)
         if sort_order.lower() == "desc":
             sort_field = sort_field.desc()
         else:
@@ -1126,9 +1129,7 @@ class RequestService:
     @staticmethod
     @log_database_operation("delete_service_request")
     @transactional_database_operation
-    async def delete_service_request(
-        db: AsyncSession, request_id: UUID
-    ) -> bool:
+    async def delete_service_request(db: AsyncSession, request_id: UUID) -> bool:
         """
         Delete a service request (soft delete recommended for audit trail).
 
@@ -1143,13 +1144,9 @@ class RequestService:
             NotFoundError: If request not found
         """
         # Get the request first
-        request = await RequestService.get_service_request_by_id(
-            db, request_id
-        )
+        request = await RequestService.get_service_request_by_id(db, request_id)
         if not request:
-            raise NotFoundError(
-                f"Service request with ID {request_id} not found"
-            )
+            raise NotFoundError(f"Service request with ID {request_id} not found")
 
         # Soft delete by setting a deleted flag or timestamp
         # For now, we'll implement a soft delete
@@ -1176,7 +1173,7 @@ class RequestService:
 
         Args:
             db: Database session
-            user: Current user (for region filtering)
+            user: Current user (for section-based visibility filtering)
             view_type: View type (unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved)
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
             page: Page number
@@ -1190,53 +1187,117 @@ class RequestService:
         # Existing views
         if view_type == "unassigned":
             return await ServiceRequestCRUD.find_unassigned_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "all_unsolved":
             return await ServiceRequestCRUD.find_unsolved_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "my_unsolved":
             return await ServiceRequestCRUD.find_my_unsolved_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "recently_updated":
             return await ServiceRequestCRUD.find_recently_updated_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "recently_solved":
             return await ServiceRequestCRUD.find_recently_solved_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         # New views
         elif view_type == "all_your_requests":
             return await ServiceRequestCRUD.find_all_your_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "urgent_high_priority":
             return await ServiceRequestCRUD.find_urgent_high_priority_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "pending_requester_response":
             return await ServiceRequestCRUD.find_pending_requester_response_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "pending_subtask":
             return await ServiceRequestCRUD.find_pending_subtask_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "new_today":
             return await ServiceRequestCRUD.find_new_today_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         elif view_type == "in_progress":
             return await ServiceRequestCRUD.find_in_progress_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
+            )
+        elif view_type == "all_tickets":
+            return await ServiceRequestCRUD.find_all_tickets_requests(
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
+            )
+        elif view_type == "all_solved":
+            return await ServiceRequestCRUD.find_all_solved_requests(
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
         else:
             # Default to unassigned
             return await ServiceRequestCRUD.find_unassigned_requests(
-                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
+                db,
+                user,
+                business_unit_ids=business_unit_ids,
+                page=page,
+                per_page=per_page,
             )
 
     @staticmethod
@@ -1252,7 +1313,7 @@ class RequestService:
 
         Args:
             db: Database session
-            user: Current user (for region filtering)
+            user: Current user (for section-based visibility filtering)
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
 
         Returns:
@@ -1263,7 +1324,9 @@ class RequestService:
         return await ServiceRequestCRUD.get_view_counts(db, user, business_unit_ids)
 
     @staticmethod
-    @safe_database_query("get_view_filter_counts", default_return={"all": 0, "parents": 0, "subtasks": 0})
+    @safe_database_query(
+        "get_view_filter_counts", default_return={"all": 0, "parents": 0, "subtasks": 0}
+    )
     @log_database_operation("view filter counts retrieval", level="debug")
     async def get_view_filter_counts(
         db: AsyncSession,
@@ -1278,7 +1341,7 @@ class RequestService:
 
         Args:
             db: Database session
-            user: Current user (for region filtering)
+            user: Current user (for section-based visibility filtering)
             view_type: View type to count (unassigned, all_unsolved, etc.)
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
 
@@ -1290,9 +1353,7 @@ class RequestService:
         # Build the base query using the same logic as the view methods
         # but WITHOUT selectinload options (we only need counts)
         base_stmt = await ServiceRequestCRUD.build_view_base_query(
-            user=user,
-            view_type=view_type,
-            business_unit_ids=business_unit_ids
+            user=user, view_type=view_type, business_unit_ids=business_unit_ids
         )
 
         # Count total records
@@ -1366,9 +1427,7 @@ class RequestService:
             raise ValueError("This user is already assigned to this request")
 
         # Create the assignment
-        await ServiceRequestCRUD.create_assignment(
-            db, request_id, user_id, assigned_by
-        )
+        await ServiceRequestCRUD.create_assignment(db, request_id, user_id, assigned_by)
 
         # Update request status to "in-progress" (status_id=8) if currently Open (status_id=1)
         if request.status_id == 1:
@@ -1476,9 +1535,7 @@ class RequestService:
             raise ValueError("must_have_assignee")
 
         # Check if user is assigned and remove the assignment
-        success = await ServiceRequestCRUD.delete_assignment(
-            db, request_id, user_id
-        )
+        success = await ServiceRequestCRUD.delete_assignment(db, request_id, user_id)
 
         if not success:
             raise ValueError("This user is not assigned to this request")
@@ -1605,10 +1662,7 @@ class RequestService:
             raise NotFoundError(f"Service request with ID {request_id} not found")
 
         # Get all assignments for this request
-        return await ServiceRequestCRUD.get_request_assignees(
-            db, request_id
-        )
-
+        return await ServiceRequestCRUD.get_request_assignees(db, request_id)
 
     # ==================================================================================
     # SUB-TASK METHODS
@@ -1617,10 +1671,7 @@ class RequestService:
     @staticmethod
     @transactional_database_operation
     async def create_sub_task(
-        db: AsyncSession,
-        parent_id: UUID,
-        sub_task_data: dict,
-        current_user_id: UUID
+        db: AsyncSession, parent_id: UUID, sub_task_data: dict, current_user_id: UUID
     ) -> ServiceRequest:
         """
         Create a sub-task under a parent request.
@@ -1654,7 +1705,9 @@ class RequestService:
 
         # Validate parent is not a sub-task (max 1 level nesting)
         if parent.parent_task_id is not None:
-            raise ValueError("Cannot create sub-task of a sub-task (max 1 level nesting)")
+            raise ValueError(
+                "Cannot create sub-task of a sub-task (max 1 level nesting)"
+            )
 
         # Validate parent is not closed/solved (using count_as_solved flag)
         if parent.status and parent.status.count_as_solved:
@@ -1667,7 +1720,10 @@ class RequestService:
         sub_task_data["created_by"] = current_user_id
 
         # Inherit business_unit_id from parent if not provided
-        if "business_unit_id" not in sub_task_data or sub_task_data["business_unit_id"] is None:
+        if (
+            "business_unit_id" not in sub_task_data
+            or sub_task_data["business_unit_id"] is None
+        ):
             sub_task_data["business_unit_id"] = parent.business_unit_id
 
         # Inherit requester_id from parent
@@ -1689,11 +1745,12 @@ class RequestService:
         # If description was provided, create it as a note
         if description_text:
             from db.models import RequestNote
+
             note = RequestNote(
                 request_id=sub_task.id,
                 created_by=current_user_id,
                 note=description_text,
-                is_system_generated=False
+                is_system_generated=False,
             )
             db.add(note)
             await db.flush()  # Flush to persist the note
@@ -1706,10 +1763,7 @@ class RequestService:
     @staticmethod
     @safe_database_query
     async def get_sub_tasks(
-        db: AsyncSession,
-        parent_id: UUID,
-        skip: int = 0,
-        limit: int = 20
+        db: AsyncSession, parent_id: UUID, skip: int = 0, limit: int = 20
     ) -> List[ServiceRequest]:
         """
         Get all sub-tasks for a parent request.
@@ -1739,10 +1793,7 @@ class RequestService:
 
     @staticmethod
     @safe_database_query
-    async def get_sub_task_stats(
-        db: AsyncSession,
-        parent_id: UUID
-    ) -> dict:
+    async def get_sub_task_stats(db: AsyncSession, parent_id: UUID) -> dict:
         """
         Get statistics for sub-tasks of a parent request.
 
@@ -1758,8 +1809,7 @@ class RequestService:
 
         # Get all sub-tasks for parent
         query = select(ServiceRequest).where(
-            ServiceRequest.parent_task_id == parent_id,
-            not ServiceRequest.is_deleted
+            ServiceRequest.parent_task_id == parent_id, not ServiceRequest.is_deleted
         )
         result = await db.execute(query)
         sub_tasks = list(result.scalars().all())
@@ -1770,7 +1820,7 @@ class RequestService:
             "by_status": {},
             "blocked_count": 0,
             "overdue_count": 0,
-            "completed_count": 0
+            "completed_count": 0,
         }
 
         now = datetime.now(timezone.utc)
@@ -1797,9 +1847,7 @@ class RequestService:
     @staticmethod
     @safe_database_query
     async def update_sub_task_order(
-        db: AsyncSession,
-        parent_id: UUID,
-        task_ids_in_order: List[UUID]
+        db: AsyncSession, parent_id: UUID, task_ids_in_order: List[UUID]
     ) -> None:
         """
         Reorder sub-tasks by updating their 'order' field.
@@ -1813,8 +1861,7 @@ class RequestService:
 
         for index, task_id in enumerate(task_ids_in_order):
             query = select(ServiceRequest).where(
-                ServiceRequest.id == task_id,
-                ServiceRequest.parent_task_id == parent_id
+                ServiceRequest.id == task_id, ServiceRequest.parent_task_id == parent_id
             )
             result = await db.execute(query)
             task = result.scalar_one_or_none()
@@ -1832,7 +1879,7 @@ class RequestService:
         technician_id: UUID,
         status_filter: Optional[List[int]] = None,
         skip: int = 0,
-        limit: int = 20
+        limit: int = 20,
     ) -> List[ServiceRequest]:
         """
         Get all tasks (including sub-tasks) assigned to a technician.
@@ -1858,11 +1905,12 @@ class RequestService:
         if status_filter:
             query = query.where(ServiceRequest.status_id.in_(status_filter))
 
-        query = query.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(limit)
+        query = (
+            query.order_by(ServiceRequest.created_at.desc()).offset(skip).limit(limit)
+        )
 
         result = await db.execute(query)
         return list(result.scalars().all())
-
 
     @staticmethod
     @safe_database_query("get_full_request_details", default_return=None)
@@ -1870,7 +1918,7 @@ class RequestService:
         db: AsyncSession,
         request_id: UUID,
         messages_limit: int = 100,
-        sub_tasks_limit: int = 20
+        sub_tasks_limit: int = 20,
     ):
         """
         Get complete request details in a single optimized call.
@@ -1911,12 +1959,16 @@ class RequestService:
         # Note: asyncio.gather() with the same session causes "provisioning connection" errors
         try:
             ticket = await RequestService.get_service_request_detail(db, request_id)
-            notes_result = await RequestNoteService.get_request_notes(db, request_id, page=1, per_page=100)
+            notes_result = await RequestNoteService.get_request_notes(
+                db, request_id, page=1, per_page=100
+            )
             assignees = await ServiceRequestCRUD.get_request_assignees(db, request_id)
             messages_result = await ChatMessageCRUD.find_by_request_id_with_relations(
                 db, request_id, limit=messages_limit, offset=0
             )
-            sub_tasks = await RequestService.get_sub_tasks(db, request_id, skip=0, limit=sub_tasks_limit)
+            sub_tasks = await RequestService.get_sub_tasks(
+                db, request_id, skip=0, limit=sub_tasks_limit
+            )
             sub_task_stats_raw = await RequestService.get_sub_task_stats(db, request_id)
         except Exception as e:
             # If any query fails, return None
@@ -1932,31 +1984,47 @@ class RequestService:
         if notes_result:
             notes_data, _ = notes_result
             for note in notes_data:
-                notes_list.append(RequestNoteDetail(
-                    id=note.id,
-                    request_id=note.request_id,
-                    note=note.note,
-                    created_by=note.created_by,
-                    is_system_generated=note.is_system_generated,
-                    created_at=note.created_at,
-                    creator_username=note.creator.username if note.creator else None,
-                    creator_full_name=note.creator.full_name if note.creator else None,
-                ))
+                notes_list.append(
+                    RequestNoteDetail(
+                        id=note.id,
+                        request_id=note.request_id,
+                        note=note.note,
+                        created_by=note.created_by,
+                        is_system_generated=note.is_system_generated,
+                        created_at=note.created_at,
+                        creator_username=note.creator.username
+                        if note.creator
+                        else None,
+                        creator_full_name=note.creator.full_name
+                        if note.creator
+                        else None,
+                    )
+                )
 
         # Process assignees
         assignees_list = []
         if assignees:
             for assignment in assignees:
-                assignees_list.append(AssigneeInfo(
-                    id=assignment.id,
-                    user_id=assignment.assignee_id,  # Model uses assignee_id, not user_id
-                    username=assignment.assignee.username if assignment.assignee else "",
-                    full_name=assignment.assignee.full_name if assignment.assignee else None,
-                    title=assignment.assignee.title if assignment.assignee else None,
-                    assigned_by=assignment.assigned_by,
-                    assigned_by_name=assignment.assigner.full_name if assignment.assigner else None,
-                    created_at=assignment.created_at,
-                ))
+                assignees_list.append(
+                    AssigneeInfo(
+                        id=assignment.id,
+                        user_id=assignment.assignee_id,  # Model uses assignee_id, not user_id
+                        username=assignment.assignee.username
+                        if assignment.assignee
+                        else "",
+                        full_name=assignment.assignee.full_name
+                        if assignment.assignee
+                        else None,
+                        title=assignment.assignee.title
+                        if assignment.assignee
+                        else None,
+                        assigned_by=assignment.assigned_by,
+                        assigned_by_name=assignment.assigner.full_name
+                        if assignment.assigner
+                        else None,
+                        created_at=assignment.created_at,
+                    )
+                )
 
         # Process messages
         messages_list = []
@@ -1971,45 +2039,48 @@ class RequestService:
                         full_name=msg.sender.full_name,
                         email=msg.sender.email,
                     )
-                messages_list.append(ChatMessageRead(
-                    id=msg.id,
-                    request_id=msg.request_id,
-                    sender_id=msg.sender_id,
-                    sender=sender_info,
-                    content=msg.content,
-                    is_screenshot=msg.is_screenshot,
-                    screenshot_file_name=msg.screenshot_file_name,
-                    is_read=msg.is_read,
-                    is_read_by_current_user=False,  # Will be determined client-side
-                    created_at=msg.created_at,
-                    updated_at=msg.updated_at,
-                    read_at=msg.read_at,
-                    ip_address=msg.ip_address,
-                    client_temp_id=None,
-                ))
+                messages_list.append(
+                    ChatMessageRead(
+                        id=msg.id,
+                        request_id=msg.request_id,
+                        sender_id=msg.sender_id,
+                        sender=sender_info,
+                        content=msg.content,
+                        is_screenshot=msg.is_screenshot,
+                        screenshot_file_name=msg.screenshot_file_name,
+                        is_read=msg.is_read,
+                        is_read_by_current_user=False,  # Will be determined client-side
+                        created_at=msg.created_at,
+                        updated_at=msg.updated_at,
+                        read_at=msg.read_at,
+                        ip_address=msg.ip_address,
+                        client_temp_id=None,
+                    )
+                )
 
         # Process sub-tasks
         sub_tasks_list = []
         if sub_tasks:
             for task in sub_tasks:
-                sub_tasks_list.append(ServiceRequestListItem(
-                    id=task.id,
-                    title=task.title,
-                    subcategory_id=task.subcategory_id,
-                    tag_id=task.tag_id,
-                    business_unit_id=task.business_unit_id,
-                    status_id=task.status_id,
-                    priority_id=task.priority_id,
-                    requester_id=task.requester_id,
-                    created_at=task.created_at,
-                    updated_at=task.updated_at,
-                    due_date=task.due_date,
-                    parent_task_id=task.parent_task_id,
-                    is_blocked=task.is_blocked,
-                    assigned_to_section_id=task.assigned_to_section_id,
-                    assigned_to_technician_id=task.assigned_to_technician_id,
-                    completed_at=task.completed_at,
-                ))
+                sub_tasks_list.append(
+                    ServiceRequestListItem(
+                        id=task.id,
+                        title=task.title,
+                        subcategory_id=task.subcategory_id,
+                        business_unit_id=task.business_unit_id,
+                        status_id=task.status_id,
+                        priority_id=task.priority_id,
+                        requester_id=task.requester_id,
+                        created_at=task.created_at,
+                        updated_at=task.updated_at,
+                        due_date=task.due_date,
+                        parent_task_id=task.parent_task_id,
+                        is_blocked=task.is_blocked,
+                        assigned_to_section_id=task.assigned_to_section_id,
+                        assigned_to_technician_id=task.assigned_to_technician_id,
+                        completed_at=task.completed_at,
+                    )
+                )
 
         # Process sub-task stats
         sub_task_stats = SubTaskStats(

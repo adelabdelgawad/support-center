@@ -3,7 +3,7 @@ import { makeAuthenticatedRequest } from '@/lib/api/server-fetch';
 import { ApiError } from '@/lib/fetch/errors';
 
 /**
- * GET /api/service-sections
+ * GET /api/sections
  * Fetch all active service sections (responsible teams)
  */
 export async function GET(request: NextRequest) {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
     const data = await makeAuthenticatedRequest<unknown>(
       'GET',
-      `/service-sections?${queryParams.toString()}`
+      `/sections?${queryParams.toString()}`
     );
 
     return NextResponse.json(data, { status: 200 });

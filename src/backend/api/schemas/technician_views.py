@@ -50,14 +50,6 @@ class BusinessUnitInfo(HTTPSchemaModel):
     name: str
 
 
-class TagInfo(HTTPSchemaModel):
-    """Tag information for request list."""
-
-    id: int
-    name_en: str
-    name_ar: str
-
-
 class CategoryInfo(HTTPSchemaModel):
     """Category information for request list."""
 
@@ -88,7 +80,6 @@ class TechnicianRequestListItem(HTTPSchemaModel):
     priority: PriorityInfo
     last_message: Optional[LastMessageInfo] = None
     business_unit: Optional[BusinessUnitInfo] = None
-    tag: Optional[TagInfo] = None
     category: Optional[CategoryInfo] = None
     subcategory: Optional[SubcategoryInfo] = None
     requester_has_unread: bool = False  # Whether requester has unread messages from technician (requester hasn't read)

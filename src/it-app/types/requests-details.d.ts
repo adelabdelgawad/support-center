@@ -20,7 +20,7 @@ import type { SubTask, SubTaskStats } from './sub-task';
 import type { ScreenshotItem } from './media-viewer';
 // Connection status type - now part of SignalR context
 export type ConnectionAlertLevel = 'none' | 'info' | 'warning' | 'error';
-import type { Category } from '@/lib/hooks/use-categories-tags';
+import type { Category } from '@/lib/hooks/use-categories';
 
 /**
  * Complete page data fetched server-side

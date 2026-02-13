@@ -68,14 +68,9 @@ export async function POST(request: NextRequest) {
       realIp = realIp.substring(7);
     }
 
-    const requestData: { title: string; tagId?: number } = {
+    const requestData: { title: string } = {
       title: body.title.trim(),
     };
-
-    // Include tagId if provided
-    if (body.tagId !== undefined && body.tagId !== null) {
-      requestData.tagId = body.tagId;
-    }
 
     const response = await makeAuthenticatedRequest<unknown>(
       'POST',

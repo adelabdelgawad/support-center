@@ -14,10 +14,9 @@ from . import (
     request_status,
     request_types,
     roles,
-    service_sections,
+    sections,
     sla_configs,
     system_messages,
-    tags,
     user_custom_views,
     users,
 )
@@ -36,10 +35,9 @@ __all__ = [
     "request_status",
     "request_types",
     "roles",
-    "service_sections",
+    "sections",
     "sla_configs",
     "system_messages",
-    "tags",
     "user_custom_views",
     "users",
 ]

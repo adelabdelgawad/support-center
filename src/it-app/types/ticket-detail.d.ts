@@ -2,7 +2,7 @@
  * Type definitions for ticket detail page
  */
 
-import type { Tag, Category, Subcategory } from "./tag";
+import type { Category, Subcategory } from "./category";
 
 // Backend response types (camelCase from HTTPSchemaModel)
 export interface ServiceRequestDetail {
@@ -12,7 +12,6 @@ export interface ServiceRequestDetail {
   statusId: number;
   priorityId: number;
   requesterId: string;  // Changed from number to string UUID
-  tagId?: number | null;  // Request classification tag
   subcategoryId?: number | null;  // Subcategory for the request
   createdAt: string;
   updatedAt: string;
@@ -48,7 +47,6 @@ export interface ServiceRequestDetail {
     managerId: string | null;  // Changed from number to string UUID
     managerName: string | null;
   };
-  tag?: Tag | null;  // Tag with category information
   subcategory?: Subcategory | null;  // Subcategory with category information
 
   // Sub-task parent information (if this request is a sub-task)

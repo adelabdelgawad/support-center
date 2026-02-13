@@ -17,7 +17,7 @@ import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/metadata';
 import type { ChatMessage, TaskStatusChangedEvent } from '@/lib/signalr/types';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
-import type { Category } from '@/lib/hooks/use-categories-tags';
+import type { Category } from '@/lib/hooks/use-categories';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 
 // Import split contexts

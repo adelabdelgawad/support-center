@@ -28,7 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { updateRequestSubcategory } from "@/lib/hooks/use-categories-tags";
+import { updateRequestSubcategory } from "@/lib/hooks/use-categories";
 import { Link as LinkIcon, Loader2, User } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";

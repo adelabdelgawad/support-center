@@ -34,7 +34,6 @@ export interface ReportFilters {
   categoryIds?: number[];
   priorityIds?: number[];
   statusIds?: number[];
-  tagIds?: number[];
 }
 
 // =============================================================================

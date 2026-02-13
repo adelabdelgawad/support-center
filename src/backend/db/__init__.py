@@ -10,7 +10,6 @@ REFACTORED:
 - Replaced SessionType and AssignType tables with enums
 - Renamed tables for clarity:
   * request_user_assigns → request_assignees
-  * region_user_assigns → technician_regions
   * business_unit_user_assigns → technician_business_units
   * technician_section_assigns → technician_sections
   * chat_read_monitors → chat_read_states
@@ -19,6 +18,7 @@ REFACTORED:
 - Added UploadStatus and TriggerTiming enums
 - Consolidated auth models into models.py for consistency
 """
+
 from .models import (
     # Lookup/Reference Tables
     Role,
@@ -27,14 +27,11 @@ from .models import (
     PageRole,
     RequestAssignee,
     UserRequestAssign,  # Backward compatibility alias for RequestAssignee
-    TechnicianRegion,
     TechnicianBusinessUnit,
     BusinessUnitUserAssign,  # Backward compatibility alias for TechnicianBusinessUnit
     RequestResolution,
     SystemMessage,
     SystemEvent,
-    Tag,
-
     # Updated Core Models
     User,
     DesktopSession,
@@ -49,49 +46,40 @@ from .models import (
     RequestScreenshotLink,
     RequestStatus,
     RequestType,
-
     # Unchanged Models
     Priority,
-    ServiceSection,
+    Section,
     Category,
     Subcategory,
     BusinessUnitRegion,
     BusinessUnit,
-
     # Remote Access Models
     RemoteAccessSession,
-
     # Notification Events (Durable Notification Tracking)
     NotificationEvent,
-
     # WhatsApp Escalation Models
     WhatsAppBatch,
-
     # Client Version Management
     ClientVersion,
-
     # Deployment Control Plane
     Device,
     DeploymentJob,
     Credential,
-
     # Active Directory
     ActiveDirectoryConfig,
-
     # Authentication Models
     AuthToken,
     RefreshSession,
-
     # Utilities
     UUIDField,
-    cairo_now
+    cairo_now,
 )
 
 # Enums (replacing simple lookup tables)
 from .enums import (
-    SessionType,      # Replaces session_types table
-    UploadStatus,     # Type-safe upload status
-    TriggerTiming,    # Type-safe trigger timing
+    SessionType,  # Replaces session_types table
+    UploadStatus,  # Type-safe upload status
+    TriggerTiming,  # Type-safe trigger timing
     # Deployment Control Plane enums
     DeviceLifecycleState,
     DeviceDiscoverySource,
@@ -108,7 +96,6 @@ __all__ = [
     "DeviceDiscoverySource",
     "DeploymentJobStatus",
     "CredentialType",
-
     # Lookup/Reference Tables
     "Role",
     "UserRole",
@@ -116,14 +103,11 @@ __all__ = [
     "PageRole",
     "RequestAssignee",
     "UserRequestAssign",  # Backward compatibility alias
-    "TechnicianRegion",
     "TechnicianBusinessUnit",
     "BusinessUnitUserAssign",  # Backward compatibility alias
     "RequestResolution",
     "SystemMessage",
     "SystemEvent",
-    "Tag",
-
     # Core Models
     "User",
     "DesktopSession",
@@ -139,38 +123,29 @@ __all__ = [
     "RequestStatus",
     "RequestType",
     "Priority",
-    "ServiceSection",
+    "Section",
     "Category",
     "Subcategory",
-
     # Business Unit Models
     "BusinessUnitRegion",
     "BusinessUnit",
-
     # Remote Access Models
     "RemoteAccessSession",
-
     # Notification Events (Durable Notification Tracking)
     "NotificationEvent",
-
     # WhatsApp Escalation Models
     "WhatsAppBatch",
-
     # Client Version Management
     "ClientVersion",
-
     # Deployment Control Plane
     "Device",
     "DeploymentJob",
     "Credential",
-
     # Active Directory
     "ActiveDirectoryConfig",
-
     # Authentication Models
     "AuthToken",
     "RefreshSession",
-
     # Utilities
     "UUIDField",
     "cairo_now",

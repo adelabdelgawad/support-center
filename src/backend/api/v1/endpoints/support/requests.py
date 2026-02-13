@@ -18,15 +18,25 @@ This module provides endpoints for managing service requests (tickets), includin
 """
 
 import logging
+from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from db.database import get_session
-from core.dependencies import _get_user_with_roles, get_client_ip, get_current_user, require_supervisor, require_technician
+from core.dependencies import (
+    _get_user_with_roles,
+    get_client_ip,
+    get_current_user,
+    require_supervisor,
+    require_technician,
+)
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from db.models import User
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from db.models import ServiceRequest, User
 from api.schemas import (
     AssignTechnicianRequest,
+    SectionReassignRequest,
     ServiceRequestCreateByRequester,
     ServiceRequestDetailRead,
     ServiceRequestList,
@@ -50,7 +60,6 @@ from api.schemas.technician_views import (
     RequesterInfo,
     StatusInfo,
     SubcategoryInfo,
-    TagInfo,
     TechnicianRequestListItem,
     TechnicianViewsResponse,
     TicketTypeCounts,
@@ -126,7 +135,8 @@ async def list_requests(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     requester_view: bool = Query(
-        False, description="If true, only show requests with statuses visible to requesters"
+        False,
+        description="If true, only show requests with statuses visible to requesters",
     ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -322,11 +332,21 @@ async def get_technician_views(
 
     request_ids = [req.id for req in requests]
 
-    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_ids)
-    last_messages_dict = await ServiceRequestCRUD.get_last_messages_for_requests(db, request_ids)
-    requester_unread_dict = await ChatMessageCRUD.check_requester_unread_for_requests(db, request_ids)
-    technician_unread_dict = await ChatMessageCRUD.check_technician_unread_for_requests(db, request_ids)
-    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_ids)
+    counts_dict = await RequestService.get_technician_view_counts(
+        db, current_user, business_unit_ids
+    )
+    last_messages_dict = await ServiceRequestCRUD.get_last_messages_for_requests(
+        db, request_ids
+    )
+    requester_unread_dict = await ChatMessageCRUD.check_requester_unread_for_requests(
+        db, request_ids
+    )
+    technician_unread_dict = await ChatMessageCRUD.check_technician_unread_for_requests(
+        db, request_ids
+    )
+    filter_counts_dict = await RequestService.get_view_filter_counts(
+        db, current_user, view, business_unit_ids
+    )
 
     # Build response items
     items = []
@@ -348,7 +368,6 @@ async def get_technician_views(
             RequesterInfo,
             PriorityInfo,
             BusinessUnitInfo,
-            TagInfo,
             CategoryInfo,
             SubcategoryInfo,
         )
@@ -361,23 +380,14 @@ async def get_technician_views(
                 name=req.business_unit.name,
             )
 
-        # Build tag info if available
-        tag_info = None
-        if req.tag:
-            tag_info = TagInfo(
-                id=req.tag.id,
-                name_en=req.tag.name_en,
-                name_ar=req.tag.name_ar,
-            )
-
-        # Build category info from tag if available
+        # Build category info from subcategory if available
         category_info = None
-        if req.tag and req.tag.category:
+        if req.subcategory and req.subcategory.category:
             category_info = CategoryInfo(
-                id=req.tag.category.id,
-                name=req.tag.category.name,
-                name_en=req.tag.category.name_en,
-                name_ar=req.tag.category.name_ar,
+                id=req.subcategory.category.id,
+                name=req.subcategory.category.name,
+                name_en=req.subcategory.category.name_en,
+                name_ar=req.subcategory.category.name_ar,
             )
 
         # Build subcategory info if available
@@ -413,7 +423,6 @@ async def get_technician_views(
             ),
             business_unit=business_unit_info,
             last_message=last_message_info,
-            tag=tag_info,
             category=category_info,
             subcategory=subcategory_info,
             requester_has_unread=requester_unread_dict.get(req.id, False),
@@ -529,8 +538,12 @@ async def get_technician_views_counts_only(
         )
 
     # Execute sequentially - asyncpg doesn't support concurrent operations on the same session
-    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_ids)
-    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_ids)
+    counts_dict = await RequestService.get_technician_view_counts(
+        db, current_user, business_unit_ids
+    )
+    filter_counts_dict = await RequestService.get_view_filter_counts(
+        db, current_user, view, business_unit_ids
+    )
 
     # Build response
     from api.schemas.technician_views import ViewCounts
@@ -569,7 +582,7 @@ async def get_technician_views_counts_only(
 async def get_business_unit_counts(
     view: Optional[str] = Query(
         None,
-        description="View filter to apply (e.g., 'all_unsolved', 'unassigned', 'my_unsolved')"
+        description="View filter to apply (e.g., 'all_unsolved', 'unassigned', 'my_unsolved')",
     ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(require_technician),
@@ -635,9 +648,7 @@ async def get_ticket_type_counts(
     """
     from crud.service_request_crud import ServiceRequestCRUD
 
-    counts = await ServiceRequestCRUD.get_ticket_type_counts(
-        db=db, user=current_user
-    )
+    counts = await ServiceRequestCRUD.get_ticket_type_counts(db=db, user=current_user)
 
     return TicketTypeCounts(
         all=counts["all"],
@@ -657,7 +668,7 @@ async def get_request(
 
     **Single request lookup** with eager-loaded relationships:
     - Status, Priority, Requester
-    - Category, Subcategory, Tag
+    - Category (via Subcategory), Subcategory
     - Business Unit
     - Assigned Technicians
     - Parent Task (if sub-task)
@@ -683,8 +694,12 @@ async def get_request(
 @router.get("/{request_id}/full-details")
 async def get_request_full_details(
     request_id: UUID,
-    messages_limit: int = Query(100, ge=1, le=500, description="Maximum messages to return"),
-    sub_tasks_limit: int = Query(20, ge=1, le=100, description="Maximum sub-tasks to return"),
+    messages_limit: int = Query(
+        100, ge=1, le=500, description="Maximum messages to return"
+    ),
+    sub_tasks_limit: int = Query(
+        20, ge=1, le=100, description="Maximum sub-tasks to return"
+    ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -853,9 +868,7 @@ async def update_request(
             from api.services.event_trigger_service import EventTriggerService
 
             await EventTriggerService.trigger_request_solved(
-                db=db,
-                request_id=request_id,
-                solver=current_user
+                db=db, request_id=request_id, solver=current_user
             )
         except Exception as e:
             # Log error but don't fail the request update
@@ -898,7 +911,9 @@ async def update_request(
 
             # Broadcast to user ticket lists (requester + assignees)
             user_ids_str = [str(request.requester_id)]
-            user_ids_str.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            user_ids_str.extend(
+                [str(a.assignee_id) for a in request.assignees if a.assignee_id]
+            )
             await signalr_client.broadcast_user_ticket_update(
                 user_ids=list(set(user_ids_str)),  # Dedupe
                 request_id=str(request_id),
@@ -1048,9 +1063,7 @@ async def update_request_by_technician(
             from api.services.event_trigger_service import EventTriggerService
 
             await EventTriggerService.trigger_request_solved(
-                db=db,
-                request_id=request_id,
-                solver=current_user
+                db=db, request_id=request_id, solver=current_user
             )
         except Exception as e:
             # Log error but don't fail the request update
@@ -1093,7 +1106,9 @@ async def update_request_by_technician(
 
             # Broadcast to user ticket lists (requester + assignees)
             user_ids = [str(request.requester_id)]
-            user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            user_ids.extend(
+                [str(a.assignee_id) for a in request.assignees if a.assignee_id]
+            )
             await signalr_client.broadcast_user_ticket_update(
                 user_ids=list(set(user_ids)),  # Dedupe
                 request_id=str(request_id),
@@ -1218,7 +1233,9 @@ async def assign_request(
             update_data={
                 "updatedFields": ["assignedTechnician"],
                 "newValues": {
-                    "assignedTechnicianId": str(assign_data.technician_id) if assign_data.technician_id else None,
+                    "assignedTechnicianId": str(assign_data.technician_id)
+                    if assign_data.technician_id
+                    else None,
                 },
                 "updatedBy": {
                     "id": str(current_user.id),
@@ -1230,7 +1247,9 @@ async def assign_request(
 
         # Broadcast to user ticket lists (requester + all assignees including new one)
         user_ids_str = [str(request.requester_id)]
-        user_ids_str.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+        user_ids_str.extend(
+            [str(a.assignee_id) for a in request.assignees if a.assignee_id]
+        )
         await signalr_client.broadcast_user_ticket_update(
             user_ids=list(set(user_ids_str)),  # Dedupe
             request_id=str(request_id),
@@ -1343,7 +1362,7 @@ async def unassign_request(
         if error_msg == "must_have_assignee":
             raise HTTPException(
                 status_code=400,
-                detail="Cannot remove the last assignee. Requests must have at least one assignee."
+                detail="Cannot remove the last assignee. Requests must have at least one assignee.",
             )
         # Re-raise other ValueError types (e.g., "not assigned")
         raise HTTPException(status_code=400, detail=error_msg)
@@ -1364,7 +1383,9 @@ async def unassign_request(
             update_data={
                 "updatedFields": ["unassignedTechnician"],
                 "newValues": {
-                    "unassignedTechnicianId": str(assign_data.technician_id) if assign_data.technician_id else None,
+                    "unassignedTechnicianId": str(assign_data.technician_id)
+                    if assign_data.technician_id
+                    else None,
                 },
                 "updatedBy": {
                     "id": str(current_user.id),
@@ -1375,10 +1396,14 @@ async def unassign_request(
         )
 
         # Broadcast to user ticket lists (requester + remaining assignees + unassigned user)
-        request = await RequestService.get_service_request_by_id(db=db, request_id=request_id)
+        request = await RequestService.get_service_request_by_id(
+            db=db, request_id=request_id
+        )
         if request:
             user_ids = [str(request.requester_id)]
-            user_ids.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
+            user_ids.extend(
+                [str(a.assignee_id) for a in request.assignees if a.assignee_id]
+            )
             # Also notify the unassigned user so their list updates
             if assign_data.technician_id:
                 user_ids.append(str(assign_data.technician_id))
@@ -1394,428 +1419,103 @@ async def unassign_request(
     return {"success": True, "message": "Technician unassigned successfully"}
 
 
-@router.post("/{request_id}/pickup", response_model=ServiceRequestRead)
-async def pickup_request(
+@router.patch("/{request_id}/reassign-section", response_model=ServiceRequestRead)
+async def reassign_section(
     request_id: UUID,
+    reassign_data: SectionReassignRequest,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_technician),
+    current_user: User = Depends(_get_user_with_roles),
 ):
     """
-    Technician picks up an unassigned request (status change only).
+    Reassign a request to a different section.
 
-    **Quick action** to change request status to "in-progress"
-    without assigning to a specific technician.
+    **Workflow:**
+    1. Update assigned_to_section_id
+    2. Clear assigned technicians (optional, or keep them if section transfer)
+    3. Broadcast update via SignalR
 
-    **Use /take instead** to self-assign and update status.
-
-    **Permission:** Technicians only (require_technician)
+    **Permission:**
+    - Supervisors only
 
     **Returns:**
-        Updated service request
+        Updated service request with new section
 
     **Raises:**
-        HTTPException 404: Request not found
+        HTTPException 403: Permission denied (not supervisor)
+        HTTPException 404: Request or section not found
     """
 
-    update_data = ServiceRequestUpdate(
-        status_id=3  # status_id 3 = "in_progress" (or "on-progress")
+    # Check if user has Supervisor role
+    has_supervisor_role = any(
+        ur.role and ur.role.name == "Supervisor"
+        for ur in current_user.user_roles
+        if ur.is_active and not ur.is_deleted
     )
 
-    request = await RequestService.update_service_request(
-        db=db,
-        request_id=request_id,
-        update_data=update_data,
+    if not has_supervisor_role and not current_user.is_super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only supervisors can reassign requests to different sections",
+        )
+
+    # Get the request
+    stmt = (
+        select(ServiceRequest)
+        .options(
+            selectinload(ServiceRequest.assignees),
+        )
+        .where(ServiceRequest.id == request_id)
     )
+    result = await db.execute(stmt)
+    request = result.scalar_one_or_none()
 
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    return request
+    # Update section assignment
+    request.assigned_to_section_id = reassign_data.section_id
+    request.updated_at = datetime.utcnow()
 
+    # Optional: Clear technician assignments when changing section
+    # Uncomment the following if you want to clear assignees on section change
+    # if request.assignees:
+    #     for assignee in request.assignees:
+    #         await db.delete(assignee)
 
-@router.post("/{request_id}/take", response_model=ServiceRequestRead)
-async def take_request(
-    request_id: UUID,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_technician),
-):
-    """
-    Technician takes (self-assigns) an unassigned request.
+    await db.commit()
+    await db.refresh(request)
 
-    **Self-assignment flow** for claiming unassigned tickets:
-    1. Creates RequestAssignee record for the technician
-    2. Updates request status to "on-progress" (status_id 3)
-    3. Triggers ticket_assigned system message
-    4. Broadcasts update via SignalR
-
-    **Use this when:** Request has 0 assignees and you want to claim it.
-
-    **Use /assign instead when:** Request already has assignees and you're
-    a supervisor adding another technician.
-
-    **Permission:** Technicians only (require_technician)
-
-    **Returns:**
-        Updated service request with current user as assignee
-
-    **Raises:**
-        HTTPException 400: Request already has assignees
-        HTTPException 404: Request not found
-    """
-
-    # Use service layer to take the request
-    try:
-        request = await RequestService.take_request(
-            db=db,
-            request_id=request_id,
-            technician_id=current_user.id,
-        )
-    except Exception as e:
-        if "already assigned" in str(e):
-            raise HTTPException(status_code=400, detail=str(e))
-        elif "not found" in str(e):
-            raise HTTPException(status_code=404, detail=str(e))
-        else:
-            raise HTTPException(status_code=500, detail=str(e))
-
-    # Trigger ticket_assigned system message
-    try:
-        from api.services.event_trigger_service import EventTriggerService
-
-        await EventTriggerService.trigger_ticket_assigned(
-            db=db, request_id=request_id, technician=current_user
-        )
-    except Exception as e:
-        logger.warning(f"Failed to trigger ticket_assigned event: {e}")
-
-    # Broadcast the update via SignalR
+    # Broadcast update via SignalR
     try:
         from api.services.signalr_client import signalr_client
 
         await signalr_client.broadcast_ticket_update(
             request_id=str(request_id),
-            update_type="picked_up",
+            update_type="section_reassigned",
             update_data={
-                "updatedFields": ["status", "assignedTechnician"],
+                "updatedFields": ["assignedToSection"],
                 "newValues": {
-                    "statusId": 3,
-                    "assignedTechnicianId": str(current_user.id),
+                    "assignedToSectionId": reassign_data.section_id,
                 },
                 "updatedBy": {
                     "id": str(current_user.id),
                     "username": current_user.username,
                     "fullName": current_user.full_name,
                 },
-                "request": request.model_dump(mode="json"),
             },
         )
-
-        # Broadcast to user ticket lists (requester + new assignee)
-        user_ids_str = [str(request.requester_id)]
-        user_ids_str.extend([str(a.assignee_id) for a in request.assignees if a.assignee_id])
-        await signalr_client.broadcast_user_ticket_update(
-            user_ids=list(set(user_ids_str)),  # Dedupe
-            request_id=str(request_id),
-            update_type="picked_up",
-            update_data={"updatedFields": ["status", "assignedTechnician"]},
-        )
-
-        # Invalidate technician views cache for affected users
-        user_ids_int = [request.requester_id]
-        user_ids_int.extend([a.assignee_id for a in request.assignees if a.assignee_id])
     except Exception as e:
-        logger.warning(f"Failed to broadcast pickup update: {e}")
+        logger.warning(f"Failed to broadcast section reassignment update: {e}")
 
     return request
 
 
-# ==================================================================================
-# SUB-TASK ENDPOINTS
-# ==================================================================================
-
-@router.post("/{parent_id}/sub-tasks", response_model=TechnicianRequestListItem, status_code=201)
-async def create_sub_task(
-    parent_id: UUID,
-    sub_task: SubTaskCreate,
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_technician)
-):
-    """
-    Create a sub-task under a parent request.
-
-    **Sub-task breakdown:** Break complex requests into smaller trackable tasks.
-    Sub-tasks inherit category/priority from parent but have separate status.
-
-    **Permission:** Technicians only (require_technician)
-
-    **Workflow:**
-    1. Create sub-task with parent_task_id set to parent_id
-    2. Link to parent request
-    3. Return sub-task with full nested data
-
-    **Returns:**
-        Created sub-task with status, priority, requester, business unit
-
-    **Raises:**
-        HTTPException 404: Parent request not found
-        HTTPException 400: Validation error
-
-    **Notes:**
-        - Requesters cannot create sub-tasks (technician-only feature)
-        - Sub-tasks can have their own sub-tasks (nested hierarchy)
-    """
-    from api.services.request_service import RequestService
-    from sqlmodel import select
-    from sqlalchemy.orm import selectinload
-    from db.models import ServiceRequest, Tag
-
-    # Convert schema to dict
-    sub_task_data = sub_task.model_dump(exclude_unset=True)
-
-    # Create sub-task
-    created_sub_task = await RequestService.create_sub_task(
-        db, parent_id, sub_task_data, current_user.id
-    )
-
-    # Reload with all relationships to build proper response
-    result = await db.execute(
-        select(ServiceRequest)
-        .options(
-            selectinload(ServiceRequest.status),
-            selectinload(ServiceRequest.priority),
-            selectinload(ServiceRequest.requester),
-            selectinload(ServiceRequest.business_unit),
-            selectinload(ServiceRequest.tag).selectinload(Tag.category),
-            selectinload(ServiceRequest.subcategory)
-        )
-        .where(ServiceRequest.id == created_sub_task.id)
-    )
-    req = result.scalar_one()
-
-    # Build response with nested data
-    business_unit_info = None
-    if req.business_unit:
-        business_unit_info = BusinessUnitInfo(
-            id=req.business_unit.id,
-            name=req.business_unit.name,
-        )
-
-    tag_info = None
-    if req.tag:
-        tag_info = TagInfo(
-            id=req.tag.id,
-            name_en=req.tag.name_en,
-            name_ar=req.tag.name_ar,
-        )
-
-    category_info = None
-    if req.tag and req.tag.category:
-        category_info = CategoryInfo(
-            id=req.tag.category.id,
-            name=req.tag.category.name,
-            name_en=req.tag.category.name_en,
-            name_ar=req.tag.category.name_ar,
-        )
-
-    subcategory_info = None
-    if req.subcategory:
-        subcategory_info = SubcategoryInfo(
-            id=req.subcategory.id,
-            name=req.subcategory.name,
-            name_en=req.subcategory.name_en,
-            name_ar=req.subcategory.name_ar,
-        )
-
-    return TechnicianRequestListItem(
-        id=req.id,
-        status=StatusInfo(
-            id=req.status.id,
-            name=req.status.name,
-            color=req.status.color,
-            count_as_solved=req.status.count_as_solved,
-        ),
-        subject=req.title,
-        requester=RequesterInfo(
-            id=req.requester.id,
-            full_name=req.requester.full_name,
-        ),
-        requested=req.created_at,
-        due_date=req.due_date,
-        priority=PriorityInfo(
-            id=req.priority.id,
-            name=req.priority.name,
-            response_time_minutes=req.priority.response_time_minutes,
-            resolution_time_hours=req.priority.resolution_time_hours,
-        ),
-        business_unit=business_unit_info,
-        last_message=None,  # No messages yet for new sub-task
-        tag=tag_info,
-        category=category_info,
-        subcategory=subcategory_info,
-        requester_has_unread=False,
-        technician_has_unread=False,
-        parent_task_id=req.parent_task_id,
-        is_blocked=req.is_blocked,
-        assigned_to_section_id=req.assigned_to_section_id,
-        assigned_to_technician_id=req.assigned_to_technician_id,
-        completed_at=req.completed_at,
-        estimated_hours=req.estimated_hours,
-    )
-
-
-@router.get("/{parent_id}/sub-tasks", response_model=List[TechnicianRequestListItem])
-async def get_sub_tasks(
-    parent_id: UUID,
-    skip: int = 0,
-    limit: int = 20,
-    db: AsyncSession = Depends(get_session)
-):
-    """
-    Get all sub-tasks for a parent request with full nested data.
-
-    **Hierarchy listing:** Get all direct children of a parent request.
-
-    **Query Parameters:**
-    - skip: Pagination offset (default: 0)
-    - limit: Maximum results (default: 20)
-
-    **Returns:**
-        List of sub-tasks with status, priority, requester, business unit
-
-    **Notes:**
-        - Ordered by order field, then created_at
-        - Only returns direct children (not nested sub-sub-tasks)
-    """
-    from sqlmodel import select
-    from sqlalchemy.orm import selectinload
-    from db.models import ServiceRequest, Tag
-
-    # Fetch sub-tasks with all relationships
-    query = (
-        select(ServiceRequest)
-        .options(
-            selectinload(ServiceRequest.status),
-            selectinload(ServiceRequest.priority),
-            selectinload(ServiceRequest.requester),
-            selectinload(ServiceRequest.business_unit),
-            selectinload(ServiceRequest.tag).selectinload(Tag.category),
-            selectinload(ServiceRequest.subcategory)
-        )
-        .where(ServiceRequest.parent_task_id == parent_id)
-        .where(not ServiceRequest.is_deleted)
-        .order_by(ServiceRequest.order.asc(), ServiceRequest.created_at.asc())
-        .offset(skip)
-        .limit(limit)
-    )
-
-    result = await db.execute(query)
-    sub_tasks = list(result.scalars().all())
-
-    # Build response items with nested data
-    items = []
-    for req in sub_tasks:
-        business_unit_info = None
-        if req.business_unit:
-            business_unit_info = BusinessUnitInfo(
-                id=req.business_unit.id,
-                name=req.business_unit.name,
-            )
-
-        tag_info = None
-        if req.tag:
-            tag_info = TagInfo(
-                id=req.tag.id,
-                name_en=req.tag.name_en,
-                name_ar=req.tag.name_ar,
-            )
-
-        category_info = None
-        if req.tag and req.tag.category:
-            category_info = CategoryInfo(
-                id=req.tag.category.id,
-                name=req.tag.category.name,
-                name_en=req.tag.category.name_en,
-                name_ar=req.tag.category.name_ar,
-            )
-
-        subcategory_info = None
-        if req.subcategory:
-            subcategory_info = SubcategoryInfo(
-                id=req.subcategory.id,
-                name=req.subcategory.name,
-                name_en=req.subcategory.name_en,
-                name_ar=req.subcategory.name_ar,
-            )
-
-        item = TechnicianRequestListItem(
-            id=req.id,
-            status=StatusInfo(
-                id=req.status.id,
-                name=req.status.name,
-                color=req.status.color,
-                count_as_solved=req.status.count_as_solved,
-            ),
-            subject=req.title,
-            requester=RequesterInfo(
-                id=req.requester.id,
-                full_name=req.requester.full_name,
-            ),
-            requested=req.created_at,
-            due_date=req.due_date,
-            priority=PriorityInfo(
-                id=req.priority.id,
-                name=req.priority.name,
-                response_time_minutes=req.priority.response_time_minutes,
-                resolution_time_hours=req.priority.resolution_time_hours,
-            ),
-            business_unit=business_unit_info,
-            last_message=None,  # We don't fetch last message for sub-tasks list
-            tag=tag_info,
-            category=category_info,
-            subcategory=subcategory_info,
-            requester_has_unread=False,
-            technician_has_unread=False,
-            parent_task_id=req.parent_task_id,
-            is_blocked=req.is_blocked,
-            assigned_to_section_id=req.assigned_to_section_id,
-            assigned_to_technician_id=req.assigned_to_technician_id,
-            completed_at=req.completed_at,
-            estimated_hours=req.estimated_hours,
-        )
-        items.append(item)
-
-    return items
-
-
-@router.get("/{parent_id}/sub-tasks/stats", response_model=dict)
-async def get_sub_task_stats(
-    parent_id: UUID,
-    db: AsyncSession = Depends(get_session)
-):
-    """
-    Get statistics for sub-tasks of a parent request.
-
-    **Progress tracking:** Get completion status of all sub-tasks.
-
-    **Returns:**
-        - total: Total number of sub-tasks
-        - completed: Number of completed sub-tasks
-        - pending: Number of pending sub-tasks
-        - blocked: Number of blocked sub-tasks
-
-    **Use Case:** Display progress bar on parent request detail page
-    """
-    from api.services.request_service import RequestService
-
-    return await RequestService.get_sub_task_stats(db, parent_id)
-
-
-@router.put("/{parent_id}/sub-tasks/reorder")
+@router.post("/{parent_id}/sub-tasks/reorder")
 async def reorder_sub_tasks(
     parent_id: UUID,
     task_ids: List[UUID],
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Reorder sub-tasks by providing ordered list of task IDs.
@@ -1844,7 +1544,7 @@ async def get_my_tasks(
     skip: int = 0,
     limit: int = 20,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get all tasks (including sub-tasks) assigned to current technician.
@@ -1881,12 +1581,13 @@ async def get_my_tasks(
 # SCREENSHOT LINKING ENDPOINTS
 # ==================================================================================
 
+
 @router.post("/{request_id}/screenshots/{screenshot_id}/link", status_code=201)
 async def link_screenshot_to_request(
     request_id: UUID,
     screenshot_id: int,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Link a screenshot from parent task to a sub-task.
@@ -1927,7 +1628,7 @@ async def unlink_screenshot_from_request(
     request_id: UUID,
     screenshot_id: int,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Unlink a screenshot from a sub-task.
@@ -1960,8 +1661,7 @@ async def unlink_screenshot_from_request(
 
 @router.get("/{request_id}/screenshots/all", response_model=List[dict])
 async def get_all_screenshots_for_request(
-    request_id: UUID,
-    db: AsyncSession = Depends(get_session)
+    request_id: UUID, db: AsyncSession = Depends(get_session)
 ):
     """
     Get all screenshots for a request (owned + linked from parent).
@@ -1985,7 +1685,9 @@ async def get_all_screenshots_for_request(
     """
     from api.services.screenshot_service import ScreenshotService
 
-    screenshots = await ScreenshotService.get_all_screenshots_for_request(db, request_id)
+    screenshots = await ScreenshotService.get_all_screenshots_for_request(
+        db, request_id
+    )
 
     # Convert to dict for response
     return [
@@ -1997,7 +1699,7 @@ async def get_all_screenshots_for_request(
             "mime_type": s.mime_type,
             "uploaded_by": str(s.uploaded_by),
             "created_at": s.created_at.isoformat(),
-            "upload_status": s.upload_status
+            "upload_status": s.upload_status,
         }
         for s in screenshots
     ]

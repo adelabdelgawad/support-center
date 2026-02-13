@@ -1,13 +1,6 @@
 /**
- * Type definitions for tags and categories
+ * Type definitions for categories
  */
-
-export interface Tag {
-  id: number;
-  nameEn: string;
-  nameAr: string;
-  category?: Category | null;
-}
 
 export interface Category {
   id: number;

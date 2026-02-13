@@ -24,10 +24,9 @@ from .endpoints.setting import (
     request_status,
     request_types,
     roles,
-    service_sections,
+    sections,
     sla_configs,
     system_messages,
-    tags,
     user_custom_views,
     users,
 )
@@ -91,13 +90,9 @@ api_router.include_router(
     tags=["request-statuses"],
 )
 
-api_router.include_router(
-    requests.router, prefix="/requests", tags=["requests"]
-)
+api_router.include_router(requests.router, prefix="/requests", tags=["requests"])
 
-api_router.include_router(
-    priorities.router, prefix="/priorities", tags=["priorities"]
-)
+api_router.include_router(priorities.router, prefix="/priorities", tags=["priorities"])
 
 api_router.include_router(
     request_details_metadata.router,
@@ -113,18 +108,12 @@ api_router.include_router(
     request_types.router, prefix="/request-types", tags=["request-types"]
 )
 
-api_router.include_router(
-    categories.router, prefix="/categories", tags=["categories"]
-)
+api_router.include_router(categories.router, prefix="/categories", tags=["categories"])
 
 api_router.include_router(
-    tags.router, prefix="/tags", tags=["tags"]
-)
-
-api_router.include_router(
-    service_sections.router,
-    prefix="/service-sections",
-    tags=["service-sections"],
+    sections.router,
+    prefix="/sections",
+    tags=["sections"],
 )
 
 api_router.include_router(
@@ -147,9 +136,7 @@ api_router.include_router(
     request_notes.router, prefix="/request-notes", tags=["request-notes"]
 )
 
-api_router.include_router(
-    remote_access.router, prefix="", tags=["remote-access"]
-)
+api_router.include_router(remote_access.router, prefix="", tags=["remote-access"])
 
 api_router.include_router(turn.router, prefix="/turn", tags=["turn"])
 
@@ -157,9 +144,7 @@ api_router.include_router(
     desktop_sessions.router, prefix="/sessions/desktop", tags=["desktop-sessions"]
 )
 
-api_router.include_router(
-    session_stats.router, prefix="/sessions", tags=["sessions"]
-)
+api_router.include_router(session_stats.router, prefix="/sessions", tags=["sessions"])
 
 api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
 
@@ -171,13 +156,7 @@ api_router.include_router(search.router, prefix="/search", tags=["search"])
 
 api_router.include_router(files.router, prefix="/files", tags=["files"])
 
-api_router.include_router(
-    screenshots.router, prefix="/screenshots", tags=["screenshots"]
-)
-
-api_router.include_router(
-    chat_files.router, prefix="/chat-files", tags=["chat-files"]
-)
+api_router.include_router(chat_files.router, prefix="/chat-files", tags=["chat-files"])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 
@@ -214,11 +193,7 @@ api_router.include_router(
 api_router.include_router(internal.router, prefix="/internal", tags=["internal"])
 
 # Scheduler Management
-api_router.include_router(
-    scheduler.router, prefix="/scheduler", tags=["scheduler"]
-)
+api_router.include_router(scheduler.router, prefix="/scheduler", tags=["scheduler"])
 
 # Events Monitoring (Redis Streams)
-api_router.include_router(
-    events.router, prefix="/events", tags=["Events"]
-)
+api_router.include_router(events.router, prefix="/events", tags=["Events"])

@@ -76,14 +76,14 @@ async def get_current_user(
         user_id = get_user_id_from_token(payload)  # Returns UUID string
 
         # Get user from database using UUID (User.id is now UUID primary key)
-        # Eager-load relationships used by _get_region_filter for performance
+        # Eager-load relationships used by _get_visibility_filter for performance
         result = await db.execute(
             select(User)
             .where(User.id == user_id)
             .options(
                 selectinload(User.user_roles).selectinload(UserRole.role),
                 selectinload(User.business_unit_assigns),
-                selectinload(User.region_assigns),
+                selectinload(User.section_assigns),
             )
         )
         user = result.scalar_one_or_none()
@@ -183,6 +183,7 @@ def _is_valid_private_ip(ip_str: str) -> bool:
         True if valid private IP, False otherwise
     """
     import ipaddress
+
     try:
         ip = ipaddress.ip_address(ip_str.strip())
         return ip.is_private and not ip.is_loopback
@@ -327,6 +328,7 @@ async def _get_user_with_roles(
 
         # Get user from database with roles eagerly loaded using UUID (User.id is now UUID primary key)
         from db import UserRole
+
         result = await db.execute(
             select(User)
             .where(User.id == user_id)
@@ -363,13 +365,17 @@ def _has_role(user: User, role_name: str) -> bool:
     Returns:
         True if user has the role, False otherwise
     """
-    if not hasattr(user, 'user_roles') or not user.user_roles:
+    if not hasattr(user, "user_roles") or not user.user_roles:
         return False
 
     role_name_lower = role_name.lower()
 
     for user_role in user.user_roles:
-        if user_role.role and user_role.role.name and user_role.role.name.lower() == role_name_lower:
+        if (
+            user_role.role
+            and user_role.role.name
+            and user_role.role.name.lower() == role_name_lower
+        ):
             # Check if the role assignment is active
             if not user_role.is_deleted and user_role.role.is_active:
                 return True
@@ -560,7 +566,7 @@ async def verify_request_access(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid request ID format"
+                detail="Invalid request ID format",
             )
 
     # Fetch the service request
@@ -571,8 +577,7 @@ async def verify_request_access(
 
     if not service_request:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Service request not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Service request not found"
         )
 
     # Super admins and technicians have full access

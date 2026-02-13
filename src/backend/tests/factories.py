@@ -13,9 +13,20 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from db.models import (
-    User, Role, Page, UserRole, ServiceRequest,
-    RequestStatus, Priority, Category, BusinessUnit, BusinessUnitRegion,
-    ChatMessage, RequestNote, DesktopSession, WebSession
+    User,
+    Role,
+    Page,
+    UserRole,
+    ServiceRequest,
+    RequestStatus,
+    Priority,
+    Category,
+    BusinessUnit,
+    BusinessUnitRegion,
+    ChatMessage,
+    RequestNote,
+    DesktopSession,
+    WebSession,
 )
 
 
@@ -46,8 +57,26 @@ class UserFactory:
         """Create a User instance with realistic defaults."""
         suffix = _unique_suffix()
 
-        first_names = ["Ahmed", "Mohamed", "Fatma", "Sara", "Omar", "Layla", "Youssef", "Nour"]
-        last_names = ["Hassan", "Ali", "Ibrahim", "Mahmoud", "Khalil", "Mostafa", "Salem", "Farouk"]
+        first_names = [
+            "Ahmed",
+            "Mohamed",
+            "Fatma",
+            "Sara",
+            "Omar",
+            "Layla",
+            "Youssef",
+            "Nour",
+        ]
+        last_names = [
+            "Hassan",
+            "Ali",
+            "Ibrahim",
+            "Mahmoud",
+            "Khalil",
+            "Mostafa",
+            "Salem",
+            "Farouk",
+        ]
 
         # Use hash of suffix to pick names deterministically but uniquely
         idx = hash(suffix) % len(first_names)
@@ -112,9 +141,21 @@ class RoleFactory:
     PREDEFINED_ROLES = [
         {"name": "Admin", "ar_name": "مدير", "description": "Full system access"},
         {"name": "Supervisor", "ar_name": "مشرف", "description": "Supervisory access"},
-        {"name": "Technician", "ar_name": "فني", "description": "Technical support access"},
-        {"name": "Auditor", "ar_name": "مدقق", "description": "Audit and reporting access"},
-        {"name": "Manager", "ar_name": "مدير قسم", "description": "Department management"},
+        {
+            "name": "Technician",
+            "ar_name": "فني",
+            "description": "Technical support access",
+        },
+        {
+            "name": "Auditor",
+            "ar_name": "مدقق",
+            "description": "Audit and reporting access",
+        },
+        {
+            "name": "Manager",
+            "ar_name": "مدير قسم",
+            "description": "Department management",
+        },
         {"name": "Senior", "ar_name": "كبير", "description": "Senior staff access"},
     ]
 
@@ -133,8 +174,8 @@ class RoleFactory:
         if name is None:
             predefined = cls.PREDEFINED_ROLES[cls._counter % len(cls.PREDEFINED_ROLES)]
             name = f"{predefined['name']}_{cls._counter}"
-            ar_name = ar_name or predefined['ar_name']
-            description = description or predefined['description']
+            ar_name = ar_name or predefined["ar_name"]
+            description = description or predefined["description"]
 
         return Role(
             name=name,
@@ -148,18 +189,14 @@ class RoleFactory:
     def create_admin_role(cls) -> Role:
         """Create the Admin role."""
         return cls.create(
-            name="Admin",
-            ar_name="مدير",
-            description="Full system access"
+            name="Admin", ar_name="مدير", description="Full system access"
         )
 
     @classmethod
     def create_technician_role(cls) -> Role:
         """Create the Technician role."""
         return cls.create(
-            name="Technician",
-            ar_name="فني",
-            description="Technical support access"
+            name="Technician", ar_name="فني", description="Technical support access"
         )
 
 
@@ -167,14 +204,64 @@ class RequestStatusFactory:
     """Factory for creating RequestStatus instances."""
 
     STATUSES = [
-        {"name": "New", "name_en": "New", "name_ar": "جديد", "color": "#3B82F6", "order": 1},
-        {"name": "Open", "name_en": "Open", "name_ar": "مفتوح", "color": "#10B981", "order": 2},
-        {"name": "In Progress", "name_en": "In Progress", "name_ar": "قيد التنفيذ", "color": "#F59E0B", "order": 3},
-        {"name": "On Hold", "name_en": "On Hold", "name_ar": "معلق", "color": "#6B7280", "order": 4},
-        {"name": "Pending", "name_en": "Pending", "name_ar": "معلق", "color": "#8B5CF6", "order": 5},
-        {"name": "Resolved", "name_en": "Resolved", "name_ar": "تم الحل", "color": "#22C55E", "order": 6, "count_as_solved": True},
-        {"name": "Closed", "name_en": "Closed", "name_ar": "مغلق", "color": "#EF4444", "order": 7, "count_as_solved": True},
-        {"name": "Cancelled", "name_en": "Cancelled", "name_ar": "ملغي", "color": "#DC2626", "order": 8},
+        {
+            "name": "New",
+            "name_en": "New",
+            "name_ar": "جديد",
+            "color": "#3B82F6",
+            "order": 1,
+        },
+        {
+            "name": "Open",
+            "name_en": "Open",
+            "name_ar": "مفتوح",
+            "color": "#10B981",
+            "order": 2,
+        },
+        {
+            "name": "In Progress",
+            "name_en": "In Progress",
+            "name_ar": "قيد التنفيذ",
+            "color": "#F59E0B",
+            "order": 3,
+        },
+        {
+            "name": "On Hold",
+            "name_en": "On Hold",
+            "name_ar": "معلق",
+            "color": "#6B7280",
+            "order": 4,
+        },
+        {
+            "name": "Pending",
+            "name_en": "Pending",
+            "name_ar": "معلق",
+            "color": "#8B5CF6",
+            "order": 5,
+        },
+        {
+            "name": "Resolved",
+            "name_en": "Resolved",
+            "name_ar": "تم الحل",
+            "color": "#22C55E",
+            "order": 6,
+            "count_as_solved": True,
+        },
+        {
+            "name": "Closed",
+            "name_en": "Closed",
+            "name_ar": "مغلق",
+            "color": "#EF4444",
+            "order": 7,
+            "count_as_solved": True,
+        },
+        {
+            "name": "Cancelled",
+            "name_en": "Cancelled",
+            "name_ar": "ملغي",
+            "color": "#DC2626",
+            "order": 8,
+        },
     ]
 
     @classmethod
@@ -229,10 +316,38 @@ class PriorityFactory:
     """Factory for creating Priority instances."""
 
     PRIORITIES = [
-        {"name": "Critical", "name_en": "Critical", "name_ar": "حرج", "response_time_minutes": 15, "resolution_time_hours": 4, "order": 1},
-        {"name": "High", "name_en": "High", "name_ar": "مرتفع", "response_time_minutes": 60, "resolution_time_hours": 8, "order": 2},
-        {"name": "Medium", "name_en": "Medium", "name_ar": "متوسط", "response_time_minutes": 240, "resolution_time_hours": 24, "order": 3},
-        {"name": "Low", "name_en": "Low", "name_ar": "منخفض", "response_time_minutes": 480, "resolution_time_hours": 72, "order": 4},
+        {
+            "name": "Critical",
+            "name_en": "Critical",
+            "name_ar": "حرج",
+            "response_time_minutes": 15,
+            "resolution_time_hours": 4,
+            "order": 1,
+        },
+        {
+            "name": "High",
+            "name_en": "High",
+            "name_ar": "مرتفع",
+            "response_time_minutes": 60,
+            "resolution_time_hours": 8,
+            "order": 2,
+        },
+        {
+            "name": "Medium",
+            "name_en": "Medium",
+            "name_ar": "متوسط",
+            "response_time_minutes": 240,
+            "resolution_time_hours": 24,
+            "order": 3,
+        },
+        {
+            "name": "Low",
+            "name_en": "Low",
+            "name_ar": "منخفض",
+            "response_time_minutes": 480,
+            "resolution_time_hours": 72,
+            "order": 4,
+        },
     ]
 
     @classmethod
@@ -248,7 +363,9 @@ class PriorityFactory:
     ) -> Priority:
         """Create a Priority instance."""
         if name is None:
-            priority_data = cls.PRIORITIES[order - 1] if 1 <= order <= 4 else cls.PRIORITIES[2]
+            priority_data = (
+                cls.PRIORITIES[order - 1] if 1 <= order <= 4 else cls.PRIORITIES[2]
+            )
             name = priority_data["name"]
             name_en = priority_data["name_en"]
             name_ar = priority_data["name_ar"]
@@ -417,7 +534,6 @@ class ServiceRequestFactory:
         priority_id: int = 3,
         category_id: Optional[int] = None,
         business_unit_id: Optional[int] = None,
-        tag_id: Optional[int] = None,
         resolution: Optional[str] = None,
         parent_task_id: Optional[UUID] = None,
         is_deleted: bool = False,
@@ -439,7 +555,6 @@ class ServiceRequestFactory:
             priority_id=priority_id,
             category_id=category_id,
             business_unit_id=business_unit_id,
-            tag_id=tag_id,
             resolution=resolution,
             parent_task_id=parent_task_id,
             is_deleted=is_deleted,
@@ -581,8 +696,18 @@ class PageFactory:
 
     PAGES = [
         {"title": "Dashboard", "path": "/dashboard", "icon": "dashboard", "order": 1},
-        {"title": "Support Center", "path": "/support-center", "icon": "support", "order": 2},
-        {"title": "Requests", "path": "/support-center/requests", "icon": "requests", "order": 3},
+        {
+            "title": "Support Center",
+            "path": "/support-center",
+            "icon": "support",
+            "order": 2,
+        },
+        {
+            "title": "Requests",
+            "path": "/support-center/requests",
+            "icon": "requests",
+            "order": 3,
+        },
         {"title": "Settings", "path": "/setting", "icon": "settings", "order": 4},
         {"title": "Users", "path": "/setting/users", "icon": "users", "order": 5},
         {"title": "Roles", "path": "/setting/roles", "icon": "roles", "order": 6},
@@ -624,10 +749,9 @@ class PageFactory:
 
 # Helper functions for common test scenarios
 
+
 def create_user_with_role(
-    db_session,
-    role: Role,
-    **user_kwargs
+    db_session, role: Role, **user_kwargs
 ) -> tuple[User, UserRole]:
     """Create a user and assign them a role."""
     user = UserFactory.create(**user_kwargs)
@@ -636,15 +760,12 @@ def create_user_with_role(
 
 
 def create_complete_request(
-    requester: User,
-    status: RequestStatus,
-    priority: Priority,
-    **kwargs
+    requester: User, status: RequestStatus, priority: Priority, **kwargs
 ) -> ServiceRequest:
     """Create a request with all required relationships."""
     return ServiceRequestFactory.create(
         requester_id=requester.id,
         status_id=status.id,
         priority_id=priority.id,
-        **kwargs
+        **kwargs,
     )

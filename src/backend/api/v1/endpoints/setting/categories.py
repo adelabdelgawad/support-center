@@ -10,17 +10,23 @@ Categories organize service requests into logical groups for better routing and 
 - Hierarchical structure (subcategories belong to categories)
 - Active/inactive status tracking
 - Bilingual support (name_en, name_ar, name_fr)
-- Tag associations via categories
 """
+
 from typing import List, Optional
 
 from db.database import get_session
 from core.dependencies import get_current_user, require_admin
 from fastapi import APIRouter, Depends, HTTPException, Query
 from db import User
-from api.schemas.category import (CategoryCreate, CategoryRead, CategoryUpdate,
-                               CategoryWithSubcategories, SubcategoryCreate,
-                               SubcategoryRead, SubcategoryUpdate)
+from api.schemas.category import (
+    CategoryCreate,
+    CategoryRead,
+    CategoryUpdate,
+    CategoryWithSubcategories,
+    SubcategoryCreate,
+    SubcategoryRead,
+    SubcategoryUpdate,
+)
 from api.services.category_service import CategoryService
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +36,7 @@ router = APIRouter()
 # =============================================================================
 # CATEGORY ENDPOINTS
 # =============================================================================
+
 
 @router.get("/categories")
 async def list_categories(
@@ -57,9 +64,7 @@ async def list_categories(
     **Permissions:** Authenticated users
     """
     categories = await CategoryService.list_categories(
-        db=db,
-        active_only=active_only,
-        include_subcategories=include_subcategories
+        db=db, active_only=active_only, include_subcategories=include_subcategories
     )
 
     # Return with or without subcategories based on request
@@ -93,9 +98,7 @@ async def get_category(
     **Permissions:** Authenticated users
     """
     category = await CategoryService.get_category(
-        db=db,
-        category_id=category_id,
-        include_subcategories=include_subcategories
+        db=db, category_id=category_id, include_subcategories=include_subcategories
     )
 
     if not category:
@@ -131,8 +134,7 @@ async def create_category(
     """
     try:
         category = await CategoryService.create_category(
-            db=db,
-            category_data=category_data
+            db=db, category_data=category_data
         )
         return category
     except Exception as e:
@@ -164,9 +166,7 @@ async def update_category(
     **Permissions:** Admin only
     """
     category = await CategoryService.update_category(
-        db=db,
-        category_id=category_id,
-        update_data=update_data
+        db=db, category_id=category_id, update_data=update_data
     )
 
     if not category:
@@ -212,6 +212,7 @@ async def delete_category(
 # SUBCATEGORY ENDPOINTS
 # =============================================================================
 
+
 @router.get("/subcategories", response_model=List[SubcategoryRead])
 async def list_subcategories(
     category_id: Optional[int] = Query(None, description="Filter by category ID"),
@@ -234,9 +235,7 @@ async def list_subcategories(
     **Permissions:** Authenticated users
     """
     subcategories = await CategoryService.list_subcategories(
-        db=db,
-        category_id=category_id,
-        active_only=active_only
+        db=db, category_id=category_id, active_only=active_only
     )
     return subcategories
 
@@ -264,8 +263,7 @@ async def get_subcategory(
     **Permissions:** Authenticated users
     """
     subcategory = await CategoryService.get_subcategory(
-        db=db,
-        subcategory_id=subcategory_id
+        db=db, subcategory_id=subcategory_id
     )
 
     if not subcategory:
@@ -274,7 +272,11 @@ async def get_subcategory(
     return subcategory
 
 
-@router.post("/categories/{category_id}/subcategories", response_model=SubcategoryRead, status_code=201)
+@router.post(
+    "/categories/{category_id}/subcategories",
+    response_model=SubcategoryRead,
+    status_code=201,
+)
 async def create_subcategory(
     category_id: int,
     subcategory_data: SubcategoryCreate,
@@ -309,13 +311,12 @@ async def create_subcategory(
     if subcategory_data.category_id != category_id:
         raise HTTPException(
             status_code=400,
-            detail="Category ID in path must match category_id in request body"
+            detail="Category ID in path must match category_id in request body",
         )
 
     try:
         subcategory = await CategoryService.create_subcategory(
-            db=db,
-            subcategory_data=subcategory_data
+            db=db, subcategory_data=subcategory_data
         )
         return subcategory
     except ValueError as e:
@@ -356,8 +357,7 @@ async def create_subcategory_direct(
     """
     try:
         subcategory = await CategoryService.create_subcategory(
-            db=db,
-            subcategory_data=subcategory_data
+            db=db, subcategory_data=subcategory_data
         )
         return subcategory
     except ValueError as e:
@@ -391,9 +391,7 @@ async def update_subcategory(
     **Permissions:** Admin only
     """
     subcategory = await CategoryService.update_subcategory(
-        db=db,
-        subcategory_id=subcategory_id,
-        update_data=update_data
+        db=db, subcategory_id=subcategory_id, update_data=update_data
     )
 
     if not subcategory:
@@ -428,8 +426,7 @@ async def delete_subcategory(
     **Permissions:** Admin only
     """
     success = await CategoryService.delete_subcategory(
-        db=db,
-        subcategory_id=subcategory_id
+        db=db, subcategory_id=subcategory_id
     )
 
     if not success:

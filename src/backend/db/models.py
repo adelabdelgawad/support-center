@@ -41,12 +41,12 @@ from api.schemas.page import PageRoleDetailedResponse, PageWithRolesName
 def cairo_now():
     """
     Get current time in UTC (timezone-naive) for database storage.
-    
+
     Stores datetime in UTC without timezone info. The application layer should:
     1. Store all times in UTC (this function)
     2. Convert to user's timezone when displaying (frontend/API layer)
     3. Convert from user's timezone to UTC when receiving input
-    
+
     This ensures consistent storage while allowing proper timezone conversion for all users.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -111,12 +111,16 @@ class Role(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this role",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this role",
     )
     created_at: datetime = Field(
@@ -229,12 +233,16 @@ class Page(TableModel, table=True):
 
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this page",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this page",
     )
     created_at: datetime = Field(
@@ -351,12 +359,16 @@ class PageRole(TableModel, table=True):
 
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this page permission",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this page permission",
     )
     created_at: datetime = Field(
@@ -440,7 +452,7 @@ class UserRole(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="User UUID",
     )
@@ -454,12 +466,16 @@ class UserRole(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this assignment",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this assignment",
     )
     created_at: datetime = Field(
@@ -548,13 +564,15 @@ class RequestAssignee(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="Assignee user UUID (technician or CC recipient)",
     )
     assigned_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who made this assignment",
     )
     created_at: datetime = Field(
@@ -618,95 +636,6 @@ class RequestAssignee(TableModel, table=True):
 UserRequestAssign = RequestAssignee
 
 
-class TechnicianRegion(TableModel, table=True):
-    """Technician-Region assignment table.
-
-    Renamed from RegionUserAssign/region_user_assigns for clarity.
-    Assigns technicians to geographic regions.
-    """
-
-    __tablename__ = "technician_regions"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    technician_id: UUID = Field(
-        sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
-            ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
-        ),
-        description="Technician user UUID",
-    )
-    region_id: int = Field(
-        sa_column=Column(
-            Integer, ForeignKey("business_unit_regions.id"), nullable=False
-        ),
-        description="Business unit region ID",
-    )
-    created_at: datetime = Field(
-        default_factory=cairo_now,
-        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
-        description="Assignment creation timestamp",
-    )
-    created_by: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
-        description="User who created this assignment",
-    )
-    updated_at: datetime = Field(
-        default_factory=cairo_now,
-        sa_column_kwargs={
-            "server_default": text("CURRENT_TIMESTAMP"),
-            "onupdate": text("CURRENT_TIMESTAMP"),
-        },
-        description="Last update timestamp",
-    )
-    is_active: bool = Field(
-        default=True,
-        sa_column=Column(Boolean, default=True, nullable=False),
-        description="Whether this assignment is active",
-    )
-    is_deleted: bool = Field(
-        default=False,
-        sa_column=Column(Boolean, default=False, nullable=False),
-        description="Soft delete flag",
-    )
-
-    # Relationships
-    technician: "User" = Relationship(
-        back_populates="region_assigns",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "TechnicianRegion.technician_id",
-        },
-    )
-    region: "BusinessUnitRegion" = Relationship(
-        back_populates="user_assigns",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "TechnicianRegion.region_id",
-        },
-    )
-    creator: Optional["User"] = Relationship(
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "TechnicianRegion.created_by",
-        }
-    )
-
-    __table_args__ = (
-        Index("ix_technician_regions_technician_id", "technician_id"),
-        Index("ix_technician_regions_region_id", "region_id"),
-        Index(
-            "ix_technician_regions_unique",
-            "technician_id",
-            "region_id",
-            unique=True,
-        ),
-        Index("ix_technician_regions_is_active", "is_active"),
-        Index("ix_technician_regions_is_deleted", "is_deleted"),
-    )
-
-
 class TechnicianBusinessUnit(TableModel, table=True):
     """Technician-BusinessUnit assignment table.
 
@@ -721,14 +650,12 @@ class TechnicianBusinessUnit(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="Technician user UUID",
     )
     business_unit_id: int = Field(
-        sa_column=Column(
-            Integer, ForeignKey("business_units.id"), nullable=False
-        ),
+        sa_column=Column(Integer, ForeignKey("business_units.id"), nullable=False),
         description="Business unit ID",
     )
     created_at: datetime = Field(
@@ -738,12 +665,16 @@ class TechnicianBusinessUnit(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this assignment",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this assignment",
     )
     updated_at: datetime = Field(
@@ -1071,7 +1002,9 @@ class User(TableModel, table=True):
     )
     manager_id: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User's manager (self-referential foreign key)",
     )
     direct_manager_name: Optional[str] = Field(
@@ -1204,21 +1137,21 @@ class User(TableModel, table=True):
         },
     )
 
-    # NEW: TechnicianRegion relationship
-    region_assigns: List["TechnicianRegion"] = Relationship(
-        back_populates="technician",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "TechnicianRegion.technician_id",
-        },
-    )
-
     # NEW: TechnicianBusinessUnit relationship
     business_unit_assigns: List["TechnicianBusinessUnit"] = Relationship(
         back_populates="technician",
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "TechnicianBusinessUnit.technician_id",
+        },
+    )
+
+    # Technician Section assignments
+    section_assigns: List["TechnicianSection"] = Relationship(
+        back_populates="technician",
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "TechnicianSection.technician_id",
         },
     )
 
@@ -1290,9 +1223,7 @@ class User(TableModel, table=True):
                 page = perm.page
                 if not page:
                     continue
-                if not include_inactive and (
-                    not perm.is_active or not page.is_active
-                ):
+                if not include_inactive and (not perm.is_active or not page.is_active):
                     continue
                 if page.id not in seen_ids:
                     seen_ids.add(page.id)
@@ -1307,19 +1238,23 @@ class User(TableModel, table=True):
 
 class AuthToken(TableModel, table=True):
     """Access tokens for authentication"""
+
     __tablename__ = "auth_tokens"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     token_id: UUID = Field(
         default_factory=uuid4,
-        sa_column=Column(PGUUID(as_uuid=True), unique=True, nullable=False)
+        sa_column=Column(PGUUID(as_uuid=True), unique=True, nullable=False),
     )
     user_id: UUID = Field(
-        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
     )
     session_id: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), nullable=True)
+        default=None, sa_column=Column(PostgreSQL_UUID(as_uuid=True), nullable=True)
     )  # Session ID (references refresh_sessions table)
     token_hash: str = Field(max_length=255, unique=True)
     token_type: str = Field(default="access", max_length=20)
@@ -1356,6 +1291,7 @@ class RefreshSession(TableModel, table=True):
     - Individual session revocation
     - Metadata storage for locale and other preferences
     """
+
     __tablename__ = "refresh_sessions"
 
     id: UUID = Field(
@@ -1366,7 +1302,11 @@ class RefreshSession(TableModel, table=True):
 
     # User reference (UUID primary key)
     user_id: UUID = Field(
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         description="User UUID (primary key reference)",
     )
 
@@ -1467,7 +1407,7 @@ class DesktopSession(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="User UUID who owns this session",
     )
@@ -1605,7 +1545,7 @@ class WebSession(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="User UUID who owns this session",
     )
@@ -1770,12 +1710,16 @@ class RequestStatus(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this status",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this status",
     )
     readonly: bool = Field(
@@ -1823,7 +1767,9 @@ class RequestStatus(TableModel, table=True):
         Index("ix_request_statuses_readonly", "readonly"),
         Index("ix_request_statuses_created_at", "created_at"),
         Index("ix_request_statuses_count_as_solved", "count_as_solved"),
-        Index("ix_request_statuses_visible_on_requester_page", "visible_on_requester_page"),
+        Index(
+            "ix_request_statuses_visible_on_requester_page", "visible_on_requester_page"
+        ),
     )
 
 
@@ -1835,9 +1781,7 @@ class ServiceRequest(TableModel, table=True):
     id: Optional[UUID] = Field(
         default_factory=uuid4,
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
-            primary_key=True,
-            nullable=False
+            PostgreSQL_UUID(as_uuid=True), primary_key=True, nullable=False
         ),
         description="Unique UUID identifier for the service request",
     )
@@ -1847,35 +1791,22 @@ class ServiceRequest(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
-        description="User UUID who created the request"
+        description="User UUID who created the request",
     )
 
     # Business Unit - automatically assigned based on IP address
     business_unit_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(
-            Integer, ForeignKey("business_units.id"), nullable=True
-        ),
+        sa_column=Column(Integer, ForeignKey("business_units.id"), nullable=True),
         description="Business unit (auto-assigned from IP or manually set)",
-    )
-
-    # Tag - for categorizing requests
-    tag_id: Optional[int] = Field(
-        default=None,
-        sa_column=Column(
-            Integer, ForeignKey("tags.id"), nullable=True
-        ),
-        description="Tag for categorizing request",
     )
 
     # Status relationship
     status_id: int = Field(
         default=1,
-        sa_column=Column(
-            Integer, ForeignKey("request_statuses.id"), nullable=False
-        ),
+        sa_column=Column(Integer, ForeignKey("request_statuses.id"), nullable=False),
         description="Current status ID (defaults to Open)",
     )
 
@@ -1896,9 +1827,7 @@ class ServiceRequest(TableModel, table=True):
     # Subcategory
     subcategory_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(
-            Integer, ForeignKey("subcategories.id"), nullable=True
-        ),
+        sa_column=Column(Integer, ForeignKey("subcategories.id"), nullable=True),
         description="Subcategory (mandatory if request_id != 1)",
     )
 
@@ -2003,21 +1932,29 @@ class ServiceRequest(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("service_requests.id", ondelete="CASCADE"),
-            nullable=True
+            nullable=True,
         ),
-        description="Parent task ID for sub-tasks (NULL for top-level requests)"
+        description="Parent task ID for sub-tasks (NULL for top-level requests)",
     )
 
     # Assignment tracking (for sub-tasks and requests)
     assigned_to_section_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("service_sections.id", ondelete="SET NULL"), nullable=True),
-        description="Assigned service section"
+        sa_column=Column(
+            Integer,
+            ForeignKey("sections.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="Assigned service section",
     )
     assigned_to_technician_id: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        description="Assigned technician"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="Assigned technician",
     )
 
     # Task management
@@ -2026,42 +1963,54 @@ class ServiceRequest(TableModel, table=True):
     blocked_reason: Optional[str] = Field(
         default=None,
         sa_column=Column(Text, nullable=True),
-        description="Reason for blocking"
+        description="Reason for blocking",
     )
 
     # Time tracking
-    estimated_hours: Optional[float] = Field(default=None, description="Estimated hours to complete")
-    actual_hours: Optional[float] = Field(default=None, description="Actual hours spent")
+    estimated_hours: Optional[float] = Field(
+        default=None, description="Estimated hours to complete"
+    )
+    actual_hours: Optional[float] = Field(
+        default=None, description="Actual hours spent"
+    )
 
     # Additional timestamps
     completed_at: Optional[datetime] = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
-        description="When task was completed"
+        description="When task was completed",
     )
 
     # Soft delete and status
     is_active: bool = Field(
         default=True,
         sa_column=Column(Boolean, default=True, nullable=False),
-        description="Whether request/task is active"
+        description="Whether request/task is active",
     )
     is_deleted: bool = Field(
         default=False,
         sa_column=Column(Boolean, default=False, nullable=False),
-        description="Soft delete flag"
+        description="Soft delete flag",
     )
 
     # Audit fields
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        description="User who created this request/task"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="User who created this request/task",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        description="User who last updated this request/task"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+        description="User who last updated this request/task",
     )
 
     # Relationships
@@ -2077,13 +2026,6 @@ class ServiceRequest(TableModel, table=True):
             "lazy": "selectin",
             "foreign_keys": "ServiceRequest.business_unit_id",
         }
-    )
-    tag: Optional["Tag"] = Relationship(
-        back_populates="requests",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "ServiceRequest.tag_id",
-        },
     )
     status: "RequestStatus" = Relationship(
         back_populates="requests",
@@ -2132,7 +2074,7 @@ class ServiceRequest(TableModel, table=True):
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "RequestAssignee.request_id",
-        }
+        },
     )
     # NEW: request_resolutions relationship
     request_resolutions: List["RequestResolution"] = Relationship(
@@ -2144,28 +2086,28 @@ class ServiceRequest(TableModel, table=True):
         sa_relationship_kwargs={
             "lazy": "selectin",
             "remote_side": "ServiceRequest.id",
-            "foreign_keys": "ServiceRequest.parent_task_id"
+            "foreign_keys": "ServiceRequest.parent_task_id",
         }
     )
     child_tasks: List["ServiceRequest"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "ServiceRequest.parent_task_id",
-            "overlaps": "parent_task"
+            "overlaps": "parent_task",
         }
     )
 
     # Assignment relationships
-    assigned_section: Optional["ServiceSection"] = Relationship(
+    assigned_section: Optional["Section"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "ServiceRequest.assigned_to_section_id"
+            "foreign_keys": "ServiceRequest.assigned_to_section_id",
         }
     )
     assigned_technician: Optional["User"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "ServiceRequest.assigned_to_technician_id"
+            "foreign_keys": "ServiceRequest.assigned_to_technician_id",
         }
     )
 
@@ -2173,27 +2115,25 @@ class ServiceRequest(TableModel, table=True):
     created_by_user: Optional["User"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "ServiceRequest.created_by"
+            "foreign_keys": "ServiceRequest.created_by",
         }
     )
     updated_by_user: Optional["User"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "ServiceRequest.updated_by"
+            "foreign_keys": "ServiceRequest.updated_by",
         }
     )
 
     # Screenshot links (for sharing parent screenshots with sub-tasks)
     linked_screenshots: List["RequestScreenshotLink"] = Relationship(
-        back_populates="request",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        back_populates="request", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     # ALL INDEXES DEFINED HERE
     __table_args__ = (
         Index("ix_requests_requester_id", "requester_id"),
         Index("ix_requests_business_unit_id", "business_unit_id"),
-        Index("ix_requests_tag_id", "tag_id"),
         Index("ix_requests_status_id", "status_id"),
         Index("ix_requests_priority_id", "priority_id"),
         Index("ix_requests_subcategory_id", "subcategory_id"),
@@ -2202,13 +2142,21 @@ class ServiceRequest(TableModel, table=True):
         Index("ix_requests_status_requester", "status_id", "requester_id"),
         Index("ix_requests_status_priority", "status_id", "priority_id"),
         Index("ix_requests_status_created", "status_id", "created_at"),
-        Index(
-            "ix_requests_business_unit_status", "business_unit_id", "status_id"
-        ),
+        Index("ix_requests_business_unit_status", "business_unit_id", "status_id"),
         # Composite index for technician views filtering
-        Index("ix_requests_status_bu_created", "status_id", "business_unit_id", "created_at"),
+        Index(
+            "ix_requests_status_bu_created",
+            "status_id",
+            "business_unit_id",
+            "created_at",
+        ),
         # Composite index for requester views
-        Index("ix_requests_requester_status_created", "requester_id", "status_id", "created_at"),
+        Index(
+            "ix_requests_requester_status_created",
+            "requester_id",
+            "status_id",
+            "created_at",
+        ),
         # Sub-task hierarchy indexes
         Index("ix_requests_parent_task_id", "parent_task_id"),
         Index("ix_requests_parent_status", "parent_task_id", "status_id"),
@@ -2225,7 +2173,12 @@ class ServiceRequest(TableModel, table=True):
         Index("ix_requests_first_requester_message_at", "first_requester_message_at"),
         Index("ix_requests_whatsapp_last_sent_at", "whatsapp_last_sent_at"),
         # Composite index for WhatsApp eligibility queries
-        Index("ix_requests_bu_assignee_first_msg", "business_unit_id", "assigned_to_technician_id", "first_requester_message_at"),
+        Index(
+            "ix_requests_bu_assignee_first_msg",
+            "business_unit_id",
+            "assigned_to_technician_id",
+            "first_requester_message_at",
+        ),
     )
 
 
@@ -2253,9 +2206,9 @@ class ChatMessage(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=True
+            nullable=True,
         ),
-        description="User UUID who sent the message (optional)"
+        description="User UUID who sent the message (optional)",
     )
     content: str = Field(
         min_length=1,
@@ -2282,7 +2235,9 @@ class ChatMessage(TableModel, table=True):
     # File attachment fields (for non-image files like PDF, DOC, etc.)
     file_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(Integer, ForeignKey("chat_files.id", ondelete="SET NULL"), nullable=True),
+        sa_column=Column(
+            Integer, ForeignKey("chat_files.id", ondelete="SET NULL"), nullable=True
+        ),
         description="Reference to ChatFile for non-image attachments",
     )
     file_name: Optional[str] = Field(
@@ -2373,7 +2328,9 @@ class ChatMessage(TableModel, table=True):
             unique=True,
         ),
         # Index for last message queries (DESC order for recent messages)
-        Index("ix_messages_request_created_desc", "request_id", text("created_at DESC")),
+        Index(
+            "ix_messages_request_created_desc", "request_id", text("created_at DESC")
+        ),
     )
 
 
@@ -2476,7 +2433,9 @@ class ChatReadState(TableModel, table=True):
 
     __table_args__ = (
         # Unique constraint: one record per user per chat
-        UniqueConstraint("request_id", "user_id", name="uq_chat_read_state_request_user"),
+        UniqueConstraint(
+            "request_id", "user_id", name="uq_chat_read_state_request_user"
+        ),
         # Index for efficient lookups by user (for global unread count)
         Index("ix_chat_read_states_user", "user_id"),
         # Index for efficient lookups by request (for participant list)
@@ -2495,13 +2454,19 @@ class Screenshot(TableModel, table=True):
 
     request_id: UUID = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True), ForeignKey("service_requests.id", ondelete="CASCADE"), nullable=False
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("service_requests.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         description="Service request this screenshot belongs to",
     )
     uploaded_by: UUID = Field(
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        description="User who uploaded this screenshot"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        description="User who uploaded this screenshot",
     )
     filename: str = Field(
         min_length=1,
@@ -2545,9 +2510,7 @@ class Screenshot(TableModel, table=True):
     upload_status: str = Field(
         default="pending",
         max_length=20,
-        sa_column=Column(
-            String(20), nullable=False, server_default=text("'pending'")
-        ),
+        sa_column=Column(String(20), nullable=False, server_default=text("'pending'")),
         description="Upload status: 'pending', 'completed', 'failed'",
     )
     temp_local_path: Optional[str] = Field(
@@ -2558,9 +2521,7 @@ class Screenshot(TableModel, table=True):
     )
     is_corrupted: bool = Field(
         default=False,
-        sa_column=Column(
-            Boolean, nullable=False, server_default=text("false")
-        ),
+        sa_column=Column(Boolean, nullable=False, server_default=text("false")),
         description="File corruption flag (set when hash validation fails)",
     )
 
@@ -2596,8 +2557,7 @@ class Screenshot(TableModel, table=True):
 
     # Screenshot links (for sharing with sub-tasks)
     linked_to_requests: List["RequestScreenshotLink"] = Relationship(
-        back_populates="screenshot",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        back_populates="screenshot", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     # ALL INDEXES DEFINED HERE
@@ -2675,7 +2635,9 @@ class ChatFile(TableModel, table=True):
     bucket_name: str = Field(
         default="servicecatalog-files",
         max_length=100,
-        sa_column=Column(String(100), nullable=False, server_default=text("'servicecatalog-files'")),
+        sa_column=Column(
+            String(100), nullable=False, server_default=text("'servicecatalog-files'")
+        ),
         description="MinIO bucket name",
     )
     upload_status: str = Field(
@@ -2762,14 +2724,16 @@ class RequestScreenshotLink(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("service_requests.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
-        description="Sub-task or request ID where screenshot is linked"
+        description="Sub-task or request ID where screenshot is linked",
     )
 
     screenshot_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("screenshots.id", ondelete="CASCADE"), nullable=False),
-        description="Screenshot ID being linked"
+        sa_column=Column(
+            Integer, ForeignKey("screenshots.id", ondelete="CASCADE"), nullable=False
+        ),
+        description="Screenshot ID being linked",
     )
 
     linked_by: Optional[UUID] = Field(
@@ -2777,15 +2741,15 @@ class RequestScreenshotLink(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True
+            nullable=True,
         ),
-        description="Technician who linked the screenshot"
+        description="Technician who linked the screenshot",
     )
 
     linked_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
-        description="When screenshot was linked"
+        description="When screenshot was linked",
     )
 
     # Relationships
@@ -2793,22 +2757,22 @@ class RequestScreenshotLink(TableModel, table=True):
         back_populates="linked_screenshots",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "RequestScreenshotLink.request_id"
-        }
+            "foreign_keys": "RequestScreenshotLink.request_id",
+        },
     )
 
     screenshot: "Screenshot" = Relationship(
         back_populates="linked_to_requests",
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "RequestScreenshotLink.screenshot_id"
-        }
+            "foreign_keys": "RequestScreenshotLink.screenshot_id",
+        },
     )
 
     linker: Optional["User"] = Relationship(
         sa_relationship_kwargs={
             "lazy": "selectin",
-            "foreign_keys": "RequestScreenshotLink.linked_by"
+            "foreign_keys": "RequestScreenshotLink.linked_by",
         }
     )
 
@@ -2817,7 +2781,9 @@ class RequestScreenshotLink(TableModel, table=True):
         Index("ix_screenshot_links_screenshot_id", "screenshot_id"),
         Index("ix_screenshot_links_linked_by", "linked_by"),
         # Unique constraint to prevent duplicate links
-        UniqueConstraint("request_id", "screenshot_id", name="uq_request_screenshot_link"),
+        UniqueConstraint(
+            "request_id", "screenshot_id", name="uq_request_screenshot_link"
+        ),
     )
 
 
@@ -2904,6 +2870,11 @@ class RequestType(TableModel, table=True):
         sa_column=Column(Boolean, default=True, nullable=False),
         description="Whether this request type is active",
     )
+    section_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("sections.id"), nullable=True),
+        description="Service section this request type belongs to",
+    )
     created_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
@@ -2922,18 +2893,22 @@ class RequestType(TableModel, table=True):
     requests: List["ServiceRequest"] = Relationship(
         back_populates="request_type", sa_relationship_kwargs={"lazy": "selectin"}
     )
+    section: Optional["Section"] = Relationship(
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
 
     __table_args__ = (
         Index("ix_request_types_name_en", "name_en"),
         Index("ix_request_types_name_ar", "name_ar"),
         Index("ix_request_types_is_active", "is_active"),
+        Index("ix_request_types_section_id", "section_id"),
     )
 
 
-class ServiceSection(TableModel, table=True):
+class Section(TableModel, table=True):
     """Service Section model for categorizing services."""
 
-    __tablename__ = "service_sections"
+    __tablename__ = "sections"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(
@@ -2990,15 +2965,15 @@ class ServiceSection(TableModel, table=True):
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "ServiceRequest.assigned_to_section_id",
-            "overlaps": "assigned_section"
+            "overlaps": "assigned_section",
         }
     )
 
     __table_args__ = (
-        Index("ix_service_sections_name", "name", unique=True),
-        Index("ix_service_sections_is_active", "is_active"),
-        Index("ix_service_sections_is_deleted", "is_deleted"),
-        Index("ix_service_sections_is_shown", "is_shown"),
+        Index("ix_sections_name", "name", unique=True),
+        Index("ix_sections_is_active", "is_active"),
+        Index("ix_sections_is_deleted", "is_deleted"),
+        Index("ix_sections_is_shown", "is_shown"),
     )
 
 
@@ -3033,9 +3008,7 @@ class Category(TableModel, table=True):
     )
     section_id: Optional[int] = Field(
         default=None,
-        sa_column=Column(
-            Integer, ForeignKey("service_sections.id"), nullable=True
-        ),
+        sa_column=Column(Integer, ForeignKey("sections.id"), nullable=True),
         description="Service section this category belongs to",
     )
     is_active: bool = Field(
@@ -3058,14 +3031,11 @@ class Category(TableModel, table=True):
     )
 
     # Relationships
-    section: Optional["ServiceSection"] = Relationship(
+    section: Optional["Section"] = Relationship(
         back_populates="categories",
         sa_relationship_kwargs={"lazy": "selectin"},
     )
     subcategories: List["Subcategory"] = Relationship(
-        back_populates="category", sa_relationship_kwargs={"lazy": "selectin"}
-    )
-    tags: List["Tag"] = Relationship(
         back_populates="category", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
@@ -3154,85 +3124,6 @@ class Subcategory(TableModel, table=True):
     )
 
 
-class Tag(TableModel, table=True):
-    """Tag model for service requests with bilingual support."""
-
-    __tablename__ = "tags"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name_en: str = Field(
-        min_length=2,
-        max_length=100,
-        sa_column=Column(String(100), nullable=False),
-        description="Tag name in English",
-    )
-    name_ar: str = Field(
-        min_length=2,
-        max_length=100,
-        sa_column=Column(String(100), nullable=False),
-        description="Tag name in Arabic",
-    )
-    category_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("categories.id"), nullable=False),
-        description="Parent category",
-    )
-    is_active: bool = Field(
-        default=True,
-        sa_column=Column(Boolean, default=True, nullable=False),
-        description="Whether this tag is active",
-    )
-    is_deleted: bool = Field(
-        default=False,
-        sa_column=Column(Boolean, default=False, nullable=False),
-        description="Soft delete flag",
-    )
-    created_by: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
-            ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True
-        ),
-        description="User UUID who created the tag",
-    )
-    updated_by: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
-            ForeignKey("users.id", ondelete="SET NULL"),
-            nullable=True
-        ),
-        description="User UUID who last updated the tag",
-    )
-    created_at: datetime = Field(
-        default_factory=cairo_now,
-        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
-        description="Tag creation timestamp",
-    )
-    updated_at: datetime = Field(
-        default_factory=cairo_now,
-        sa_column_kwargs={
-            "server_default": text("CURRENT_TIMESTAMP"),
-            "onupdate": text("CURRENT_TIMESTAMP"),
-        },
-        description="Last update timestamp",
-    )
-
-    # Relationships
-    category: "Category" = Relationship(
-        back_populates="tags", sa_relationship_kwargs={"lazy": "selectin"}
-    )
-    requests: List["ServiceRequest"] = Relationship(
-        back_populates="tag", sa_relationship_kwargs={"lazy": "selectin"}
-    )
-
-    __table_args__ = (
-        Index("ix_tags_category_id", "category_id"),
-        Index("ix_tags_is_active", "is_active"),
-        Index("ix_tags_is_deleted", "is_deleted"),
-    )
-
-
 class RequestNote(TableModel, table=True):
     """Request note table - for tracking, hints, or general comments.
 
@@ -3254,7 +3145,7 @@ class RequestNote(TableModel, table=True):
         sa_column=Column(
             PostgreSQL_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False
+            nullable=False,
         ),
         description="User UUID who created the note",
     )
@@ -3332,12 +3223,16 @@ class BusinessUnitRegion(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this region",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this region",
     )
     is_active: bool = Field(
@@ -3366,10 +3261,6 @@ class BusinessUnitRegion(TableModel, table=True):
             "lazy": "selectin",
             "foreign_keys": "BusinessUnitRegion.updated_by",
         }
-    )
-    # NEW: TechnicianRegion relationship (renamed from RegionUserAssign)
-    user_assigns: List["TechnicianRegion"] = Relationship(
-        back_populates="region", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     __table_args__ = (
@@ -3423,12 +3314,16 @@ class BusinessUnit(TableModel, table=True):
     )
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who created this business unit",
     )
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who last updated this business unit",
     )
     is_active: bool = Field(
@@ -3489,8 +3384,7 @@ class BusinessUnit(TableModel, table=True):
     )
     # NEW: TechnicianBusinessUnit relationship (alias: BusinessUnitUserAssign)
     technician_assigns: List["TechnicianBusinessUnit"] = Relationship(
-        back_populates="business_unit",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        back_populates="business_unit", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     __table_args__ = (
@@ -3593,7 +3487,9 @@ class WhatsAppBatch(TableModel, table=True):
         # CRITICAL: Unique constraint prevents duplicate batches for same message range
         # Note: This works for batches with messages (first_message_id, last_message_id not NULL)
         UniqueConstraint(
-            "request_id", "first_message_id", "last_message_id",
+            "request_id",
+            "first_message_id",
+            "last_message_id",
             name="uq_whatsapp_batch_message_range",
         ),
         # Note: Additional partial unique constraint for request_created batches
@@ -3614,14 +3510,16 @@ class TechnicianSection(TableModel, table=True):
 
     technician_id: UUID = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         description="Technician user ID",
     )
     section_id: int = Field(
         sa_column=Column(
             Integer,
-            ForeignKey("service_sections.id", ondelete="CASCADE"),
+            ForeignKey("sections.id", ondelete="CASCADE"),
             nullable=False,
         ),
         description="Service section ID",
@@ -3630,7 +3528,7 @@ class TechnicianSection(TableModel, table=True):
     # Audit fields
     assigned_by: UUID = Field(
         sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id")),
-        description="User who made the assignment"
+        description="User who made the assignment",
     )
     assigned_at: datetime = Field(
         default_factory=cairo_now,
@@ -3665,7 +3563,7 @@ class TechnicianSection(TableModel, table=True):
             "foreign_keys": "TechnicianSection.technician_id",
         }
     )
-    section: "ServiceSection" = Relationship(
+    section: "Section" = Relationship(
         back_populates="technician_assignments",
         sa_relationship_kwargs={
             "lazy": "selectin",
@@ -3680,9 +3578,7 @@ class TechnicianSection(TableModel, table=True):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "technician_id", "section_id", name="uq_technician_section"
-        ),
+        UniqueConstraint("technician_id", "section_id", name="uq_technician_section"),
         Index("ix_technician_sections_technician_id", "technician_id"),
         Index("ix_technician_sections_section_id", "section_id"),
         Index("ix_technician_sections_assigned_at", "assigned_at"),
@@ -3700,39 +3596,38 @@ class SystemMessage(TableModel, table=True):
         min_length=2,
         max_length=50,
         sa_column=Column(String(50), nullable=False, unique=True),
-        description="Message type identifier (e.g., 'new_request', 'ticket_assigned', 'request_solved')"
+        description="Message type identifier (e.g., 'new_request', 'ticket_assigned', 'request_solved')",
     )
 
     template_en: str = Field(
         min_length=2,
         max_length=500,
         sa_column=Column(String(500), nullable=False),
-        description="English template with {placeholders}"
+        description="English template with {placeholders}",
     )
 
     template_ar: str = Field(
         min_length=2,
         max_length=500,
         sa_column=Column(String(500), nullable=False),
-        description="Arabic template with {placeholders}"
+        description="Arabic template with {placeholders}",
     )
 
     is_active: bool = Field(
         default=True,
         sa_column=Column(Boolean, default=True, nullable=False),
-        description="Whether this template is active"
+        description="Whether this template is active",
     )
 
     created_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
-        description="Template creation timestamp"
+        description="Template creation timestamp",
     )
 
     # Relationships
     system_events: List["SystemEvent"] = Relationship(
-        back_populates="system_message",
-        sa_relationship_kwargs={"lazy": "selectin"}
+        back_populates="system_message", sa_relationship_kwargs={"lazy": "selectin"}
     )
 
     __table_args__ = (
@@ -3752,60 +3647,60 @@ class SystemEvent(TableModel, table=True):
         min_length=2,
         max_length=50,
         sa_column=Column(String(50), nullable=False, unique=True),
-        description="Unique event identifier (e.g., 'new_request', 'ticket_assigned')"
+        description="Unique event identifier (e.g., 'new_request', 'ticket_assigned')",
     )
 
     event_name_en: str = Field(
         min_length=2,
         max_length=100,
         sa_column=Column(String(100), nullable=False),
-        description="Event display name in English"
+        description="Event display name in English",
     )
 
     event_name_ar: str = Field(
         min_length=2,
         max_length=100,
         sa_column=Column(String(100), nullable=False),
-        description="Event display name in Arabic"
+        description="Event display name in Arabic",
     )
 
     description_en: Optional[str] = Field(
         default=None,
         max_length=500,
         sa_column=Column(String(500), nullable=True),
-        description="Event description in English (what triggers it)"
+        description="Event description in English (what triggers it)",
     )
 
     description_ar: Optional[str] = Field(
         default=None,
         max_length=500,
         sa_column=Column(String(500), nullable=True),
-        description="Event description in Arabic (what triggers it)"
+        description="Event description in Arabic (what triggers it)",
     )
 
     system_message_id: Optional[int] = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("system_messages.id"), nullable=True),
-        description="Linked system message template (nullable for events without message)"
+        description="Linked system message template (nullable for events without message)",
     )
 
     is_active: bool = Field(
         default=True,
         sa_column=Column(Boolean, default=True, nullable=False),
-        description="Whether this event trigger is enabled"
+        description="Whether this event trigger is enabled",
     )
 
     trigger_timing: str = Field(
         default="immediate",
         max_length=20,
         sa_column=Column(String(20), nullable=False, server_default="immediate"),
-        description="Trigger timing: 'immediate' or 'delayed' (for future extensibility)"
+        description="Trigger timing: 'immediate' or 'delayed' (for future extensibility)",
     )
 
     created_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
-        description="Event creation timestamp"
+        description="Event creation timestamp",
     )
 
     updated_at: datetime = Field(
@@ -3814,19 +3709,23 @@ class SystemEvent(TableModel, table=True):
             "server_default": text("CURRENT_TIMESTAMP"),
             "onupdate": text("CURRENT_TIMESTAMP"),
         },
-        description="Last update timestamp"
+        description="Last update timestamp",
     )
 
     created_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
-        description="User who created this event"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
+        description="User who created this event",
     )
 
     updated_by: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
-        description="User who last updated this event"
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
+        description="User who last updated this event",
     )
 
     # Relationships
@@ -3835,7 +3734,7 @@ class SystemEvent(TableModel, table=True):
         sa_relationship_kwargs={
             "lazy": "selectin",
             "foreign_keys": "SystemEvent.system_message_id",
-        }
+        },
     )
 
     creator: Optional["User"] = Relationship(
@@ -3986,9 +3885,7 @@ class SLAConfig(TableModel, table=True):
     first_response_minutes: int = Field(
         ge=0, description="Target first response time in minutes"
     )
-    resolution_hours: int = Field(
-        ge=0, description="Target resolution time in hours"
-    )
+    resolution_hours: int = Field(ge=0, description="Target resolution time in hours")
 
     # Configuration
     business_hours_only: bool = Field(
@@ -4044,8 +3941,10 @@ class SLAConfig(TableModel, table=True):
         Index("ix_sla_configs_is_active", "is_active"),
         # Unique constraint for combination
         UniqueConstraint(
-            "priority_id", "category_id", "business_unit_id",
-            name="uq_sla_config_priority_category_bu"
+            "priority_id",
+            "category_id",
+            "business_unit_id",
+            name="uq_sla_config_priority_category_bu",
         ),
     )
 
@@ -4158,8 +4057,7 @@ class TechnicianMetricsSnapshot(TableModel, table=True):
         Index("ix_tech_metrics_tech_date", "technician_id", "snapshot_date"),
         # One snapshot per technician per day
         UniqueConstraint(
-            "technician_id", "snapshot_date",
-            name="uq_technician_metrics_snapshot_date"
+            "technician_id", "snapshot_date", name="uq_technician_metrics_snapshot_date"
         ),
     )
 
@@ -4578,7 +4476,9 @@ class ClientVersion(TableModel, table=True):
     silent_install_args: Optional[str] = Field(
         default="/qn /norestart",
         max_length=100,
-        sa_column=Column(String(100), nullable=True, server_default=text("'/qn /norestart'")),
+        sa_column=Column(
+            String(100), nullable=True, server_default=text("'/qn /norestart'")
+        ),
         description="Command-line arguments for silent installation",
     )
 
@@ -4660,7 +4560,9 @@ class Device(TableModel, table=True):
     lifecycle_state: str = Field(
         default="discovered",
         max_length=50,
-        sa_column=Column(String(50), nullable=False, server_default=text("'discovered'")),
+        sa_column=Column(
+            String(50), nullable=False, server_default=text("'discovered'")
+        ),
         description="Device lifecycle state",
     )
     discovery_source: str = Field(
@@ -4747,7 +4649,9 @@ class Device(TableModel, table=True):
             return v
         mac_pattern = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")
         if not mac_pattern.match(v):
-            raise ValueError(f"Invalid MAC address format: {v}. Expected XX:XX:XX:XX:XX:XX")
+            raise ValueError(
+                f"Invalid MAC address format: {v}. Expected XX:XX:XX:XX:XX:XX"
+            )
         return v.upper()
 
     __table_args__ = (
@@ -5067,9 +4971,7 @@ class SchedulerJobType(TableModel, table=True):
         sa_relationship_kwargs={"lazy": "selectin"},
     )
 
-    __table_args__ = (
-        Index("ix_scheduler_job_types_name", "name", unique=True),
-    )
+    __table_args__ = (Index("ix_scheduler_job_types_name", "name", unique=True),)
 
 
 class ScheduledJob(TableModel, table=True):
@@ -5561,7 +5463,9 @@ class Audit(TableModel, table=True):
     )
     user_id: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True),
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
         description="User who performed the action",
     )
     action: str = Field(
@@ -5636,5 +5540,7 @@ class Audit(TableModel, table=True):
         Index("ix_audit_logs_resource_id", "resource_id"),
         Index("ix_audit_logs_correlation_id", "correlation_id"),
         Index("ix_audit_logs_created_at", "created_at"),
-        Index("ix_audit_logs_user_action_resource", "user_id", "action", "resource_type"),
+        Index(
+            "ix_audit_logs_user_action_resource", "user_id", "action", "resource_type"
+        ),
     )

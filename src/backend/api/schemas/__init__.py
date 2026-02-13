@@ -52,6 +52,7 @@ from .request_status import (
 )
 from .service_request import (
     AssignTechnicianRequest,
+    SectionReassignRequest,
     ServiceRequestBase,
     ServiceRequestCreate,
     ServiceRequestCreateByRequester,
@@ -140,6 +141,7 @@ __all__ = [
     "ServiceRequestStatusUpdate",
     "ServiceRequestStats",
     "AssignTechnicianRequest",
+    "SectionReassignRequest",
     "SubTaskCreate",
 
     # Chat Message schemas

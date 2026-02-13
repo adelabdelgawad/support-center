@@ -14,7 +14,7 @@ import type { Technician, Priority, RequestNote, RequestStatus } from '@/types/m
 import type { ChatMessage } from '@/lib/signalr/types';
 import type { RequestDetailsPageData } from '@/types/requests-details';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
-import type { Category } from '@/lib/hooks/use-categories-tags';
+import type { Category } from '@/lib/hooks/use-categories';
 
 /**
  * Fetch request/ticket details by ID

@@ -9,7 +9,7 @@ import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestNote, RequestStatus } from '@/types/metadata';
 import type { ChatMessage } from '@/lib/signalr/types';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
-import type { Category } from '@/lib/hooks/use-categories-tags';
+import type { Category } from '@/lib/hooks/use-categories';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
 
 interface BackendAssignee {

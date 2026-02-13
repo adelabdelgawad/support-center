@@ -7,7 +7,7 @@ import {
   type SubTaskCreate,
   type SubTask,
 } from '@/lib/api/sub-tasks';
-import { getServiceSections, type ServiceSection } from '@/lib/api/service-sections';
+import { getSections, type Section } from '@/lib/api/sections';
 import { useRequestDetail } from '../_context/request-detail-context';
 import { useSubTasks } from '@/lib/hooks/use-sub-tasks';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,7 @@ export function SubTasksPanel({ requestId }: SubTasksPanelProps) {
     { enabled: true }
   );
 
-  const [sections, setSections] = useState<ServiceSection[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
 
   // Track mounted state for sections fetch
   const isMountedRef = useRef(true);
@@ -79,7 +79,7 @@ export function SubTasksPanel({ requestId }: SubTasksPanelProps) {
 
     const fetchSections = async () => {
       try {
-        const data = await getServiceSections(true, false, true);
+        const data = await getSections(true, false, true);
         if (isMountedRef.current) {
           setSections(data);
         }

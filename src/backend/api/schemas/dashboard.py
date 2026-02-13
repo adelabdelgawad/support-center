@@ -17,6 +17,7 @@ from core.schema_base import HTTPSchemaModel
 
 class DateRangePreset(str, Enum):
     """Preset date ranges for reports."""
+
     TODAY = "today"
     YESTERDAY = "yesterday"
     LAST_7_DAYS = "last_7_days"
@@ -33,6 +34,7 @@ class DateRangePreset(str, Enum):
 
 class ReportDateRange(HTTPSchemaModel):
     """Date range specification for reports."""
+
     preset: Optional[DateRangePreset] = Field(None, description="Preset date range")
     start_date: Optional[date] = Field(None, description="Custom start date")
     end_date: Optional[date] = Field(None, description="Custom end date")
@@ -40,13 +42,17 @@ class ReportDateRange(HTTPSchemaModel):
 
 class ReportFilters(HTTPSchemaModel):
     """Common filters for reports."""
+
     date_range: Optional[ReportDateRange] = None
-    business_unit_ids: Optional[List[int]] = Field(None, description="Filter by business units")
-    technician_ids: Optional[List[UUID]] = Field(None, description="Filter by technicians")
+    business_unit_ids: Optional[List[int]] = Field(
+        None, description="Filter by business units"
+    )
+    technician_ids: Optional[List[UUID]] = Field(
+        None, description="Filter by technicians"
+    )
     category_ids: Optional[List[int]] = Field(None, description="Filter by categories")
     priority_ids: Optional[List[int]] = Field(None, description="Filter by priorities")
     status_ids: Optional[List[int]] = Field(None, description="Filter by statuses")
-    tag_ids: Optional[List[int]] = Field(None, description="Filter by tags")
 
 
 # =============================================================================
@@ -56,6 +62,7 @@ class ReportFilters(HTTPSchemaModel):
 
 class TrendDirection(str, Enum):
     """Direction of trend."""
+
     UP = "up"
     DOWN = "down"
     STABLE = "stable"
@@ -63,19 +70,27 @@ class TrendDirection(str, Enum):
 
 class KPICard(HTTPSchemaModel):
     """KPI card data for dashboard display."""
+
     id: str = Field(..., description="Unique identifier for the KPI")
     label: str = Field(..., description="Display label")
     value: float = Field(..., description="Current value")
     unit: Optional[str] = Field(None, description="Unit of measurement (%, hrs, count)")
-    previous_value: Optional[float] = Field(None, description="Previous period value for comparison")
-    change_percent: Optional[float] = Field(None, description="Percentage change from previous period")
-    trend_direction: Optional[TrendDirection] = Field(None, description="Direction of change")
+    previous_value: Optional[float] = Field(
+        None, description="Previous period value for comparison"
+    )
+    change_percent: Optional[float] = Field(
+        None, description="Percentage change from previous period"
+    )
+    trend_direction: Optional[TrendDirection] = Field(
+        None, description="Direction of change"
+    )
     target: Optional[float] = Field(None, description="Target value if applicable")
     is_target_met: Optional[bool] = Field(None, description="Whether target is met")
 
 
 class TrendDataPoint(HTTPSchemaModel):
     """Single data point for trend charts."""
+
     date: date
     value: float
     label: Optional[str] = None
@@ -83,6 +98,7 @@ class TrendDataPoint(HTTPSchemaModel):
 
 class DistributionItem(HTTPSchemaModel):
     """Item for distribution charts (pie charts, bar charts)."""
+
     id: str
     label: str
     value: int
@@ -97,6 +113,7 @@ class DistributionItem(HTTPSchemaModel):
 
 class ExecutiveDashboardData(HTTPSchemaModel):
     """Complete executive dashboard data."""
+
     # Period info
     period_start: date
     period_end: date
@@ -132,6 +149,7 @@ class ExecutiveDashboardData(HTTPSchemaModel):
 
 class SLABreachItem(HTTPSchemaModel):
     """Details of an SLA breach."""
+
     request_id: UUID
     title: str
     requester_name: Optional[str] = None
@@ -146,7 +164,10 @@ class SLABreachItem(HTTPSchemaModel):
 
 class SLAAgingBucket(HTTPSchemaModel):
     """Aging bucket for ticket analysis."""
-    bucket_name: str = Field(..., description="e.g., '0-1 day', '1-3 days', '3-7 days', '7+ days'")
+
+    bucket_name: str = Field(
+        ..., description="e.g., '0-1 day', '1-3 days', '3-7 days', '7+ days'"
+    )
     count: int
     percentage: float
     average_age_hours: float
@@ -154,6 +175,7 @@ class SLAAgingBucket(HTTPSchemaModel):
 
 class SLAComplianceData(HTTPSchemaModel):
     """Complete SLA compliance report data."""
+
     # Period info
     period_start: date
     period_end: date
@@ -199,6 +221,7 @@ class SLAComplianceData(HTTPSchemaModel):
 
 class VolumeTrendItem(HTTPSchemaModel):
     """Volume trend data point with additional metrics."""
+
     date: date
     created_count: int
     resolved_count: int
@@ -208,6 +231,7 @@ class VolumeTrendItem(HTTPSchemaModel):
 
 class CategoryVolumeItem(HTTPSchemaModel):
     """Volume breakdown by category."""
+
     category_id: int
     category_name: str
     ticket_count: int
@@ -218,6 +242,7 @@ class CategoryVolumeItem(HTTPSchemaModel):
 
 class BusinessUnitVolumeItem(HTTPSchemaModel):
     """Volume breakdown by business unit."""
+
     business_unit_id: int
     business_unit_name: str
     ticket_count: int
@@ -229,6 +254,7 @@ class BusinessUnitVolumeItem(HTTPSchemaModel):
 
 class VolumeReportData(HTTPSchemaModel):
     """Complete volume report data."""
+
     # Period info
     period_start: date
     period_end: date
@@ -239,7 +265,9 @@ class VolumeReportData(HTTPSchemaModel):
     total_closed: int
     total_reopened: int
     current_backlog: int
-    backlog_change: int = Field(..., description="Change in backlog from start to end of period")
+    backlog_change: int = Field(
+        ..., description="Change in backlog from start to end of period"
+    )
 
     # KPIs
     avg_tickets_per_day: float
@@ -268,6 +296,7 @@ class VolumeReportData(HTTPSchemaModel):
 
 class AgentRankingItem(HTTPSchemaModel):
     """Agent performance ranking item."""
+
     rank: int
     technician_id: UUID
     technician_name: str
@@ -283,11 +312,14 @@ class AgentRankingItem(HTTPSchemaModel):
     sla_compliance_rate: Optional[float] = None
 
     # Change from previous period
-    rank_change: Optional[int] = Field(None, description="Positive = improved, negative = declined")
+    rank_change: Optional[int] = Field(
+        None, description="Positive = improved, negative = declined"
+    )
 
 
 class WorkloadDistributionItem(HTTPSchemaModel):
     """Workload distribution for a technician."""
+
     technician_id: UUID
     technician_name: str
     full_name: Optional[str] = None
@@ -295,11 +327,14 @@ class WorkloadDistributionItem(HTTPSchemaModel):
     overdue_tickets: int
     tickets_due_today: int
     tickets_assigned_today: int
-    capacity_percentage: Optional[float] = Field(None, description="Current load vs capacity")
+    capacity_percentage: Optional[float] = Field(
+        None, description="Current load vs capacity"
+    )
 
 
 class AgentPerformanceData(HTTPSchemaModel):
     """Complete agent performance report data."""
+
     # Period info
     period_start: date
     period_end: date
@@ -318,8 +353,7 @@ class AgentPerformanceData(HTTPSchemaModel):
     # Rankings
     top_performers: List[AgentRankingItem] = Field(default_factory=list)
     needs_attention: List[AgentRankingItem] = Field(
-        default_factory=list,
-        description="Technicians with low performance metrics"
+        default_factory=list, description="Technicians with low performance metrics"
     )
 
     # Workload distribution

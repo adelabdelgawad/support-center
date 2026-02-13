@@ -24,7 +24,7 @@ from .organizational_unit_crud import OrganizationalUnitCRUD
 from .page_crud import PageCRUD, PageRoleCRUD
 from .remote_access_crud import RemoteAccessCRUD
 from .service_request_crud import ServiceRequestCRUD
-from .service_section_crud import ServiceSectionCRUD
+from .section_crud import SectionCRUD
 from .user_crud import UserCRUD
 from .user_role_crud import UserRoleCRUD
 
@@ -44,7 +44,7 @@ __all__ = [
     "PageRoleCRUD",
     "RemoteAccessCRUD",
     "ServiceRequestCRUD",
-    "ServiceSectionCRUD",
+    "SectionCRUD",
     "UserCRUD",
     "UserRoleCRUD",
 ]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import {
   FormControl,
@@ -10,12 +10,22 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EntityFormSheet } from "@/components/settings";
 import { updateCategory } from "@/lib/api/categories";
+import { getSections, type Section } from "@/lib/api/sections";
 import { useCategoriesActions } from "../../context/categories-actions-context";
 import { Edit } from "lucide-react";
 import type { CategoryResponse, CategoryUpdateRequest } from "@/types/categories";
+
+const NONE_VALUE = "__none__";
 
 const categorySchema = z.object({
   name: z
@@ -35,6 +45,7 @@ const categorySchema = z.object({
     .max(500, "Description must be 500 characters or less")
     .optional()
     .nullable(),
+  sectionId: z.string().optional(),
 });
 
 type CategoryFormData = z.infer<typeof categorySchema>;
@@ -49,6 +60,17 @@ export function EditCategorySheet({
   onOpenChange,
 }: EditCategorySheetProps) {
   const { handleUpdateCategory } = useCategoriesActions();
+  const [sections, setSections] = useState<Section[]>([]);
+  const [loadingSections, setLoadingSections] = useState(false);
+
+  // Fetch sections on mount
+  useEffect(() => {
+    setLoadingSections(true);
+    getSections(true, false, false)
+      .then(setSections)
+      .catch(() => setSections([]))
+      .finally(() => setLoadingSections(false));
+  }, []);
 
   const handleSubmit = async (data: CategoryFormData) => {
     const updateData: CategoryUpdateRequest = {};
@@ -66,6 +88,11 @@ export function EditCategorySheet({
       updateData.description = data.description || null;
     }
 
+    const newSectionId = data.sectionId === NONE_VALUE ? null : (data.sectionId ? Number(data.sectionId) : null);
+    if (newSectionId !== category.sectionId) {
+      updateData.sectionId = newSectionId;
+    }
+
     const updatedCategory = await updateCategory(category.id, updateData);
     handleUpdateCategory(category.id, updatedCategory);
   };
@@ -76,6 +103,7 @@ export function EditCategorySheet({
       nameEn: category.nameEn,
       nameAr: category.nameAr,
       description: category.description ?? null,
+      sectionId: category.sectionId ? String(category.sectionId) : "",
     }),
     [category]
   );
@@ -95,6 +123,47 @@ export function EditCategorySheet({
     >
       {(form) => (
         <>
+          <FormField
+            control={form.control}
+            name="sectionId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Section</FormLabel>
+                <Select
+                  onValueChange={field.onChange}
+                  value={field.value}
+                  disabled={loadingSections}
+                >
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={
+                          loadingSections
+                            ? "Loading sections..."
+                            : "Select a section (optional)"
+                        }
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={NONE_VALUE}>
+                      <span className="text-muted-foreground">No section</span>
+                    </SelectItem>
+                    {sections.map((section) => (
+                      <SelectItem
+                        key={section.id}
+                        value={String(section.id)}
+                      >
+                        {section.shownNameEn}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
           <FormField
             control={form.control}
             name="name"

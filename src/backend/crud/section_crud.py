@@ -1,21 +1,22 @@
 """
-ServiceSection CRUD for database operations.
+Section CRUD for database operations.
 
 Handles all database queries related to service sections.
 """
+
 from typing import List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db.models import ServiceSection, TechnicianSection, User
+from db.models import Section, TechnicianSection, User
 from crud.base_repository import BaseCRUD
 
 
-class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
-    """CRUD for ServiceSection database operations."""
+class SectionCRUD(BaseCRUD[Section]):
+    """CRUD for Section database operations."""
 
-    model = ServiceSection
+    model = Section
 
     @classmethod
     async def find_all_active_sections(
@@ -25,8 +26,8 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
         only_active: bool = True,
         only_shown: bool = True,
         order_by_id: bool = True,
-        include_technicians: bool = False
-    ) -> List[ServiceSection]:
+        include_technicians: bool = False,
+    ) -> List[Section]:
         """
         Find all service sections with filtering.
 
@@ -40,29 +41,31 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
         Returns:
             List of service sections
         """
-        stmt = select(ServiceSection).where(not ServiceSection.is_deleted)
+        stmt = select(Section).where(Section.is_deleted.is_(False))
 
         if only_active:
-            stmt = stmt.where(ServiceSection.is_active)
+            stmt = stmt.where(Section.is_active)
 
         if only_shown:
-            stmt = stmt.where(ServiceSection.is_shown)
+            stmt = stmt.where(Section.is_shown)
 
         if include_technicians:
-            stmt = stmt.options(selectinload(ServiceSection.technician_assignments).selectinload(TechnicianSection.technician))
+            stmt = stmt.options(
+                selectinload(Section.technician_assignments).selectinload(
+                    TechnicianSection.technician
+                )
+            )
 
         if order_by_id:
-            stmt = stmt.order_by(ServiceSection.id)
+            stmt = stmt.order_by(Section.id)
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
     @classmethod
     async def find_by_id_active(
-        cls,
-        db: AsyncSession,
-        section_id: int
-    ) -> Optional[ServiceSection]:
+        cls, db: AsyncSession, section_id: int
+    ) -> Optional[Section]:
         """
         Find a service section by ID (excluding deleted).
 
@@ -71,12 +74,9 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             section_id: Section ID
 
         Returns:
-            ServiceSection or None if not found or deleted
+            Section or None if not found or deleted
         """
-        stmt = select(ServiceSection).where(
-            ServiceSection.id == section_id,
-            not ServiceSection.is_deleted
-        )
+        stmt = select(Section).where(Section.id == section_id, Section.is_deleted.is_(False))
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -85,8 +85,8 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
         cls,
         db: AsyncSession,
         name_en: Optional[str] = None,
-        name_ar: Optional[str] = None
-    ) -> Optional[ServiceSection]:
+        name_ar: Optional[str] = None,
+    ) -> Optional[Section]:
         """
         Find a service section by name (English or Arabic).
 
@@ -96,12 +96,11 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             name_ar: Arabic name
 
         Returns:
-            ServiceSection or None if not found
+            Section or None if not found
         """
         if name_en:
-            stmt = select(ServiceSection).where(
-                ServiceSection.name_en == name_en,
-                not ServiceSection.is_deleted
+            stmt = select(Section).where(
+                Section.name_en == name_en, Section.is_deleted.is_(False)
             )
             result = await db.execute(stmt)
             section = result.scalar_one_or_none()
@@ -109,9 +108,8 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
                 return section
 
         if name_ar:
-            stmt = select(ServiceSection).where(
-                ServiceSection.name_ar == name_ar,
-                not ServiceSection.is_deleted
+            stmt = select(Section).where(
+                Section.name_ar == name_ar, Section.is_deleted.is_(False)
             )
             result = await db.execute(stmt)
             return result.scalar_one_or_none()
@@ -126,8 +124,8 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
         is_active: Optional[bool] = None,
         is_shown: Optional[bool] = None,
         page: int = 1,
-        per_page: int = 50
-    ) -> Tuple[List[ServiceSection], int]:
+        per_page: int = 50,
+    ) -> Tuple[List[Section], int]:
         """
         List service sections with pagination.
 
@@ -148,21 +146,13 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             filters["is_shown"] = is_shown
 
         return await cls.find_paginated(
-            db,
-            page=page,
-            per_page=per_page,
-            filters=filters,
-            order_by=ServiceSection.id
+            db, page=page, per_page=per_page, filters=filters, order_by=Section.id
         )
 
     @classmethod
     async def toggle_active_status(
-        cls,
-        db: AsyncSession,
-        section_id: int,
-        is_active: bool,
-        commit: bool = True
-    ) -> Optional[ServiceSection]:
+        cls, db: AsyncSession, section_id: int, is_active: bool, commit: bool = True
+    ) -> Optional[Section]:
         """
         Toggle the active status of a service section.
 
@@ -173,7 +163,7 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             commit: Whether to commit immediately
 
         Returns:
-            Updated ServiceSection or None if not found
+            Updated Section or None if not found
         """
         section = await cls.find_by_id_active(db, section_id)
         if not section:
@@ -189,12 +179,8 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
 
     @classmethod
     async def toggle_shown_status(
-        cls,
-        db: AsyncSession,
-        section_id: int,
-        is_shown: bool,
-        commit: bool = True
-    ) -> Optional[ServiceSection]:
+        cls, db: AsyncSession, section_id: int, is_shown: bool, commit: bool = True
+    ) -> Optional[Section]:
         """
         Toggle the shown status of a service section.
 
@@ -205,7 +191,7 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             commit: Whether to commit immediately
 
         Returns:
-            Updated ServiceSection or None if not found
+            Updated Section or None if not found
         """
         section = await cls.find_by_id_active(db, section_id)
         if not section:
@@ -221,10 +207,7 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
 
     @classmethod
     async def soft_delete(
-        cls,
-        db: AsyncSession,
-        section_id: int,
-        commit: bool = True
+        cls, db: AsyncSession, section_id: int, commit: bool = True
     ) -> bool:
         """
         Soft delete a service section.
@@ -250,9 +233,7 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
 
     @classmethod
     async def find_section_technicians(
-        cls,
-        db: AsyncSession,
-        section_id: int
+        cls, db: AsyncSession, section_id: int
     ) -> List[dict]:
         """
         Find all technicians assigned to a specific service section.
@@ -269,9 +250,9 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
             .join(TechnicianSection, TechnicianSection.technician_id == User.id)
             .where(
                 TechnicianSection.section_id == section_id,
-                not User.is_deleted,
+                User.is_deleted.is_(False),
                 User.is_active,
-                User.is_technician
+                User.is_technician,
             )
             .order_by(User.full_name, User.username)
         )
@@ -284,7 +265,7 @@ class ServiceSectionCRUD(BaseCRUD[ServiceSection]):
                 "id": str(tech.id),
                 "username": tech.username,
                 "full_name": tech.full_name,
-                "is_active": tech.is_active
+                "is_active": tech.is_active,
             }
             for tech in technicians
         ]

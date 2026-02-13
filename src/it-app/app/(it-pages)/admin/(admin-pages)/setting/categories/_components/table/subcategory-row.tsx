@@ -30,7 +30,7 @@ export function SubcategoryRow({
 
   return (
     <tr>
-      <td colSpan={7} className="p-0 bg-muted/30">
+      <td colSpan={8} className="p-0 bg-muted/30">
         <div className="pl-12 pr-4 py-4">
           {/* Header with Add Button */}
           <div className="flex items-center justify-between mb-3">

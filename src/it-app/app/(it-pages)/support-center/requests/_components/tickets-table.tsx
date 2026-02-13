@@ -236,12 +236,6 @@ export function TicketsTable({
                   <ArrowDown className="ml-1 h-3 w-3 text-muted-foreground/60" />
                 </div>
               </th>
-              <th className={`${thBaseClass} ${thTextClass} min-w-[100px]`}>
-                <div className="flex items-center">
-                  Tag
-                  <ArrowDown className="ml-1 h-3 w-3 text-muted-foreground/60" />
-                </div>
-              </th>
               <th className={`${thBaseClass} ${thTextClass} min-w-[150px]`}>
                 <div className="flex items-center">
                   Business Unit

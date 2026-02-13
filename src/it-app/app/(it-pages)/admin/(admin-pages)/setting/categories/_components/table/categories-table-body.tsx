@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Section } from "@/lib/api/sections";
 import type { CategoryResponse, SubcategoryResponse } from "@/types/categories";
 
 interface CategoriesTableBodyProps {
@@ -29,6 +30,7 @@ interface CategoriesTableBodyProps {
   isValidating?: boolean;
   activeCount: number;
   inactiveCount: number;
+  sectionsMap: Map<number, Section>;
 }
 
 export function CategoriesTableBody({
@@ -39,6 +41,7 @@ export function CategoriesTableBody({
   isValidating,
   activeCount,
   inactiveCount,
+  sectionsMap,
 }: CategoriesTableBodyProps) {
   // Get actions from context
   const categoriesActions = useCategoriesActions();
@@ -251,6 +254,7 @@ export function CategoriesTableBody({
                 <TableHead className="text-center w-10">Select</TableHead>
                 <TableHead className="text-center">Name (EN)</TableHead>
                 <TableHead className="text-center">Name (AR)</TableHead>
+                <TableHead className="text-center">Section</TableHead>
                 <TableHead className="text-center">Description</TableHead>
                 <TableHead className="text-center w-24">Active</TableHead>
                 <TableHead className="text-center w-24">Actions</TableHead>
@@ -259,13 +263,13 @@ export function CategoriesTableBody({
             <TableBody>
               {isValidating && categories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12">
+                  <TableCell colSpan={8} className="text-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto text-primary" />
                   </TableCell>
                 </TableRow>
               ) : categories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     No categories available
                   </TableCell>
                 </TableRow>
@@ -342,6 +346,17 @@ export function CategoriesTableBody({
                         {/* Name (AR) Column */}
                         <TableCell className="text-center" dir="rtl">
                           {category.nameAr}
+                        </TableCell>
+
+                        {/* Section Column */}
+                        <TableCell className="text-center text-sm">
+                          {category.sectionId && sectionsMap.has(category.sectionId) ? (
+                            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-blue-700/10 ring-inset dark:bg-blue-400/10 dark:text-blue-400 dark:ring-blue-400/30">
+                              {sectionsMap.get(category.sectionId)!.shownNameEn}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">&mdash;</span>
+                          )}
                         </TableCell>
 
                         {/* Description Column */}

@@ -164,15 +164,6 @@ export function TicketsTableRow({
         </span>
       </td>
 
-      {/* Tag */}
-      <td className={`${tdBaseClass} text-sm text-foreground`}>
-        {ticket.tag ? (
-          <span className="text-sm">{ticket.tag.nameEn}</span>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        )}
-      </td>
-
       {/* Business Unit */}
       <td className={`${tdBaseClass} text-sm text-foreground`}>
         {ticket.businessUnit?.name || (

@@ -169,7 +169,6 @@ export interface ServiceRequest {
 
 export interface CreateServiceRequest {
   title: string;
-  tagId?: number;
   requestTypeId?: number;
 }
 
@@ -502,11 +501,11 @@ export interface RefreshSubscriptionsMessage {
 }
 
 // ============================================================================
-// Tag Types (Request Classification)
+// Category and Subcategory Types
 // ============================================================================
 
 /**
- * Category for organizing tags
+ * Category for organizing requests
  */
 export interface Category {
   id: number;
@@ -518,11 +517,10 @@ export interface Category {
   createdAt?: string;
   updatedAt?: string;
   subcategories?: Subcategory[];
-  tags?: Tag[];
 }
 
 /**
- * Subcategory for organizing tags within a category
+ * Subcategory for organizing requests within a category
  */
 export interface Subcategory {
   id: number;
@@ -534,21 +532,6 @@ export interface Subcategory {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
-}
-
-/**
- * Tag for request classification (bilingual support)
- */
-export interface Tag {
-  id: number;
-  nameEn: string;
-  nameAr: string;
-  categoryId: number;
-  isActive: boolean;
-  isDeleted?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  category?: Category;
 }
 
 // ============================================================================
@@ -566,6 +549,7 @@ export interface RequestType {
   nameAr: string;
   briefEn?: string;
   briefAr?: string;
+  sectionId?: number | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;

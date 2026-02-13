@@ -18,7 +18,7 @@ import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/metadata';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
-import type { Category } from '@/lib/hooks/use-categories-tags';
+import type { Category } from '@/lib/hooks/use-categories';
 import type { TaskStatusChangedEvent, TicketUpdateEvent } from '@/lib/signalr/types';
 import { useRequestNotes } from '@/lib/hooks/use-request-notes';
 import { useRequestAssignees } from '@/lib/hooks/use-request-assignees';

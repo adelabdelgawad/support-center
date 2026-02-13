@@ -1,8 +1,9 @@
 """
 Service Request CRUD for database operations.
 
-Handles all database queries related to service requests with business unit region filtering.
+Handles all database queries related to service requests with section-based visibility filtering.
 """
+
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
@@ -17,14 +18,13 @@ from db import (
     RequestStatus,
     ServiceRequest,
     Subcategory,
-    Tag,
     User,
 )
 from crud.base_repository import BaseCRUD
 
 
 class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
-    """CRUD for ServiceRequest database operations with region filtering."""
+    """CRUD for ServiceRequest database operations with section-based visibility filtering."""
 
     model = ServiceRequest
 
@@ -36,8 +36,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         stmt = (
             select(ServiceRequest)
             .where(
-                ServiceRequest.id == request_id,
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.id == request_id, ServiceRequest.is_deleted.is_(False)
             )
             .options(
                 selectinload(ServiceRequest.requester),
@@ -50,17 +49,20 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         return result.scalar_one_or_none()
 
     @classmethod
-    def _get_region_filter(cls, user: User):
+    def _get_visibility_filter(cls, user: User):
         """
-        Get business unit region filter for requests.
+        Get section-based visibility filter for requests.
 
-        Priority order:
-        1. Super admins and users with 'Admin' role see all requests
-        2. Users with business unit assignments see ONLY their assigned business units
-        3. Users with region assignments see requests from all business units in those regions
-        4. Users with business_unit_region_id see requests from that region
-        5. No assignments = no results
+        New filtering logic:
+        1. Super admin / Admin role → no filter (see all)
+        2. Get user's section_ids from TechnicianSection (user.section_assigns)
+        3. No section assignments → see nothing
+        4. Section filter: ServiceRequest.assigned_to_section_id IN (user_section_ids)
+        5. If user has BU assignments → AND with BU filter (geographic narrowing)
+        6. Return combined filter
         """
+        from sqlalchemy import and_
+
         # Super admins see all requests (no filter)
         if user.is_super_admin:
             return None
@@ -75,43 +77,34 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if has_admin_role:
             return None  # Admin role users see all requests
 
-        # PRIORITY 1: Check for business unit assignments (NEW - technicians assigned to BUs)
+        # Get user's section assignments
+        active_section_assigns = [
+            sa for sa in user.section_assigns if not sa.is_deleted
+        ]
+
+        if not active_section_assigns:
+            # No section assignments - return empty filter (no results)
+            return ServiceRequest.id.is_(None)
+
+        # Section filter: requests assigned to user's sections
+        section_ids = [sa.section_id for sa in active_section_assigns]
+        section_filter = ServiceRequest.assigned_to_section_id.in_(section_ids)
+
+        # Check if user has business unit assignments for geographic narrowing
         active_bu_assigns = [
-            ba for ba in user.business_unit_assigns
+            ba
+            for ba in user.business_unit_assigns
             if ba.is_active and not ba.is_deleted
         ]
 
         if active_bu_assigns:
-            # User has explicit business unit assignments
-            # Show only requests from the agent's directly assigned business units
+            # Combine section filter with BU filter (AND logic)
             assigned_bu_ids = [ba.business_unit_id for ba in active_bu_assigns]
-            return ServiceRequest.business_unit_id.in_(assigned_bu_ids)
+            bu_filter = ServiceRequest.business_unit_id.in_(assigned_bu_ids)
+            return and_(section_filter, bu_filter)
 
-        # PRIORITY 2: Check for region assignments via RegionUserAssign table
-        active_region_assigns = [
-            ra for ra in user.region_assigns
-            if ra.is_active and not ra.is_deleted
-        ]
-
-        if active_region_assigns:
-            # User has explicit region assignments - filter by all assigned regions
-            assigned_region_ids = [ra.region_id for ra in active_region_assigns]
-            return ServiceRequest.business_unit_id.in_(
-                select(BusinessUnit.id).where(
-                    BusinessUnit.business_unit_region_id.in_(assigned_region_ids)
-                )
-            )
-
-        # PRIORITY 3: Fall back to single business_unit_region_id if no explicit assigns
-        if user.business_unit_region_id:
-            return ServiceRequest.business_unit_id.in_(
-                select(BusinessUnit.id).where(
-                    BusinessUnit.business_unit_region_id == user.business_unit_region_id
-                )
-            )
-
-        # User has no region assigned - return empty filter (no results)
-        return ServiceRequest.id.is_(None)
+        # No BU assignments - return section filter only
+        return section_filter
 
     @classmethod
     def _apply_business_unit_filter(cls, stmt, business_unit_ids: list[int] | None):
@@ -172,8 +165,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             )
 
             stmt = select(ServiceRequest).where(
-                ~assigned_exists,
-                ServiceRequest.is_deleted.is_(False)
+                ~assigned_exists, ServiceRequest.is_deleted.is_(False)
             )
 
         elif view_type == "all_unsolved":
@@ -189,7 +181,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             stmt = select(ServiceRequest).where(
                 ServiceRequest.status_id.notin_(solved_subquery),
                 ServiceRequest.is_deleted.is_(False),
-                assigned_exists
+                assigned_exists,
             )
 
         elif view_type == "my_unsolved":
@@ -206,14 +198,22 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.id.in_(my_requests_subquery),
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted.is_(False)
+                    ServiceRequest.is_deleted.is_(False),
                 )
             )
 
-        elif view_type in ("recently_updated", "recently_solved", "all_your_requests",
-                          "urgent_high_priority", "pending_requester_response",
-                          "pending_subtask", "new_today", "in_progress",
-                          "all_tickets", "all_solved"):
+        elif view_type in (
+            "recently_updated",
+            "recently_solved",
+            "all_your_requests",
+            "urgent_high_priority",
+            "pending_requester_response",
+            "pending_subtask",
+            "new_today",
+            "in_progress",
+            "all_tickets",
+            "all_solved",
+        ):
             # For other views, use a simpler base (they all have similar structure)
             # This is a fallback - specific logic can be added per view if needed
             stmt = select(ServiceRequest).where(ServiceRequest.is_deleted.is_(False))
@@ -236,20 +236,19 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 select(1).where(RequestAssignee.request_id == ServiceRequest.id)
             )
             stmt = select(ServiceRequest).where(
-                ~assigned_exists,
-                ServiceRequest.is_deleted.is_(False)
+                ~assigned_exists, ServiceRequest.is_deleted.is_(False)
             )
 
         # Apply filters:
-        # - If business_unit_ids is explicitly provided, use ONLY that filter (not region filter)
-        # - Otherwise, apply region filter to limit to user's accessible BUs
-        region_filter = cls._get_region_filter(user)
+        # - If business_unit_ids is explicitly provided, use ONLY that filter (not visibility filter)
+        # - Otherwise, apply visibility filter (section + BU) to limit to user's accessible requests
+        visibility_filter = cls._get_visibility_filter(user)
         if business_unit_ids:
             # User explicitly selected business units - use only that filter
             stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
-        elif region_filter is not None:
-            # No explicit BU selection - apply region filter
-            stmt = stmt.where(region_filter)
+        elif visibility_filter is not None:
+            # No explicit BU selection - apply section-based visibility filter
+            stmt = stmt.where(visibility_filter)
 
         return stmt
 
@@ -278,24 +277,22 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         # Base query
         stmt = (
             select(ServiceRequest)
-            .where(
-                ~assigned_exists,
-                ServiceRequest.is_deleted.is_(False)
-            )
+            .where(~assigned_exists, ServiceRequest.is_deleted.is_(False))
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter (supports multiple IDs and -1 for unassigned)
         stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
@@ -304,9 +301,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         stmt = stmt.order_by(ServiceRequest.created_at.desc())
 
         # Get total count
-        count_stmt = select(func.count()).select_from(
-            stmt.subquery()
-        )
+        count_stmt = select(func.count()).select_from(stmt.subquery())
         total_result = await db.execute(count_stmt)
         total = total_result.scalar() or 0
 
@@ -338,9 +333,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         # Use EXISTS for better performance vs IN
         assigned_exists = exists(
@@ -352,22 +345,23 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             .where(
                 ServiceRequest.status_id.notin_(solved_subquery),
                 ServiceRequest.is_deleted.is_(False),
-                assigned_exists  # Only requests with assignees
+                assigned_exists,  # Only requests with assignees
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter (supports multiple IDs and -1 for unassigned)
         stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
@@ -406,9 +400,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         # Subquery to get request IDs assigned to user
         my_requests_subquery = select(RequestAssignee.request_id).where(
@@ -421,7 +413,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.id.in_(my_requests_subquery),
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted.is_(False)
+                    ServiceRequest.is_deleted.is_(False),
                 )
             )
             .options(
@@ -429,15 +421,16 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter (supports multiple IDs and -1 for unassigned)
         stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
@@ -483,16 +476,17 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.updated_at.desc())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter (supports multiple IDs and -1 for unassigned)
         stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
@@ -529,31 +523,30 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         stmt = (
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id.in_(solved_subquery),
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.resolved_at.desc().nullslast())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter (supports multiple IDs and -1 for unassigned)
         stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
@@ -597,24 +590,22 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.id.in_(my_requests_subquery),
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.created_at.desc())
         )
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -644,9 +635,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Get requests with urgent (1) or high (2) priority that are not solved.
         """
         # Subquery to get solved status IDs
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         stmt = (
             select(ServiceRequest)
@@ -654,7 +643,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 and_(
                     ServiceRequest.priority_id.in_([1, 2]),  # Critical=1, High=2
                     ServiceRequest.status_id.notin_(solved_subquery),
-                    ServiceRequest.is_deleted.is_(False)
+                    ServiceRequest.is_deleted.is_(False),
                 )
             )
             .options(
@@ -662,22 +651,22 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
-            .order_by(ServiceRequest.priority_id.asc(), ServiceRequest.created_at.desc())
+            .order_by(
+                ServiceRequest.priority_id.asc(), ServiceRequest.created_at.desc()
+            )
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -710,29 +699,27 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id == 7,  # pending-requester-response
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.updated_at.desc())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -762,9 +749,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Get requests that have at least one incomplete sub-task.
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         # Subquery to find parent request IDs with incomplete subtasks
         # Sub-tasks are identified by parent_task_id being NOT NULL
@@ -784,29 +769,27 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.id.in_(incomplete_subtasks_subquery),
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.updated_at.desc())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -843,29 +826,27 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.created_at >= today_start,
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.created_at.desc())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -898,29 +879,132 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             select(ServiceRequest)
             .where(
                 ServiceRequest.status_id == 8,  # in-progress
-                ServiceRequest.is_deleted.is_(False)
+                ServiceRequest.is_deleted.is_(False),
             )
             .options(
                 selectinload(ServiceRequest.requester),
                 selectinload(ServiceRequest.status),
                 selectinload(ServiceRequest.priority),
                 selectinload(ServiceRequest.business_unit),
-                selectinload(ServiceRequest.tag).selectinload(Tag.category),
-                selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
             )
             .order_by(ServiceRequest.updated_at.desc())
         )
 
-        # Apply region filter
-        region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar() or 0
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        stmt = stmt.offset(offset).limit(per_page)
+
+        result = await db.execute(stmt)
+        requests = list(result.scalars().all())
+
+        return requests, total
+
+    @classmethod
+    async def find_all_tickets_requests(
+        cls,
+        db: AsyncSession,
+        user: User,
+        *,
+        business_unit_ids: list[int] | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> Tuple[List[ServiceRequest], int]:
+        """
+        Get all tickets (no status filter).
+        """
+        stmt = (
+            select(ServiceRequest)
+            .where(ServiceRequest.is_deleted.is_(False))
+            .options(
+                selectinload(ServiceRequest.requester),
+                selectinload(ServiceRequest.status),
+                selectinload(ServiceRequest.priority),
+                selectinload(ServiceRequest.business_unit),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
+            )
+            .order_by(ServiceRequest.updated_at.desc())
+        )
+
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
+
+        # Apply business unit filter
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar() or 0
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        stmt = stmt.offset(offset).limit(per_page)
+
+        result = await db.execute(stmt)
+        requests = list(result.scalars().all())
+
+        return requests, total
+
+    @classmethod
+    async def find_all_solved_requests(
+        cls,
+        db: AsyncSession,
+        user: User,
+        *,
+        business_unit_ids: list[int] | None = None,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> Tuple[List[ServiceRequest], int]:
+        """
+        Get all tickets with a solved status (count_as_solved = True).
+        """
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
+
+        stmt = (
+            select(ServiceRequest)
+            .where(
+                ServiceRequest.status_id.in_(solved_subquery),
+                ServiceRequest.is_deleted.is_(False),
+            )
+            .options(
+                selectinload(ServiceRequest.requester),
+                selectinload(ServiceRequest.status),
+                selectinload(ServiceRequest.priority),
+                selectinload(ServiceRequest.business_unit),
+                selectinload(ServiceRequest.subcategory).selectinload(
+                    Subcategory.category
+                ),
+            )
+            .order_by(ServiceRequest.updated_at.desc())
+        )
+
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
+
+        # Apply business unit filter
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -953,12 +1037,10 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         """
         from datetime import datetime, date
 
-        region_filter = cls._get_region_filter(user)
+        visibility_filter = cls._get_visibility_filter(user)
 
         # Subquery for solved statuses (where count_as_solved = True)
-        solved_subquery = select(RequestStatus.id).where(
-            RequestStatus.count_as_solved
-        )
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
 
         # Subquery for assigned request IDs
         assigned_subquery = select(RequestAssignee.request_id).distinct()
@@ -986,90 +1068,96 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         today_start = datetime.combine(date.today(), datetime.min.time())
 
         # Single query with CASE WHEN expressions to count all categories at once
-        stmt = select(
-            # Existing views
-            # Count unassigned: requests not in assigned_subquery
-            func.count(
-                case((ServiceRequest.id.notin_(assigned_subquery), 1))
-            ).label("unassigned"),
-            # Count all unsolved: requests with status not in solved_subquery AND have assignees
-            func.count(
-                case(
-                    (
-                        and_(
-                            ServiceRequest.status_id.notin_(solved_subquery),
-                            ServiceRequest.id.in_(assigned_subquery)
-                        ),
-                        1
+        stmt = (
+            select(
+                # Existing views
+                # Count unassigned: requests not in assigned_subquery
+                func.count(
+                    case((ServiceRequest.id.notin_(assigned_subquery), 1))
+                ).label("unassigned"),
+                # Count all unsolved: requests with status not in solved_subquery AND have assignees
+                func.count(
+                    case(
+                        (
+                            and_(
+                                ServiceRequest.status_id.notin_(solved_subquery),
+                                ServiceRequest.id.in_(assigned_subquery),
+                            ),
+                            1,
+                        )
                     )
-                )
-            ).label("all_unsolved"),
-            # Count my unsolved: requests assigned to user AND not solved
-            func.count(
-                case(
-                    (
-                        and_(
-                            ServiceRequest.id.in_(my_requests_subquery),
-                            ServiceRequest.status_id.notin_(solved_subquery),
-                        ),
-                        1,
+                ).label("all_unsolved"),
+                # Count my unsolved: requests assigned to user AND not solved
+                func.count(
+                    case(
+                        (
+                            and_(
+                                ServiceRequest.id.in_(my_requests_subquery),
+                                ServiceRequest.status_id.notin_(solved_subquery),
+                            ),
+                            1,
+                        )
                     )
-                )
-            ).label("my_unsolved"),
-            # Count recently updated: all requests
-            func.count(ServiceRequest.id).label("recently_updated"),
-            # Count recently solved: requests with status in solved_subquery
-            func.count(
-                case((ServiceRequest.status_id.in_(solved_subquery), 1))
-            ).label("recently_solved"),
-            # New views
-            # Count all_your_requests: requests ASSIGNED TO user (all statuses)
-            func.count(
-                case((ServiceRequest.id.in_(my_requests_subquery), 1))
-            ).label("all_your_requests"),
-            # Count urgent_high_priority: priority 1 or 2 AND not solved
-            func.count(
-                case(
-                    (
-                        and_(
-                            ServiceRequest.priority_id.in_([1, 2]),
-                            ServiceRequest.status_id.notin_(solved_subquery),
-                        ),
-                        1,
+                ).label("my_unsolved"),
+                # Count recently updated: all requests
+                func.count(ServiceRequest.id).label("recently_updated"),
+                # Count recently solved: requests with status in solved_subquery
+                func.count(
+                    case((ServiceRequest.status_id.in_(solved_subquery), 1))
+                ).label("recently_solved"),
+                # New views
+                # Count all_your_requests: requests ASSIGNED TO user (all statuses)
+                func.count(
+                    case((ServiceRequest.id.in_(my_requests_subquery), 1))
+                ).label("all_your_requests"),
+                # Count urgent_high_priority: priority 1 or 2 AND not solved
+                func.count(
+                    case(
+                        (
+                            and_(
+                                ServiceRequest.priority_id.in_([1, 2]),
+                                ServiceRequest.status_id.notin_(solved_subquery),
+                            ),
+                            1,
+                        )
                     )
-                )
-            ).label("urgent_high_priority"),
-            # Count pending_requester_response: status_id = 7
-            func.count(
-                case((ServiceRequest.status_id == 7, 1))
-            ).label("pending_requester_response"),
-            # Count pending_subtask: requests with incomplete subtasks
-            func.count(
-                case((ServiceRequest.id.in_(incomplete_subtasks_subquery), 1))
-            ).label("pending_subtask"),
-            # Count new_today: created today
-            func.count(
-                case((ServiceRequest.created_at >= today_start, 1))
-            ).label("new_today"),
-            # Count in_progress: status_id = 8
-            func.count(
-                case((ServiceRequest.status_id == 8, 1))
-            ).label("in_progress"),
-            # Count all_tickets: all tickets
-            func.count(ServiceRequest.id).label("all_tickets"),
-            # Count all_solved: all tickets with count_as_solved status
-            func.count(
-                case((ServiceRequest.status_id.in_(solved_subquery), 1))
-            ).label("all_solved"),
-        ).select_from(ServiceRequest).where(
-            ServiceRequest.is_deleted.is_(False)  # CRITICAL: Exclude deleted requests from all counts
+                ).label("urgent_high_priority"),
+                # Count pending_requester_response: status_id = 7
+                func.count(case((ServiceRequest.status_id == 7, 1))).label(
+                    "pending_requester_response"
+                ),
+                # Count pending_subtask: requests with incomplete subtasks
+                func.count(
+                    case((ServiceRequest.id.in_(incomplete_subtasks_subquery), 1))
+                ).label("pending_subtask"),
+                # Count new_today: created today
+                func.count(case((ServiceRequest.created_at >= today_start, 1))).label(
+                    "new_today"
+                ),
+                # Count in_progress: status_id = 8
+                func.count(case((ServiceRequest.status_id == 8, 1))).label(
+                    "in_progress"
+                ),
+                # Count all_tickets: all tickets
+                func.count(ServiceRequest.id).label("all_tickets"),
+                # Count all_solved: all tickets with count_as_solved status
+                func.count(
+                    case((ServiceRequest.status_id.in_(solved_subquery), 1))
+                ).label("all_solved"),
+            )
+            .select_from(ServiceRequest)
+            .where(
+                ServiceRequest.is_deleted.is_(
+                    False
+                )  # CRITICAL: Exclude deleted requests from all counts
+            )
         )
 
         # NOTE: View navbar counts ALWAYS show user's total accessible BUs (region filter only)
         # The business_unit_ids parameter is ignored here - it's only used for tabs counts
-        # Apply region filter to limit counts to user's accessible business units
-        if region_filter is not None:
-            stmt = stmt.where(region_filter)
+        # Apply visibility filter to limit counts to user's accessible business units
+        if visibility_filter is not None:
+            stmt = stmt.where(visibility_filter)
 
         # Execute single query
         result = await db.execute(stmt)
@@ -1112,6 +1200,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Returns tuple of (list of dicts with: id, name, count, unassigned_count)
         """
         from datetime import datetime, date
+
         # Determine which business units the user can see
         if user.is_super_admin:
             # Super admins see all business units
@@ -1128,9 +1217,19 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 # Admin role users see all business units
                 bu_filter = None
             else:
-                # PRIORITY 1: Check for business unit assignments
+                # Check for section assignments
+                active_section_assigns = [
+                    sa for sa in user.section_assigns if not sa.is_deleted
+                ]
+
+                if not active_section_assigns:
+                    # No section assignments - return empty
+                    return [], 0
+
+                # Check for business unit assignments (geographic narrowing)
                 active_bu_assigns = [
-                    ba for ba in user.business_unit_assigns
+                    ba
+                    for ba in user.business_unit_assigns
                     if ba.is_active and not ba.is_deleted
                 ]
 
@@ -1140,22 +1239,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                     assigned_bu_ids = [ba.business_unit_id for ba in active_bu_assigns]
                     bu_filter = BusinessUnit.id.in_(assigned_bu_ids)
                 else:
-                    # PRIORITY 2: Check for region assignments
-                    active_region_assigns = [
-                        ra for ra in user.region_assigns
-                        if ra.is_active and not ra.is_deleted
-                    ]
-
-                    if active_region_assigns:
-                        # User has explicit region assignments
-                        assigned_region_ids = [ra.region_id for ra in active_region_assigns]
-                        bu_filter = BusinessUnit.business_unit_region_id.in_(assigned_region_ids)
-                    elif user.business_unit_region_id:
-                        # PRIORITY 3: Fall back to single business_unit_region_id
-                        bu_filter = BusinessUnit.business_unit_region_id == user.business_unit_region_id
-                    else:
-                        # User has no assignments - return empty
-                        return [], 0
+                    # No BU assignments - show all BUs (section filter is applied separately)
+                    bu_filter = None
 
         # Build view-specific filter conditions for ServiceRequest
         view_conditions = [ServiceRequest.is_deleted.is_(False)]
@@ -1210,7 +1295,9 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             elif view == "pending_requester_response":
                 view_conditions.append(ServiceRequest.status_id == 7)
             elif view == "pending_subtask":
-                view_conditions.append(ServiceRequest.id.in_(incomplete_subtasks_subquery))
+                view_conditions.append(
+                    ServiceRequest.id.in_(incomplete_subtasks_subquery)
+                )
             elif view == "new_today":
                 view_conditions.append(ServiceRequest.created_at >= today_start)
             elif view == "in_progress":
@@ -1222,8 +1309,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
         # Build join condition with view filters
         join_condition = and_(
-            ServiceRequest.business_unit_id == BusinessUnit.id,
-            *view_conditions
+            ServiceRequest.business_unit_id == BusinessUnit.id, *view_conditions
         )
 
         # Query to get ALL business units user can access with LEFT JOIN to get counts
@@ -1251,20 +1337,19 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
         # Get count of unassigned requests (where business_unit_id is NULL)
         # Use the same region filter logic for requests
-        region_filter = cls._get_region_filter(user)
+        visibility_filter = cls._get_visibility_filter(user)
         unassigned_stmt = select(func.count(ServiceRequest.id)).where(
             ServiceRequest.business_unit_id.is_(None),
-            *view_conditions  # Apply view filters to unassigned count too
+            *view_conditions,  # Apply view filters to unassigned count too
         )
-        if region_filter is not None:
-            unassigned_stmt = unassigned_stmt.where(region_filter)
+        if visibility_filter is not None:
+            unassigned_stmt = unassigned_stmt.where(visibility_filter)
 
         unassigned_result = await db.execute(unassigned_stmt)
         unassigned_count = unassigned_result.scalar() or 0
 
         business_units = [
-            {"id": row.id, "name": row.name, "count": row.count}
-            for row in rows
+            {"id": row.id, "name": row.name, "count": row.count} for row in rows
         ]
 
         return business_units, unassigned_count
@@ -1284,14 +1369,14 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Respects user's region/business unit filtering permissions.
         """
         # Get region filter for the user
-        region_filter = cls._get_region_filter(user)
+        visibility_filter = cls._get_visibility_filter(user)
 
         # Base query with region filter
         base_stmt = select(func.count(ServiceRequest.id)).where(
             ServiceRequest.is_deleted.is_(False)
         )
-        if region_filter is not None:
-            base_stmt = base_stmt.where(region_filter)
+        if visibility_filter is not None:
+            base_stmt = base_stmt.where(visibility_filter)
 
         # Count all tickets
         all_result = await db.execute(base_stmt)
@@ -1357,8 +1442,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 latest_msg_subquery,
                 and_(
                     ChatMessage.request_id == latest_msg_subquery.c.request_id,
-                    ChatMessage.created_at
-                    == latest_msg_subquery.c.max_created_at,
+                    ChatMessage.created_at == latest_msg_subquery.c.max_created_at,
                 ),
             )
             .options(selectinload(ChatMessage.sender))
@@ -1477,9 +1561,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Returns:
             True if assignment was deleted, False if not found
         """
-        assignment = await cls.check_existing_assignment(
-            db, request_id, user_id
-        )
+        assignment = await cls.check_existing_assignment(db, request_id, user_id)
         if assignment:
             await db.delete(assignment)
             await db.commit()
@@ -1487,9 +1569,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         return False
 
     @classmethod
-    async def count_assignees(
-        cls, db: AsyncSession, request_id: UUID
-    ) -> int:
+    async def count_assignees(cls, db: AsyncSession, request_id: UUID) -> int:
         """
         Count the number of assignees for a request.
 
@@ -1500,9 +1580,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Returns:
             Count of assignees for the request
         """
-        stmt = (
-            select(func.count(RequestAssignee.id))
-            .where(RequestAssignee.request_id == request_id)
+        stmt = select(func.count(RequestAssignee.id)).where(
+            RequestAssignee.request_id == request_id
         )
         result = await db.execute(stmt)
         return result.scalar_one()

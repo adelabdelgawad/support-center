@@ -6,6 +6,7 @@ import { CategoriesTableBody } from "./categories-table-body";
 import { CategoriesActionsProvider } from "../../context/categories-actions-context";
 import { toggleCategoryStatus } from "@/lib/api/categories";
 import { getSubcategories, toggleSubcategoryStatus } from "@/lib/api/subcategories";
+import { getSections, type Section } from "@/lib/api/sections";
 import { toastSuccess, toastError } from "@/lib/toast";
 import type { SettingCategoriesResponse, CategoryResponse, SubcategoryResponse } from "@/types/categories";
 
@@ -52,6 +53,20 @@ function CategoriesTable({ initialData }: CategoriesTableProps) {
     return initialMap;
   });
   const [loadingSubcategories, setLoadingSubcategories] = useState<Set<number>>(new Set());
+
+  // Sections lookup for displaying section names
+  const [sectionsMap, setSectionsMap] = useState<Map<number, Section>>(new Map());
+
+  // Fetch sections on mount
+  useEffect(() => {
+    getSections(false, false, false)
+      .then((sections) => {
+        const map = new Map<number, Section>();
+        sections.forEach((s) => map.set(s.id, s));
+        setSectionsMap(map);
+      })
+      .catch(() => setSectionsMap(new Map()));
+  }, []);
 
   // Track previous URL for change detection
   const prevUrlRef = useRef("");
@@ -361,6 +376,7 @@ function CategoriesTable({ initialData }: CategoriesTableProps) {
               isValidating={isValidating}
               activeCount={activeCount}
               inactiveCount={inactiveCount}
+              sectionsMap={sectionsMap}
             />
           </div>
         </div>

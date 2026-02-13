@@ -31,11 +31,10 @@ from db import (  # NOTE: AssignType and SessionType are now enums in db.enums, 
     RequestStatus,
     RequestType,
     Role,
-    ServiceSection,
+    Section,
     Subcategory,
     SystemEvent,
     SystemMessage,
-    Tag,
     User,
 )
 
@@ -60,12 +59,8 @@ class DatabaseSetup:
         # Get admin configuration from environment
         self.admin_username = os.getenv("ADMIN_USERNAME", "admin")
         self.admin_password = os.getenv("ADMIN_PASSWORD", "Admin123!@#")
-        self.admin_email = os.getenv(
-            "ADMIN_EMAIL", "admin@servicecatalog.local"
-        )
-        self.admin_full_name = os.getenv(
-            "ADMIN_FULL_NAME", "System Administrator"
-        )
+        self.admin_email = os.getenv("ADMIN_EMAIL", "admin@servicecatalog.local")
+        self.admin_full_name = os.getenv("ADMIN_FULL_NAME", "System Administrator")
 
         logger.info("Database setup initialized with admin config:")
         logger.info(f"  Admin username: {self.admin_username}")
@@ -79,7 +74,7 @@ class DatabaseSetup:
         Produces hashes compatible with passlib's bcrypt scheme.
         """
         salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
     # ========================================================================
     # LOOKUP TABLE SEEDING
@@ -175,9 +170,7 @@ class DatabaseSetup:
 
         try:
             for priority_data in priorities_data:
-                stmt = select(Priority).where(
-                    Priority.id == priority_data["id"]
-                )
+                stmt = select(Priority).where(Priority.id == priority_data["id"])
                 result = await db.execute(stmt)
                 existing = result.scalar_one_or_none()
 
@@ -218,46 +211,33 @@ class DatabaseSetup:
         request_types_data = [
             {
                 "id": 1,
-                "name_en": "Incident",
-                "name_ar": "حادث",
-                "brief_en": "An unplanned interruption or reduction in quality of an IT service",
-                "brief_ar": "انقطاع أو تراجع غير مخطط له في جودة خدمة تقنية المعلومات",
+                "name_en": "Application Support (Dotcare)",
+                "name_ar": "دعم التطبيقات (دوت كير)",
+                "brief_en": "Support services responsible for maintaining, troubleshooting, and resolving issues related to the Dotcare application to ensure continuous and efficient operation.",
+                "brief_ar": "خدمات دعم مسؤولة عن صيانة تطبيق دوت كير واستكشاف الأخطاء وإصلاحها وحل المشكلات لضمان التشغيل المستمر والفعّال للتطبيق",
+                "section_id": 1,  # application_support
             },
             {
                 "id": 2,
-                "name_en": "Service Request",
-                "name_ar": "طلب خدمة",
-                "brief_en": "A formal request from a user for something to be provided or done",
-                "brief_ar": "طلب رسمي من المستخدم لتقديم أو تنفيذ شيء ما",
+                "name_en": "Technical Support (Windows)",
+                "name_ar": "الدعم الفني (ويندوز)",
+                "brief_en": "Technical assistance provided to diagnose, troubleshoot, and resolve issues related to Windows operating systems, devices, and software.",
+                "brief_ar": "مساعدة فنية تُقدَّم لتشخيص المشكلات واستكشاف الأخطاء وإصلاحها المتعلقة بأنظمة تشغيل ويندوز والأجهزة والبرامج المرتبطة بها",
+                "section_id": 3,  # technical-support
             },
             {
                 "id": 3,
-                "name_en": "Problem",
-                "name_ar": "مشكلة",
-                "brief_en": "A cause of one or more incidents, requiring investigation",
-                "brief_ar": "سبب لحادث واحد أو أكثر، يتطلب تحقيقاً",
-            },
-            {
-                "id": 4,
-                "name_en": "Change Request",
-                "name_ar": "طلب تغيير",
-                "brief_en": "A request for modification to IT infrastructure or services",
-                "brief_ar": "طلب لتعديل البنية التحتية أو الخدمات التقنية",
-            },
-            {
-                "id": 5,
-                "name_en": "Access Request",
-                "name_ar": "طلب وصول",
-                "brief_en": "A request for access to systems, applications, or resources",
-                "brief_ar": "طلب للوصول إلى الأنظمة أو التطبيقات أو الموارد",
+                "name_en": "Internet Support (Infrastructure)",
+                "name_ar": "دعم الإنترنت (البنية التحتية)",
+                "brief_en": "Support services focused on maintaining, monitoring, and resolving issues related to network connectivity and internet infrastructure to ensure reliable access.",
+                "brief_ar": "خدمات دعم تركز على صيانة ومراقبة وحل المشكلات المتعلقة بالاتصال الشبكي وبنية الإنترنت التحتية لضمان توفر اتصال موثوق",
+                "section_id": 2,  # infrastructure
             },
         ]
 
         try:
             for type_data in request_types_data:
-                stmt = select(RequestType).where(
-                    RequestType.id == type_data["id"]
-                )
+                stmt = select(RequestType).where(RequestType.id == type_data["id"])
                 result = await db.execute(stmt)
                 existing = result.scalar_one_or_none()
 
@@ -315,21 +295,17 @@ class DatabaseSetup:
 
         try:
             for section_data in sections_data:
-                stmt = select(ServiceSection).where(
-                    ServiceSection.id == section_data["id"]
-                )
+                stmt = select(Section).where(Section.id == section_data["id"])
                 result = await db.execute(stmt)
                 existing = result.scalar_one_or_none()
 
                 if existing:
                     logger.info(
-                        f"ServiceSection '{section_data['name']}' (ID: {section_data['id']}) already exists, skipping..."
+                        f"Section '{section_data['name']}' (ID: {section_data['id']}) already exists, skipping..."
                     )
                     continue
 
-                new_section = ServiceSection(
-                    **section_data, is_active=True, is_deleted=False
-                )
+                new_section = Section(**section_data, is_active=True, is_deleted=False)
                 db.add(new_section)
                 logger.info(
                     f"✅ Created service section: {section_data['name']} (ID: {section_data['id']})"
@@ -344,9 +320,7 @@ class DatabaseSetup:
             await db.rollback()
             return False
 
-    async def create_categories_and_subcategories(
-        self, db: AsyncSession
-    ) -> bool:
+    async def create_categories_and_subcategories(self, db: AsyncSession) -> bool:
         """Create default categories and subcategories with bilingual support."""
         logger.info("Creating default categories and subcategories...")
 
@@ -359,7 +333,7 @@ class DatabaseSetup:
                 "name_en": "Hardware",
                 "name_ar": "الأجهزة",
                 "description": "Hardware peripherals and devices",
-                "section_id": None,
+                "section_id": 3,  # technical-support
                 "subcategories": [
                     {
                         "name": "keyboard_mouse",
@@ -393,7 +367,7 @@ class DatabaseSetup:
                 "name_en": "Printers",
                 "name_ar": "الطابعات",
                 "description": "Printer support and maintenance",
-                "section_id": None,
+                "section_id": 3,  # technical-support
                 "subcategories": [
                     {
                         "name": "access_printer",
@@ -427,7 +401,7 @@ class DatabaseSetup:
                 "name_en": "PACS",
                 "name_ar": "نظام أرشفة الصور الطبية",
                 "description": "Picture Archiving and Communication System",
-                "section_id": None,
+                "section_id": 1,  # application_support
                 "subcategories": [
                     {
                         "name": "access",
@@ -449,7 +423,7 @@ class DatabaseSetup:
                 "name_en": "Avaya",
                 "name_ar": "أفايا",
                 "description": "Avaya telephone system",
-                "section_id": None,
+                "section_id": 2,  # infrastructure
                 "subcategories": [
                     {
                         "name": "telephone_cable",
@@ -477,7 +451,7 @@ class DatabaseSetup:
                 "name_en": "Create User Account",
                 "name_ar": "إنشاء حساب مستخدم",
                 "description": "User account creation and management",
-                "section_id": None,
+                "section_id": 1,  # application_support
                 "subcategories": [
                     {
                         "name": "for_dotcare_only",
@@ -517,7 +491,7 @@ class DatabaseSetup:
                 "name_en": "Email",
                 "name_ar": "البريد الإلكتروني",
                 "description": "Email and Outlook support",
-                "section_id": None,
+                "section_id": 3,  # technical-support
                 "subcategories": [
                     {
                         "name": "outlook_issue",
@@ -545,7 +519,7 @@ class DatabaseSetup:
                 "name_en": "Network",
                 "name_ar": "الشبكة",
                 "description": "Network connectivity",
-                "section_id": None,
+                "section_id": 2,  # infrastructure
                 "subcategories": [
                     {
                         "name": "lan",
@@ -567,7 +541,7 @@ class DatabaseSetup:
                 "name_en": "Surveillance Cameras",
                 "name_ar": "كاميرات المراقبة",
                 "description": "Security camera systems",
-                "section_id": None,
+                "section_id": 2,  # infrastructure
                 "subcategories": [
                     {
                         "name": "add_access",
@@ -601,7 +575,7 @@ class DatabaseSetup:
                 "name_en": "SharePoint",
                 "name_ar": "شير بوينت",
                 "description": "SharePoint platform support",
-                "section_id": None,
+                "section_id": 1,  # application_support
                 "subcategories": [
                     {
                         "name": "access",
@@ -641,8 +615,8 @@ class DatabaseSetup:
             for category_data in categories_data:
                 # Check if category already exists by ID or name
                 stmt = select(Category).where(
-                    (Category.id == category_data["id"]) |
-                    (Category.name == category_data["name"])
+                    (Category.id == category_data["id"])
+                    | (Category.name == category_data["name"])
                 )
                 result = await db.execute(stmt)
                 existing_category = result.scalar_one_or_none()
@@ -657,12 +631,8 @@ class DatabaseSetup:
                     # Create new category with bilingual support (without explicit ID)
                     new_category = Category(
                         name=category_data["name"],
-                        name_en=category_data.get(
-                            "name_en", category_data["name"]
-                        ),
-                        name_ar=category_data.get(
-                            "name_ar", category_data["name"]
-                        ),
+                        name_en=category_data.get("name_en", category_data["name"]),
+                        name_ar=category_data.get("name_ar", category_data["name"]),
                         description=category_data.get("description"),
                         section_id=category_data.get("section_id"),
                         is_active=True,
@@ -696,12 +666,8 @@ class DatabaseSetup:
                     new_subcategory = Subcategory(
                         category_id=category_id,
                         name=subcat_data["name"],
-                        name_en=subcat_data.get(
-                            "name_en", subcat_data["name"]
-                        ),
-                        name_ar=subcat_data.get(
-                            "name_ar", subcat_data["name"]
-                        ),
+                        name_en=subcat_data.get("name_en", subcat_data["name"]),
+                        name_ar=subcat_data.get("name_ar", subcat_data["name"]),
                         description=subcat_data.get("description"),
                         is_active=True,
                     )
@@ -721,218 +687,7 @@ class DatabaseSetup:
             return True
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to create categories and subcategories: {str(e)}"
-            )
-            await db.rollback()
-            return False
-
-    async def seed_tags(self, db: AsyncSession) -> bool:
-        """Create default tags with bilingual support."""
-        logger.info("Creating default tags...")
-
-        # Comprehensive tags mapped to categories
-        tags_data = [
-            # Network category tags
-            {
-                "name_en": "Internet Connection Issue",
-                "name_ar": "مشكلة اتصال الإنترنت",
-                "category_name": "Network",
-            },
-            {
-                "name_en": "Slow Network Speed",
-                "name_ar": "سرعة الشبكة بطيئة",
-                "category_name": "Network",
-            },
-            {
-                "name_en": "Network Disconnection",
-                "name_ar": "انقطاع الشبكة",
-                "category_name": "Network",
-            },
-            {
-                "name_en": "WiFi Not Working",
-                "name_ar": "الواي فاي لا يعمل",
-                "category_name": "Network",
-            },
-            {
-                "name_en": "VPN Access Problem",
-                "name_ar": "مشكلة الوصول إلى VPN",
-                "category_name": "Network",
-            },
-            # Software category tags
-            {
-                "name_en": "Software Installation",
-                "name_ar": "تثبيت البرنامج",
-                "category_name": "Software",
-            },
-            {
-                "name_en": "Software Update Required",
-                "name_ar": "يتطلب تحديث البرنامج",
-                "category_name": "Software",
-            },
-            {
-                "name_en": "Application Crash",
-                "name_ar": "تعطل التطبيق",
-                "category_name": "Software",
-            },
-            {
-                "name_en": "License Issue",
-                "name_ar": "مشكلة الترخيص",
-                "category_name": "Software",
-            },
-            {
-                "name_en": "Antivirus Issue",
-                "name_ar": "مشكلة مكافحة الفيروسات",
-                "category_name": "Software",
-            },
-            # Hardware category tags
-            {
-                "name_en": "Computer Not Starting",
-                "name_ar": "الحاسوب لا يعمل",
-                "category_name": "Hardware",
-            },
-            {
-                "name_en": "Printer Not Working",
-                "name_ar": "الطابعة لا تعمل",
-                "category_name": "Hardware",
-            },
-            {
-                "name_en": "Keyboard/Mouse Issue",
-                "name_ar": "مشكلة لوحة المفاتيح/الفأرة",
-                "category_name": "Hardware",
-            },
-            {
-                "name_en": "Monitor Display Problem",
-                "name_ar": "مشكلة شاشة العرض",
-                "category_name": "Hardware",
-            },
-            {
-                "name_en": "Hardware Replacement",
-                "name_ar": "استبدال الأجهزة",
-                "category_name": "Hardware",
-            },
-            # Servers category tags
-            {
-                "name_en": "Server Down",
-                "name_ar": "توقف الخادم",
-                "category_name": "Servers",
-            },
-            {
-                "name_en": "Server Performance Issue",
-                "name_ar": "مشكلة أداء الخادم",
-                "category_name": "Servers",
-            },
-            {
-                "name_en": "Database Connection Error",
-                "name_ar": "خطأ اتصال قاعدة البيانات",
-                "category_name": "Servers",
-            },
-            {
-                "name_en": "Server Maintenance Request",
-                "name_ar": "طلب صيانة الخادم",
-                "category_name": "Servers",
-            },
-            # ERP Systems category tags
-            {
-                "name_en": "Oracle EBS Error",
-                "name_ar": "خطأ في أوراكل EBS",
-                "category_name": "ERP Systems",
-            },
-            {
-                "name_en": "SAP Access Issue",
-                "name_ar": "مشكلة الوصول إلى SAP",
-                "category_name": "ERP Systems",
-            },
-            {
-                "name_en": "ERP Login Problem",
-                "name_ar": "مشكلة تسجيل الدخول ERP",
-                "category_name": "ERP Systems",
-            },
-            {
-                "name_en": "Report Generation Failed",
-                "name_ar": "فشل إنشاء التقرير",
-                "category_name": "ERP Systems",
-            },
-            # Healthcare Applications category tags
-            {
-                "name_en": "HIS System Error",
-                "name_ar": "خطأ في نظام المعلومات الطبية",
-                "category_name": "Healthcare Applications",
-            },
-            {
-                "name_en": "Patient Record Access",
-                "name_ar": "الوصول إلى سجل المريض",
-                "category_name": "Healthcare Applications",
-            },
-            {
-                "name_en": "Lab System Issue",
-                "name_ar": "مشكلة نظام المختبر",
-                "category_name": "Healthcare Applications",
-            },
-            {
-                "name_en": "Medical Device Integration",
-                "name_ar": "تكامل الجهاز الطبي",
-                "category_name": "Healthcare Applications",
-            },
-        ]
-
-        try:
-            tags_created = 0
-
-            for tag_data in tags_data:
-                # Find category by name_en
-                category_stmt = select(Category).where(
-                    Category.name_en == tag_data["category_name"]
-                )
-                category_result = await db.execute(category_stmt)
-                category = category_result.scalar_one_or_none()
-
-                if not category:
-                    logger.warning(
-                        f"Category '{tag_data['category_name']}' not found, skipping tag '{tag_data['name_en']}'"
-                    )
-                    continue
-
-                # Check if tag already exists (by name_en to avoid duplicates)
-                tag_stmt = select(Tag).where(
-                    Tag.name_en == tag_data["name_en"],
-                    Tag.category_id == category.id,
-                )
-                tag_result = await db.execute(tag_stmt)
-                existing_tag = tag_result.scalar_one_or_none()
-
-                if existing_tag:
-                    logger.info(
-                        f"Tag '{tag_data['name_en']}' already exists in category '{category.name_en}', skipping..."
-                    )
-                    continue
-
-                # Create new tag
-                new_tag = Tag(
-                    name_en=tag_data["name_en"],
-                    name_ar=tag_data["name_ar"],
-                    category_id=category.id,
-                    is_active=True,
-                    is_deleted=False,
-                )
-                db.add(new_tag)
-                tags_created += 1
-                logger.info(
-                    f"✅ Created tag: '{tag_data['name_en']}' (EN/AR) in category '{category.name_en}'"
-                )
-
-            if tags_created > 0:
-                await db.commit()
-                logger.info(
-                    f"✅ Tags seeded successfully ({tags_created} tags created)"
-                )
-            else:
-                logger.info("All default tags already exist")
-
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Failed to seed tags: {str(e)}")
+            logger.error(f"❌ Failed to create categories and subcategories: {str(e)}")
             await db.rollback()
             return False
 
@@ -1030,24 +785,18 @@ class DatabaseSetup:
                         f"✅ Created business unit: {bu_data['name']} - {bu_data['description']} ({bu_data['network']})"
                     )
                 else:
-                    logger.info(
-                        f"Business unit '{bu_data['name']}' already exists"
-                    )
+                    logger.info(f"Business unit '{bu_data['name']}' already exists")
 
             if created_count > 0:
                 await db.commit()
-                logger.info(
-                    f"✅ Created {created_count} business units successfully"
-                )
+                logger.info(f"✅ Created {created_count} business units successfully")
             else:
                 logger.info("All business units already exist")
 
             return True
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to create default business units: {str(e)}"
-            )
+            logger.error(f"❌ Failed to create default business units: {str(e)}")
             await db.rollback()
             return False
 
@@ -1375,7 +1124,7 @@ class DatabaseSetup:
             # 1. Pages accessible to ALL roles (including non-technicians)
             all_roles_pages = [
                 21,  # Requests
-                6,   # Portal (download client)
+                6,  # Portal (download client)
             ]
 
             # 2. Settings pages - Admin only
@@ -1415,7 +1164,7 @@ class DatabaseSetup:
 
             # 5. Dashboard page - All technician roles
             dashboard_pages = [
-                5,   # Dashboard (metrics and quick actions)
+                5,  # Dashboard (metrics and quick actions)
             ]
 
             permissions_created = 0
@@ -1461,9 +1210,7 @@ class DatabaseSetup:
                 existing = result.scalar_one_or_none()
 
                 if existing:
-                    logger.info(
-                        f"Permission already exists: admin -> Page {page_id}"
-                    )
+                    logger.info(f"Permission already exists: admin -> Page {page_id}")
                     continue
 
                 # Get page name for logging
@@ -1618,9 +1365,7 @@ class DatabaseSetup:
             return True
 
         except Exception as e:
-            logger.error(
-                f"❌ Failed to create page-role permissions: {str(e)}"
-            )
+            logger.error(f"❌ Failed to create page-role permissions: {str(e)}")
             await db.rollback()
             return False
 
@@ -1637,8 +1382,7 @@ class DatabaseSetup:
 
         # Check if admin user already exists
         stmt = select(User).where(
-            (User.username == self.admin_username)
-            | (User.email == self.admin_email)
+            (User.username == self.admin_username) | (User.email == self.admin_email)
         )
         result = await db.execute(stmt)
         existing_user = result.scalar_one_or_none()
@@ -1663,9 +1407,7 @@ class DatabaseSetup:
             await db.commit()
             await db.refresh(existing_user)
 
-            logger.info(
-                f"✅ Admin user '{self.admin_username}' updated successfully"
-            )
+            logger.info(f"✅ Admin user '{self.admin_username}' updated successfully")
             return existing_user
         else:
             logger.info(f"Creating new admin user '{self.admin_username}'...")
@@ -1689,14 +1431,10 @@ class DatabaseSetup:
             await db.commit()
             await db.refresh(admin_user)
 
-            logger.info(
-                f"✅ Admin user '{self.admin_username}' created successfully"
-            )
+            logger.info(f"✅ Admin user '{self.admin_username}' created successfully")
             return admin_user
 
-    async def create_default_statuses(
-        self, db: AsyncSession, admin_user: User
-    ) -> bool:
+    async def create_default_statuses(self, db: AsyncSession, admin_user: User) -> bool:
         """Create 5 default request statuses with colors."""
         logger.info("Creating default request statuses...")
 
@@ -1772,12 +1510,8 @@ class DatabaseSetup:
                 if existing_status:
                     # Update description, color, and count_as_solved if different
                     updated = False
-                    if existing_status.description != status_data.get(
-                        "description"
-                    ):
-                        existing_status.description = status_data.get(
-                            "description"
-                        )
+                    if existing_status.description != status_data.get("description"):
+                        existing_status.description = status_data.get("description")
                         updated = True
                     if existing_status.color != status_data.get("color"):
                         existing_status.color = status_data.get("color")
@@ -1789,8 +1523,14 @@ class DatabaseSetup:
                             "count_as_solved", False
                         )
                         updated = True
-                    if "visible_on_requester_page" in status_data and existing_status.visible_on_requester_page != status_data["visible_on_requester_page"]:
-                        existing_status.visible_on_requester_page = status_data["visible_on_requester_page"]
+                    if (
+                        "visible_on_requester_page" in status_data
+                        and existing_status.visible_on_requester_page
+                        != status_data["visible_on_requester_page"]
+                    ):
+                        existing_status.visible_on_requester_page = status_data[
+                            "visible_on_requester_page"
+                        ]
                         updated = True
 
                     if updated:
@@ -1812,7 +1552,9 @@ class DatabaseSetup:
                     description=status_data.get("description"),
                     color=status_data.get("color"),
                     count_as_solved=status_data.get("count_as_solved", False),
-                    visible_on_requester_page=status_data.get("visible_on_requester_page", True),
+                    visible_on_requester_page=status_data.get(
+                        "visible_on_requester_page", True
+                    ),
                     readonly=True,  # All default statuses are readonly
                     is_active=True,  # All default statuses are active
                     created_by=admin_user.id,
@@ -1878,7 +1620,9 @@ class DatabaseSetup:
                 existing_msg = result.scalar_one_or_none()
 
                 if existing_msg:
-                    logger.info(f"System message '{msg_data['message_type']}' already exists, skipping...")
+                    logger.info(
+                        f"System message '{msg_data['message_type']}' already exists, skipping..."
+                    )
                     created_messages[msg_data["message_type"]] = existing_msg
                 else:
                     # Create new system message
@@ -1887,7 +1631,9 @@ class DatabaseSetup:
                     await db.flush()
                     await db.refresh(system_msg)
                     created_messages[msg_data["message_type"]] = system_msg
-                    logger.info(f"✅ Created system message: {msg_data['message_type']}")
+                    logger.info(
+                        f"✅ Created system message: {msg_data['message_type']}"
+                    )
 
             # Define system events (linked to messages)
             system_events_data = [
@@ -1934,7 +1680,9 @@ class DatabaseSetup:
                 existing_event = result.scalar_one_or_none()
 
                 if existing_event:
-                    logger.info(f"System event '{event_data['event_key']}' already exists, skipping...")
+                    logger.info(
+                        f"System event '{event_data['event_key']}' already exists, skipping..."
+                    )
                 else:
                     # Get the system_message_id
                     message_type = event_data.pop("message_type")
@@ -1942,8 +1690,7 @@ class DatabaseSetup:
 
                     # Create new system event
                     system_event = SystemEvent(
-                        **event_data,
-                        system_message_id=system_msg.id
+                        **event_data, system_message_id=system_msg.id
                     )
                     db.add(system_event)
                     await db.flush()
@@ -2168,7 +1915,9 @@ class DatabaseSetup:
             )
             interval_type = interval_result.scalar_one_or_none()
             if not interval_type:
-                logger.error("❌ Interval job type not found, cannot seed scheduled jobs")
+                logger.error(
+                    "❌ Interval job type not found, cannot seed scheduled jobs"
+                )
                 return False
 
             # Build task function name -> id mapping
@@ -2310,9 +2059,7 @@ class DatabaseSetup:
         """
         try:
             # Check if admin user exists
-            admin_stmt = select(User).where(
-                User.username == self.admin_username
-            )
+            admin_stmt = select(User).where(User.username == self.admin_username)
             admin_result = await db.execute(admin_stmt)
             admin_exists = admin_result.scalar_one_or_none() is not None
 
@@ -2324,9 +2071,7 @@ class DatabaseSetup:
             # Check if priorities exist
             priorities_stmt = select(Priority).limit(1)
             priorities_result = await db.execute(priorities_stmt)
-            priorities_exist = (
-                priorities_result.scalar_one_or_none() is not None
-            )
+            priorities_exist = priorities_result.scalar_one_or_none() is not None
 
             # If all basic data exists, database is already initialized
             return admin_exists and roles_exist and priorities_exist
@@ -2353,11 +2098,7 @@ class DatabaseSetup:
             ad_password = settings.active_directory.ldap_password
 
             # Skip if using default/empty values
-            if (
-                not ad_password
-                or ad_path == "dc.example.com"
-                or ad_password == ""
-            ):
+            if not ad_password or ad_path == "dc.example.com" or ad_password == "":
                 logger.info(
                     "No AD configuration in environment or using defaults, skipping seed"
                 )
@@ -2425,10 +2166,6 @@ class DatabaseSetup:
 
             # Categories depend on service sections, so run separately
             if not await self.create_categories_and_subcategories(db):
-                return False
-
-            # Seed default tags (depends on categories existing)
-            if not await self.seed_tags(db):
                 return False
 
             # Step 2: Setup admin user
@@ -2499,21 +2236,17 @@ class DatabaseSetup:
                 f"✅ Admin user ready: {admin_user.username} ({admin_user.email})"
             )
             logger.info("✅ All lookup tables seeded")
-            logger.info(
-                "✅ 2 assignment types created (Assignees and CC only)"
-            )
+            logger.info("✅ 2 assignment types created (Assignees and CC only)")
             logger.info(
                 "✅ 9 categories with 31 subcategories created (with bilingual EN/AR names)"
             )
             logger.info(
-                "✅ 28 default tags created across all categories (Hardware, Printers, PACS, Avaya, Create User Account, Email, Network, Surveillance Cameras, SharePoint)"
+                "✅ 3 sections created (Application Support, Infrastructure, Technical Support)"
             )
             logger.info(
                 "✅ 8 default statuses created (Open, Hold, Solved, Archived, Canceled, Pending Sub-Task, Pending Requester Response, In Progress)"
             )
-            logger.info(
-                "✅ 8 default statuses with bilingual names (EN/AR) seeded"
-            )
+            logger.info("✅ 8 default statuses with bilingual names (EN/AR) seeded")
             logger.info("✅ 5 priorities created")
             logger.info(
                 "✅ 8 business units created (Andalusia hospitals and facilities)"
@@ -2528,7 +2261,7 @@ class DatabaseSetup:
                 "✅ 3 system message templates created for bilingual notifications"
             )
             logger.info(
-                "✅ Bilingual support fully initialized (Categories, Subcategories, Tags, Statuses)"
+                "✅ Bilingual support fully initialized (Categories, Subcategories, Statuses)"
             )
 
             return True

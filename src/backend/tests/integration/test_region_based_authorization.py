@@ -20,7 +20,6 @@ from db.models import (
     BusinessUnit,
     BusinessUnitRegion,
     TechnicianBusinessUnit,
-    TechnicianRegion,
     RequestStatus,
     Priority,
 )
@@ -124,9 +123,7 @@ async def saudi_business_unit(
 async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
     """Get or create standard request statuses."""
     result = await db_session.execute(
-        select(RequestStatus)
-        .where(RequestStatus.is_active)
-        .order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -289,7 +286,9 @@ class TestRegionBasedAuthorization:
         # Technician should see BOTH requests (from SMH and ARC)
         request_ids = {str(r.id) for r in requests}
         assert str(request_smh.id) in request_ids, "Should see SMH request"
-        assert str(request_arc.id) in request_ids, "Should see ARC request (same region)"
+        assert str(request_arc.id) in request_ids, (
+            "Should see ARC request (same region)"
+        )
         assert total >= 2
 
     @pytest.mark.asyncio
@@ -352,9 +351,9 @@ class TestRegionBasedAuthorization:
         # Technician should see ONLY SMH request, NOT Saudi request
         request_ids = {str(r.id) for r in requests}
         assert str(request_smh.id) in request_ids, "Should see SMH request"
-        assert (
-            str(request_saudi.id) not in request_ids
-        ), "Should NOT see Saudi request (different region)"
+        assert str(request_saudi.id) not in request_ids, (
+            "Should NOT see Saudi request (different region)"
+        )
 
     @pytest.mark.asyncio
     async def test_technician_assigned_to_multiple_regions_sees_all(
@@ -475,82 +474,6 @@ class TestRegionBasedAuthorization:
         assert str(request_saudi.id) in request_ids
 
     @pytest.mark.asyncio
-    async def test_technician_with_region_assignment_sees_all_bus_in_region(
-        self,
-        db_session: AsyncSession,
-        technician_user: User,
-        requester_user: User,
-        smh_business_unit: BusinessUnit,
-        arc_business_unit: BusinessUnit,
-        egypt_region: BusinessUnitRegion,
-        saudi_business_unit: BusinessUnit,
-        sample_statuses: list[RequestStatus],
-        sample_priorities: list[Priority],
-    ):
-        """
-        Test that a technician assigned to a Region (via TechnicianRegion)
-        sees ALL requests from ALL BUs in that region.
-        """
-        # Assign technician to Egypt region (not specific BU)
-        region_assignment = TechnicianRegion(
-            technician_id=technician_user.id,
-            region_id=egypt_region.id,
-            is_active=True,
-            is_deleted=False,
-        )
-        db_session.add(region_assignment)
-
-        # Create requests in Egypt region BUs
-        request_smh = ServiceRequestFactory.create(
-            title="Request in SMH",
-            requester_id=requester_user.id,
-            business_unit_id=smh_business_unit.id,
-            status_id=sample_statuses[0].id,
-            priority_id=sample_priorities[0].id,
-        )
-        request_arc = ServiceRequestFactory.create(
-            title="Request in ARC",
-            requester_id=requester_user.id,
-            business_unit_id=arc_business_unit.id,
-            status_id=sample_statuses[0].id,
-            priority_id=sample_priorities[0].id,
-        )
-
-        # Create request in different region
-        request_saudi = ServiceRequestFactory.create(
-            title="Request in Saudi",
-            requester_id=requester_user.id,
-            business_unit_id=saudi_business_unit.id,
-            status_id=sample_statuses[0].id,
-            priority_id=sample_priorities[0].id,
-        )
-
-        db_session.add(request_smh)
-        db_session.add(request_arc)
-        db_session.add(request_saudi)
-
-        await db_session.commit()
-
-        # Refresh user to load relationships
-        await db_session.refresh(technician_user, ["region_assigns"])
-
-        # Get unassigned requests
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
-            db=db_session,
-            user=technician_user,
-            page=1,
-            per_page=20,
-        )
-
-        # Technician should see requests from Egypt region (SMH and ARC), but NOT Saudi
-        request_ids = {str(r.id) for r in requests}
-        assert str(request_smh.id) in request_ids, "Should see SMH request"
-        assert str(request_arc.id) in request_ids, "Should see ARC request"
-        assert (
-            str(request_saudi.id) not in request_ids
-        ), "Should NOT see Saudi request"
-
-    @pytest.mark.asyncio
     async def test_technician_with_no_assignments_sees_no_requests(
         self,
         db_session: AsyncSession,
@@ -591,9 +514,9 @@ class TestRegionBasedAuthorization:
 
         # Technician should see NO requests
         request_ids = {str(r.id) for r in requests}
-        assert (
-            str(request_smh.id) not in request_ids
-        ), "Should NOT see any requests without assignments"
+        assert str(request_smh.id) not in request_ids, (
+            "Should NOT see any requests without assignments"
+        )
         assert total == 0 or str(request_smh.id) not in request_ids
 
     @pytest.mark.asyncio
@@ -654,7 +577,7 @@ class TestRegionBasedAuthorization:
 
         # Should see ONLY ARC request, not SMH
         request_ids = {str(r.id) for r in requests}
-        assert (
-            str(request_smh.id) not in request_ids
-        ), "Should NOT see SMH request (filtered out)"
+        assert str(request_smh.id) not in request_ids, (
+            "Should NOT see SMH request (filtered out)"
+        )
         assert str(request_arc.id) in request_ids, "Should see ARC request"

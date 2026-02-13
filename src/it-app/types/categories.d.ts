@@ -12,6 +12,7 @@ export interface CategoryResponse {
   nameEn: string;
   nameAr: string;
   description: string | null;
+  sectionId: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -25,6 +26,7 @@ export interface CategoryCreateRequest {
   nameEn: string;
   nameAr: string;
   description?: string | null;
+  sectionId?: number | null;
   isActive?: boolean;
 }
 
@@ -36,6 +38,7 @@ export interface CategoryUpdateRequest {
   nameEn?: string | null;
   nameAr?: string | null;
   description?: string | null;
+  sectionId?: number | null;
   isActive?: boolean | null;
 }
 

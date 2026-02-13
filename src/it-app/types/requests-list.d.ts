@@ -59,12 +59,6 @@ export interface BusinessUnitInfo {
   name: string;
 }
 
-export interface TagInfo {
-  id: number;
-  nameEn: string;
-  nameAr: string;
-}
-
 export interface CategoryInfo {
   id: number;
   name: string;
@@ -89,7 +83,6 @@ export interface RequestListItem {
   priority: PriorityInfo;
   businessUnit: BusinessUnitInfo | null;
   lastMessage: LastMessageInfo | null;
-  tag: TagInfo | null;
   category: CategoryInfo | null;
   subcategory: SubcategoryInfo | null;
   requesterHasUnread: boolean; // Whether requester has unread messages from technician (requester hasn't read)
