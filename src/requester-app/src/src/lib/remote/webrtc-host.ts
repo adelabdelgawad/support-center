@@ -84,9 +84,9 @@ export class WebRTCHost {
   private selectedSource: SelectedSource | null = null;
 
   // Resolution profile for streaming quality
-  private resolutionProfile: ResolutionProfile = "standard";
+  private resolutionProfile: ResolutionProfile = "extreme";
 
-  constructor(sessionId: string, callbacks: WebRTCHostCallbacks = {}, source?: SelectedSource, resolutionProfile: ResolutionProfile = "standard") {
+  constructor(sessionId: string, callbacks: WebRTCHostCallbacks = {}, source?: SelectedSource, resolutionProfile: ResolutionProfile = "extreme") {
     this.sessionId = sessionId;
     this.callbacks = callbacks;
     this.selectedSource = source || null;
@@ -516,10 +516,14 @@ export class WebRTCHost {
           const params = sender.getParameters();
 
           // Determine bitrate based on resolution profile
-          // Screen content needs higher bitrate than video for sharp text/UI
-          // extreme (1920x1080): 35 Mbps for pristine quality
-          // standard (960x540): 12 Mbps for near-lossless quality
-          const maxBitrate = this.resolutionProfile === "extreme" ? 35000000 : 12000000;
+          // Screen content needs much higher bitrate than video for sharp text/UI
+          // Higher bitrate prevents WebRTC from aggressively compressing text details
+          const bitrateMap: Record<ResolutionProfile, number> = {
+            standard: 20_000_000,  // 20 Mbps for 960x540
+            high: 40_000_000,      // 40 Mbps for 1280x720
+            extreme: 80_000_000,   // 80 Mbps for 1920x1080 (LAN-only, prioritize clarity)
+          };
+          const maxBitrate = bitrateMap[this.resolutionProfile];
 
           // Create encoding object with settings to prevent downscaling
           const encoding: RTCRtpEncodingParameters = {
@@ -909,7 +913,11 @@ export class WebRTCHost {
         // Color depth is applied client-side on the viewer - just acknowledge
         console.log("[WebRTCHost] Color depth set to:", event.depth);
         return;
-      // Add other config events here as needed
+      case "set_resolution_profile":
+        // Resolution profile change requested by agent
+        console.log("[WebRTCHost] Resolution profile change requested:", event.profile);
+        this.handleResolutionProfileChange(event.profile);
+        return;
     }
 
     // For input control events, require controlEnabled
@@ -1115,6 +1123,73 @@ export class WebRTCHost {
       data: {},
     });
     console.log("[WebRTCHost] Remote control disabled");
+  }
+
+  /**
+   * Handle resolution profile change from agent
+   * Stops current capture, restarts with new profile, and replaces the track seamlessly
+   */
+  private async handleResolutionProfileChange(profile: string): Promise<void> {
+    // Validate the profile
+    if (!RESOLUTION_PROFILES[profile as ResolutionProfile]) {
+      console.warn("[WebRTCHost] Invalid resolution profile:", profile);
+      return;
+    }
+
+    const newProfile = profile as ResolutionProfile;
+    if (newProfile === this.resolutionProfile) {
+      console.log("[WebRTCHost] Resolution profile unchanged:", newProfile);
+      return;
+    }
+
+    console.log(`[WebRTCHost] Changing resolution: ${this.resolutionProfile} -> ${newProfile}`);
+    this.resolutionProfile = newProfile;
+
+    try {
+      // Stop current screen stream
+      if (this.screenStream) {
+        this.screenStream.getTracks().forEach(track => track.stop());
+        this.screenStream = null;
+      }
+
+      // Start new capture with the new profile
+      await this.startScreenCapture();
+
+      // Replace the track on the existing peer connection (seamless switch)
+      if (this.peerConnection && this.screenStream) {
+        const newVideoTrack = this.screenStream.getVideoTracks()[0];
+        if (newVideoTrack) {
+          const senders = this.peerConnection.getSenders();
+          const videoSender = senders.find(s => s.track?.kind === "video");
+
+          if (videoSender) {
+            await videoSender.replaceTrack(newVideoTrack);
+            console.log("[WebRTCHost] Track replaced successfully");
+
+            // Update sender parameters for new bitrate
+            const params = videoSender.getParameters();
+            const bitrateMap: Record<ResolutionProfile, number> = {
+              standard: 20_000_000,
+              high: 40_000_000,
+              extreme: 80_000_000,
+            };
+
+            if (params.encodings.length > 0) {
+              params.encodings[0].maxBitrate = bitrateMap[newProfile];
+              params.encodings[0].scaleResolutionDownBy = 1.0;
+              await videoSender.setParameters(params);
+              console.log("[WebRTCHost] Sender parameters updated for", newProfile);
+            }
+          } else {
+            console.warn("[WebRTCHost] No video sender found for track replacement");
+          }
+        }
+      }
+
+      console.log("[WebRTCHost] Resolution profile changed to:", newProfile);
+    } catch (error) {
+      console.error("[WebRTCHost] Error changing resolution profile:", error);
+    }
   }
 
   /**

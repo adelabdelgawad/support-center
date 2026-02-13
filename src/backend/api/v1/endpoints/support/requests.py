@@ -224,11 +224,11 @@ async def get_request_statistics(
 async def get_technician_views(
     view: str = Query(
         "unassigned",
-        description="View type: unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved, all_your_requests, urgent_high_priority, pending_requester_response, pending_subtask, new_today, in_progress",
+        description="View type: unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved, all_your_requests, urgent_high_priority, pending_requester_response, pending_subtask, new_today, in_progress, all_tickets, all_solved",
     ),
-    business_unit_id: int | None = Query(
+    business_unit_ids: list[int] | None = Query(
         None,
-        description="Optional business unit ID to filter by. Use -1 to show only unassigned requests.",
+        description="Optional list of business unit IDs to filter by. Use -1 for unassigned (null business_unit_id).",
     ),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
@@ -255,8 +255,8 @@ async def get_technician_views(
     - **in_progress**: Requests with "in progress" status
 
     **Business Unit Filtering:**
-    - business_unit_id=<id>: Filter to specific business unit
-    - business_unit_id=-1: Show only unassigned requests (null business_unit_id)
+    - business_unit_ids=<id1>&business_unit_ids=<id2>: Filter to multiple business units
+    - business_unit_ids=-1: Show only unassigned requests (null business_unit_id)
     - No filter: Show all requests (respecting region permissions)
 
     **Region Authorization:**
@@ -296,6 +296,9 @@ async def get_technician_views(
         "pending_subtask",
         "new_today",
         "in_progress",
+        # Additional views
+        "all_tickets",
+        "all_solved",
     ]
     if view not in valid_views:
         raise HTTPException(
@@ -308,7 +311,7 @@ async def get_technician_views(
         db=db,
         user=current_user,
         view_type=view,
-        business_unit_id=business_unit_id,
+        business_unit_ids=business_unit_ids,
         page=page,
         per_page=per_page,
     )
@@ -319,11 +322,11 @@ async def get_technician_views(
 
     request_ids = [req.id for req in requests]
 
-    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_id)
+    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_ids)
     last_messages_dict = await ServiceRequestCRUD.get_last_messages_for_requests(db, request_ids)
     requester_unread_dict = await ChatMessageCRUD.check_requester_unread_for_requests(db, request_ids)
     technician_unread_dict = await ChatMessageCRUD.check_technician_unread_for_requests(db, request_ids)
-    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_id)
+    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_ids)
 
     # Build response items
     items = []
@@ -442,6 +445,9 @@ async def get_technician_views(
         pending_subtask=counts_dict.get("pending_subtask", 0),
         new_today=counts_dict.get("new_today", 0),
         in_progress=counts_dict.get("in_progress", 0),
+        # Additional views
+        all_tickets=counts_dict.get("all_tickets", 0),
+        all_solved=counts_dict.get("all_solved", 0),
     )
 
     # Build filter counts response
@@ -470,9 +476,9 @@ async def get_technician_views_counts_only(
         "unassigned",
         description="View type to get counts for",
     ),
-    business_unit_id: int | None = Query(
+    business_unit_ids: list[int] | None = Query(
         None,
-        description="Optional business unit ID to filter by. Use -1 to show only unassigned requests.",
+        description="Optional list of business unit IDs to filter by. Use -1 for unassigned (null business_unit_id).",
     ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(require_technician),
@@ -513,6 +519,8 @@ async def get_technician_views_counts_only(
         "pending_subtask",
         "new_today",
         "in_progress",
+        "all_tickets",
+        "all_solved",
     ]
     if view not in valid_views:
         raise HTTPException(
@@ -521,8 +529,8 @@ async def get_technician_views_counts_only(
         )
 
     # Execute sequentially - asyncpg doesn't support concurrent operations on the same session
-    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_id)
-    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_id)
+    counts_dict = await RequestService.get_technician_view_counts(db, current_user, business_unit_ids)
+    filter_counts_dict = await RequestService.get_view_filter_counts(db, current_user, view, business_unit_ids)
 
     # Build response
     from api.schemas.technician_views import ViewCounts
@@ -539,6 +547,8 @@ async def get_technician_views_counts_only(
         pending_subtask=counts_dict.get("pending_subtask", 0),
         new_today=counts_dict.get("new_today", 0),
         in_progress=counts_dict.get("in_progress", 0),
+        all_tickets=counts_dict.get("all_tickets", 0),
+        all_solved=counts_dict.get("all_solved", 0),
     )
 
     filter_counts = TicketTypeCounts(

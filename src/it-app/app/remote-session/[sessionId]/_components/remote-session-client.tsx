@@ -34,11 +34,18 @@ type ConnectionState =
   | "session_ended";
 
 type ColorDepth = 256 | 16 | 1;
+type ResolutionProfile = "standard" | "high" | "extreme";
 
 const COLOR_DEPTH_OPTIONS: { value: ColorDepth; label: string; description: string }[] = [
   { value: 256, label: "High Quality", description: "Full color - ~3 Mbps" },
   { value: 16, label: "Balanced", description: "Reduced color - ~1.5 Mbps" },
   { value: 1, label: "Grayscale", description: "Monochrome - ~800 Kbps" },
+];
+
+const RESOLUTION_OPTIONS: { value: ResolutionProfile; label: string; description: string }[] = [
+  { value: "extreme", label: "1080p", description: "1920x1080 - Best quality" },
+  { value: "high", label: "720p", description: "1280x720 - Balanced" },
+  { value: "standard", label: "540p", description: "960x540 - Low bandwidth" },
 ];
 
 const SESSION_STORAGE_KEY = "active_remote_session";
@@ -66,6 +73,7 @@ export default function RemoteSessionClient({
   const [screenshotFlash, setScreenshotFlash] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [videoResolution, setVideoResolution] = useState<{ width: number; height: number } | null>(null);
+  const [resolutionProfile, setResolutionProfile] = useState<ResolutionProfile>("extreme");
 
   // Reconnection state
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
@@ -781,6 +789,21 @@ export default function RemoteSessionClient({
     }
   }, []);
 
+  // Resolution profile change handler
+  const handleResolutionChange = useCallback((profile: ResolutionProfile) => {
+    setResolutionProfile(profile);
+
+    // Send resolution change via control data channel (config event, no controlEnabled required)
+    if (controlChannelRef.current?.readyState === "open") {
+      controlChannelRef.current.send(
+        JSON.stringify({
+          type: "set_resolution_profile",
+          profile,
+        })
+      );
+    }
+  }, []);
+
   // Get CSS filter for color depth
   const getColorDepthFilter = useCallback((depth: ColorDepth) => {
     switch (depth) {
@@ -1174,10 +1197,7 @@ export default function RemoteSessionClient({
             userSelect: "none",
             WebkitUserSelect: "none",
             touchAction: "none",
-            imageRendering: "crisp-edges",
-            WebkitBackfaceVisibility: "hidden",
-            backfaceVisibility: "hidden",
-            transform: "translateZ(0)",
+            imageRendering: "auto",
             ...(colorDepth !== 256 && { filter: getColorDepthFilter(colorDepth) }),
           }}
           onDragStart={(e) => e.preventDefault()}
@@ -1262,6 +1282,37 @@ export default function RemoteSessionClient({
                     key={option.value}
                     onClick={() => handleColorDepthChange(option.value)}
                     className={colorDepth === option.value ? "bg-accent" : ""}
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium">{option.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Resolution Profile Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={connectionState !== "connected"}
+                  title="Resolution"
+                >
+                  <Monitor className="h-4 w-4 mr-2" />
+                  {RESOLUTION_OPTIONS.find(o => o.value === resolutionProfile)?.label ?? "1080p"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {RESOLUTION_OPTIONS.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => handleResolutionChange(option.value)}
+                    className={resolutionProfile === option.value ? "bg-accent" : ""}
                   >
                     <div className="flex flex-col">
                       <span className="font-medium">{option.label}</span>

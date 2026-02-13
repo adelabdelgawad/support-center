@@ -82,6 +82,8 @@ export default async function RequestsPage({ searchParams }: PageProps) {
       pendingSubtask: 0,
       newToday: 0,
       inProgress: 0,
+      allTickets: 0,
+      allSolved: 0,
     },
     filterCounts: { all: 0, parents: 0, subtasks: 0 },
     total: 0,

@@ -63,6 +63,9 @@ export async function GET(request: NextRequest) {
       "pending_subtask",
       "new_today",
       "in_progress",
+      // Additional views
+      "all_tickets",
+      "all_solved",
     ];
 
     if (!validViews.includes(view)) {
@@ -82,9 +85,11 @@ export async function GET(request: NextRequest) {
       per_page: perPage, // Backend uses snake_case
     });
 
-    // Add business unit IDs if provided (send first one for now, backend only supports one)
+    // Add business unit IDs if provided (supports multiple IDs)
     if (businessUnitIds.length > 0) {
-      params.append("business_unit_id", businessUnitIds[0]);
+      businessUnitIds.forEach((id: string) => {
+        params.append("business_unit_ids", id);
+      });
     }
 
     const endpoint = `/requests/technician-views?${params.toString()}`;

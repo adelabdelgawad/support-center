@@ -21,7 +21,9 @@ export type AvailableTabId =
   | 'pending_requester_response'
   | 'pending_subtask'
   | 'new_today'
-  | 'in_progress';
+  | 'in_progress'
+  | 'all_tickets'
+  | 'all_solved';
 
 /**
  * User's custom view configuration (ONE per user)

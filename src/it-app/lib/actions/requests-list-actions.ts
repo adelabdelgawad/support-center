@@ -39,9 +39,11 @@ export async function getTechnicianViewsData(
       per_page: perPage.toString(), // Backend uses snake_case
     });
 
-    // Add business unit filters if provided (send first one for now, backend only supports one)
+    // Add business unit filters if provided (supports multiple IDs)
     if (businessUnitIds && businessUnitIds.length > 0) {
-      params.append('business_unit_id', businessUnitIds[0].toString());
+      businessUnitIds.forEach(id => {
+        params.append('business_unit_ids', id.toString());
+      });
     }
 
     // Call backend API directly from server using serverGet

@@ -47,6 +47,8 @@ const TAB_LABELS: Record<AvailableTabId, string> = {
   pending_subtask: 'Pending Subtask',
   new_today: 'New Today',
   in_progress: 'In Progress',
+  all_tickets: 'All Tickets',
+  all_solved: 'All Solved',
 };
 
 export function CustomViewDialog({

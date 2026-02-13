@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useTransition, useState, useEffect, useCallback } from "react";
+import React, { useTransition, useState, useRef, useCallback } from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Input } from "@/components/ui/input";
@@ -17,30 +17,23 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   placeholder = "Search...",
   className = "",
   urlParam = "filter",
-  debounceMs = 2000,
+  debounceMs = 500,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
-  // Get current value from URL
   const urlValue = searchParams?.get(urlParam) || "";
-
-  // Local state for immediate UI updates
   const [localValue, setLocalValue] = useState(urlValue);
   const [isDebouncing, setIsDebouncing] = useState(false);
 
-  // Sync local value with URL value when URL changes externally
-  useEffect(() => {
-    setLocalValue(urlValue);
-  }, [urlValue]);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
-  // Update URL function
-  const updateUrl = useCallback((value: string) => {
-    const params = new URLSearchParams(searchParams?.toString() || "");
-
-    // Reset to page 1 when searching
+  const pushToUrl = useCallback((value: string) => {
+    const params = new URLSearchParams(searchParamsRef.current?.toString() || "");
     params.set("page", "1");
 
     if (value) {
@@ -51,34 +44,26 @@ export const SearchInput: React.FC<SearchInputProps> = ({
 
     startTransition(() => {
       router.replace(`${pathname}?${params.toString()}`);
-      setIsDebouncing(false);
     });
-  }, [router, pathname, searchParams, urlParam]);
-
-  // Debounced update to URL
-  useEffect(() => {
-    if (localValue === urlValue) {
-      setIsDebouncing(false);
-      return;
-    }
-
-    setIsDebouncing(true);
-    const timer = setTimeout(() => {
-      updateUrl(localValue);
-    }, debounceMs);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [localValue, debounceMs, updateUrl, urlValue]);
+    setIsDebouncing(false);
+  }, [router, pathname, urlParam]);
 
   const handleChange = (newValue: string) => {
     setLocalValue(newValue);
+    setIsDebouncing(true);
+
+    // Clear any existing timer and start a new one from this keystroke
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      pushToUrl(newValue);
+    }, debounceMs);
   };
 
   const handleClear = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setLocalValue("");
-    updateUrl("");
+    setIsDebouncing(false);
+    pushToUrl("");
   };
 
   const showLoading = isPending || isDebouncing;

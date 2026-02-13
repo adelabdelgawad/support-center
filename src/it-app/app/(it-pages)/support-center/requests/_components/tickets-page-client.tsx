@@ -14,7 +14,6 @@ import { BusinessUnitCards } from './business-unit-cards';
 import { CustomViewDialog } from './custom-view-dialog';
 import { TicketTypeFilter, type TicketTypeFilter as TicketFilterType } from './ticket-type-filter';
 import { useRequestsListContext } from '../_context/requests-list-context';
-import { useTicketTypeCounts } from '@/lib/hooks/use-ticket-type-counts';
 import { useViewport } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/requests-list';
 
@@ -70,6 +69,9 @@ const viewDisplayNames: Record<ViewType, string> = {
   pending_subtask: 'Pending subtask',
   new_today: 'New today',
   in_progress: 'In progress',
+  // Additional views
+  all_tickets: 'All tickets',
+  all_solved: 'All solved tickets',
 };
 
 export function TicketsPageClient() {

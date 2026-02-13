@@ -61,7 +61,7 @@ interface RemoteAccessState {
   isPickerOpen: boolean;
   /** Session ID pending screen selection */
   pendingSessionId: string | null;
-  /** Resolution profile for streaming (default: extreme for local network) */
+  /** Resolution profile for streaming (default: extreme/1080p for local network) */
   resolutionProfile: ResolutionProfile;
   /** Banner visibility state for user awareness (FR-002) */
   bannerSessions: BannerSession[];
@@ -95,9 +95,8 @@ function createRemoteAccessStore() {
     controlEnabled: false,
     isPickerOpen: false,
     pendingSessionId: null,
-    // Default to standard resolution for better performance (960x540)
-    // Use "extreme" (1920x1080) only on high-performance systems
-    resolutionProfile: "standard",
+    // Default to extreme resolution (1920x1080) for sharp text/UI on local network
+    resolutionProfile: "extreme",
     // Banner sessions for user awareness indicator (FR-002)
     bannerSessions: [],
     // Pending session waiting for user acceptance

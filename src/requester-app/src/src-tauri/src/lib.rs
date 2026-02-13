@@ -944,8 +944,8 @@ async fn capture_monitor_preview(monitor_id: usize) -> Result<String, String> {
     .map_err(|e| format!("Capture task failed: {}", e))?
 }
 
-/// Capture a specific monitor at full resolution for streaming
-/// Returns base64-encoded JPEG image optimized for real-time streaming
+/// Capture a specific monitor at standard resolution (960x540) for streaming
+/// Returns base64-encoded JPEG image at quality 97 optimized for real-time streaming
 /// OPTIMIZED: fast_image_resize (SIMD) + jpeg-encoder (SIMD) for best quality/performance
 #[tauri::command]
 async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
@@ -1015,9 +1015,9 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
             rgb_data.push(chunk[2]); // B
         }
 
-        // Use jpeg-encoder with SIMD (quality 90 for good balance of quality/speed)
-        let mut jpeg_buffer = Vec::with_capacity(300_000);
-        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_buffer, 90);
+        // Use jpeg-encoder with SIMD (quality 97 for sharp text/UI)
+        let mut jpeg_buffer = Vec::with_capacity(500_000);
+        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_buffer, 97);
         encoder.encode(
             &rgb_data,
             dst_width as u16,
@@ -1053,8 +1053,111 @@ async fn capture_monitor_stream(monitor_id: usize) -> Result<String, String> {
     .map_err(|e| format!("Capture task failed: {}", e))?
 }
 
+/// Capture a specific monitor at HIGH resolution (1280x720) for bandwidth fallback
+/// Returns base64-encoded JPEG image at 1280x720 with quality 98
+/// Use this profile when 1080p is too heavy but 540p is too blurry
+#[tauri::command]
+async fn capture_monitor_stream_high(monitor_id: usize) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        use fast_image_resize::{images::Image, Resizer, ResizeOptions, ResizeAlg, FilterType};
+        use std::time::Instant;
+
+        let _t0 = Instant::now();
+
+        let monitors = xcap::Monitor::all()
+            .map_err(|e| format!("Failed to get monitors: {}", e))?;
+
+        let _t1 = Instant::now();
+
+        let monitor = monitors
+            .get(monitor_id)
+            .ok_or_else(|| format!("Monitor {} not found", monitor_id))?;
+
+        let captured = monitor
+            .capture_image()
+            .map_err(|e| format!("Failed to capture monitor: {}", e))?;
+
+        let _t2 = Instant::now();
+
+        let src_width = captured.width();
+        let src_height = captured.height();
+
+        // HIGH: Target 1280x720 for good quality with moderate bandwidth
+        let dst_width = 1280u32;
+        let dst_height = 720u32;
+
+        let src_image = Image::from_vec_u8(
+            src_width,
+            src_height,
+            captured.into_raw(),
+            fast_image_resize::PixelType::U8x4,
+        ).map_err(|e| format!("Failed to create source image: {}", e))?;
+
+        let mut dst_image = Image::new(
+            dst_width,
+            dst_height,
+            fast_image_resize::PixelType::U8x4,
+        );
+
+        // Resize using Lanczos3 (high quality, sharp for text/icons)
+        let mut resizer = Resizer::new();
+        resizer.resize(
+            &src_image,
+            &mut dst_image,
+            &ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3)),
+        ).map_err(|e| format!("Failed to resize: {}", e))?;
+
+        let _t3 = Instant::now();
+
+        // Convert RGBA to RGB for JPEG
+        let rgba_data = dst_image.into_vec();
+        let mut rgb_data = Vec::with_capacity((dst_width * dst_height * 3) as usize);
+        for chunk in rgba_data.chunks(4) {
+            rgb_data.push(chunk[0]); // R
+            rgb_data.push(chunk[1]); // G
+            rgb_data.push(chunk[2]); // B
+        }
+
+        // HIGH: Use quality 98 for sharp text
+        let mut jpeg_buffer = Vec::with_capacity(800_000);
+        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_buffer, 98);
+        encoder.encode(
+            &rgb_data,
+            dst_width as u16,
+            dst_height as u16,
+            jpeg_encoder::ColorType::Rgb,
+        ).map_err(|e| format!("Failed to encode JPEG: {}", e))?;
+
+        let jpeg_data = jpeg_buffer;
+
+        let _t4 = Instant::now();
+
+        #[cfg(debug_assertions)]
+        {
+            static FRAME_COUNT_HIGH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let frame_num = FRAME_COUNT_HIGH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if frame_num % 30 == 0 {
+                eprintln!(
+                    "[capture_monitor_stream_high] Frame {}: Monitor::all={:?}ms, capture={:?}ms, resize={:?}ms, encode={:?}ms, total={:?}ms, size={}KB",
+                    frame_num,
+                    _t1.duration_since(_t0).as_millis(),
+                    _t2.duration_since(_t1).as_millis(),
+                    _t3.duration_since(_t2).as_millis(),
+                    _t4.duration_since(_t3).as_millis(),
+                    _t4.duration_since(_t0).as_millis(),
+                    jpeg_data.len() / 1024
+                );
+            }
+        }
+
+        Ok::<String, String>(general_purpose::STANDARD.encode(&jpeg_data))
+    })
+    .await
+    .map_err(|e| format!("Capture task failed: {}", e))?
+}
+
 /// Capture a specific monitor at EXTREME resolution for local network streaming
-/// Returns base64-encoded JPEG image at 1920x1080 with quality 97 for best visual fidelity
+/// Returns base64-encoded JPEG image at 1920x1080 with quality 100 for best visual fidelity
 /// Use this profile for local network connections where bandwidth is not a concern
 #[tauri::command]
 async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, String> {
@@ -1120,9 +1223,9 @@ async fn capture_monitor_stream_extreme(monitor_id: usize) -> Result<String, Str
             rgb_data.push(chunk[2]); // B
         }
 
-        // EXTREME: Use quality 92 for excellent quality with better performance
-        let mut jpeg_buffer = Vec::with_capacity(800_000); // Larger buffer for 1080p
-        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_buffer, 92);
+        // EXTREME: Use quality 100 for pristine text/UI clarity (near-lossless)
+        let mut jpeg_buffer = Vec::with_capacity(1_500_000); // Larger buffer for 1080p at max quality
+        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_buffer, 100);
         encoder.encode(
             &rgb_data,
             dst_width as u16,
@@ -1770,6 +1873,7 @@ pub fn run() {
             get_windows,
             capture_monitor_preview,
             capture_monitor_stream,
+            capture_monitor_stream_high,
             capture_monitor_stream_extreme,
             show_system_notification,
             is_window_focused,

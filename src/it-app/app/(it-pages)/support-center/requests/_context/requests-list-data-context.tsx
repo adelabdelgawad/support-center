@@ -15,6 +15,7 @@ import type {
   RequestListItem,
   ViewType,
   TicketTypeCounts,
+  ViewCounts,
 } from '@/types/requests-list';
 import type { TechnicianViewsResponse } from '@/types/requests-list';
 
@@ -22,6 +23,7 @@ export interface RequestsListDataContextType {
   // Ticket data
   tickets: RequestListItem[];
   filterCounts: TicketTypeCounts;
+  counts: ViewCounts; // View counts (unassigned, allUnsolved, etc.)
   total: number;
   currentPage: number;
   perPage: number;
@@ -80,6 +82,7 @@ export function RequestsListDataProvider({
   const {
     tickets,
     filterCounts,
+    counts,
     total,
     currentPage,
     perPage,
@@ -121,6 +124,10 @@ export function RequestsListDataProvider({
     ? initialData.filterCounts
     : (filterCounts ?? initialData.filterCounts);
   // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
+  const safeCounts = isFirstRenderRef.current
+    ? initialData.counts
+    : (counts ?? initialData.counts);
+  // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/refs
   const safeTotal = isFirstRenderRef.current
     ? initialData.total
     : (total ?? initialData.total);
@@ -141,6 +148,7 @@ export function RequestsListDataProvider({
     () => ({
       tickets: safeTickets,
       filterCounts: safeFilterCounts,
+      counts: safeCounts,
       total: safeTotal,
       currentPage,
       perPage,
@@ -151,6 +159,7 @@ export function RequestsListDataProvider({
     [
       safeTickets,
       safeFilterCounts,
+      safeCounts,
       safeTotal,
       currentPage,
       perPage,

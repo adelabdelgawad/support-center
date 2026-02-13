@@ -3,6 +3,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { makeAuthenticatedRequest } from '@/lib/api/server-fetch';
 import type { UserCustomView } from '@/types/custom-views';
 
@@ -12,6 +13,9 @@ export async function POST() {
       'POST',
       '/user-custom-views/reset'
     );
+
+    // Invalidate cached custom view for requests page
+    revalidatePath('/support-center/requests');
 
     return NextResponse.json(response);
   } catch (error) {

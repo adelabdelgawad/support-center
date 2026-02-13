@@ -561,12 +561,28 @@ class SignalRClient:
         """
         Check if a user is currently connected to SignalR.
 
+        Checks Redis presence first (shared across all SignalR instances),
+        then falls back to the SignalR internal HTTP API (single instance).
+
         Args:
             user_id: User ID to check
 
         Returns:
             True if user has at least one active connection, False otherwise
         """
+        # Check Redis presence first (shared across all SignalR instances)
+        try:
+            from uuid import UUID
+            from api.services.presence_service import presence_service
+
+            uid = UUID(user_id)
+            if await presence_service.is_user_present(uid):
+                logger.debug(f"User {user_id} online via Redis presence")
+                return True
+        except Exception as e:
+            logger.warning(f"Redis presence check failed, falling back to SignalR: {e}")
+
+        # Fallback: query SignalR internal API (only reaches one instance)
         if not settings.signalr.enabled:
             logger.debug("SignalR disabled, returning False for online check")
             return False
@@ -579,7 +595,7 @@ class SignalRClient:
                 is_online = result.get("isOnline", False)
                 connection_count = result.get("connectionCount", 0)
                 logger.debug(
-                    f"User {user_id} online check: {is_online} ({connection_count} connections)"
+                    f"User {user_id} online check via SignalR: {is_online} ({connection_count} connections)"
                 )
                 return is_online
             return False

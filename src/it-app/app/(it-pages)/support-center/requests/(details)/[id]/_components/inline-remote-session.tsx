@@ -35,11 +35,18 @@ import { cn } from '@/lib/utils';
 import { useRemoteAccessSignaling } from '@/lib/signalr';
 
 type ColorDepth = 256 | 16 | 1;
+type ResolutionProfile = "standard" | "high" | "extreme";
 
 const COLOR_DEPTH_OPTIONS: { value: ColorDepth; label: string; description: string }[] = [
   { value: 256, label: 'High Quality', description: 'Full color' },
   { value: 16, label: 'Balanced', description: 'Reduced color' },
   { value: 1, label: 'Grayscale', description: 'Monochrome' },
+];
+
+const RESOLUTION_OPTIONS: { value: ResolutionProfile; label: string; description: string }[] = [
+  { value: 'extreme', label: '1080p', description: '1920x1080' },
+  { value: 'high', label: '720p', description: '1280x720' },
+  { value: 'standard', label: '540p', description: '960x540' },
 ];
 
 const MOUSE_THROTTLE_MS = 16; // ~60fps max for mouse moves
@@ -73,6 +80,7 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
   });
   const [screenshotFlash, setScreenshotFlash] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resolutionProfile, setResolutionProfile] = useState<ResolutionProfile>('extreme');
 
   // Local cursor position for custom cursor overlay (pixel coordinates relative to video container)
   const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null);
@@ -731,6 +739,21 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
     }
   }, []);
 
+  // Resolution profile change handler
+  const handleResolutionChange = useCallback((profile: ResolutionProfile) => {
+    setResolutionProfile(profile);
+
+    // Send resolution change via control data channel (config event, no controlEnabled required)
+    if (controlChannelRef.current?.readyState === 'open') {
+      controlChannelRef.current.send(
+        JSON.stringify({
+          type: 'set_resolution_profile',
+          profile,
+        })
+      );
+    }
+  }, []);
+
   const getColorDepthFilter = useCallback((depth: ColorDepth) => {
     switch (depth) {
       case 256:
@@ -1051,6 +1074,38 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Resolution Profile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={connectionState !== 'connected'}
+                className={cn(
+                  'p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors text-xs font-mono',
+                  'focus:outline-none focus:ring-1 focus:ring-gray-500',
+                  'disabled:opacity-50 disabled:cursor-not-allowed'
+                )}
+                title="Resolution"
+              >
+                {RESOLUTION_OPTIONS.find(o => o.value === resolutionProfile)?.label ?? '1080p'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {RESOLUTION_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onClick={() => handleResolutionChange(option.value)}
+                  className={resolutionProfile === option.value ? 'bg-accent' : ''}
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           {/* Screenshot */}
           <button
             type="button"
@@ -1116,7 +1171,7 @@ export function InlineRemoteSession({ className }: InlineRemoteSessionProps) {
             userSelect: 'none',
             WebkitUserSelect: 'none',
             touchAction: 'none',
-            imageRendering: 'crisp-edges',
+            imageRendering: 'auto',
             ...(colorDepth !== 256 && { filter: getColorDepthFilter(colorDepth) }),
           }}
           onDragStart={(e) => e.preventDefault()}

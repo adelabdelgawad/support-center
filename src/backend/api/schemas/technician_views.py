@@ -119,6 +119,9 @@ class ViewCounts(HTTPSchemaModel):
     pending_subtask: int = 0
     new_today: int = 0
     in_progress: int = 0
+    # Additional views
+    all_tickets: int = 0
+    all_solved: int = 0
 
 
 class TechnicianViewsResponse(HTTPSchemaModel):

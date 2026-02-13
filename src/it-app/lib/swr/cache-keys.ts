@@ -30,14 +30,8 @@ export const cacheKeys = {
     return `/api/requests/technician-views?${params.toString()}`;
   },
 
-  // View counts for sidebar (SWR - kept for requests-list)
-  viewCounts: '/api/requests/view-counts',
-
   // Business unit counts (SWR - kept for requests-list)
   businessUnitCounts: (view: string) => `/api/requests/business-unit-counts?view=${view}`,
-
-  // Ticket type counts (SWR - kept for requests-list)
-  ticketTypeCounts: '/api/requests/ticket-type-counts',
 
   // Scheduler related keys (SWR - kept for scheduler)
   schedulerJobs: (page: number = 1, perPage: number = 50) => `/api/scheduler/jobs?page=${page}&per_page=${perPage}`,
@@ -63,7 +57,7 @@ export function createKeyMatcher(pattern: RegExp) {
  */
 export const keyMatchers = {
   // Match all requests-list keys for invalidation from detail page
-  requestsList: createKeyMatcher(/\/api\/requests\/(technician-views|view-counts|business-unit-counts|ticket-type-counts)/),
+  requestsList: createKeyMatcher(/\/api\/requests\/(technician-views|view-counts|business-unit-counts)/),
 
   // Match all scheduler keys
   schedulerRelated: createKeyMatcher(/\/api\/scheduler\//),

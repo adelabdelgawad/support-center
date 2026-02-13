@@ -5,8 +5,8 @@
  * Provides centralized data and actions for the requests list page
  *
  * NOW SPLIT into three separate contexts to prevent unnecessary re-renders:
- * 1. RequestsListDataContext - tickets, pagination, filter counts
- * 2. RequestsListCountsContext - view counts, business unit counts
+ * 1. RequestsListDataContext - tickets, pagination, filter counts, view counts
+ * 2. RequestsListCountsContext - view counts (from data provider), business unit counts
  * 3. RequestsListUIContext - active view, view changing state
  *
  * Each context independently memoizes its value, so changes in one context
@@ -22,6 +22,37 @@ import { RequestsListUIProvider, useRequestsListUI, type RequestsListUIContextTy
 
 // Re-export types from individual contexts for backward compatibility
 export type { RequestsListDataContextType, RequestsListCountsContextType, RequestsListUIContextType };
+
+/**
+ * Bridge component that reads counts from data provider and passes to counts provider
+ * This eliminates the redundant double-fetch of view counts
+ */
+function CountsBridge({
+  children,
+  initialBusinessUnitsData,
+  initialView,
+  visibleTabs,
+}: {
+  children: React.ReactNode;
+  initialBusinessUnitsData: BusinessUnitCountsResponse;
+  initialView: string;
+  visibleTabs?: ViewType[];
+}) {
+  // Read counts from data provider (already fetched with tickets)
+  const { counts } = useRequestsListData();
+
+  return (
+    <RequestsListCountsProvider
+      initialData={{ counts }}
+      initialBusinessUnitsData={initialBusinessUnitsData}
+      initialView={initialView}
+      visibleTabs={visibleTabs}
+      countsFromData={counts}
+    >
+      {children}
+    </RequestsListCountsProvider>
+  );
+}
 
 interface RequestsListProviderProps {
   children: React.ReactNode;
@@ -59,14 +90,13 @@ export function RequestsListProvider({
         initialPage={initialPage}
         businessUnitIds={businessUnitIds}
       >
-        <RequestsListCountsProvider
-          initialData={initialData}
+        <CountsBridge
           initialBusinessUnitsData={initialBusinessUnitsData}
           initialView={initialView}
           visibleTabs={visibleTabs}
         >
           {children}
-        </RequestsListCountsProvider>
+        </CountsBridge>
       </RequestsListDataProvider>
     </RequestsListUIProvider>
   );

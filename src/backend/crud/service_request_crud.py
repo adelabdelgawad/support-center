@@ -6,7 +6,7 @@ Handles all database queries related to service requests with business unit regi
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, case, exists, func, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -56,8 +56,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
         Priority order:
         1. Super admins and users with 'Admin' role see all requests
-        2. Users with business unit assignments see requests from ALL business units in the same region(s)
-           (e.g., if assigned to BU "SMH" in Region "Egypt", they see ALL BUs in "Egypt" region)
+        2. Users with business unit assignments see ONLY their assigned business units
         3. Users with region assignments see requests from all business units in those regions
         4. Users with business_unit_region_id see requests from that region
         5. No assignments = no results
@@ -115,11 +114,41 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         return ServiceRequest.id.is_(None)
 
     @classmethod
+    def _apply_business_unit_filter(cls, stmt, business_unit_ids: list[int] | None):
+        """
+        Apply business unit filter to a query statement.
+        Supports multiple business unit IDs and -1 for unassigned (null business_unit_id).
+
+        Args:
+            stmt: SQLAlchemy statement to filter
+            business_unit_ids: List of business unit IDs. -1 indicates unassigned (null).
+
+        Returns:
+            Filtered statement
+        """
+        if not business_unit_ids:
+            return stmt
+
+        has_unassigned = -1 in business_unit_ids
+        positive_ids = [id for id in business_unit_ids if id > 0]
+
+        conditions = []
+        if has_unassigned:
+            conditions.append(ServiceRequest.business_unit_id.is_(None))
+        if positive_ids:
+            conditions.append(ServiceRequest.business_unit_id.in_(positive_ids))
+
+        if conditions:
+            stmt = stmt.where(or_(*conditions))
+
+        return stmt
+
+    @classmethod
     async def build_view_base_query(
         cls,
         user: User,
         view_type: str,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
     ):
         """
         Build base query for a view WITHOUT eager loading (for counting).
@@ -130,7 +159,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Args:
             user: Current user (for region filtering)
             view_type: View type (unassigned, all_unsolved, etc.)
-            business_unit_id: Optional filter
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned.
 
         Returns:
             SQLAlchemy select statement with filters applied
@@ -183,13 +212,19 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
         elif view_type in ("recently_updated", "recently_solved", "all_your_requests",
                           "urgent_high_priority", "pending_requester_response",
-                          "pending_subtask", "new_today", "in_progress"):
+                          "pending_subtask", "new_today", "in_progress",
+                          "all_tickets", "all_solved"):
             # For other views, use a simpler base (they all have similar structure)
             # This is a fallback - specific logic can be added per view if needed
             stmt = select(ServiceRequest).where(ServiceRequest.is_deleted.is_(False))
 
             # Add view-specific filters
             if view_type == "recently_solved":
+                solved_subquery = select(RequestStatus.id).where(
+                    RequestStatus.count_as_solved
+                )
+                stmt = stmt.where(ServiceRequest.status_id.in_(solved_subquery))
+            elif view_type == "all_solved":
                 solved_subquery = select(RequestStatus.id).where(
                     RequestStatus.count_as_solved
                 )
@@ -205,16 +240,16 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 ServiceRequest.is_deleted.is_(False)
             )
 
-        # Apply region filter
+        # Apply filters:
+        # - If business_unit_ids is explicitly provided, use ONLY that filter (not region filter)
+        # - Otherwise, apply region filter to limit to user's accessible BUs
         region_filter = cls._get_region_filter(user)
-        if region_filter is not None:
+        if business_unit_ids:
+            # User explicitly selected business units - use only that filter
+            stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
+        elif region_filter is not None:
+            # No explicit BU selection - apply region filter
             stmt = stmt.where(region_filter)
-
-        # Apply business unit filter
-        if business_unit_id == -1:
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
 
         return stmt
 
@@ -224,7 +259,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -233,7 +268,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Filtered by user's business unit region unless admin/super_admin.
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Use NOT EXISTS for better performance vs NOT IN
         assigned_exists = exists(
@@ -262,13 +297,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if region_filter is not None:
             stmt = stmt.where(region_filter)
 
-        # Apply business unit filter
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        # Apply business unit filter (supports multiple IDs and -1 for unassigned)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Order by created_at DESC
         stmt = stmt.order_by(ServiceRequest.created_at.desc())
@@ -295,7 +325,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -305,7 +335,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Filtered by user's business unit region unless admin/super_admin.
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
         solved_subquery = select(RequestStatus.id).where(
@@ -339,13 +369,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if region_filter is not None:
             stmt = stmt.where(region_filter)
 
-        # Apply business unit filter
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        # Apply business unit filter (supports multiple IDs and -1 for unassigned)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         stmt = stmt.order_by(ServiceRequest.updated_at.desc())
 
@@ -369,7 +394,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -378,7 +403,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Filtered by user's business unit region unless admin/super_admin.
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
         solved_subquery = select(RequestStatus.id).where(
@@ -414,13 +439,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if region_filter is not None:
             stmt = stmt.where(region_filter)
 
-        # Apply business unit filter
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        # Apply business unit filter (supports multiple IDs and -1 for unassigned)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         stmt = stmt.order_by(ServiceRequest.updated_at.desc())
 
@@ -444,7 +464,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -453,7 +473,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Filtered by user's business unit region unless admin/super_admin.
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         stmt = (
             select(ServiceRequest)
@@ -474,13 +494,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if region_filter is not None:
             stmt = stmt.where(region_filter)
 
-        # Apply business unit filter
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        # Apply business unit filter (supports multiple IDs and -1 for unassigned)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -502,7 +517,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -511,7 +526,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         Filtered by user's business unit region unless admin/super_admin.
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         # Subquery to get solved status IDs (where count_as_solved = True)
         solved_subquery = select(RequestStatus.id).where(
@@ -540,13 +555,8 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         if region_filter is not None:
             stmt = stmt.where(region_filter)
 
-        # Apply business unit filter
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
+        # Apply business unit filter (supports multiple IDs and -1 for unassigned)
+        stmt = cls._apply_business_unit_filter(stmt, business_unit_ids)
 
         # Get total count
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -570,7 +580,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -626,7 +636,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -689,7 +699,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -744,7 +754,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -818,7 +828,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -877,7 +887,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         db: AsyncSession,
         user: User,
         *,
-        business_unit_id: Optional[int] = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> Tuple[List[ServiceRequest], int]:
@@ -930,7 +940,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
     @classmethod
     async def get_view_counts(
-        cls, db: AsyncSession, user: User, business_unit_id: Optional[int] = None
+        cls, db: AsyncSession, user: User, business_unit_ids: list[int] | None = None
     ) -> Dict[str, int]:
         """
         Get counts for all views using a single optimized query.
@@ -939,7 +949,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         **NOTE**: Counts include both parent tasks AND subtasks (no parent_task_id filtering).
 
         Args:
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
         """
         from datetime import datetime, date
 
@@ -1045,21 +1055,21 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             func.count(
                 case((ServiceRequest.status_id == 8, 1))
             ).label("in_progress"),
+            # Count all_tickets: all tickets
+            func.count(ServiceRequest.id).label("all_tickets"),
+            # Count all_solved: all tickets with count_as_solved status
+            func.count(
+                case((ServiceRequest.status_id.in_(solved_subquery), 1))
+            ).label("all_solved"),
         ).select_from(ServiceRequest).where(
             ServiceRequest.is_deleted.is_(False)  # CRITICAL: Exclude deleted requests from all counts
         )
 
-        # Apply region filter to all counts
+        # NOTE: View navbar counts ALWAYS show user's total accessible BUs (region filter only)
+        # The business_unit_ids parameter is ignored here - it's only used for tabs counts
+        # Apply region filter to limit counts to user's accessible business units
         if region_filter is not None:
             stmt = stmt.where(region_filter)
-
-        # Apply business unit filter (same logic as individual view methods)
-        if business_unit_id == -1:
-            # Filter for unassigned (null business_unit_id)
-            stmt = stmt.where(ServiceRequest.business_unit_id.is_(None))
-        elif business_unit_id is not None and business_unit_id > 0:
-            # Filter for specific business unit
-            stmt = stmt.where(ServiceRequest.business_unit_id == business_unit_id)
 
         # Execute single query
         result = await db.execute(stmt)
@@ -1079,6 +1089,9 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
             "pending_subtask": row.pending_subtask or 0,
             "new_today": row.new_today or 0,
             "in_progress": row.in_progress or 0,
+            # Additional views
+            "all_tickets": row.all_tickets or 0,
+            "all_solved": row.all_solved or 0,
         }
 
         return counts
@@ -1123,18 +1136,9 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
 
                 if active_bu_assigns:
                     # User has explicit business unit assignments
-                    # Find ALL business units in the same regions as the assigned BUs
-                    # This allows technicians to see counts for ALL BUs in their region
+                    # Show only their assigned business units (not all BUs in the region)
                     assigned_bu_ids = [ba.business_unit_id for ba in active_bu_assigns]
-
-                    # Get regions of assigned business units
-                    region_ids_subquery = select(BusinessUnit.business_unit_region_id).where(
-                        BusinessUnit.id.in_(assigned_bu_ids),
-                        BusinessUnit.business_unit_region_id.is_not(None)
-                    ).distinct()
-
-                    # Show all BUs in those regions
-                    bu_filter = BusinessUnit.business_unit_region_id.in_(region_ids_subquery)
+                    bu_filter = BusinessUnit.id.in_(assigned_bu_ids)
                 else:
                     # PRIORITY 2: Check for region assignments
                     active_region_assigns = [
@@ -1190,6 +1194,7 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 view_conditions.append(ServiceRequest.id.notin_(assigned_subquery))
             elif view == "all_unsolved":
                 view_conditions.append(ServiceRequest.status_id.notin_(solved_subquery))
+                view_conditions.append(ServiceRequest.id.in_(assigned_subquery))
             elif view == "my_unsolved":
                 view_conditions.append(ServiceRequest.id.in_(my_requests_subquery))
                 view_conditions.append(ServiceRequest.status_id.notin_(solved_subquery))
@@ -1210,6 +1215,10 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
                 view_conditions.append(ServiceRequest.created_at >= today_start)
             elif view == "in_progress":
                 view_conditions.append(ServiceRequest.status_id == 8)
+            elif view == "all_tickets":
+                pass  # No filter - all tickets
+            elif view == "all_solved":
+                view_conditions.append(ServiceRequest.status_id.in_(solved_subquery))
 
         # Build join condition with view filters
         join_condition = and_(

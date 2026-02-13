@@ -22,6 +22,9 @@ export interface ViewCounts {
   pendingSubtask: number;
   newToday: number;
   inProgress: number;
+  // Additional views
+  allTickets: number;
+  allSolved: number;
 }
 
 export interface StatusInfo {
@@ -132,7 +135,10 @@ export type ViewType =
   | 'pending_requester_response'
   | 'pending_subtask'
   | 'new_today'
-  | 'in_progress';
+  | 'in_progress'
+  // Additional views
+  | 'all_tickets'
+  | 'all_solved';
 
 // Sub-task related types
 export interface SubTaskStats {

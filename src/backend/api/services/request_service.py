@@ -744,7 +744,7 @@ class RequestService:
             description=None,  # Technician will fill this later
             requester_id=requester_id,
             ip_address=client_ip,
-            business_unit_id=business_unit_id,
+            business_unit_ids=business_unit_ids,
             priority_id=3,  # Default to Medium priority
             status_id=1,  # Default to Open status
             tag_id=request_data.tag_id,  # Tag selected by requester
@@ -1167,7 +1167,7 @@ class RequestService:
         user: User,
         view_type: str,
         *,
-        business_unit_id: int | None = None,
+        business_unit_ids: list[int] | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[list[ServiceRequest], int]:
@@ -1178,7 +1178,7 @@ class RequestService:
             db: Database session
             user: Current user (for region filtering)
             view_type: View type (unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved)
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
             page: Page number
             per_page: Items per page
 
@@ -1190,60 +1190,60 @@ class RequestService:
         # Existing views
         if view_type == "unassigned":
             return await ServiceRequestCRUD.find_unassigned_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "all_unsolved":
             return await ServiceRequestCRUD.find_unsolved_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "my_unsolved":
             return await ServiceRequestCRUD.find_my_unsolved_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "recently_updated":
             return await ServiceRequestCRUD.find_recently_updated_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "recently_solved":
             return await ServiceRequestCRUD.find_recently_solved_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         # New views
         elif view_type == "all_your_requests":
             return await ServiceRequestCRUD.find_all_your_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "urgent_high_priority":
             return await ServiceRequestCRUD.find_urgent_high_priority_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "pending_requester_response":
             return await ServiceRequestCRUD.find_pending_requester_response_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "pending_subtask":
             return await ServiceRequestCRUD.find_pending_subtask_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "new_today":
             return await ServiceRequestCRUD.find_new_today_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         elif view_type == "in_progress":
             return await ServiceRequestCRUD.find_in_progress_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
         else:
             # Default to unassigned
             return await ServiceRequestCRUD.find_unassigned_requests(
-                db, user, business_unit_id=business_unit_id, page=page, per_page=per_page
+                db, user, business_unit_ids=business_unit_ids, page=page, per_page=per_page
             )
 
     @staticmethod
     @safe_database_query("get_technician_view_counts", default_return={})
     @log_database_operation("technician view counts retrieval", level="debug")
     async def get_technician_view_counts(
-        db: AsyncSession, user: User, business_unit_id: int | None = None
+        db: AsyncSession, user: User, business_unit_ids: list[int] | None = None
     ) -> dict[str, int]:
         """
         Get counts for all technician views.
@@ -1253,14 +1253,14 @@ class RequestService:
         Args:
             db: Database session
             user: Current user (for region filtering)
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
 
         Returns:
             Dict with view counts
         """
         from crud.service_request_crud import ServiceRequestCRUD
 
-        return await ServiceRequestCRUD.get_view_counts(db, user, business_unit_id)
+        return await ServiceRequestCRUD.get_view_counts(db, user, business_unit_ids)
 
     @staticmethod
     @safe_database_query("get_view_filter_counts", default_return={"all": 0, "parents": 0, "subtasks": 0})
@@ -1269,7 +1269,7 @@ class RequestService:
         db: AsyncSession,
         user: User,
         view_type: str,
-        business_unit_id: int | None = None,
+        business_unit_ids: list[int] | None = None,
     ) -> dict[str, int]:
         """
         Get ticket type counts (all/parents/subtasks) for a specific view.
@@ -1280,7 +1280,7 @@ class RequestService:
             db: Database session
             user: Current user (for region filtering)
             view_type: View type to count (unassigned, all_unsolved, etc.)
-            business_unit_id: Optional filter. If -1, shows unassigned (null BU). If positive int, filters by specific BU.
+            business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
 
         Returns:
             Dict with keys: all, parents, subtasks
@@ -1292,7 +1292,7 @@ class RequestService:
         base_stmt = await ServiceRequestCRUD.build_view_base_query(
             user=user,
             view_type=view_type,
-            business_unit_id=business_unit_id
+            business_unit_ids=business_unit_ids
         )
 
         # Count total records

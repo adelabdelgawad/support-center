@@ -22,6 +22,8 @@ AVAILABLE_TABS = [
     "pending_subtask",
     "new_today",
     "in_progress",
+    "all_tickets",
+    "all_solved",
 ]
 
 

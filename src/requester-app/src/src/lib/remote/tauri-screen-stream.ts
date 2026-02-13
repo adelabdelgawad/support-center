@@ -9,10 +9,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Resolution profiles for different network conditions
- * - standard: 960x540 @ quality 95 - balanced for most networks
- * - extreme: 1920x1080 @ quality 97 - optimal for local network (best visual quality)
+ * - standard: 960x540 @ quality 97 - low bandwidth fallback
+ * - high: 1280x720 @ quality 98 - balanced quality/bandwidth
+ * - extreme: 1920x1080 @ quality 100 - best quality for local network (default)
  */
-export type ResolutionProfile = "standard" | "extreme";
+export type ResolutionProfile = "standard" | "high" | "extreme";
 
 export interface ResolutionConfig {
   width: number;
@@ -26,7 +27,13 @@ export const RESOLUTION_PROFILES: Record<ResolutionProfile, ResolutionConfig> = 
     width: 960,
     height: 540,
     captureCommand: "capture_monitor_stream",
-    description: "Standard (960x540) - Balanced quality/bandwidth",
+    description: "Standard (960x540) - Low bandwidth",
+  },
+  high: {
+    width: 1280,
+    height: 720,
+    captureCommand: "capture_monitor_stream_high",
+    description: "High (1280x720) - Balanced quality/bandwidth",
   },
   extreme: {
     width: 1920,
