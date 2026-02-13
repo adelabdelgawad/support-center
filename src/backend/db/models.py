@@ -552,9 +552,9 @@ class RequestAssignee(TableModel, table=True):
     __tablename__ = "request_assignees"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -762,9 +762,9 @@ class RequestResolution(TableModel, table=True):
     __tablename__ = "request_resolutions"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -1778,12 +1778,10 @@ class ServiceRequest(TableModel, table=True):
 
     __tablename__ = "service_requests"
 
-    id: Optional[UUID] = Field(
-        default_factory=uuid4,
-        sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True), primary_key=True, nullable=False
-        ),
-        description="Unique UUID identifier for the service request",
+    id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, primary_key=True, autoincrement=True, nullable=False),
+        description="Unique integer identifier for the service request",
     )
 
     # User relationships
@@ -1927,10 +1925,10 @@ class ServiceRequest(TableModel, table=True):
     )
 
     # Sub-task hierarchy (self-referential)
-    parent_task_id: Optional[UUID] = Field(
+    parent_task_id: Optional[int] = Field(
         default=None,
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=True,
         ),
@@ -2193,9 +2191,9 @@ class ChatMessage(TableModel, table=True):
         description="Message UUID",
     )
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -2350,9 +2348,9 @@ class ChatReadState(TableModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -2452,9 +2450,9 @@ class Screenshot(TableModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -2582,9 +2580,9 @@ class ChatFile(TableModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -2720,9 +2718,9 @@ class RequestScreenshotLink(TableModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -3133,9 +3131,9 @@ class RequestNote(TableModel, table=True):
     __tablename__ = "request_notes"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -3404,9 +3402,9 @@ class WhatsAppBatch(TableModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
-    request_id: UUID = Field(
+    request_id: int = Field(
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=False,
         ),
@@ -4201,10 +4199,10 @@ class RemoteAccessSession(TableModel, table=True):
         sa_column=Column(PostgreSQL_UUID(as_uuid=True), primary_key=True),
         description="Session UUID for reconnection",
     )
-    request_id: Optional[UUID] = Field(
+    request_id: Optional[int] = Field(
         default=None,
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=True,
         ),
@@ -4330,10 +4328,10 @@ class NotificationEvent(TableModel, table=True):
         sa_column=Column(String(50), nullable=False),
         description="Event type: subscription_added, subscription_removed, new_message, system, ticket_update",
     )
-    request_id: Optional[UUID] = Field(
+    request_id: Optional[int] = Field(
         default=None,
         sa_column=Column(
-            PostgreSQL_UUID(as_uuid=True),
+            Integer,
             ForeignKey("service_requests.id", ondelete="CASCADE"),
             nullable=True,
         ),

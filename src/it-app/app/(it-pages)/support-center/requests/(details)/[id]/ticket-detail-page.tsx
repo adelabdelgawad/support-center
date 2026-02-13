@@ -27,6 +27,7 @@ export function TicketDetailPage({ pageData }: TicketDetailsProps) {
         priorities={pageData.priorities}
         statuses={pageData.statuses}
         categories={pageData.categories}
+        sections={pageData.sections}
         notes={pageData.notes}
         assignees={pageData.assignees}
         initialMessages={pageData.initialMessages}

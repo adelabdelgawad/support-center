@@ -12,6 +12,7 @@ export interface Assignee {
   username: string;
   fullName: string | null;
   title: string | null;
+  office: string | null;
   assignTypeId?: number; // Optional - may not be present in combined endpoint
   assignedBy: string | null; // UUID string from backend
   assignedByName: string | null;
@@ -22,7 +23,7 @@ export interface Assignee {
  * Response from the assignees endpoint
  */
 export interface AssigneesResponse {
-  requestId: string;
+  requestId: number;
   assignees: Assignee[];
   total: number;
 }
@@ -41,7 +42,7 @@ export interface TechnicianInfo {
  * Options for useRequestAssignees hook
  */
 export interface UseRequestAssigneesOptions {
-  requestId: string;
+  requestId: number;
   initialData?: Assignee[];
   /** Optional: Provide technicians from shared cache for better optimistic updates */
   technicians?: TechnicianInfo[];
@@ -102,7 +103,7 @@ export function useRequestAssignees(
       const response = await apiClient.post<{
         success: boolean;
         message: string;
-        requestId: string;
+        requestId: number;
         assignees: Assignee[];
         total: number;
       }>(`/api/requests-details/${requestId}/assignees`, { technicianId });
@@ -157,7 +158,7 @@ export function useRequestAssignees(
       const response = await apiClient.delete<{
         success: boolean;
         message: string;
-        requestId: string;
+        requestId: number;
         assignees: Assignee[];
         total: number;
       }>(`/api/requests-details/${requestId}/assignees`, { technicianId });
@@ -232,6 +233,7 @@ export function useRequestAssignees(
       username: currentUser.username,
       fullName: currentUser.fullName || currentUser.username,
       title: currentUser.title || null,
+      office: null,
       assignTypeId: 1,
       assignedBy: currentUser.id,
       assignedByName: currentUser.fullName || currentUser.username,

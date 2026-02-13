@@ -18,6 +18,7 @@ import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/m
 import type { ChatMessage, TaskStatusChangedEvent } from '@/lib/signalr/types';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
 import type { Category } from '@/lib/hooks/use-categories';
+import type { Section } from '@/lib/api/sections';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 
 // Import split contexts
@@ -44,6 +45,7 @@ interface RequestDetailProviderProps {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];
+  sections: Section[];
   notes: RequestNote[];
   assignees: Assignee[];
   initialMessages: ChatMessage[];
@@ -67,6 +69,7 @@ export function RequestDetailProvider({
   priorities,
   statuses,
   categories: initialCategories,
+  sections: initialSections,
   notes: initialNotes,
   assignees: initialAssignees,
   initialMessages,
@@ -156,6 +159,7 @@ export function RequestDetailProvider({
         priorities={priorities}
         statuses={statuses}
         categories={initialCategories}
+        sections={initialSections}
         notes={initialNotes}
         assignees={initialAssignees}
         currentUserId={currentUserId ? String(currentUserId) : undefined}

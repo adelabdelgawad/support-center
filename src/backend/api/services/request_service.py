@@ -95,6 +95,37 @@ class RequestService:
         return None
 
     @staticmethod
+    async def validate_technician_assignment_requirement(
+        db: AsyncSession, request: "ServiceRequest"
+    ) -> None:
+        """
+        Validate that a technician is assigned before allowing status changes.
+
+        Business Rule: Status cannot change if the request has no assigned technician.
+
+        Checks both:
+        - request_assignees table (for parent requests)
+        - assigned_to_technician_id field (for sub-tasks)
+        """
+        if request.assigned_to_technician_id:
+            return
+
+        result = await db.execute(
+            select(func.count())
+            .select_from(RequestAssignee)
+            .where(
+                RequestAssignee.request_id == request.id,
+                RequestAssignee.is_deleted == False,
+            )
+        )
+        assignee_count = result.scalar()
+
+        if not assignee_count:
+            raise ValueError(
+                "Cannot change request status: no technician is assigned to this request"
+            )
+
+    @staticmethod
     def validate_resolution_requirement(
         status_id: int, resolution: Optional[str]
     ) -> None:
@@ -384,6 +415,12 @@ class RequestService:
         if not request:
             raise NotFoundError(f"Service request with ID {request_id} not found")
 
+        # Business rule: Cannot change status if no technician is assigned
+        if "status_id" in update_dict:
+            await RequestService.validate_technician_assignment_requirement(
+                db, request
+            )
+
         # Apply business rule validations and processing
         processed_updates = RequestService._validate_and_process_update(
             request, update_dict
@@ -453,8 +490,14 @@ class RequestService:
         if not request:
             raise ValueError(f"Service request with ID {request_id} not found")
 
-        # Business rule: Cannot change to resolved/closed without description
+        # Business rule: Cannot change status if no technician is assigned
         new_status_id = update_dict.get("status_id")
+        if new_status_id:
+            await RequestService.validate_technician_assignment_requirement(
+                db, request
+            )
+
+        # Business rule: Cannot change to resolved/closed without description
         if new_status_id in [6, 8]:
             final_description = update_dict.get("description") or request.description
             if not final_description:
@@ -1008,6 +1051,7 @@ class RequestService:
             priority_id=request.priority_id,
             requester_id=request.requester_id,
             subcategory_id=request.subcategory_id,
+            assigned_to_section_id=request.assigned_to_section_id,
             created_at=request.created_at,
             updated_at=request.updated_at,
             assigned_at=request.assigned_at,
@@ -2016,6 +2060,9 @@ class RequestService:
                         if assignment.assignee
                         else None,
                         title=assignment.assignee.title
+                        if assignment.assignee
+                        else None,
+                        office=assignment.assignee.office
                         if assignment.assignee
                         else None,
                         assigned_by=assignment.assigned_by,

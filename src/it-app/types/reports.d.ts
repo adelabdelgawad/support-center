@@ -105,7 +105,7 @@ export interface ExecutiveDashboardData {
 // =============================================================================
 
 export interface SLABreachItem {
-  requestId: string;
+  requestId: number;
   title: string;
   requesterName?: string;
   assignedTechnician?: string;

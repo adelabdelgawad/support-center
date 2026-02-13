@@ -98,7 +98,7 @@ const RemoteAccessContext = createContext<RemoteAccessContextType | undefined>(u
 
 interface RemoteAccessProviderProps {
   children: ReactNode;
-  requestId: string;
+  requestId: number;
 }
 
 export function RemoteAccessProvider({ children, requestId }: RemoteAccessProviderProps) {

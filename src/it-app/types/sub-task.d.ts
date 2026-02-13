@@ -1,6 +1,6 @@
 export interface SubTask {
   id: string;
-  requestId: string;
+  requestId: number;
   title: string;
   description?: string;
   statusId: number;
@@ -34,7 +34,7 @@ export interface SubTaskDetail extends SubTask {
 }
 
 export interface SubTaskCreate {
-  requestId: string;
+  requestId: number;
   title: string;
   description?: string;
   priorityId?: number;

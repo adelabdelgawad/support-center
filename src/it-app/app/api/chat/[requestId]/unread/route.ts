@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { makeAuthenticatedRequest, getServerErrorMessage } from '@/lib/api/server-fetch';
 
 interface ChatUnreadResponse {
-  requestId: string;
+  requestId: number;
   unreadCount: number;
   lastReadAt: string | null;
 }

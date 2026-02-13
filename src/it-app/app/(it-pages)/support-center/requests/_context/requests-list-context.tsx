@@ -1,58 +1,68 @@
 'use client';
 
-/**
- * Requests List Provider
- * Provides centralized data and actions for the requests list page
- *
- * NOW SPLIT into three separate contexts to prevent unnecessary re-renders:
- * 1. RequestsListDataContext - tickets, pagination, filter counts, view counts
- * 2. RequestsListCountsContext - view counts (from data provider), business unit counts
- * 3. RequestsListUIContext - active view, view changing state
- *
- * Each context independently memoizes its value, so changes in one context
- * don't cause re-renders in components that only consume the other contexts.
- */
-
-import type { ViewType } from '@/types/requests-list';
-import type { TechnicianViewsResponse } from '@/types/requests-list';
+import { createContext, useContext, useMemo, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
+import { getTechnicianViews, getBusinessUnitCounts } from '@/lib/api/requests-list';
+import { cacheKeys } from '@/lib/swr/cache-keys';
+import type {
+  RequestListItem,
+  ViewType,
+  TicketTypeCounts,
+  ViewCounts,
+  ViewItem,
+  TechnicianViewsResponse,
+} from '@/types/requests-list';
 import type { BusinessUnitCountsResponse } from '@/lib/actions/requests-list-actions';
-import { RequestsListDataProvider, useRequestsListData, type RequestsListDataContextType } from './requests-list-data-context';
-import { RequestsListCountsProvider, useRequestsListCounts, type RequestsListCountsContextType } from './requests-list-counts-context';
-import { RequestsListUIProvider, useRequestsListUI, type RequestsListUIContextType } from './requests-list-ui-context';
 
-// Re-export types from individual contexts for backward compatibility
-export type { RequestsListDataContextType, RequestsListCountsContextType, RequestsListUIContextType };
+// Single source of truth for view display names
+export const viewDisplayNames: Record<string, string> = {
+  unassigned: 'Unassigned tickets',
+  all_unsolved: 'All unsolved tickets',
+  my_unsolved: 'Your unsolved tickets',
+  recently_updated: 'Recently updated tickets',
+  recently_solved: 'Recently solved tickets',
+  all_your_requests: 'All your requests',
+  urgent_high_priority: 'Urgent / High priority',
+  pending_requester_response: 'Pending requester response',
+  pending_subtask: 'Pending subtask',
+  new_today: 'New today',
+  in_progress: 'In progress',
+  all_tickets: 'All tickets',
+  all_solved: 'All solved tickets',
+};
 
-/**
- * Bridge component that reads counts from data provider and passes to counts provider
- * This eliminates the redundant double-fetch of view counts
- */
-function CountsBridge({
-  children,
-  initialBusinessUnitsData,
-  initialView,
-  visibleTabs,
-}: {
-  children: React.ReactNode;
-  initialBusinessUnitsData: BusinessUnitCountsResponse;
-  initialView: string;
-  visibleTabs?: ViewType[];
-}) {
-  // Read counts from data provider (already fetched with tickets)
-  const { counts } = useRequestsListData();
+interface RequestsListContextType {
+  // Ticket data
+  tickets: RequestListItem[];
+  filterCounts: TicketTypeCounts;
+  counts: ViewCounts;
+  total: number;
+  currentPage: number;
+  perPage: number;
 
-  return (
-    <RequestsListCountsProvider
-      initialData={{ counts }}
-      initialBusinessUnitsData={initialBusinessUnitsData}
-      initialView={initialView}
-      visibleTabs={visibleTabs}
-      countsFromData={counts}
-    >
-      {children}
-    </RequestsListCountsProvider>
-  );
+  // View state
+  activeView: ViewType;
+  activeViewDisplayName: string;
+  viewItems: ViewItem[];
+
+  // Business units
+  allBusinessUnits: Array<{ id: number; name: string; count: number }>;
+  unassignedCount: number;
+
+  // Loading states
+  isLoading: boolean;
+  isValidating: boolean;
+  isCountsReady: boolean;
+  isBusinessUnitsValidating: boolean;
+
+  // Actions
+  refresh: () => Promise<void>;
+  decrementViewCount: (view: keyof ViewCounts, amount?: number) => Promise<void>;
+  incrementViewCount: (view: keyof ViewCounts, amount?: number) => Promise<void>;
 }
+
+const RequestsListContext = createContext<RequestsListContextType | undefined>(undefined);
 
 interface RequestsListProviderProps {
   children: React.ReactNode;
@@ -64,62 +74,232 @@ interface RequestsListProviderProps {
   visibleTabs?: ViewType[];
 }
 
-/**
- * Combined provider that wraps all three split providers
- * This maintains the same API as the original monolithic provider
- */
 export function RequestsListProvider({
   children,
   initialData,
   initialBusinessUnitsData,
   initialView,
   initialPage,
-  businessUnitIds,
+  businessUnitIds: initialBusinessUnitIds,
   visibleTabs,
 }: RequestsListProviderProps) {
+  // Read current state from URL
+  const searchParams = useSearchParams();
+
+  const urlView = (searchParams.get('view') as ViewType) || initialView;
+  const urlPage = searchParams.get('page') ? parseInt(searchParams.get('page')!, 10) : initialPage;
+  const urlPerPage = searchParams.get('perPage') ? parseInt(searchParams.get('perPage')!, 10) : initialData.perPage;
+  const urlBusinessUnitIds = useMemo(() => {
+    const param = searchParams.get('business_unit_ids');
+    if (param) {
+      return param.split(',').map(id => parseInt(id, 10));
+    }
+    return initialBusinessUnitIds;
+  }, [searchParams, initialBusinessUnitIds]);
+  const urlUnread = searchParams.get('unread') === 'true';
+
+  // Save current URL to sessionStorage for back navigation from details page
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('view', urlView);
+    params.set('page', urlPage.toString());
+    params.set('perPage', urlPerPage.toString());
+    if (urlBusinessUnitIds && urlBusinessUnitIds.length > 0) {
+      params.set('business_unit_ids', urlBusinessUnitIds.join(','));
+    }
+    if (urlUnread) {
+      params.set('unread', 'true');
+    }
+    const fullUrl = `/support-center/requests?${params.toString()}`;
+    sessionStorage.setItem('requests-list-url', fullUrl);
+  }, [urlView, urlPage, urlPerPage, urlBusinessUnitIds, urlUnread]);
+
+  // --- Tickets SWR ---
+  const {
+    data: ticketsData,
+    isLoading: ticketsIsLoading,
+    isValidating: ticketsIsValidating,
+    mutate: mutateTickets,
+  } = useSWR<TechnicianViewsResponse>(
+    cacheKeys.technicianViews(urlView, urlPage, urlPerPage, urlBusinessUnitIds),
+    () => getTechnicianViews(urlView, urlPage, urlPerPage, urlBusinessUnitIds),
+    {
+      fallbackData: initialData,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      refreshInterval: 60000,
+      dedupingInterval: 2000,
+      keepPreviousData: true,
+    }
+  );
+
+  // --- Business Units SWR ---
+  const {
+    data: businessUnitsData,
+    isValidating: businessUnitsIsValidating,
+    mutate: mutateBusinessUnits,
+  } = useSWR<BusinessUnitCountsResponse>(
+    cacheKeys.businessUnitCounts(urlView),
+    () => getBusinessUnitCounts(urlView),
+    {
+      fallbackData: initialBusinessUnitsData,
+      revalidateOnMount: !initialBusinessUnitsData,
+      revalidateOnFocus: false,
+      refreshInterval: 60000,
+      dedupingInterval: 10000,
+      keepPreviousData: true,
+    }
+  );
+
+  // --- Return-from-details refresh (single check) ---
+  const hasCheckedReturn = useRef(false);
+  useEffect(() => {
+    if (hasCheckedReturn.current) return;
+    hasCheckedReturn.current = true;
+
+    const flag = sessionStorage.getItem('returning-from-details');
+    if (flag === 'true') {
+      sessionStorage.removeItem('returning-from-details');
+      mutateTickets();
+      mutateBusinessUnits();
+    }
+  }, [mutateTickets, mutateBusinessUnits]);
+
+  // --- Derive values from SWR data ---
+  const resolvedTickets = ticketsData ?? initialData;
+
+  const tickets = resolvedTickets.data;
+  const filterCounts = resolvedTickets.filterCounts;
+  const counts = resolvedTickets.counts;
+  const total = resolvedTickets.total;
+  const currentPage = resolvedTickets.page ?? urlPage;
+  const perPage = resolvedTickets.perPage ?? urlPerPage;
+
+  const hasData = ticketsData !== undefined;
+  const isLoading = !hasData && ticketsIsLoading;
+
+  const allBusinessUnits = businessUnitsData?.businessUnits ?? initialBusinessUnitsData.businessUnits;
+  const unassignedCount = businessUnitsData?.unassignedCount ?? initialBusinessUnitsData.unassignedCount;
+
+  // --- Optimistic count updates ---
+  const [countOverrides, setCountOverrides] = useState<Partial<ViewCounts>>({});
+
+  // Reset overrides when SWR data changes (server has latest)
+  const countsRef = useRef(counts);
+  useEffect(() => {
+    if (counts !== countsRef.current) {
+      countsRef.current = counts;
+      setCountOverrides({});
+    }
+  }, [counts]);
+
+  const effectiveCounts = useMemo(() => {
+    if (Object.keys(countOverrides).length === 0) return counts;
+    return { ...counts, ...countOverrides };
+  }, [counts, countOverrides]);
+
+  const decrementViewCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
+    setCountOverrides(prev => ({
+      ...prev,
+      [view]: Math.max(0, (prev[view] ?? counts[view]) - amount),
+    }));
+  }, [counts]);
+
+  const incrementViewCount = useCallback(async (view: keyof ViewCounts, amount: number = 1) => {
+    setCountOverrides(prev => ({
+      ...prev,
+      [view]: (prev[view] ?? counts[view]) + amount,
+    }));
+  }, [counts]);
+
+  // --- View items ---
+  const activeViewDisplayName = viewDisplayNames[urlView] ?? urlView;
+
+  const viewItems: ViewItem[] = useMemo(() => {
+    const allViewItems = [
+      { name: viewDisplayNames.unassigned, count: effectiveCounts.unassigned, viewType: 'unassigned' },
+      { name: viewDisplayNames.all_unsolved, count: effectiveCounts.allUnsolved, viewType: 'all_unsolved' },
+      { name: viewDisplayNames.my_unsolved, count: effectiveCounts.myUnsolved, viewType: 'my_unsolved' },
+      { name: viewDisplayNames.recently_updated, count: effectiveCounts.recentlyUpdated, viewType: 'recently_updated' },
+      { name: viewDisplayNames.recently_solved, count: effectiveCounts.recentlySolved, viewType: 'recently_solved' },
+      { name: viewDisplayNames.all_your_requests, count: effectiveCounts.allYourRequests, viewType: 'all_your_requests' },
+      { name: viewDisplayNames.urgent_high_priority, count: effectiveCounts.urgentHighPriority, viewType: 'urgent_high_priority' },
+      { name: viewDisplayNames.pending_requester_response, count: effectiveCounts.pendingRequesterResponse, viewType: 'pending_requester_response' },
+      { name: viewDisplayNames.pending_subtask, count: effectiveCounts.pendingSubtask, viewType: 'pending_subtask' },
+      { name: viewDisplayNames.new_today, count: effectiveCounts.newToday, viewType: 'new_today' },
+      { name: viewDisplayNames.in_progress, count: effectiveCounts.inProgress, viewType: 'in_progress' },
+      { name: viewDisplayNames.all_tickets, count: effectiveCounts.allTickets, viewType: 'all_tickets' },
+      { name: viewDisplayNames.all_solved, count: effectiveCounts.allSolved, viewType: 'all_solved' },
+    ];
+
+    if (visibleTabs && visibleTabs.length > 0) {
+      return allViewItems
+        .filter(item => visibleTabs.includes(item.viewType as ViewType))
+        .map(({ name, count }) => ({ name, count }));
+    }
+
+    return allViewItems.map(({ name, count }) => ({ name, count }));
+  }, [effectiveCounts, visibleTabs]);
+
+  // --- Refresh ---
+  const refresh = useCallback(async () => {
+    await Promise.all([mutateTickets(), mutateBusinessUnits()]);
+  }, [mutateTickets, mutateBusinessUnits]);
+
+  // --- Context value ---
+  const value: RequestsListContextType = useMemo(
+    () => ({
+      tickets,
+      filterCounts,
+      counts: effectiveCounts,
+      total,
+      currentPage,
+      perPage,
+      activeView: urlView,
+      activeViewDisplayName,
+      viewItems,
+      allBusinessUnits,
+      unassignedCount,
+      isLoading,
+      isValidating: ticketsIsValidating,
+      isCountsReady: true,
+      isBusinessUnitsValidating: businessUnitsIsValidating,
+      refresh,
+      decrementViewCount,
+      incrementViewCount,
+    }),
+    [
+      tickets,
+      filterCounts,
+      effectiveCounts,
+      total,
+      currentPage,
+      perPage,
+      urlView,
+      activeViewDisplayName,
+      viewItems,
+      allBusinessUnits,
+      unassignedCount,
+      isLoading,
+      ticketsIsValidating,
+      businessUnitsIsValidating,
+      refresh,
+      decrementViewCount,
+      incrementViewCount,
+    ]
+  );
+
   return (
-    <RequestsListUIProvider
-      initialData={initialData}
-      initialView={initialView}
-      initialPage={initialPage}
-      businessUnitIds={businessUnitIds}
-    >
-      <RequestsListDataProvider
-        initialData={initialData}
-        initialView={initialView}
-        initialPage={initialPage}
-        businessUnitIds={businessUnitIds}
-      >
-        <CountsBridge
-          initialBusinessUnitsData={initialBusinessUnitsData}
-          initialView={initialView}
-          visibleTabs={visibleTabs}
-        >
-          {children}
-        </CountsBridge>
-      </RequestsListDataProvider>
-    </RequestsListUIProvider>
+    <RequestsListContext.Provider value={value}>
+      {children}
+    </RequestsListContext.Provider>
   );
 }
 
-/**
- * Combined hook that returns values from all three contexts
- * Maintains backward compatibility with existing code
- */
 export function useRequestsListContext() {
-  const data = useRequestsListData();
-  const counts = useRequestsListCounts();
-  const ui = useRequestsListUI();
-
-  // Combine all context values into a single object
-  return {
-    ...data,
-    ...counts,
-    ...ui,
-  };
+  const context = useContext(RequestsListContext);
+  if (context === undefined) {
+    throw new Error('useRequestsListContext must be used within a RequestsListProvider');
+  }
+  return context;
 }
-
-// Re-export individual hooks for granular access
-export { useRequestsListData } from './requests-list-data-context';
-export { useRequestsListCounts } from './requests-list-counts-context';
-export { useRequestsListUI } from './requests-list-ui-context';

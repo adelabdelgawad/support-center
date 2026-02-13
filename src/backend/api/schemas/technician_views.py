@@ -71,12 +71,15 @@ class SubcategoryInfo(HTTPSchemaModel):
 class TechnicianRequestListItem(HTTPSchemaModel):
     """Single request item in technician views."""
 
-    id: UUID
+    id: int
     status: StatusInfo
     subject: str
     requester: RequesterInfo
     requested: datetime  # created_at
+    requested_duration: str  # Formatted duration (e.g., "5 hours ago", "Just now")
     due_date: Optional[datetime] = None  # SLA-based due date
+    due_date_duration: str  # Formatted duration (e.g., "in 5h", "2d 3h overdue")
+    is_due_date_overdue: bool  # Whether the due date is overdue
     priority: PriorityInfo
     last_message: Optional[LastMessageInfo] = None
     business_unit: Optional[BusinessUnitInfo] = None

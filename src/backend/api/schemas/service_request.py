@@ -31,7 +31,7 @@ class ServiceRequestBase(HTTPSchemaModel):
     business_unit_id: Optional[int] = None  # Auto-assigned or manually set
 
     # Sub-task hierarchy
-    parent_task_id: Optional[UUID] = None
+    parent_task_id: Optional[int] = None
 
     # Assignment tracking
     assigned_to_section_id: Optional[int] = None
@@ -117,7 +117,7 @@ class SubTaskCreate(HTTPSchemaModel):
 class ServiceRequestRead(ServiceRequestBase):
     """Schema for reading service request data."""
 
-    id: UUID  # UUID that will be serialized as string in JSON
+    id: int
     requester_id: UUID
     status_id: int
     created_at: datetime
@@ -141,7 +141,7 @@ class ServiceRequestRead(ServiceRequestBase):
 class ServiceRequestListItem(HTTPSchemaModel):
     """Lightweight schema for service request lists."""
 
-    id: UUID  # UUID that will be serialized as string in JSON
+    id: int
     title: str
     subcategory_id: Optional[int] = None
     business_unit_id: Optional[int] = None
@@ -153,7 +153,7 @@ class ServiceRequestListItem(HTTPSchemaModel):
     due_date: Optional[datetime] = None
 
     # Sub-task fields
-    parent_task_id: Optional[UUID] = None
+    parent_task_id: Optional[int] = None
     is_blocked: bool = False
     assigned_to_section_id: Optional[int] = None
     assigned_to_technician_id: Optional[UUID] = None
@@ -259,7 +259,7 @@ class RequesterInfo(HTTPSchemaModel):
 class TechnicianInfo(HTTPSchemaModel):
     """Technician/Creator information for subtask detail view."""
 
-    id: UUID
+    id: int
     username: str
     full_name: Optional[str] = None
     email: Optional[str] = None
@@ -297,13 +297,14 @@ class SubcategoryInfo(HTTPSchemaModel):
 class ServiceRequestDetailRead(HTTPSchemaModel):
     """Detailed service request schema with nested relationships."""
 
-    id: UUID
+    id: int
     title: str
     description: Optional[str] = None
     status_id: int
     priority_id: int
     requester_id: UUID
     subcategory_id: Optional[int] = None
+    assigned_to_section_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     assigned_at: Optional[datetime] = None
@@ -316,7 +317,7 @@ class ServiceRequestDetailRead(HTTPSchemaModel):
     requester: RequesterInfo
     subcategory: Optional[SubcategoryInfo] = None
     # Sub-task information
-    parent_request_id: Optional[UUID] = None  # If this is a sub-task
+    parent_request_id: Optional[int] = None  # If this is a sub-task
     parent_request_title: Optional[str] = None
     created_by_technician: Optional[TechnicianInfo] = (
         None  # Technician who created this (for subtasks)
@@ -331,6 +332,7 @@ class AssigneeInfo(HTTPSchemaModel):
     username: str
     full_name: Optional[str] = None
     title: Optional[str] = None
+    office: Optional[str] = None
     assigned_by: Optional[UUID] = None
     assigned_by_name: Optional[str] = None
     created_at: datetime
@@ -339,7 +341,7 @@ class AssigneeInfo(HTTPSchemaModel):
 class RequestAssigneesResponse(HTTPSchemaModel):
     """Response schema for request assignees list."""
 
-    request_id: UUID
+    request_id: int
     assignees: List[AssigneeInfo]
     total: int
 
@@ -347,7 +349,7 @@ class RequestAssigneesResponse(HTTPSchemaModel):
 class RequestAssigneesDetailedResponse(HTTPSchemaModel):
     """Response schema for detailed assignees (technicians only after CC removal)."""
 
-    request_id: UUID
+    request_id: int
     technicians: List[AssigneeInfo]  # All assignees (CC removed)
     cc_members: List[AssigneeInfo] = []  # Kept for backward compatibility, always empty
     total_technicians: int

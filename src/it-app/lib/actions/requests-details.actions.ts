@@ -166,6 +166,7 @@ interface BackendAssignee {
   username: string;
   fullName: string | null;
   title: string | null;
+  office: string | null;
   assignTypeId: number;
   assignedBy: string | null;
   assignedByName: string | null;
@@ -176,7 +177,7 @@ interface BackendAssignee {
  * Backend response wrapper for assignees endpoint
  */
 interface AssigneesResponse {
-  requestId: string;
+  requestId: number;
   assignees: BackendAssignee[];
   total: number;
 }
@@ -191,6 +192,7 @@ function transformAssignee(item: BackendAssignee): Assignee {
     username: item.username,
     fullName: item.fullName,
     title: item.title,
+    office: item.office ?? null,
     assignTypeId: item.assignTypeId,
     assignedBy: item.assignedBy,
     assignedByName: item.assignedByName,
@@ -352,6 +354,7 @@ export async function getRequestDetailsPageData(
       priorities,
       statuses,
       categories,
+      sections: [],
       notes: fullDetails.notes || [],
       assignees: transformedAssignees,
       initialMessages: fullDetails.initialMessages || [],

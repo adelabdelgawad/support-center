@@ -130,8 +130,7 @@ class ActiveDirectoryConfigUpdate(HTTPSchemaModel):
 
 class ActiveDirectoryConfigRead(ActiveDirectoryConfigBase):
     """Schema for reading Active Directory configuration (excludes password)."""
-
-    id: UUID
+    id: int
     is_active: bool
     has_password: bool  # Computed field indicating password exists
     organizational_units: List[str] = []

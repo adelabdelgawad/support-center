@@ -79,7 +79,10 @@ export interface RequestListItem {
   subject: string;
   requester: RequesterInfo;
   requested: string; // ISO datetime string
+  requestedDuration: string; // Formatted duration (e.g., "5 hours ago", "Just now")
   dueDate: string | null; // ISO datetime string - SLA-based due date
+  dueDateDuration: string; // Formatted duration (e.g., "in 5h", "2d 3h overdue")
+  isDueDateOverdue: boolean; // Whether the due date is overdue
   priority: PriorityInfo;
   businessUnit: BusinessUnitInfo | null;
   lastMessage: LastMessageInfo | null;

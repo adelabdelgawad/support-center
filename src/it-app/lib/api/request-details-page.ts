@@ -10,6 +10,7 @@ import type { Technician, Priority, RequestNote, RequestStatus } from '@/types/m
 import type { ChatMessage } from '@/lib/signalr/types';
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 import type { Category } from '@/lib/hooks/use-categories';
+import type { Section } from '@/lib/api/sections';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
 
 interface BackendAssignee {
@@ -18,6 +19,7 @@ interface BackendAssignee {
   username: string;
   fullName: string | null;
   title: string | null;
+  office: string | null;
   assignTypeId: number;
   assignedBy: string | null;
   assignedByName: string | null;
@@ -46,6 +48,7 @@ export interface RequestDetailsPageData {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];
+  sections: Section[];
   notes: RequestNote[];
   assignees: Assignee[];
   initialMessages: ChatMessage[];
@@ -68,6 +71,7 @@ function transformAssignee(item: BackendAssignee): Assignee {
     username: item.username,
     fullName: item.fullName,
     title: item.title,
+    office: item.office,
     assignTypeId: item.assignTypeId,
     assignedBy: item.assignedBy,
     assignedByName: item.assignedByName,
@@ -101,6 +105,7 @@ interface RequestDetailsMetadata {
   statuses: RequestStatus[];
   technicians: Technician[];
   categories: Category[];
+  sections: Section[];
 }
 
 /**
@@ -119,6 +124,7 @@ export async function fetchRequestDetailsMetadata(): Promise<RequestDetailsMetad
       statuses: [],
       technicians: [],
       categories: [],
+      sections: [],
     };
   }
 
@@ -162,6 +168,7 @@ export async function fetchRequestDetailsPageData(
       priorities: metadata.priorities,
       statuses: metadata.statuses,
       categories: metadata.categories,
+      sections: metadata.sections,
       notes: fullDetails.notes || [],
       assignees: transformedAssignees,
       initialMessages: fullDetails.initialMessages || [],

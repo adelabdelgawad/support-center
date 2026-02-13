@@ -11,7 +11,7 @@ import { formatApiError, logError } from '@/lib/api/error-handler';
 
 interface RouteContext {
   params: Promise<{
-    requestId: string;
+    requestId: number;
   }>;
 }
 

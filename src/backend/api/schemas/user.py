@@ -25,9 +25,7 @@ class UserBase(HTTPSchemaModel):
     is_active: bool = True
     is_super_admin: bool = False
     phone_number: Optional[str] = Field(None, max_length=20)
-    title: Optional[str] = Field(
-        None, max_length=100, description="User's job title"
-    )
+    title: Optional[str] = Field(None, max_length=100, description="User's job title")
     office: Optional[str] = Field(
         None, max_length=100, description="User's office location"
     )
@@ -40,11 +38,23 @@ class UserBase(HTTPSchemaModel):
         description="Custom message explaining why user is blocked",
     )
     is_deleted: bool = False
-    language: Optional[str] = Field("ar", max_length=10, description="User's preferred language (en or ar)")
-    theme: Optional[str] = Field("system", max_length=10, description="User's preferred theme (light, dark, or system)")
-    notifications_enabled: Optional[bool] = Field(True, description="Whether desktop notifications are enabled")
-    sound_enabled: Optional[bool] = Field(True, description="Whether notification sounds are enabled")
-    sound_volume: Optional[float] = Field(0.5, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)")
+    language: Optional[str] = Field(
+        "ar", max_length=10, description="User's preferred language (en or ar)"
+    )
+    theme: Optional[str] = Field(
+        "system",
+        max_length=10,
+        description="User's preferred theme (light, dark, or system)",
+    )
+    notifications_enabled: Optional[bool] = Field(
+        True, description="Whether desktop notifications are enabled"
+    )
+    sound_enabled: Optional[bool] = Field(
+        True, description="Whether notification sounds are enabled"
+    )
+    sound_volume: Optional[float] = Field(
+        0.5, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
+    )
 
 
 class UserCreate(UserBase):
@@ -63,9 +73,7 @@ class UserUpdate(HTTPSchemaModel):
     is_active: Optional[bool] = None
     is_super_admin: Optional[bool] = None
     phone_number: Optional[str] = Field(None, max_length=20)
-    title: Optional[str] = Field(
-        None, max_length=100, description="User's job title"
-    )
+    title: Optional[str] = Field(None, max_length=100, description="User's job title")
     office: Optional[str] = Field(
         None, max_length=100, description="User's office location"
     )
@@ -78,11 +86,23 @@ class UserUpdate(HTTPSchemaModel):
         description="Custom message explaining why user is blocked",
     )
     is_deleted: Optional[bool] = None
-    language: Optional[str] = Field(None, max_length=10, description="User's preferred language (en or ar)")
-    theme: Optional[str] = Field(None, max_length=10, description="User's preferred theme (light, dark, or system)")
-    notifications_enabled: Optional[bool] = Field(None, description="Whether desktop notifications are enabled")
-    sound_enabled: Optional[bool] = Field(None, description="Whether notification sounds are enabled")
-    sound_volume: Optional[float] = Field(None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)")
+    language: Optional[str] = Field(
+        None, max_length=10, description="User's preferred language (en or ar)"
+    )
+    theme: Optional[str] = Field(
+        None,
+        max_length=10,
+        description="User's preferred theme (light, dark, or system)",
+    )
+    notifications_enabled: Optional[bool] = Field(
+        None, description="Whether desktop notifications are enabled"
+    )
+    sound_enabled: Optional[bool] = Field(
+        None, description="Whether notification sounds are enabled"
+    )
+    sound_volume: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
+    )
 
 
 class UserRead(UserBase):
@@ -103,6 +123,7 @@ class UserListItem(HTTPSchemaModel):
     full_name: Optional[str]
     email: Optional[str] = None
     title: Optional[str] = None
+    office: Optional[str] = None
     is_technician: bool
     is_online: bool
     is_active: bool
@@ -128,9 +149,7 @@ class UserProfileUpdate(HTTPSchemaModel):
     full_name: Optional[str] = Field(None, max_length=100)
     email: Optional[EmailStr] = None
     phone_number: Optional[str] = Field(None, max_length=20)
-    title: Optional[str] = Field(
-        None, max_length=100, description="User's job title"
-    )
+    title: Optional[str] = Field(None, max_length=100, description="User's job title")
     office: Optional[str] = Field(
         None, max_length=100, description="User's office location"
     )
@@ -183,12 +202,8 @@ class UserBlockRequest(HTTPSchemaModel):
     @model_validator(mode="after")
     def validate_block_message(self):
         """Validate that block_message is provided when blocking a user."""
-        if self.is_blocked and (
-            self.block_message is None or self.block_message == ""
-        ):
-            raise ValueError(
-                "block_message is required when is_blocked is True"
-            )
+        if self.is_blocked and (self.block_message is None or self.block_message == ""):
+            raise ValueError("block_message is required when is_blocked is True")
         return self
 
 
@@ -204,7 +219,7 @@ class UserBlockedResponse(HTTPSchemaModel):
 class UserRoleInfo(HTTPSchemaModel):
     """Simple role information for user responses."""
 
-    id: UUID
+    id: int
     name: str
 
 
@@ -324,11 +339,23 @@ class UserCountsResponse(HTTPSchemaModel):
 class UserPreferencesUpdate(HTTPSchemaModel):
     """Schema for updating user preferences."""
 
-    language: Optional[str] = Field(None, max_length=10, description="User's preferred language (en or ar)")
-    theme: Optional[str] = Field(None, max_length=10, description="User's preferred theme (light, dark, or system)")
-    notifications_enabled: Optional[bool] = Field(None, description="Whether desktop notifications are enabled")
-    sound_enabled: Optional[bool] = Field(None, description="Whether notification sounds are enabled")
-    sound_volume: Optional[float] = Field(None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)")
+    language: Optional[str] = Field(
+        None, max_length=10, description="User's preferred language (en or ar)"
+    )
+    theme: Optional[str] = Field(
+        None,
+        max_length=10,
+        description="User's preferred theme (light, dark, or system)",
+    )
+    notifications_enabled: Optional[bool] = Field(
+        None, description="Whether desktop notifications are enabled"
+    )
+    sound_enabled: Optional[bool] = Field(
+        None, description="Whether notification sounds are enabled"
+    )
+    sound_volume: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
+    )
 
     @model_validator(mode="after")
     def validate_preferences(self):

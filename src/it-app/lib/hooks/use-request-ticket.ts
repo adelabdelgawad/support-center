@@ -9,7 +9,7 @@ import type { Priority, RequestStatus } from '@/types/metadata';
  * Options for the useRequestTicket hook
  */
 export interface UseRequestTicketOptions {
-  requestId: string;
+  requestId: number;
   initialData?: ServiceRequestDetail;
   priorities?: Priority[];
   statuses?: RequestStatus[];

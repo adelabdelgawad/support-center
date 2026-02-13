@@ -19,6 +19,7 @@ import type { Technician, Priority, RequestStatus, RequestNote } from '@/types/m
 import type { Assignee } from '@/lib/hooks/use-request-assignees';
 import type { SubTask, SubTaskStats } from '@/types/sub-task';
 import type { Category } from '@/lib/hooks/use-categories';
+import type { Section } from '@/lib/api/sections';
 import type { TaskStatusChangedEvent, TicketUpdateEvent } from '@/lib/signalr/types';
 import { useRequestNotes } from '@/lib/hooks/use-request-notes';
 import { useRequestAssignees } from '@/lib/hooks/use-request-assignees';
@@ -33,6 +34,7 @@ export interface RequestDetailMetadataContextType {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];
+  sections: Section[];
 
   // Notes
   notes: RequestNote[];
@@ -114,6 +116,7 @@ interface RequestDetailMetadataProviderProps {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];
+  sections: Section[];
   notes: RequestNote[];
   assignees: Assignee[];
   currentUserId?: string;
@@ -134,6 +137,7 @@ export function RequestDetailMetadataProvider({
   priorities,
   statuses,
   categories: initialCategories,
+  sections: initialSections,
   notes: initialNotes,
   assignees: initialAssignees,
   currentUserId,
@@ -522,6 +526,7 @@ export function RequestDetailMetadataProvider({
       priorities: prioritiesData,
       statuses: statusesData,
       categories: initialCategories,
+      sections: initialSections,
       notes,
       notesLoading,
       addNote,
@@ -562,6 +567,7 @@ export function RequestDetailMetadataProvider({
       prioritiesData,
       statusesData,
       initialCategories,
+      initialSections,
       notes,
       notesLoading,
       addNote,

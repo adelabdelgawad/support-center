@@ -8,10 +8,12 @@ from .correlation import CorrelationIdMiddleware
 from .debug import DebugLoggingMiddleware
 from .security_headers import SecurityHeadersMiddleware
 from .origin_validation import OriginValidationMiddleware
+from .audit import AuditMiddleware
 
 __all__ = [
     "CorrelationIdMiddleware",
     "DebugLoggingMiddleware",
     "SecurityHeadersMiddleware",
     "OriginValidationMiddleware",
+    "AuditMiddleware",
 ]

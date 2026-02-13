@@ -113,8 +113,7 @@ class EmailConfigUpdate(HTTPSchemaModel):
 
 class EmailConfigRead(EmailConfigBase):
     """Schema for reading Email configuration (excludes password)."""
-
-    id: UUID
+    id: int
     is_active: bool
     has_password: bool  # Computed field indicating password exists
     created_at: datetime

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { useRequestsListCounts } from '../_context/requests-list-counts-context';
+import { useRequestsListContext } from '../_context/requests-list-context';
 
 interface BusinessUnit {
   id: number;
@@ -24,7 +24,7 @@ export function BusinessUnitFilter({
   onSelectionChange,
 }: BusinessUnitFilterProps) {
   // Use data from context instead of fetching independently
-  const { allBusinessUnits, isBusinessUnitsValidating } = useRequestsListCounts();
+  const { allBusinessUnits, isBusinessUnitsValidating } = useRequestsListContext();
 
   const [isExpanded, setIsExpanded] = useState(false);
 

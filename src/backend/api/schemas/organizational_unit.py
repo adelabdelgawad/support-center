@@ -24,7 +24,7 @@ class OrganizationalUnitCreate(OrganizationalUnitBase):
 
 class OrganizationalUnitRead(OrganizationalUnitBase):
     """Schema for reading an organizational unit."""
-    id: UUID = Field(..., description="Unique identifier")
+    id: int = Field(..., description="Unique identifier")
     is_enabled: bool = Field(default=True, description="Whether OU is enabled")
 
 

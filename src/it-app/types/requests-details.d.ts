@@ -21,6 +21,7 @@ import type { ScreenshotItem } from './media-viewer';
 // Connection status type - now part of SignalR context
 export type ConnectionAlertLevel = 'none' | 'info' | 'warning' | 'error';
 import type { Category } from '@/lib/hooks/use-categories';
+import type { Section } from '@/lib/api/sections';
 
 /**
  * Complete page data fetched server-side
@@ -31,6 +32,7 @@ export interface RequestDetailsPageData {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];  // Categories with subcategories for dropdown
+  sections: Section[];  // Sections for section dropdown
   notes: RequestNote[];
   assignees: Assignee[];
   initialMessages: ChatMessage[];
@@ -55,6 +57,7 @@ export interface RequestDetailsContextType {
   priorities: Priority[];
   statuses: RequestStatus[];
   categories: Category[];  // Categories with subcategories for dropdown
+  sections: Section[];  // Sections for section dropdown
 
   // Notes (managed by SWR)
   notes: RequestNote[];
@@ -156,7 +159,7 @@ export interface RequestDetailsContextType {
  * Payload types for client actions
  */
 export interface CreateNotePayload {
-  requestId: string;
+  requestId: number;
   note: string;
 }
 
@@ -178,7 +181,7 @@ export interface AssignTechnicianPayload {
 }
 
 export interface SendMessagePayload {
-  requestId: string;
+  requestId: number;
   senderId: string;  // Changed from number to string UUID
   content: string;
 }

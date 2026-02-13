@@ -17,13 +17,14 @@ Only accessible by super admins for security and compliance reasons.
 
 import logging
 from typing import Any, Dict
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_current_user, get_session
 from db.models import User
-from api.schemas.audit import AuditFilter, AuditRead
+from api.schemas.audit import AuditFilter, AuditFilterOptions, AuditRead
 from api.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,11 @@ async def get_audit_logs(
     resource_type: str | None = Query(None, description="Filter by resource type"),
     resource_id: str | None = Query(None, description="Filter by resource ID"),
     correlation_id: str | None = Query(None, description="Filter by correlation ID"),
+    search: str | None = Query(
+        None, description="Text search across summary, endpoint, username"
+    ),
+    start_date: str | None = Query(None, description="Filter by start date"),
+    end_date: str | None = Query(None, description="Filter by end date"),
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
 ):
@@ -84,13 +90,40 @@ async def get_audit_logs(
     **Permissions:** Super admin only
     """
     try:
+        # Parse dates if provided
+        from datetime import datetime as dt
+
+        parsed_start_date = None
+        parsed_end_date = None
+        if start_date:
+            try:
+                parsed_start_date = dt.fromisoformat(start_date)
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                parsed_end_date = dt.fromisoformat(end_date)
+            except ValueError:
+                pass
+
+        # Parse user_id if provided
+        parsed_user_id = None
+        if user_id:
+            try:
+                parsed_user_id = UUID(user_id)
+            except ValueError:
+                pass
+
         # Build filter
         filters = AuditFilter(
-            user_id=user_id,
+            user_id=parsed_user_id,
             action=action,
             resource_type=resource_type,
             resource_id=resource_id,
             correlation_id=correlation_id,
+            search=search,
+            start_date=parsed_start_date,
+            end_date=parsed_end_date,
             page=page,
             per_page=per_page,
         )
@@ -108,9 +141,9 @@ async def get_audit_logs(
             "data": audit_logs,
             "pagination": {
                 "page": page,
-                "per_page": per_page,
-                "total_count": total_count,
-                "total_pages": total_pages,
+                "perPage": per_page,
+                "totalCount": total_count,
+                "totalPages": total_pages,
             },
         }
 
@@ -122,6 +155,38 @@ async def get_audit_logs(
         )
 
 
+@router.get("/filter-options", response_model=AuditFilterOptions)
+async def get_audit_filter_options(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(require_super_admin),
+):
+    """
+    Get filter options for audit logs.
+
+    Returns distinct values for filter dropdowns:
+    - actions: List of distinct action types
+    - resource_types: List of distinct resource types
+    - users: List of distinct users who performed actions
+    """
+    try:
+        actions = await AuditService.get_distinct_actions(session)
+        resource_types = await AuditService.get_distinct_resource_types(session)
+        users = await AuditService.get_distinct_users(session)
+
+        return AuditFilterOptions(
+            actions=actions,
+            resource_types=resource_types,
+            users=users,
+        )
+
+    except Exception as e:
+        logger.error(f"Error retrieving audit filter options: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve filter options",
+        )
+
+
 @router.get("/{audit_id}", response_model=AuditRead)
 async def get_audit_log(
     audit_id: int,
@@ -130,24 +195,6 @@ async def get_audit_log(
 ):
     """
     Get a single audit log by ID.
-
-    Returns detailed information about a specific audit log entry,
-    including before/after values for change tracking.
-
-    Args:
-        audit_id: Audit log ID
-        session: Database session
-        current_user: Authenticated super admin user
-
-    Returns:
-        AuditRead: Audit log details with user info
-
-    Raises:
-        HTTPException 403: Not a super admin
-        HTTPException 404: Audit log not found
-        HTTPException 500: Server error
-
-    **Permissions:** Super admin only
     """
     try:
         audit_log = await AuditService.get_audit_log_by_id(

@@ -24,9 +24,7 @@ class LoginRequest(HTTPSchemaModel):
     device_info: Optional[Dict[str, Any]] = Field(
         default=None, description="Device information"
     )
-    ip_address: Optional[str] = Field(
-        default=None, description="Client IP address"
-    )
+    ip_address: Optional[str] = Field(default=None, description="Client IP address")
 
 
 class TokenResponse(HTTPSchemaModel):
@@ -34,9 +32,7 @@ class TokenResponse(HTTPSchemaModel):
 
     access_token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer", description="Token type")
-    expires_in: int = Field(
-        ..., description="Token expiration time in seconds"
-    )
+    expires_in: int = Field(..., description="Token expiration time in seconds")
 
 
 class UserLoginInfo(HTTPSchemaModel):
@@ -48,7 +44,9 @@ class UserLoginInfo(HTTPSchemaModel):
     full_name: Optional[str] = Field(None, description="Full name")
     is_active: bool = Field(..., description="Whether user is active")
     is_technician: bool = Field(..., description="Whether user is a technician")
-    is_super_admin: bool = Field(default=False, description="Whether user is a super admin")
+    is_super_admin: bool = Field(
+        default=False, description="Whether user is a super admin"
+    )
 
 
 class LoginResponse(TokenResponse):
@@ -71,9 +69,7 @@ class TokenData(HTTPSchemaModel):
         default=False, description="Whether user is a technician"
     )
     session_id: Optional[UUID] = Field(default=None, description="Session ID")
-    device_id: Optional[str] = Field(
-        default=None, description="Device identifier"
-    )
+    device_id: Optional[str] = Field(default=None, description="Device identifier")
     type: str = Field(..., description="Token type (access)")
     iat: int = Field(..., description="Issued at timestamp")
     exp: int = Field(..., description="Expiration timestamp")
@@ -84,12 +80,8 @@ class DeviceInfo(HTTPSchemaModel):
     """Schema for device information."""
 
     os: Optional[str] = Field(default=None, description="Operating system")
-    browser: Optional[str] = Field(
-        default=None, description="Browser information"
-    )
-    user_agent: Optional[str] = Field(
-        default=None, description="User agent string"
-    )
+    browser: Optional[str] = Field(default=None, description="Browser information")
+    user_agent: Optional[str] = Field(default=None, description="User agent string")
     device_fingerprint: Optional[str] = Field(
         default=None, description="Device fingerprint"
     )
@@ -137,15 +129,9 @@ class TokenValidationResponse(HTTPSchemaModel):
     """Schema for token validation response."""
 
     valid: bool = Field(..., description="Whether token is valid")
-    user_id: Optional[UUID] = Field(
-        default=None, description="User ID if valid"
-    )
-    username: Optional[str] = Field(
-        default=None, description="Username if valid"
-    )
-    session_id: Optional[UUID] = Field(
-        default=None, description="Session ID if valid"
-    )
+    user_id: Optional[UUID] = Field(default=None, description="User ID if valid")
+    username: Optional[str] = Field(default=None, description="Username if valid")
+    session_id: Optional[UUID] = Field(default=None, description="Session ID if valid")
     expires_at: Optional[datetime] = Field(
         default=None, description="Expiration time if valid"
     )
@@ -166,9 +152,7 @@ class SSOLoginRequest(HTTPSchemaModel):
     device_info: Optional[Dict[str, Any]] = Field(
         default=None, description="Device information"
     )
-    ip_address: Optional[str] = Field(
-        default=None, description="Client IP address"
-    )
+    ip_address: Optional[str] = Field(default=None, description="Client IP address")
 
 
 class ADLoginRequest(HTTPSchemaModel):
@@ -186,9 +170,7 @@ class ADLoginRequest(HTTPSchemaModel):
     device_info: Optional[Dict[str, Any]] = Field(
         default=None, description="Device information"
     )
-    ip_address: Optional[str] = Field(
-        default=None, description="Client IP address"
-    )
+    ip_address: Optional[str] = Field(default=None, description="Client IP address")
 
 
 class AdminLoginRequest(HTTPSchemaModel):
@@ -210,6 +192,4 @@ class AdminLoginRequest(HTTPSchemaModel):
     device_info: Optional[Dict[str, Any]] = Field(
         default=None, description="Device information"
     )
-    ip_address: Optional[str] = Field(
-        default=None, description="Client IP address"
-    )
+    ip_address: Optional[str] = Field(default=None, description="Client IP address")

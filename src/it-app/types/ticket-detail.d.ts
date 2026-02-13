@@ -6,13 +6,14 @@ import type { Category, Subcategory } from "./category";
 
 // Backend response types (camelCase from HTTPSchemaModel)
 export interface ServiceRequestDetail {
-  id: string;
+  id: number;
   title: string;
   description?: string;
   statusId: number;
   priorityId: number;
   requesterId: string;  // Changed from number to string UUID
   subcategoryId?: number | null;  // Subcategory for the request
+  assignedToSectionId?: number | null;  // Section the request belongs to
   createdAt: string;
   updatedAt: string;
 

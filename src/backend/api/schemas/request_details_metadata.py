@@ -1,6 +1,6 @@
 """
 Request Details Metadata schema for consolidated API response.
-Combines priorities, statuses, technicians, and categories into a single response.
+Combines priorities, statuses, technicians, categories, and sections into a single response.
 """
 from typing import List
 
@@ -9,6 +9,7 @@ from api.schemas.priority import PriorityListItem
 from api.schemas.request_status import RequestStatusListItem
 from api.schemas.user import UserListItem
 from api.schemas.category import CategoryWithSubcategories
+from api.schemas.section import SectionListItem
 
 
 class RequestDetailsMetadataResponse(HTTPSchemaModel):
@@ -20,8 +21,10 @@ class RequestDetailsMetadataResponse(HTTPSchemaModel):
     - Statuses: for status dropdown/display
     - Technicians: for assignee selection
     - Categories: for category/subcategory selection
+    - Sections: for section dropdown/display
     """
     priorities: List[PriorityListItem]
     statuses: List[RequestStatusListItem]
     technicians: List[UserListItem]
     categories: List[CategoryWithSubcategories]
+    sections: List[SectionListItem]

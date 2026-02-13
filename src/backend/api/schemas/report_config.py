@@ -23,7 +23,7 @@ class ReportType(str, Enum):
 
 class UserInfo(HTTPSchemaModel):
     """Minimal user info for nested responses."""
-    id: UUID
+    id: int
     username: str
     full_name: Optional[str] = None
 

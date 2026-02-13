@@ -1065,6 +1065,14 @@ class DatabaseSetup:
                     "path": "management/active-directory",
                     "parent_id": 4,
                 },
+                {
+                    "id": 47,
+                    "title": "Audit Logs",
+                    "description": "View audit trail of all system actions",
+                    "icon": "history",
+                    "path": "management/audit-logs",
+                    "parent_id": 4,
+                },
             ]
 
             # Create child pages
@@ -1140,6 +1148,7 @@ class DatabaseSetup:
                 19,  # Client Versions
                 20,  # Categories
                 46,  # Active Directory
+                47,  # Audit Logs
             ]
 
             # 3. Reports pages - Supervisor and Admin roles

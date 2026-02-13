@@ -50,8 +50,7 @@ class ChatMessageCountRecord(HTTPSchemaModel):
 
 class ChatRequestListItem(HTTPSchemaModel):
     """Request list item with chat details for the chat page."""
-
-    id: UUID = Field(..., description="Request ID")
+    id: int = Field(..., description="Request ID")
     title: str = Field(..., description="Request title")
     status_id: int = Field(..., description="Request status ID")
     status: str = Field(

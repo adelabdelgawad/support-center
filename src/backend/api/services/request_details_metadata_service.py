@@ -10,9 +10,11 @@ from api.services.priority_service import PriorityService
 from api.services.request_status_service import RequestStatusService
 from api.services.user_service import UserService
 from api.services.category_service import CategoryService
+from crud.section_crud import SectionCRUD
 from api.schemas.priority import PriorityListItem
 from api.schemas.request_status import RequestStatusListItem
 from api.schemas.category import CategoryWithSubcategories
+from api.schemas.section import SectionListItem
 from api.schemas.request_details_metadata import RequestDetailsMetadataResponse
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,7 @@ class RequestDetailsMetadataService:
         - GET /api/v1/metadata/statuses
         - GET /api/v1/technicians
         - GET /api/v1/categories
+        - GET /api/v1/sections
 
         Returns:
             RequestDetailsMetadataResponse with all metadata
@@ -61,6 +64,10 @@ class RequestDetailsMetadataService:
                 self.db, active_only=True, include_subcategories=True
             )
 
+            sections = await SectionCRUD.find_all_active_sections(
+                self.db, only_active=True, only_shown=False
+            )
+
             # Convert to list item schemas
             priority_items = [PriorityListItem.model_validate(p) for p in priorities]
             status_items = [RequestStatusListItem.model_validate(s) for s in statuses_list]
@@ -68,12 +75,14 @@ class RequestDetailsMetadataService:
             category_items = [
                 CategoryWithSubcategories.model_validate(c) for c in categories
             ]
+            section_items = [SectionListItem.model_validate(s) for s in sections]
 
             return RequestDetailsMetadataResponse(
                 priorities=priority_items,
                 statuses=status_items,
                 technicians=technician_items,
                 categories=category_items,
+                sections=section_items,
             )
         except Exception as e:
             logger.error(f"Failed to fetch request details metadata: {e}")

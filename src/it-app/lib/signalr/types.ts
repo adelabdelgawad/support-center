@@ -17,7 +17,7 @@ export interface SenderInfo {
 // Chat message structure
 export interface ChatMessage {
   id: string;
-  requestId: string;
+  requestId: number;
   senderId: string;
   senderName?: string;
   senderAvatar?: string;
@@ -46,7 +46,7 @@ export interface ChatMessage {
 
 // Typing indicator event
 export interface TypingIndicator {
-  requestId: string;
+  requestId: number;
   userId: string;
   userName: string;
   isTyping: boolean;
@@ -54,7 +54,7 @@ export interface TypingIndicator {
 
 // Read status update event
 export interface ReadStatusUpdate {
-  requestId: string;
+  requestId: number;
   messageIds: string[];
   readBy: string;
   readAt: string;
@@ -62,14 +62,14 @@ export interface ReadStatusUpdate {
 
 // Ticket update event
 export interface TicketUpdateEvent {
-  requestId: string;
+  requestId: number;
   eventType: 'status_change' | 'priority_change' | 'assignment' | 'note_added' | 'fields_updated';
   data: Record<string, unknown>;
 }
 
 // Task status changed event
 export interface TaskStatusChangedEvent {
-  requestId: string;
+  requestId: number;
   taskId?: string;
   oldStatus?: string;
   newStatus?: string;
@@ -85,7 +85,7 @@ export interface TaskStatusChangedEvent {
 export interface TicketListUpdateEvent {
   eventId: string;
   updateType: string;
-  requestId: string;
+  requestId: number;
   data: {
     updatedFields?: string[];
     [key: string]: unknown;

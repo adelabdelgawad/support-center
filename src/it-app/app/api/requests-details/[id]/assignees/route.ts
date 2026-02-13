@@ -17,7 +17,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const ASSIGN_TYPE_ID = 1; // Assignee (Technician)
 
 interface AssigneesResponse {
-  requestId: string;
+  requestId: number;
   assignees: Record<string, unknown>[];
   total: number;
 }

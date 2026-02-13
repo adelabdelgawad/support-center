@@ -71,7 +71,7 @@ const RequestDetailChatContext = createContext<RequestDetailChatContextType | un
 
 interface RequestDetailChatProviderProps {
   children: React.ReactNode;
-  requestId: string;
+  requestId: number;
   initialMessages: ChatMessage[];
   currentUserId?: string;
   currentUser?: {

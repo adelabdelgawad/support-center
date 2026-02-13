@@ -31,8 +31,7 @@ class DeploymentJobCreate(DeploymentJobBase):
 
 class DeploymentJobRead(DeploymentJobBase):
     """Schema for reading deployment job data."""
-
-    id: UUID
+    id: int
     status: str
     payload: dict
     created_by: Optional[UUID] = None
@@ -46,8 +45,7 @@ class DeploymentJobRead(DeploymentJobBase):
 
 class DeploymentJobListItem(HTTPSchemaModel):
     """Lightweight schema for job lists."""
-
-    id: UUID
+    id: int
     job_type: str
     status: str
     payload: dict

@@ -12,7 +12,7 @@ from core.schema_base import HTTPSchemaModel
 
 class WhatsAppBatchBase(HTTPSchemaModel):
     """Base WhatsApp batch schema with common fields."""
-    request_id: UUID
+    request_id: int
     business_unit_id: Optional[int] = None
     first_message_id: UUID
     last_message_id: UUID

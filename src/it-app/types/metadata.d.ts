@@ -8,6 +8,7 @@ export interface Technician {
   username: string;
   fullName: string | null;
   title: string | null;
+  office: string | null;
 }
 
 // Request status information
@@ -34,7 +35,7 @@ export interface Priority {
 // Request note
 export interface RequestNote {
   id: number;
-  requestId: string;
+  requestId: number;
   note: string;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +48,6 @@ export interface RequestNote {
 
 // Note creation payload
 export interface CreateNoteData {
-  requestId: string;
+  requestId: number;
   note: string;
 }

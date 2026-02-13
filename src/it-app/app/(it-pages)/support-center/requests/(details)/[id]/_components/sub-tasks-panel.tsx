@@ -31,7 +31,7 @@ import {
 import { cn } from '@/lib/utils';
 
 interface SubTasksPanelProps {
-  requestId: string;
+  requestId: number;
 }
 
 export function SubTasksPanel({ requestId }: SubTasksPanelProps) {

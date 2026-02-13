@@ -32,15 +32,13 @@ class ChatMessageBase(HTTPSchemaModel):
 
 class ChatMessageCreate(ChatMessageBase):
     """Schema for creating a new chat message."""
-
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # UUID that will be serialized as string in JSON
     sender_id: UUID
 
 
 class ChatMessageCreateByClient(ChatMessageBase):
     """Schema for creating a chat message from client (sender inferred from JWT)."""
-
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # UUID that will be serialized as string in JSON
     # sender_id is NOT required - will be auto-populated from current_user
 
 
@@ -55,8 +53,7 @@ class ChatMessageUpdate(HTTPSchemaModel):
 
 class MessageSenderInfo(HTTPSchemaModel):
     """Schema for message sender information."""
-
-    id: UUID  # User UUID
+    id: int  # User UUID
     username: str
     full_name: Optional[str] = None
     email: Optional[str] = None
@@ -64,9 +61,8 @@ class MessageSenderInfo(HTTPSchemaModel):
 
 class ChatMessageRead(ChatMessageBase):
     """Schema for reading chat message data with per-user read state."""
-
-    id: UUID  # Message UUID
-    request_id: UUID  # Service request UUID - will be serialized as string in JSON
+    id: int  # Message UUID
+    request_id: int  # Service request UUID - will be serialized as string in JSON
     sender_id: Optional[UUID]
     sender: Optional[MessageSenderInfo] = Field(
         None, description="Sender user information for display"
@@ -103,8 +99,7 @@ class ChatMessageRead(ChatMessageBase):
 
 class ChatMessageListItem(HTTPSchemaModel):
     """Lightweight schema for chat message lists."""
-
-    id: UUID  # Message UUID
+    id: int  # Message UUID
     sender_id: Optional[UUID]
     is_read: bool
     is_screenshot: bool
@@ -135,7 +130,7 @@ class ChatMessageReaction(HTTPSchemaModel):
 class ChatMessageSearch(HTTPSchemaModel):
     """Schema for searching chat messages."""
 
-    request_id: Optional[UUID] = (
+    request_id: Optional[int] = (
         None  # UUID that will be serialized as string in JSON
     )
     sender_id: Optional[UUID] = None

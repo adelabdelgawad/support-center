@@ -13,8 +13,7 @@ from core.schema_base import HTTPSchemaModel
 
 class ReadReceiptUser(HTTPSchemaModel):
     """User information for read receipt."""
-
-    id: UUID
+    id: int
     username: str
     full_name: str | None = None
 
@@ -29,8 +28,7 @@ class ReadReceiptResponse(HTTPSchemaModel):
 
 class UnreadCountResponse(HTTPSchemaModel):
     """Response schema for unread message count."""
-
-    request_id: UUID
+    request_id: int
     user_id: UUID
     unread_count: int = Field(default=0)
     total_messages: int = Field(default=0)
@@ -39,8 +37,7 @@ class UnreadCountResponse(HTTPSchemaModel):
 
 class ChatUnreadCountItem(HTTPSchemaModel):
     """Unread count for a single chat."""
-
-    request_id: UUID
+    request_id: int
     unread_count: int = Field(default=0)
     last_read_at: Optional[datetime] = None
 
@@ -62,8 +59,7 @@ class TotalUnreadResponse(HTTPSchemaModel):
 
 class MarkChatAsReadResponse(HTTPSchemaModel):
     """Response schema for marking chat as read."""
-
-    request_id: UUID
+    request_id: int
     user_id: UUID
     marked_at: datetime
     previous_unread: int = Field(default=0)

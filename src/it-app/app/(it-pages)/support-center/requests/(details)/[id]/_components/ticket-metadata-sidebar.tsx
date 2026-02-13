@@ -47,20 +47,26 @@ interface TechnicianOption {
   value: string;  // UUID string from backend
   label: string;
   title?: string;
+  office?: string;
 }
 
-// Custom option component with user icon
+// Custom option component with two-line layout: Bold name + Title - Office
 const CustomOption = (props: OptionProps<TechnicianOption>) => {
+  const subtitle = [props.data.title, props.data.office]
+    .filter(Boolean)
+    .join(" - ");
   return (
     <components.Option {...props}>
       <div className="flex items-center gap-2">
-        <User className="h-4 w-4 text-muted-foreground" />
-        <span>{props.data.label}</span>
-        {props.data.title && (
-          <span className="text-xs text-muted-foreground">
-            - {props.data.title}
-          </span>
-        )}
+        <User className="h-4 w-4 text-muted-foreground flex-shrink-0 self-start mt-0.5" />
+        <div className="flex flex-col min-w-0">
+          <span className="font-semibold text-sm truncate">{props.data.label}</span>
+          {subtitle && (
+            <span className="text-xs text-muted-foreground truncate">
+              {subtitle}
+            </span>
+          )}
+        </div>
       </div>
     </components.Option>
   );
@@ -86,6 +92,7 @@ export function TicketMetadataSidebar() {
     priorities,
     statuses,
     categories,  // SSR categories - no loading state
+    sections,    // SSR sections
     addNote,
     assignees,
     assigneesLoading,
@@ -150,6 +157,20 @@ export function TicketMetadataSidebar() {
   const [pendingLastRemoval, setPendingLastRemoval] =
     useState<TechnicianOption | null>(null);
 
+  // State for section selection
+  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(
+    () => ticket.assignedToSectionId ?? null
+  );
+
+  // State for section change dialog (with category+subcategory selection)
+  const [pendingSectionChange, setPendingSectionChange] = useState<{
+    sectionId: number;
+    sectionName: string;
+  } | null>(null);
+  const [sectionDialogCategoryId, setSectionDialogCategoryId] = useState<number | null>(null);
+  const [sectionDialogSubcategoryId, setSectionDialogSubcategoryId] = useState<number | null>(null);
+  const [isUpdatingSection, setIsUpdatingSection] = useState(false);
+
   // State for category/subcategory selection
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
     () => ticket.subcategory?.category?.id ?? null
@@ -172,6 +193,7 @@ export function TicketMetadataSidebar() {
       value: String(assignee.userId),  // UUID string
       label: assignee.fullName || assignee.username,
       title: assignee.title ?? undefined,
+      office: assignee.office ?? undefined,
     }));
   }, [assignees]);
 
@@ -181,6 +203,7 @@ export function TicketMetadataSidebar() {
       value: String(tech.id),  // UUID string
       label: tech.fullName || tech.username,
       title: tech.title ?? undefined,
+      office: tech.office ?? undefined,
     }));
   }, [technicians]);
 
@@ -382,6 +405,13 @@ export function TicketMetadataSidebar() {
     setPendingPriorityId(null);
   }, []);
 
+  // Filter categories by the selected section
+  const filteredCategories = useMemo(() => {
+    if (!Array.isArray(categories)) return [];
+    if (!selectedSectionId) return categories;
+    return categories.filter((c) => c.sectionId === selectedSectionId);
+  }, [categories, selectedSectionId]);
+
   // Handle category selection - updates available subcategories
   const handleCategorySelect = useCallback(
     (categoryId: string) => {
@@ -402,8 +432,8 @@ export function TicketMetadataSidebar() {
         return;
 
       // Find subcategory from the selected category's subcategories (with defensive array check)
-      const category = Array.isArray(categories)
-        ? categories.find((c) => c.id === selectedCategoryId)
+      const category = Array.isArray(filteredCategories)
+        ? filteredCategories.find((c) => c.id === selectedCategoryId)
         : undefined;
       const subcategory = category?.subcategories?.find(
         (s) => s.id.toString() === subcategoryId
@@ -416,7 +446,7 @@ export function TicketMetadataSidebar() {
         });
       }
     },
-    [categories, selectedCategoryId, selectedSubcategoryId]
+    [filteredCategories, selectedCategoryId, selectedSubcategoryId]
   );
 
   // Confirm subcategory change
@@ -444,12 +474,92 @@ export function TicketMetadataSidebar() {
     }
   }, [pendingSubcategoryChange, isUpdatingSubcategory, ticket.id]);
 
+  // Handle section selection - opens confirmation dialog with category/subcategory pickers
+  const handleSectionSelect = useCallback(
+    (sectionId: string) => {
+      const newSectionId = parseInt(sectionId, 10);
+      if (newSectionId === selectedSectionId) return;
+
+      const section = sections.find((s) => s.id === newSectionId);
+      if (!section) return;
+
+      setPendingSectionChange({
+        sectionId: newSectionId,
+        sectionName: section.shownNameEn || section.name,
+      });
+      setSectionDialogCategoryId(null);
+      setSectionDialogSubcategoryId(null);
+    },
+    [selectedSectionId, sections]
+  );
+
+  // Get categories for the pending section change dialog
+  const pendingSectionCategories = useMemo(() => {
+    if (!pendingSectionChange || !Array.isArray(categories)) return [];
+    return categories.filter((c) => c.sectionId === pendingSectionChange.sectionId);
+  }, [categories, pendingSectionChange]);
+
+  // Get subcategories for the pending section change dialog
+  const pendingSectionSubcategories = useMemo(() => {
+    if (!sectionDialogCategoryId || !Array.isArray(pendingSectionCategories)) return [];
+    const category = pendingSectionCategories.find((c) => c.id === sectionDialogCategoryId);
+    return category?.subcategories || [];
+  }, [pendingSectionCategories, sectionDialogCategoryId]);
+
+  // Confirm section change
+  const handleConfirmSectionChange = useCallback(async () => {
+    if (!pendingSectionChange || isUpdatingSection) return;
+
+    setIsUpdatingSection(true);
+    try {
+      const response = await fetch(
+        `/api/requests-details/${ticket.id}/reassign-section`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            sectionId: pendingSectionChange.sectionId,
+            subcategoryId: sectionDialogSubcategoryId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to reassign section");
+      }
+
+      setSelectedSectionId(pendingSectionChange.sectionId);
+      // Update category/subcategory state to match the dialog selections
+      setSelectedCategoryId(sectionDialogCategoryId);
+      setSelectedSubcategoryId(sectionDialogSubcategoryId);
+      toast.success(
+        `Section changed to "${pendingSectionChange.sectionName}"`
+      );
+    } catch (error) {
+      console.error("❌ Failed to reassign section:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to reassign section"
+      );
+    } finally {
+      setIsUpdatingSection(false);
+      setPendingSectionChange(null);
+    }
+  }, [
+    pendingSectionChange,
+    isUpdatingSection,
+    ticket.id,
+    sectionDialogCategoryId,
+    sectionDialogSubcategoryId,
+  ]);
+
   // Get available subcategories for the selected category
   const availableSubcategories = useMemo(() => {
-    if (!Array.isArray(categories)) return [];
-    const category = categories.find((c) => c.id === selectedCategoryId);
+    if (!Array.isArray(filteredCategories)) return [];
+    const category = filteredCategories.find((c) => c.id === selectedCategoryId);
     return category?.subcategories || [];
-  }, [categories, selectedCategoryId]);
+  }, [filteredCategories, selectedCategoryId]);
 
   // Theme-aware classNames for react-select using Tailwind
   const selectClassNames: ClassNamesConfig<TechnicianOption, true> = useMemo(
@@ -706,8 +816,43 @@ export function TicketMetadataSidebar() {
 
           <Separator className="my-4" />
 
-          {/* Category and Subcategory Selection */}
+          {/* Section, Category and Subcategory Selection */}
           <div className="mb-4 space-y-3">
+            {/* Section Selection */}
+            <div>
+              <Label className="text-sm text-muted-foreground font-medium">
+                Section
+                {isUpdatingSection && (
+                  <Loader2 className="h-3 w-3 animate-spin inline ml-1" />
+                )}
+              </Label>
+              <Select
+                value={selectedSectionId?.toString() || ""}
+                onValueChange={handleSectionSelect}
+                disabled={isUpdatingSection || isStatusSolved || !canEditRequestDetails}
+              >
+                <SelectTrigger className="w-full mt-1">
+                  <SelectValue placeholder="Select section..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sections.length > 0 ? (
+                    sections.map((section) => (
+                      <SelectItem
+                        key={section.id}
+                        value={section.id.toString()}
+                      >
+                        {section.shownNameEn || section.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-sections" disabled>
+                      No sections available
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Category Selection */}
             <div>
               <Label className="text-sm text-muted-foreground font-medium">
@@ -722,22 +867,22 @@ export function TicketMetadataSidebar() {
                   <SelectValue placeholder="Select category..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem
-                      key={category.id}
-                      value={category.id.toString()}
-                    >
-                      <div className="flex flex-col">
-                        <span>{category.nameEn || category.name}</span>
-                        {category.nameAr &&
-                          category.nameAr !== category.nameEn && (
-                            <span className="text-xs text-muted-foreground">
-                              {category.nameAr}
-                            </span>
-                          )}
-                      </div>
+                  {filteredCategories.length > 0 ? (
+                    filteredCategories.map((category) => (
+                      <SelectItem
+                        key={category.id}
+                        value={category.id.toString()}
+                      >
+                        {category.nameEn || category.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-categories" disabled>
+                      {selectedSectionId
+                        ? "No categories in this section"
+                        : "Select section first"}
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -781,16 +926,7 @@ export function TicketMetadataSidebar() {
                         key={subcategory.id}
                         value={subcategory.id.toString()}
                       >
-                        <div className="flex flex-col">
-                          <span>{subcategory.nameEn || subcategory.name}</span>
-                          {subcategory.nameAr &&
-                            subcategory.nameAr !==
-                              (subcategory.nameEn || subcategory.name) && (
-                              <span className="text-xs text-muted-foreground">
-                                {subcategory.nameAr}
-                              </span>
-                            )}
-                        </div>
+                        {subcategory.nameEn || subcategory.name}
                       </SelectItem>
                     ))
                   ) : (
@@ -1055,6 +1191,132 @@ export function TicketMetadataSidebar() {
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   Updating...
+                </>
+              ) : (
+                "Confirm"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Section Change Dialog with Category/Subcategory Selection */}
+      <AlertDialog
+        open={!!pendingSectionChange}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingSectionChange(null);
+            setSectionDialogCategoryId(null);
+            setSectionDialogSubcategoryId(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change Section</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>
+                  Reassign this request to{" "}
+                  <span className="font-semibold text-foreground">
+                    {pendingSectionChange?.sectionName}
+                  </span>
+                  . Please select a category and subcategory for the new section.
+                </p>
+
+                {/* Category Selection in Dialog */}
+                <div>
+                  <Label className="text-sm font-medium mb-1 block">
+                    Category
+                  </Label>
+                  <Select
+                    value={sectionDialogCategoryId?.toString() || ""}
+                    onValueChange={(val) => {
+                      setSectionDialogCategoryId(parseInt(val, 10));
+                      setSectionDialogSubcategoryId(null);
+                    }}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pendingSectionCategories.length > 0 ? (
+                        pendingSectionCategories.map((category) => (
+                          <SelectItem
+                            key={category.id}
+                            value={category.id.toString()}
+                          >
+                            {category.nameEn || category.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-categories" disabled>
+                          No categories in this section
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Subcategory Selection in Dialog */}
+                <div>
+                  <Label className="text-sm font-medium mb-1 block">
+                    Subcategory
+                  </Label>
+                  <Select
+                    value={sectionDialogSubcategoryId?.toString() || ""}
+                    onValueChange={(val) =>
+                      setSectionDialogSubcategoryId(parseInt(val, 10))
+                    }
+                    disabled={
+                      !sectionDialogCategoryId ||
+                      pendingSectionSubcategories.length === 0
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={
+                          sectionDialogCategoryId
+                            ? "Select subcategory..."
+                            : "Select category first"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pendingSectionSubcategories.length > 0 ? (
+                        pendingSectionSubcategories.map((subcategory) => (
+                          <SelectItem
+                            key={subcategory.id}
+                            value={subcategory.id.toString()}
+                          >
+                            {subcategory.nameEn || subcategory.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-subcategories" disabled>
+                          {sectionDialogCategoryId
+                            ? "No subcategories available"
+                            : "Select category first"}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdatingSection}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmSectionChange}
+              disabled={isUpdatingSection || !sectionDialogSubcategoryId}
+            >
+              {isUpdatingSection ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Reassigning...
                 </>
               ) : (
                 "Confirm"

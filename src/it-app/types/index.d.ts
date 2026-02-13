@@ -91,23 +91,6 @@ export type BaseEntity = {
     name: string;
   };
   
-  export type AuditLog = {
-    _id: number;
-    table_name: string;
-    record_id: number;
-    operation: string;
-    changed_at: string; // ISO 8601 date string
-    changed_by: number;
-  };
-  
-  export type AuditLogDetail = {
-    _id: number;
-    audit_log_id: number;
-    column_name: string;
-    old_value?: string;
-    new_value?: string;
-  };
-  
   // Example for nested/related _data
   export type BranchWithUnits = Branch & {
     branch_units: BranchUnit[];

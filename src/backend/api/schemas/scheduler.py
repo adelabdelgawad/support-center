@@ -89,7 +89,7 @@ class ScheduledJobUpdate(HTTPSchemaModel):
 
 class ScheduledJobRead(ScheduledJobBase):
     """Schema for reading scheduled job data."""
-    id: UUID
+    id: int
     is_paused: bool
     next_run_time: Optional[datetime] = None
     last_run_time: Optional[datetime] = None
@@ -138,7 +138,7 @@ class ScheduledJobTrigger(HTTPSchemaModel):
 
 class ScheduledJobExecutionRead(HTTPSchemaModel):
     """Schema for reading execution history."""
-    id: UUID
+    id: int
     job_id: UUID
     celery_task_id: Optional[str] = None
     status: str
@@ -164,7 +164,7 @@ class ScheduledJobExecutionListResponse(HTTPSchemaModel):
 
 class SchedulerInstanceRead(HTTPSchemaModel):
     """Schema for scheduler instance."""
-    id: UUID
+    id: int
     hostname: str
     pid: int
     is_leader: bool

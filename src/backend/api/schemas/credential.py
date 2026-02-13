@@ -60,8 +60,7 @@ class CredentialRead(CredentialBase):
     Note: vault_ref is included for admin management but should
     be treated as opaque. Actual secrets are in the vault.
     """
-
-    id: UUID
+    id: int
     vault_ref: Optional[str] = None
     created_by: Optional[UUID] = None
     created_at: datetime
@@ -75,8 +74,7 @@ class CredentialListItem(HTTPSchemaModel):
 
     SECURITY: vault_ref is explicitly excluded from this schema.
     """
-
-    id: UUID
+    id: int
     name: str
     credential_type: str
     scope: dict

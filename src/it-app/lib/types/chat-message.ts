@@ -19,7 +19,7 @@ export type MessageStatus = 'pending' | 'sent' | 'failed';
 
 export interface ChatMessage {
   id: string; // UUID string (changed from number)
-  requestId: string; // UUID string
+  requestId: number; // UUID string
   senderId: string | null; // UUID string (optional)
   sender?: SenderInfo | null; // Full sender details from backend
   senderName?: string; // Legacy field for backward compatibility
@@ -51,7 +51,7 @@ export interface ChatMessageCreate {
 export type ChatMessageRead = ChatMessage;
 
 export interface SendMessageData {
-  requestId: string;
+  requestId: number;
   content: string;
 }
 

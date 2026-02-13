@@ -6,7 +6,7 @@ correlation IDs, and user context.
 """
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -18,16 +18,40 @@ class AuditCreate(HTTPSchemaModel):
     """Schema for creating an audit log entry."""
 
     user_id: Optional[UUID] = Field(None, description="User who performed the action")
-    action: str = Field(..., max_length=100, description="Action performed (CREATE, UPDATE, DELETE, etc.)")
-    resource_type: str = Field(..., max_length=100, description="Type of resource affected (User, ServiceRequest, etc.)")
-    resource_id: Optional[str] = Field(None, max_length=255, description="ID of the affected resource")
-    old_values: Optional[Dict[str, Any]] = Field(None, description="Previous values before change (JSON)")
-    new_values: Optional[Dict[str, Any]] = Field(None, description="New values after change (JSON)")
-    ip_address: Optional[str] = Field(None, max_length=45, description="Client IP address")
-    endpoint: Optional[str] = Field(None, max_length=255, description="API endpoint called")
-    correlation_id: Optional[str] = Field(None, max_length=36, description="Request correlation ID for tracing")
-    user_agent: Optional[str] = Field(None, max_length=500, description="Client user agent string")
-    changes_summary: Optional[str] = Field(None, max_length=1000, description="Human-readable summary of changes")
+    action: str = Field(
+        ...,
+        max_length=100,
+        description="Action performed (CREATE, UPDATE, DELETE, etc.)",
+    )
+    resource_type: str = Field(
+        ...,
+        max_length=100,
+        description="Type of resource affected (User, ServiceRequest, etc.)",
+    )
+    resource_id: Optional[str] = Field(
+        None, max_length=255, description="ID of the affected resource"
+    )
+    old_values: Optional[Dict[str, Any]] = Field(
+        None, description="Previous values before change (JSON)"
+    )
+    new_values: Optional[Dict[str, Any]] = Field(
+        None, description="New values after change (JSON)"
+    )
+    ip_address: Optional[str] = Field(
+        None, max_length=45, description="Client IP address"
+    )
+    endpoint: Optional[str] = Field(
+        None, max_length=255, description="API endpoint called"
+    )
+    correlation_id: Optional[str] = Field(
+        None, max_length=36, description="Request correlation ID for tracing"
+    )
+    user_agent: Optional[str] = Field(
+        None, max_length=500, description="Client user agent string"
+    )
+    changes_summary: Optional[str] = Field(
+        None, max_length=1000, description="Human-readable summary of changes"
+    )
 
 
 class AuditRead(HTTPSchemaModel):
@@ -48,7 +72,9 @@ class AuditRead(HTTPSchemaModel):
     created_at: datetime
 
     # Related data
-    username: Optional[str] = Field(None, description="Username of the user who performed the action")
+    username: Optional[str] = Field(
+        None, description="Username of the user who performed the action"
+    )
     user_full_name: Optional[str] = Field(None, description="Full name of the user")
 
 
@@ -60,7 +86,34 @@ class AuditFilter(HTTPSchemaModel):
     resource_type: Optional[str] = Field(None, description="Filter by resource type")
     resource_id: Optional[str] = Field(None, description="Filter by resource ID")
     correlation_id: Optional[str] = Field(None, description="Filter by correlation ID")
+    search: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Text search across summary, endpoint, username",
+    )
     start_date: Optional[datetime] = Field(None, description="Filter by start date")
     end_date: Optional[datetime] = Field(None, description="Filter by end date")
     page: int = Field(1, ge=1, description="Page number")
     per_page: int = Field(20, ge=1, le=100, description="Items per page")
+
+
+class AuditUserOption(HTTPSchemaModel):
+    """Schema for user filter options in audit logs."""
+
+    user_id: UUID = Field(..., description="User UUID")
+    username: str = Field(..., description="Username")
+    full_name: Optional[str] = Field(None, description="Full name")
+
+
+class AuditFilterOptions(HTTPSchemaModel):
+    """Schema for filter dropdown options."""
+
+    actions: List[str] = Field(
+        default_factory=list, description="List of distinct actions"
+    )
+    resource_types: List[str] = Field(
+        default_factory=list, description="List of distinct resource types"
+    )
+    users: List[AuditUserOption] = Field(
+        default_factory=list, description="List of distinct users"
+    )

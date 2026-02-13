@@ -25,7 +25,7 @@ class RoleCreate(RoleBase):
 
 class RoleRead(RoleBase):
     """Schema for reading a role."""
-    id: UUID = Field(..., description="Unique identifier")
+    id: int = Field(..., description="Unique identifier")
 
 
 class RoleUpdate(HTTPSchemaModel):

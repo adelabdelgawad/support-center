@@ -20,14 +20,14 @@ class RequestNoteCreate(RequestNoteBase):
 
     Simple note for tracking, hints, or general comments without status changes.
     """
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # Integer ID
     is_system_generated: bool = False
 
 
 class RequestNoteRead(RequestNoteBase):
     """Schema for reading service request note data."""
     id: int
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # Integer ID
     created_by: UUID
     is_system_generated: bool
     created_at: datetime

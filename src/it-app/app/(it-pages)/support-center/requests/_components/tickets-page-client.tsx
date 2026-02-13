@@ -13,66 +13,9 @@ import { BulkStatusChangeDialog } from './bulk-status-change-dialog';
 import { BusinessUnitCards } from './business-unit-cards';
 import { CustomViewDialog } from './custom-view-dialog';
 import { TicketTypeFilter, type TicketTypeFilter as TicketFilterType } from './ticket-type-filter';
-import { useRequestsListContext } from '../_context/requests-list-context';
+import { useRequestsListContext, viewDisplayNames } from '../_context/requests-list-context';
 import { useViewport } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/requests-list';
-
-/**
- * Client Component: Tickets Page UI
- *
- * Uses SWR context for background data refresh every 30 seconds
- * Initial render uses SSR data with NO client-side fetch (no spinner on load)
- * URL navigation updates trigger page re-render with new data
- *
- * LAYOUT STRATEGY (CSS Grid - Simple & Maintainable):
- * ====================================================
- * <main> - 2-row grid [header | content]
- *   Row 1: TicketsHeader (auto height - shrinks to content)
- *   Row 2: Content body (1fr - takes remaining space, min-h-0 for scroll containment)
- *     <div> - 3-row grid [filters | table | pagination]
- *       Row 1: Business units + filters (auto height)
- *       Row 2: Table area (1fr - constrained height, triggers scrolling in table)
- *         → Flex chain: wrapper (flex col) → inner (flex-1, flex col) → TicketsTable (flex-1, overflow-auto)
- *       Row 3: Pagination (auto height - only shown when total > 0)
- *
- * CRITICAL for vertical scrolling:
- * - Grid Row 2 (1fr) constrains table area height
- * - Flex chain with min-h-0 at each level passes height constraint down
- * - TicketsTable (innermost) has overflow-auto to handle scroll
- * - Vertical scrollbar appears ONLY on table, pagination always visible
- *
- * CRITICAL for horizontal scrolling:
- * - overflow-x-hidden on page-level containers and cards row (prevents page-level horizontal scroll)
- * - Table wrapper allows horizontal overflow to flow to TicketsTable
- * - TicketsTable has overflow-auto for both axes
- * - Horizontal scrollbar appears ONLY on table container
- *
- * Benefits:
- * - Clear hierarchy: Grid defines 3 distinct areas (filters, table, pagination)
- * - Predictable scrolling: Only table scrolls, pagination always visible
- * - Easy to maintain: Flex chain clearly defined, each level has purpose
- * - No page-level scrolling: All overflow contained within table
- */
-
-// Map view types to display names
-const viewDisplayNames: Record<ViewType, string> = {
-  // Existing views
-  unassigned: 'Unassigned tickets',
-  all_unsolved: 'All unsolved tickets',
-  my_unsolved: 'Your unsolved tickets',
-  recently_updated: 'Recently updated tickets',
-  recently_solved: 'Recently solved tickets',
-  // New views
-  all_your_requests: 'All your requests',
-  urgent_high_priority: 'Urgent / High priority',
-  pending_requester_response: 'Pending requester response',
-  pending_subtask: 'Pending subtask',
-  new_today: 'New today',
-  in_progress: 'In progress',
-  // Additional views
-  all_tickets: 'All tickets',
-  all_solved: 'All solved tickets',
-};
 
 export function TicketsPageClient() {
   const router = useRouter();

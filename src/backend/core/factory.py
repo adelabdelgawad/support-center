@@ -17,6 +17,7 @@ from core.config import settings
 from core.instrumentator import instrumentator
 from core.lifespan import lifespan
 from core.middleware import (
+    AuditMiddleware,
     CorrelationIdMiddleware,
     DebugLoggingMiddleware,
     SecurityHeadersMiddleware,
@@ -52,8 +53,12 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+    # Audit middleware - must be before CorrelationIdMiddleware (LIFO order)
+    # Intercepts all mutation requests and creates audit logs
+    app.add_middleware(AuditMiddleware)
+
     # Correlation ID middleware for distributed tracing (always enabled)
-    # Must be added early to ensure correlation ID is available in all logs
+    # Must be added after AuditMiddleware to run first (LIFO order)
     app.add_middleware(CorrelationIdMiddleware)
 
     # Debug logging middleware (only enabled when DEBUG=True)
@@ -66,7 +71,14 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors.origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With", "X-Client-Private-IP"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "Accept",
+            "Origin",
+            "X-Requested-With",
+            "X-Client-Private-IP",
+        ],
         expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
     )
 

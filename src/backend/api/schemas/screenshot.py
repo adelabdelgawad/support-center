@@ -21,7 +21,7 @@ class ScreenshotBase(HTTPSchemaModel):
 
 class ScreenshotCreate(ScreenshotBase):
     """Schema for creating a new screenshot."""
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # Integer ID
     uploaded_by: UUID
     file_hash: Optional[str] = Field(None, max_length=64)
 
@@ -34,7 +34,7 @@ class ScreenshotUpdate(HTTPSchemaModel):
 class ScreenshotRead(ScreenshotBase):
     """Schema for reading screenshot data."""
     id: int
-    request_id: UUID  # UUID that will be serialized as string in JSON
+    request_id: int  # Integer ID
     uploaded_by: UUID
     file_hash: Optional[str] = None
 

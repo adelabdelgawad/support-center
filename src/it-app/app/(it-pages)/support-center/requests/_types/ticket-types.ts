@@ -103,7 +103,7 @@ export interface TicketDetailResponse {
  */
 export interface ChatMessage {
   id: number;
-  requestId: string; // UUID
+  requestId: number; // UUID
   senderId: number;
   content: string;
   isScreenshot: boolean;

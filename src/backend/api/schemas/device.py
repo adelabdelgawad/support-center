@@ -61,8 +61,7 @@ class DeviceUpdate(HTTPSchemaModel):
 
 class DeviceRead(DeviceBase):
     """Schema for reading device data."""
-
-    id: UUID
+    id: int
     lifecycle_state: str
     discovery_source: str
     ad_computer_dn: Optional[str] = None
@@ -76,8 +75,7 @@ class DeviceRead(DeviceBase):
 
 class DeviceListItem(HTTPSchemaModel):
     """Lightweight schema for device lists."""
-
-    id: UUID
+    id: int
     hostname: str
     ip_address: Optional[str] = None
     mac_address: Optional[str] = None

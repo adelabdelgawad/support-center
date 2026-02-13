@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
+from core.date_formatting import format_due_date_duration, format_requested_duration
 from db.database import get_session
 from core.dependencies import (
     _get_user_with_roles,
@@ -414,7 +415,10 @@ async def get_technician_views(
                 full_name=req.requester.full_name,
             ),
             requested=req.created_at,
+            requested_duration=format_requested_duration(req.created_at),
             due_date=req.due_date,  # SLA-based due date
+            due_date_duration=format_due_date_duration(req.due_date)[0],
+            is_due_date_overdue=format_due_date_duration(req.due_date)[1],
             priority=PriorityInfo(
                 id=req.priority.id,
                 name=req.priority.name,
@@ -1303,6 +1307,7 @@ async def get_request_assignees(
             username=a.assignee.username if a.assignee else "Unknown",
             full_name=a.assignee.full_name if a.assignee else None,
             title=a.assignee.title if a.assignee else None,
+            office=a.assignee.office if a.assignee else None,
             assigned_by=a.assigned_by,
             assigned_by_name=a.assigner.full_name if a.assigner else None,
             created_at=a.created_at,

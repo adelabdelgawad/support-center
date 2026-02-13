@@ -30,7 +30,7 @@ const ASSIGNMENT_TYPE_LABELS: Record<AssignmentTypeId, string> = {
 };
 
 interface AssigneesResponse {
-  requestId: string;
+  requestId: number;
   assignees: Record<string, unknown>[];
   total: number;
 }

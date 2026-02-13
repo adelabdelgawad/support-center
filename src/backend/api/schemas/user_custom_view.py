@@ -56,7 +56,9 @@ class UserCustomViewCreate(UserCustomViewBase):
 class UserCustomViewUpdate(HTTPSchemaModel):
     """Schema for updating the user's custom view."""
 
-    visible_tabs: Optional[list[str]] = Field(None, description="List of visible tab IDs")
+    visible_tabs: Optional[list[str]] = Field(
+        None, description="List of visible tab IDs"
+    )
     default_tab: Optional[str] = Field(None, max_length=50, description="Default tab")
     is_active: Optional[bool] = None
 

@@ -20,7 +20,7 @@ import { RequestDetailsSkeleton } from './request-details-skeleton';
 import type { RequestDetailsPageData } from '@/types/requests-details';
 
 interface RequestDetailsWrapperProps {
-  requestId: string;
+  requestId: number;
   currentUserId?: string;
   currentUserIsTechnician?: boolean;
   initialData?: RequestDetailsPageData | null;
@@ -77,6 +77,7 @@ export function RequestDetailsWrapper({
         priorities={pageData.priorities}
         statuses={pageData.statuses}
         categories={pageData.categories}
+        sections={pageData.sections}
         notes={pageData.notes}
         assignees={pageData.assignees}
         initialMessages={pageData.initialMessages}

@@ -19,6 +19,7 @@ interface Category {
   nameEn?: string;
   nameAr?: string;
   description: string | null;
+  sectionId: number | null;
   isActive: boolean;
   subcategories?: Subcategory[];
 }

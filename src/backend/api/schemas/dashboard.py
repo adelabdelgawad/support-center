@@ -149,8 +149,7 @@ class ExecutiveDashboardData(HTTPSchemaModel):
 
 class SLABreachItem(HTTPSchemaModel):
     """Details of an SLA breach."""
-
-    request_id: UUID
+    request_id: int
     title: str
     requester_name: Optional[str] = None
     assigned_technician: Optional[str] = None

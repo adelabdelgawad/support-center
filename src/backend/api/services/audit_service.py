@@ -11,7 +11,7 @@ Provides comprehensive audit logging with:
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -59,6 +59,30 @@ class AuditService:
         return audit
 
     @staticmethod
+    async def create_audit_log_background(audit_data: AuditCreate) -> None:
+        """
+        Fire-and-forget audit log creation with independent DB session.
+
+        Args:
+            audit_data: Audit log data
+        """
+        from db.database import AsyncSessionLocal
+
+        try:
+            async with AsyncSessionLocal() as session:
+                audit = Audit(**audit_data.model_dump())
+                session.add(audit)
+                await session.commit()
+
+            logger.info(
+                f"Background audit log created: {audit_data.action} on {audit_data.resource_type} "
+                f"(resource_id={audit_data.resource_id}, user_id={audit_data.user_id})"
+            )
+        except Exception as e:
+            logger.error(f"Background audit log failed: {e}")
+            # Never propagate - audit failures must not affect endpoints
+
+    @staticmethod
     @log_database_operation("get_audit_logs")
     @safe_database_query
     async def get_audit_logs(
@@ -97,6 +121,17 @@ class AuditService:
             query = query.where(Audit.resource_id == filters.resource_id)
         if filters.correlation_id:
             query = query.where(Audit.correlation_id == filters.correlation_id)
+        if filters.search:
+            search_term = f"%{filters.search}%"
+            query = query.where(
+                or_(
+                    Audit.changes_summary.ilike(search_term),
+                    Audit.endpoint.ilike(search_term),
+                    Audit.resource_id.ilike(search_term),
+                    User.username.ilike(search_term),
+                    User.full_name.ilike(search_term),
+                )
+            )
         if filters.start_date:
             query = query.where(Audit.created_at >= filters.start_date)
         if filters.end_date:
@@ -140,7 +175,9 @@ class AuditService:
         return audit_logs, total_count
 
     @staticmethod
-    def generate_changes_summary(old_values: Optional[Dict[str, Any]], new_values: Optional[Dict[str, Any]]) -> str:
+    def generate_changes_summary(
+        old_values: Optional[Dict[str, Any]], new_values: Optional[Dict[str, Any]]
+    ) -> str:
         """
         Generate human-readable summary of changes.
 
@@ -174,7 +211,8 @@ class AuditService:
         if not changed_fields:
             return "No changes detected"
 
-        return f"Updated {len(changed_fields)} fields: {', '.join(changed_fields[:5])}"
+        summary = f"Updated {len(changed_fields)} fields: {', '.join(changed_fields[:5])}"
+        return summary[:1000]
 
     @staticmethod
     @log_database_operation("get_audit_log_by_id")
@@ -228,3 +266,78 @@ class AuditService:
             username=username,
             user_full_name=full_name,
         )
+
+    @staticmethod
+    @log_database_operation("get_distinct_actions")
+    @safe_database_query
+    async def get_distinct_actions(
+        session: AsyncSession,
+    ) -> List[str]:
+        """
+        Get distinct action types for filter dropdown.
+
+        Args:
+            session: Database session
+
+        Returns:
+            List of distinct action values
+        """
+        result = await session.execute(
+            select(Audit.action).distinct().order_by(Audit.action.asc())
+        )
+        return [row[0] for row in result.all() if row[0] is not None]
+
+    @staticmethod
+    @log_database_operation("get_distinct_resource_types")
+    @safe_database_query
+    async def get_distinct_resource_types(
+        session: AsyncSession,
+    ) -> List[str]:
+        """
+        Get distinct resource types for filter dropdown.
+
+        Args:
+            session: Database session
+
+        Returns:
+            List of distinct resource_type values
+        """
+        result = await session.execute(
+            select(Audit.resource_type).distinct().order_by(Audit.resource_type.asc())
+        )
+        return [row[0] for row in result.all() if row[0] is not None]
+
+    @staticmethod
+    @log_database_operation("get_distinct_users")
+    @safe_database_query
+    async def get_distinct_users(
+        session: AsyncSession,
+    ) -> List[dict]:
+        """
+        Get distinct users who performed actions for filter dropdown.
+
+        Args:
+            session: Database session
+
+        Returns:
+            List of dicts with user_id, username, full_name
+        """
+        result = await session.execute(
+            select(
+                Audit.user_id,
+                User.username,
+                User.full_name,
+            )
+            .join(User, Audit.user_id == User.id)
+            .distinct()
+            .order_by(User.full_name.asc())
+        )
+        return [
+            {
+                "user_id": str(row.user_id),
+                "username": row.username,
+                "full_name": row.full_name,
+            }
+            for row in result.all()
+            if row.user_id is not None
+        ]

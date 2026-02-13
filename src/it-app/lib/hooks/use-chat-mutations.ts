@@ -44,7 +44,7 @@ export interface AttachmentUploadResponse {
  * Options for the useChatMutations hook
  */
 export interface UseChatMutationsOptions {
-  requestId: string;
+  requestId: number;
   currentUserId?: number | string; // Support both for backward compatibility
   currentUser?: {
     id: number | string; // Support both for backward compatibility

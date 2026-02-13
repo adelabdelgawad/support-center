@@ -22,7 +22,7 @@ class ChatFileBase(HTTPSchemaModel):
 
 class ChatFileCreate(ChatFileBase):
     """Schema for creating a new chat file."""
-    request_id: UUID
+    request_id: int
     uploaded_by: UUID
     stored_filename: str = Field(..., min_length=1, max_length=255)
 
@@ -30,7 +30,7 @@ class ChatFileCreate(ChatFileBase):
 class ChatFileRead(ChatFileBase):
     """Schema for reading chat file data."""
     id: int
-    request_id: UUID
+    request_id: int
     uploaded_by: UUID
     stored_filename: str
 

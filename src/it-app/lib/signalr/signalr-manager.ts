@@ -36,7 +36,7 @@ export type HubType = 'chat' | 'ticket' | 'notification' | 'remote-access';
 
 // Initial state data from server
 export interface InitialStateData {
-  requestId: string;
+  requestId: number;
   messages: ChatMessage[];
   totalCount: number;
   hasMore: boolean;

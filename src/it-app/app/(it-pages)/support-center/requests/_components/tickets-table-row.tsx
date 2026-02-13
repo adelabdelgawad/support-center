@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronRight } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import type { RequestListItem as Ticket } from '@/types/requests-list';
-import { useFormattedDate, useFormattedDueDate } from '@/lib/utils/hydration-safe-date';
 
 interface TicketsTableRowProps {
   ticket: Ticket;
@@ -73,9 +72,10 @@ export function TicketsTableRow({
   onSelect,
   onTicketClick,
 }: TicketsTableRowProps) {
-  // Hydration-safe date formatting
-  const requestedTime = useFormattedDate(ticket.requested);
-  const { text: dueDateText, isOverdue } = useFormattedDueDate(ticket.dueDate);
+  // Backend-calculated duration fields
+  const requestedTime = ticket.requestedDuration;
+  const dueDateText = ticket.dueDateDuration;
+  const isOverdue = ticket.isDueDateOverdue;
 
   const handleRowClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on the subject link
