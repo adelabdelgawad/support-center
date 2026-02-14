@@ -1,4 +1,5 @@
 """Service layer for Active Directory configuration management."""
+
 import logging
 from typing import List, Optional, Tuple
 from uuid import UUID
@@ -6,10 +7,14 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.encryption import decrypt_value, encrypt_value
-from crud import active_directory_config_crud as ad_crud
-from crud import base_crud
+from repositories.setting.active_directory_config_repository import (
+    active_directory_config_crud as ad_crud,
+)
+from repositories.base_repository import base_crud
 from db.models import ActiveDirectoryConfig
-from crud.organizational_unit_crud import OrganizationalUnitCRUD
+from repositories.setting.organizational_unit_repository import (
+    OrganizationalUnitRepository,
+)
 from api.schemas.active_directory_config import (
     ActiveDirectoryConfigCreate,
     ActiveDirectoryConfigRead,
@@ -18,7 +23,11 @@ from api.schemas.active_directory_config import (
 )
 from api.schemas.ou_tree import OUTreeNodeRead
 from api.services.active_directory import ActiveDirectoryService, LdapService
-from api.services.ou_tree_builder import build_ou_tree, domain_name_to_base_dn, OUTreeNode
+from api.services.ou_tree_builder import (
+    build_ou_tree,
+    domain_name_to_base_dn,
+    OUTreeNode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +38,7 @@ class ActiveDirectoryConfigService:
     @staticmethod
     async def _get_enabled_ou_names(db: AsyncSession) -> List[str]:
         """Get list of enabled OU names from organizational_units table."""
-        ous = await OrganizationalUnitCRUD.get_all(db, enabled_only=True)
+        ous = await OrganizationalUnitRepository.get_all(db, enabled_only=True)
         return [ou.ou_name for ou in ous]
 
     @staticmethod
@@ -53,8 +62,8 @@ class ActiveDirectoryConfigService:
         page = (skip // limit) + 1 if limit > 0 else 1
         per_page = limit if limit > 0 else 100
 
-        configs, total = await base_crud.find_paginated(db, ActiveDirectoryConfig,
-            db, page=page, per_page=per_page
+        configs, total = await base_crud.find_paginated(
+            db, ActiveDirectoryConfig, db, page=page, per_page=per_page
         )
 
         ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
@@ -86,7 +95,9 @@ class ActiveDirectoryConfigService:
             return None
 
         ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
-        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
+        return ActiveDirectoryConfigRead.from_model(
+            config, organizational_units=ou_names
+        )
 
     @staticmethod
     async def get_active_config(
@@ -106,7 +117,9 @@ class ActiveDirectoryConfigService:
             return None
 
         ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
-        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
+        return ActiveDirectoryConfigRead.from_model(
+            config, organizational_units=ou_names
+        )
 
     @staticmethod
     async def create_config(
@@ -141,7 +154,9 @@ class ActiveDirectoryConfigService:
 
         logger.info(f"Created AD configuration: {config.name} (ID: {config.id})")
         ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
-        return ActiveDirectoryConfigRead.from_model(config, organizational_units=ou_names)
+        return ActiveDirectoryConfigRead.from_model(
+            config, organizational_units=ou_names
+        )
 
     @staticmethod
     async def update_config(
@@ -182,9 +197,13 @@ class ActiveDirectoryConfigService:
             db, ActiveDirectoryConfig, id_value=config_id, obj_in=update_dict
         )
 
-        logger.info(f"Updated AD configuration: {updated_config.name} (ID: {config_id})")
+        logger.info(
+            f"Updated AD configuration: {updated_config.name} (ID: {config_id})"
+        )
         ou_names = await ActiveDirectoryConfigService._get_enabled_ou_names(db)
-        return ActiveDirectoryConfigRead.from_model(updated_config, organizational_units=ou_names)
+        return ActiveDirectoryConfigRead.from_model(
+            updated_config, organizational_units=ou_names
+        )
 
     @staticmethod
     async def delete_config(db: AsyncSession, config_id: UUID) -> bool:
@@ -264,9 +283,7 @@ class ActiveDirectoryConfigService:
             )
 
     @staticmethod
-    async def get_ou_tree(
-        db: AsyncSession, config_id: UUID
-    ) -> List[OUTreeNodeRead]:
+    async def get_ou_tree(db: AsyncSession, config_id: UUID) -> List[OUTreeNodeRead]:
         """
         Fetch OU tree structure from Active Directory.
 
@@ -294,14 +311,12 @@ class ActiveDirectoryConfigService:
             logger.info(f"Fetched {len(all_ous)} OUs from AD for tree building")
 
             # Get existing OU names from database
-            existing_ous = await OrganizationalUnitCRUD.get_all(db)
+            existing_ous = await OrganizationalUnitRepository.get_all(db)
             existing_ou_dns = {ou.ou_dn for ou in existing_ous if ou.ou_dn}
 
             # Build hierarchical tree structure
             tree_nodes = build_ou_tree(
-                ou_list=all_ous,
-                existing_ou_dns=existing_ou_dns,
-                base_dn=config.base_dn
+                ou_list=all_ous, existing_ou_dns=existing_ou_dns, base_dn=config.base_dn
             )
 
             # Convert OUTreeNode (internal model) to OUTreeNodeRead (API schema)
@@ -311,7 +326,7 @@ class ActiveDirectoryConfigService:
                     ou_dn=node.ou_dn,
                     children=[convert_to_schema(child) for child in node.children],
                     already_exists=node.already_exists,
-                    user_count=node.user_count
+                    user_count=node.user_count,
                 )
 
             schema_tree = [convert_to_schema(node) for node in tree_nodes]

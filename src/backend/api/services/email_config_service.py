@@ -1,4 +1,5 @@
 """Service layer for Email configuration management."""
+
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -9,8 +10,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.encryption import decrypt_value, encrypt_value
-from crud import email_config_crud as email_crud
-from crud import base_crud
+from repositories.setting.email_config_repository import email_config_crud as email_crud
+from repositories.base_repository import base_crud
 from db.models import EmailConfig
 from api.schemas.email_config import (
     EmailConfigCreate,
@@ -47,8 +48,8 @@ class EmailConfigService:
         page = (skip // limit) + 1 if limit > 0 else 1
         per_page = limit if limit > 0 else 100
 
-        configs, total = await base_crud.find_paginated(db, EmailConfig,
-            db, page=page, per_page=per_page
+        configs, total = await base_crud.find_paginated(
+            db, EmailConfig, db, page=page, per_page=per_page
         )
 
         # Convert to read schemas (excludes encrypted password)
@@ -158,7 +159,9 @@ class EmailConfigService:
                 return None
 
             # Prepare update data
-            update_dict = config_data.model_dump(exclude_unset=True, exclude={"password"})
+            update_dict = config_data.model_dump(
+                exclude_unset=True, exclude={"password"}
+            )
 
             # Handle password update if provided
             if config_data.password:
@@ -170,7 +173,9 @@ class EmailConfigService:
                 await email_crud.deactivate_all(db)
 
             # Update the configuration
-            updated_config = await base_crud.update(db, EmailConfig, db_obj=config, obj_in=update_dict)
+            updated_config = await base_crud.update(
+                db, EmailConfig, db_obj=config, obj_in=update_dict
+            )
             if not updated_config:
                 return None
 
@@ -245,7 +250,7 @@ This is a test email from the Support Center application.
 
 Configuration: {config.name}
 SMTP Server: {config.smtp_host}:{config.smtp_port}
-TLS: {'Enabled' if config.smtp_tls else 'Disabled'}
+TLS: {"Enabled" if config.smtp_tls else "Disabled"}
 
 If you received this message, your email configuration is working correctly.
 """
@@ -255,7 +260,9 @@ If you received this message, your email configuration is working correctly.
             try:
                 if config.smtp_tls:
                     # Use STARTTLS (typically port 587)
-                    server = smtplib.SMTP(config.smtp_host, config.smtp_port, timeout=10)
+                    server = smtplib.SMTP(
+                        config.smtp_host, config.smtp_port, timeout=10
+                    )
                     server.starttls()
                 else:
                     # Use regular connection or SSL (port 25 or 465)

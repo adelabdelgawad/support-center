@@ -41,6 +41,7 @@ from api.schemas import (
     ChatMessageCreateByClient,
     ChatMessageRead,
 )
+
 # REMOVED: attachment imports (attachments removed, kept only screenshots)
 from api.schemas.chat_page import ChatPageResponse
 from api.schemas.read_state import (
@@ -154,7 +155,9 @@ async def create_message(
         sender_info = None
         if message.sender:
             sender_info = {
-                "id": str(message.sender.id),  # Convert UUID to string for JSON serialization
+                "id": str(
+                    message.sender.id
+                ),  # Convert UUID to string for JSON serialization
                 "username": message.sender.username,
                 "fullName": message.sender.full_name,
                 "email": message.sender.email,
@@ -164,7 +167,9 @@ async def create_message(
         message_dict = {
             "id": str(message.id),
             "requestId": str(message.request_id),
-            "senderId": str(message.sender_id) if message.sender_id else None,  # Convert UUID to string
+            "senderId": str(message.sender_id)
+            if message.sender_id
+            else None,  # Convert UUID to string
             "sender": sender_info,  # Include sender details
             "content": message.content,
             "sequenceNumber": message.sequence_number,
@@ -208,7 +213,9 @@ async def create_message(
                 db, message.request_id
             )
             exclude_users = [current_user.id] + viewers
-            participant_ids = [service_request.requester_id]  # Add assigned agents here if needed
+            participant_ids = [
+                service_request.requester_id
+            ]  # Add assigned agents here if needed
 
             await ChatReadStateService.increment_unread_for_users(
                 db=db,
@@ -237,12 +244,15 @@ async def create_message(
                             "message": {
                                 "id": str(message.id),
                                 "senderId": str(current_user.id),
-                                "content": message.content[:100] if message.content else "",
-                                "senderName": current_user.full_name or current_user.username,
+                                "content": message.content[:100]
+                                if message.content
+                                else "",
+                                "senderName": current_user.full_name
+                                or current_user.username,
                                 "createdAt": message.created_at.isoformat() + "Z",
                             },
                             "unreadCount": unread_count,
-                        }
+                        },
                     )
             except Exception as notif_error:
                 # Log but don't fail the message creation
@@ -256,16 +266,18 @@ async def create_message(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get(
-    "/messages/request/{request_id}", response_model=List[ChatMessageRead]
-)
+@router.get("/messages/request/{request_id}", response_model=List[ChatMessageRead])
 async def get_messages(
     request_id: UUID,
     response: Response,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    limit: Optional[int] = Query(None, ge=1, le=200, description="Limit for cursor-based pagination"),
-    before_sequence: Optional[int] = Query(None, ge=1, description="Cursor: load messages with sequence < this"),
+    limit: Optional[int] = Query(
+        None, ge=1, le=200, description="Limit for cursor-based pagination"
+    ),
+    before_sequence: Optional[int] = Query(
+        None, ge=1, description="Cursor: load messages with sequence < this"
+    ),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -308,15 +320,23 @@ async def get_messages(
 
     if use_cursor_pagination:
         # Cursor-based pagination (preferred)
-        messages, total, oldest_sequence = await ChatService.get_messages_cursor_paginated(
+        (
+            messages,
+            total,
+            oldest_sequence,
+        ) = await ChatService.get_messages_cursor_paginated(
             db=db,
             request_id=request_id,
             current_user_id=current_user.id,
             limit=limit,
             before_sequence=before_sequence,
         )
-        response.headers["X-Oldest-Sequence"] = str(oldest_sequence) if oldest_sequence else ""
-        response.headers["X-Has-More"] = "true" if oldest_sequence and oldest_sequence > 1 else "false"
+        response.headers["X-Oldest-Sequence"] = (
+            str(oldest_sequence) if oldest_sequence else ""
+        )
+        response.headers["X-Has-More"] = (
+            "true" if oldest_sequence and oldest_sequence > 1 else "false"
+        )
     else:
         # Offset-based pagination (legacy)
         messages, total, user_id = await ChatService.get_messages(
@@ -474,17 +494,11 @@ async def get_unread_count(
         db=db, request_id=request_id, user_id=current_user.id
     )
 
-    # Get total message count using repository
-    from crud.chat_crud import ChatMessageCRUD
+    # Get total message count using service
+    total = await ChatService.get_total_message_count(db, request_id)
 
-    total = await ChatMessageCRUD.get_total_count_by_request(
-        db, request_id
-    )
-
-    # Get last message timestamp using repository
-    last_message_at = await ChatMessageCRUD.get_last_message_timestamp(
-        db, request_id
-    )
+    # Get last message timestamp using service
+    last_message_at = await ChatService.get_last_message_timestamp(db, request_id)
 
     return UnreadCountResponse(
         request_id=request_id,
@@ -518,18 +532,14 @@ async def delete_message(
     )
 
     if not success:
-        raise HTTPException(
-            status_code=404, detail="Message not found or unauthorized"
-        )
+        raise HTTPException(status_code=404, detail="Message not found or unauthorized")
 
     return Response(status_code=204)
 
 
 @router.get("/page-data", response_model=ChatPageResponse)
 async def get_chat_page_data(
-    status_filter: Optional[int] = Query(
-        None, description="Filter by status ID"
-    ),
+    status_filter: Optional[int] = Query(None, description="Filter by status ID"),
     read_filter: Optional[str] = Query(
         None, description="Filter by read status: 'read' or 'unread'"
     ),
@@ -602,12 +612,14 @@ async def get_all_user_tickets(
             db=db,
             user_id=current_user.id,
             status_filter=None,  # No status filter
-            read_filter=None,    # No read filter
+            read_filter=None,  # No read filter
         )
 
         # Add cache headers for browser/CDN caching
         if response:
-            response.headers["Cache-Control"] = "private, max-age=30, stale-while-revalidate=60"
+            response.headers["Cache-Control"] = (
+                "private, max-age=30, stale-while-revalidate=60"
+            )
 
         return page_data
     except ValueError as e:
@@ -644,9 +656,7 @@ async def get_all_unread_counts(
     from api.services.chat_read_state_service import ChatReadStateService
 
     # Get all monitors for user
-    monitors = await ChatReadStateService.get_all_monitors_for_user(
-        db, current_user.id
-    )
+    monitors = await ChatReadStateService.get_all_monitors_for_user(db, current_user.id)
 
     # Get total unread count
     total_unread = await ChatReadStateService.get_total_unread_count(
@@ -688,9 +698,7 @@ async def get_total_unread(
     """
     from api.services.chat_read_state_service import ChatReadStateService
 
-    total = await ChatReadStateService.get_total_unread_count(
-        db, current_user.id
-    )
+    total = await ChatReadStateService.get_total_unread_count(db, current_user.id)
 
     return TotalUnreadResponse(
         user_id=current_user.id,
@@ -738,7 +746,9 @@ async def mark_chat_as_read(
     from api.services.signalr_client import SignalRClient
 
     logger = logging.getLogger(__name__)
-    logger.debug(f"[READ_RECEIPTS] mark_chat_as_read: request_id={request_id}, user_id={current_user.id}")
+    logger.debug(
+        f"[READ_RECEIPTS] mark_chat_as_read: request_id={request_id}, user_id={current_user.id}"
+    )
 
     # Get current unread count before marking as read
     previous_unread = await ChatReadStateService.get_unread_count(
@@ -754,7 +764,9 @@ async def mark_chat_as_read(
     monitor = await ChatReadStateService.mark_chat_as_read(
         db, request_id, current_user.id
     )
-    logger.debug(f"[READ_RECEIPTS] Marked {len(unread_message_ids)} messages as read for request {request_id}")
+    logger.debug(
+        f"[READ_RECEIPTS] Marked {len(unread_message_ids)} messages as read for request {request_id}"
+    )
 
     # CRITICAL: Broadcast read status via SignalR AFTER DB commit
     # This ensures the contract: FastAPI is the source of truth
@@ -765,7 +777,9 @@ async def mark_chat_as_read(
                 user_id=str(current_user.id),
                 message_ids=unread_message_ids,
             )
-            logger.debug(f"[READ_RECEIPTS] Broadcast ReadStatusUpdate for {len(unread_message_ids)} messages")
+            logger.debug(
+                f"[READ_RECEIPTS] Broadcast ReadStatusUpdate for {len(unread_message_ids)} messages"
+            )
         except Exception as e:
             # Log but don't fail - DB is already committed (source of truth)
             logger.warning(f"[READ_RECEIPTS] Failed to broadcast via SignalR: {e}")

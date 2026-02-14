@@ -4,6 +4,7 @@ Remote Access CRUD - Data access layer for remote access sessions.
 Provides durable session lifecycle tracking.
 WebRTC signaling remains ephemeral (SignalR only).
 """
+
 import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
@@ -14,12 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db import RemoteAccessSession
+from repositories.base_repository import BaseRepository
 
 logger = logging.getLogger(__name__)
 
 
-class RemoteAccessCRUD:
-    """CRUD for remote access session data access.
+class RemoteAccessRepository(BaseRepository[RemoteAccessSession]):
+    """Repository for remote access session data access.
 
     Provides durable session lifecycle tracking:
     - Session creation/end with timestamps
@@ -27,8 +29,11 @@ class RemoteAccessCRUD:
     - Active session queries
     """
 
-    @staticmethod
+    model = RemoteAccessSession
+
+    @classmethod
     async def create_session(
+        cls,
         db: AsyncSession,
         request_id: Optional[UUID],
         agent_id: UUID,
@@ -58,9 +63,9 @@ class RemoteAccessCRUD:
         )
         return session
 
-    @staticmethod
+    @classmethod
     async def get_session_by_id(
-        db: AsyncSession, session_id: UUID
+        cls, db: AsyncSession, session_id: UUID
     ) -> Optional[RemoteAccessSession]:
         """Get session by ID with relationships loaded."""
         result = await db.execute(
@@ -74,8 +79,9 @@ class RemoteAccessCRUD:
         )
         return result.scalar_one_or_none()
 
-    @staticmethod
+    @classmethod
     async def get_sessions_by_request(
+        cls,
         db: AsyncSession,
         request_id: UUID,
         page: int = 1,
@@ -109,8 +115,9 @@ class RemoteAccessCRUD:
         sessions = result.scalars().all()
         return list(sessions), total
 
-    @staticmethod
+    @classmethod
     async def end_session(
+        cls,
         db: AsyncSession,
         session_id: UUID,
         end_reason: str,
@@ -138,10 +145,11 @@ class RemoteAccessCRUD:
         await db.flush()
 
         # Return updated session
-        return await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        return await cls.get_session_by_id(db, session_id)
 
-    @staticmethod
+    @classmethod
     async def toggle_control(
+        cls,
         db: AsyncSession,
         session_id: UUID,
         enabled: bool,
@@ -163,10 +171,11 @@ class RemoteAccessCRUD:
         )
         await db.flush()
 
-        return await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        return await cls.get_session_by_id(db, session_id)
 
-    @staticmethod
+    @classmethod
     async def get_active_session_for_user(
+        cls,
         db: AsyncSession,
         user_id: UUID,
     ) -> Optional[RemoteAccessSession]:
@@ -195,8 +204,9 @@ class RemoteAccessCRUD:
         )
         return result.scalar_one_or_none()
 
-    @staticmethod
+    @classmethod
     async def get_active_session_for_agent(
+        cls,
         db: AsyncSession,
         agent_id: UUID,
     ) -> Optional[RemoteAccessSession]:
@@ -225,8 +235,9 @@ class RemoteAccessCRUD:
         )
         return result.scalar_one_or_none()
 
-    @staticmethod
+    @classmethod
     async def get_active_session_for_pair(
+        cls,
         db: AsyncSession,
         agent_id: UUID,
         requester_id: UUID,
@@ -258,8 +269,9 @@ class RemoteAccessCRUD:
         )
         return result.scalar_one_or_none()
 
-    @staticmethod
+    @classmethod
     async def update_heartbeat(
+        cls,
         db: AsyncSession,
         session_id: UUID,
     ) -> Optional[RemoteAccessSession]:
@@ -281,10 +293,11 @@ class RemoteAccessCRUD:
             .values(last_heartbeat=datetime.utcnow())
         )
         await db.flush()
-        return await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        return await cls.get_session_by_id(db, session_id)
 
-    @staticmethod
+    @classmethod
     async def get_orphaned_sessions(
+        cls,
         db: AsyncSession,
         threshold: datetime,
     ) -> List[RemoteAccessSession]:

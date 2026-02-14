@@ -40,7 +40,14 @@ from api.schemas.login import (
 )
 from api.schemas.domain_user import DomainUser
 from api.services.active_directory import LdapService
-from crud.active_directory_config_crud import get_active_config as get_ad_config
+from repositories.setting.active_directory_config_repository import (
+    get_active_config as get_ad_config,
+)
+from repositories.auth.auth_repository import (
+    AuthTokenRepository,
+    RefreshSessionRepository,
+)
+from repositories.setting.user_repository import UserRepository
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,8 +75,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     try:
         return bcrypt.checkpw(
-            plain_password.encode('utf-8'),
-            hashed_password.encode('utf-8')
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
         )
     except Exception:
         return False
@@ -85,7 +91,7 @@ def hash_password(password: str) -> str:
         Bcrypt hash string
     """
     salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 class AuthenticationService:
@@ -126,7 +132,9 @@ class AuthenticationService:
                 user_id=user.id,
                 ip_address=client_ip or "unknown",
                 auth_method="passwordless",
-                device_fingerprint=generate_device_fingerprint(user.username, device_info),
+                device_fingerprint=generate_device_fingerprint(
+                    user.username, device_info
+                ),
                 browser=device_info.get("browser"),
                 user_agent=device_info.get("user_agent"),
             )
@@ -386,9 +394,13 @@ class AuthenticationService:
                 db=db,
                 user_id=user.id,
                 ip_address=session_ip,
-                app_version=device_info.get("app_version", "1.0.0"),  # Required for desktop
+                app_version=device_info.get(
+                    "app_version", "1.0.0"
+                ),  # Required for desktop
                 auth_method="sso",
-                device_fingerprint=generate_device_fingerprint(user.username, device_info),
+                device_fingerprint=generate_device_fingerprint(
+                    user.username, device_info
+                ),
                 computer_name=device_info.get("computer_name"),
                 os_info=device_info.get("os"),
             )
@@ -692,9 +704,13 @@ class AuthenticationService:
                 db=db,
                 user_id=user.id,
                 ip_address=session_ip,
-                app_version=device_info.get("app_version", "1.0.0"),  # Required for desktop
+                app_version=device_info.get(
+                    "app_version", "1.0.0"
+                ),  # Required for desktop
                 auth_method="ad",
-                device_fingerprint=generate_device_fingerprint(user.username, device_info),
+                device_fingerprint=generate_device_fingerprint(
+                    user.username, device_info
+                ),
                 computer_name=device_info.get("computer_name"),
                 os_info=device_info.get("os"),
             )
@@ -869,18 +885,24 @@ class AuthenticationService:
             if desktop_session:
                 desktop_session.is_active = False
                 await db.commit()
-                logger.info(f"Desktop session {session_id} for user {user_id} terminated successfully")
+                logger.info(
+                    f"Desktop session {session_id} for user {user_id} terminated successfully"
+                )
             else:
                 web_session = await db.get(WebSession, session_id)
                 if web_session:
                     web_session.is_active = False
                     await db.commit()
-                    logger.info(f"Web session {session_id} for user {user_id} terminated successfully")
+                    logger.info(
+                        f"Web session {session_id} for user {user_id} terminated successfully"
+                    )
                 else:
                     logger.warning(f"Session {session_id} not found for user {user_id}")
 
         except Exception as e:
-            logger.error(f"Logout failed for user {user_id}, session {session_id}: {str(e)}")
+            logger.error(
+                f"Logout failed for user {user_id}, session {session_id}: {str(e)}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Logout failed: {str(e)}",
@@ -954,13 +976,13 @@ class AuthenticationService:
             user = await db.get(User, user_id)
 
             if not user:
-                return TokenValidationResponse(
-                    valid=False, reason="User not found"
-                )
+                return TokenValidationResponse(valid=False, reason="User not found")
 
             # Try to get session - check desktop first, then web
             desktop_session = await db.get(DesktopSession, session_id)
-            web_session = await db.get(WebSession, session_id) if not desktop_session else None
+            web_session = (
+                await db.get(WebSession, session_id) if not desktop_session else None
+            )
             session = desktop_session or web_session
 
             if not session or not session.is_active:
@@ -972,15 +994,9 @@ class AuthenticationService:
             token_hash = hash_token(token)
 
             if token_type == "access":
-                token_record = await db.execute(
-                    select(AuthToken).where(
-                        and_(
-                            AuthToken.token_hash == token_hash,
-                            not AuthToken.is_revoked,
-                        )
-                    )
+                token_record = await AuthTokenRepository.find_by_token_hash(
+                    db, token_hash, is_revoked=False
                 )
-                token_record = token_record.scalar_one_or_none()
             # Refresh tokens no longer exist - only access tokens are used
             else:
                 return TokenValidationResponse(
@@ -1099,8 +1115,7 @@ class AuthenticationService:
 
     async def _validate_user(self, username: str, db: AsyncSession) -> User:
         """Validate that user exists, is active, and not blocked."""
-        result = await db.execute(select(User).where(User.username == username))
-        user = result.scalar_one_or_none()
+        user = await UserRepository.find_by_username(db, username)
 
         if not user:
             raise HTTPException(
@@ -1146,7 +1161,9 @@ class AuthenticationService:
             HTTPException: If authentication fails
         """
         # 1. Fetch user from database by username (not hardcoded to "admin")
-        result = await db.execute(select(User).where(User.username == login_data.username))
+        result = await db.execute(
+            select(User).where(User.username == login_data.username)
+        )
         user = result.scalar_one_or_none()
 
         if not user:
@@ -1332,19 +1349,25 @@ class AuthenticationService:
         if policy.version_status == VersionStatus.OUTDATED_ENFORCED:
             if settings.version_policy.reject_outdated_enforced:
                 should_reject = True
-                reject_reason = "App update required. This version is no longer allowed."
+                reject_reason = (
+                    "App update required. This version is no longer allowed."
+                )
 
         elif policy.version_status == VersionStatus.UNKNOWN:
             if settings.version_policy.reject_unknown:
                 should_reject = True
-                reject_reason = "Unknown app version. Please update to a supported version."
+                reject_reason = (
+                    "Unknown app version. Please update to a supported version."
+                )
 
         if should_reject:
             # Track rejection in metrics
             track_version_enforcement_rejection(
                 platform=platform,
                 version_status=policy.version_status.value,
-                reason="outdated_enforced" if policy.version_status == VersionStatus.OUTDATED_ENFORCED else "unknown",
+                reason="outdated_enforced"
+                if policy.version_status == VersionStatus.OUTDATED_ENFORCED
+                else "unknown",
             )
 
             # Log rejection with structured logger (includes installer_url if configured)
@@ -1447,7 +1470,9 @@ class AuthenticationService:
 
         await db.commit()
 
-    def _create_access_token(self, user: User, session: Union[DesktopSession, WebSession]) -> str:
+    def _create_access_token(
+        self, user: User, session: Union[DesktopSession, WebSession]
+    ) -> str:
         """Create access token for user and session."""
         # This would use the security module to create the token
         from core.security import create_access_token
@@ -1465,16 +1490,7 @@ class AuthenticationService:
         """Store new long-lived access token."""
         # Note: user_id should be UUID for auth_tokens table
         # First, revoke old access tokens for this session
-        await db.execute(
-            update(AuthToken)
-            .where(
-                and_(
-                    AuthToken.session_id == session_id,
-                    not AuthToken.is_revoked,
-                )
-            )
-            .values(is_revoked=True, revoked_at=datetime.utcnow())
-        )
+        await AuthTokenRepository.revoke_old_session_tokens(db, session_id)
 
         # Store new long-lived access token (30 days)
         access_token_record = AuthToken(
@@ -1492,30 +1508,12 @@ class AuthenticationService:
     async def _revoke_session_tokens(self, session_id: UUID, db: AsyncSession) -> int:
         """Revoke all tokens for a specific session."""
         # Revoke access tokens only (refresh tokens no longer exist)
-        access_result = await db.execute(
-            update(AuthToken)
-            .where(AuthToken.session_id == session_id)
-            .values(is_revoked=True, revoked_at=datetime.utcnow())
-        )
-
-        await db.commit()
-
-        # Return count of affected rows
-        return access_result.rowcount
+        return await AuthTokenRepository.revoke_session_tokens(db, session_id)
 
     async def _revoke_all_user_tokens(self, user_id: UUID, db: AsyncSession) -> int:
         """Revoke all tokens for a user."""
-        # Revoke access tokens only (refresh tokens no longer exist)
-        access_result = await db.execute(
-            update(AuthToken)
-            .where(AuthToken.user_id == user_id)
-            .values(is_revoked=True, revoked_at=datetime.utcnow())
-        )
-
-        await db.commit()
-
-        # Return count of affected rows
-        return access_result.rowcount
+        # Use repository method
+        return await AuthTokenRepository.revoke_all_user_tokens(db, user_id)
 
     async def cleanup_expired_tokens(
         self, db: AsyncSession, retention_days: int = 7
@@ -1536,57 +1534,22 @@ class AuthenticationService:
         Returns:
             Dict with counts of deleted tokens by category
         """
-        now = datetime.utcnow()
-        retention_cutoff = now - timedelta(days=retention_days)
-
         logger.info(
-            f"Starting auth token cleanup | Retention: {retention_days} days | "
-            f"Cutoff: {retention_cutoff.isoformat()}"
+            f"Starting auth token cleanup | Retention: {retention_days} days"
         )
 
-        # Count tokens before cleanup
-        total_before = await db.execute(select(func.count()).select_from(AuthToken))
-        total_count_before = total_before.scalar()
-
-        # Delete expired tokens older than retention period
-        expired_result = await db.execute(
-            delete(AuthToken)
-            .where(AuthToken.expires_at < now)
-            .where(AuthToken.created_at < retention_cutoff)
-        )
-        expired_deleted = expired_result.rowcount
-
-        # Delete revoked tokens older than retention period
-        revoked_result = await db.execute(
-            delete(AuthToken)
-            .where(AuthToken.is_revoked)
-            .where(AuthToken.created_at < retention_cutoff)
-        )
-        revoked_deleted = revoked_result.rowcount
-
-        await db.commit()
-
-        # Count tokens after cleanup
-        total_after = await db.execute(select(func.count()).select_from(AuthToken))
-        total_count_after = total_after.scalar()
-
-        total_deleted = total_count_before - total_count_after
+        # Use repository method for cleanup
+        result = await AuthTokenRepository.cleanup_expired_tokens(db, retention_days)
 
         logger.info(
             f"Auth token cleanup completed | "
-            f"Total deleted: {total_deleted} | "
-            f"Expired: {expired_deleted} | "
-            f"Revoked: {revoked_deleted} | "
-            f"Remaining: {total_count_after}"
+            f"Total deleted: {result['total_deleted']} | "
+            f"Expired: {result['expired_deleted']} | "
+            f"Revoked: {result['revoked_deleted']} | "
+            f"Remaining: {result['total_after']}"
         )
 
-        return {
-            "total_deleted": total_deleted,
-            "expired_deleted": expired_deleted,
-            "revoked_deleted": revoked_deleted,
-            "total_before": total_count_before,
-            "total_after": total_count_after,
-        }
+        return result
 
     async def cleanup_expired_refresh_sessions(
         self, db: AsyncSession, retention_days: int = 7
@@ -1607,57 +1570,22 @@ class AuthenticationService:
         Returns:
             Dict with counts of deleted sessions by category
         """
-        now = datetime.utcnow()
-        retention_cutoff = now - timedelta(days=retention_days)
-
         logger.info(
-            f"Starting refresh session cleanup | Retention: {retention_days} days | "
-            f"Cutoff: {retention_cutoff.isoformat()}"
+            f"Starting refresh session cleanup | Retention: {retention_days} days"
         )
 
-        # Count sessions before cleanup
-        total_before = await db.execute(select(func.count()).select_from(RefreshSession))
-        total_count_before = total_before.scalar()
-
-        # Delete expired sessions older than retention period
-        expired_result = await db.execute(
-            delete(RefreshSession)
-            .where(RefreshSession.expires_at < now)
-            .where(RefreshSession.created_at < retention_cutoff)
-        )
-        expired_deleted = expired_result.rowcount
-
-        # Delete revoked sessions older than retention period
-        revoked_result = await db.execute(
-            delete(RefreshSession)
-            .where(RefreshSession.revoked)
-            .where(RefreshSession.created_at < retention_cutoff)
-        )
-        revoked_deleted = revoked_result.rowcount
-
-        await db.commit()
-
-        # Count sessions after cleanup
-        total_after = await db.execute(select(func.count()).select_from(RefreshSession))
-        total_count_after = total_after.scalar()
-
-        total_deleted = total_count_before - total_count_after
+        # Use repository method for cleanup
+        result = await RefreshSessionRepository.cleanup_expired_sessions(db, retention_days)
 
         logger.info(
             f"Refresh session cleanup completed | "
-            f"Total deleted: {total_deleted} | "
-            f"Expired: {expired_deleted} | "
-            f"Revoked: {revoked_deleted} | "
-            f"Remaining: {total_count_after}"
+            f"Total deleted: {result['total_deleted']} | "
+            f"Expired: {result['expired_deleted']} | "
+            f"Revoked: {result['revoked_deleted']} | "
+            f"Remaining: {result['total_after']}"
         )
 
-        return {
-            "total_deleted": total_deleted,
-            "expired_deleted": expired_deleted,
-            "revoked_deleted": revoked_deleted,
-            "total_before": total_count_before,
-            "total_after": total_count_after,
-        }
+        return result
 
     async def cleanup_all_expired_sessions(
         self, db: AsyncSession, retention_days: int = 7
@@ -1683,12 +1611,15 @@ class AuthenticationService:
         token_results = await self.cleanup_expired_tokens(db, retention_days)
 
         # Clean up refresh sessions
-        session_results = await self.cleanup_expired_refresh_sessions(db, retention_days)
+        session_results = await self.cleanup_expired_refresh_sessions(
+            db, retention_days
+        )
 
         combined_results = {
             "auth_tokens": token_results,
             "refresh_sessions": session_results,
-            "total_deleted": token_results["total_deleted"] + session_results["total_deleted"],
+            "total_deleted": token_results["total_deleted"]
+            + session_results["total_deleted"],
         }
 
         logger.info(

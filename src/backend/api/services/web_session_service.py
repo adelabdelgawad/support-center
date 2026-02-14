@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -20,6 +19,7 @@ from core.decorators import (
 )
 from core.logging_config import SessionLogger
 from db import WebSession
+from repositories.web_session_repository import WebSessionRepository
 
 # Module-level logger
 logger = logging.getLogger(__name__)
@@ -66,14 +66,9 @@ class WebSessionService:
 
         # Check for existing active session with same fingerprint
         if device_fingerprint:
-            stmt = (
-                select(WebSession)
-                .where(WebSession.user_id == user_id)
-                .where(WebSession.is_active)
-                .where(WebSession.device_fingerprint == device_fingerprint)
+            existing_session = await WebSessionRepository.find_by_user_and_fingerprint(
+                db, user_id, device_fingerprint
             )
-            result = await db.execute(stmt)
-            existing_session = result.scalar_one_or_none()
 
             if existing_session:
                 logger.info(f"Found existing active web session for user {user_id}")
@@ -97,13 +92,7 @@ class WebSessionService:
         max_concurrent = settings.security.session_max_concurrent
         if max_concurrent > 0:
             # Count current active web sessions for this user
-            count_stmt = (
-                select(WebSession)
-                .where(WebSession.user_id == user_id)
-                .where(WebSession.is_active)
-            )
-            result = await db.execute(count_stmt)
-            active_sessions = result.scalars().all()
+            active_sessions = await WebSessionRepository.find_active_by_user(db, user_id)
             active_count = len(active_sessions)
 
             if active_count >= max_concurrent:
@@ -171,9 +160,7 @@ class WebSessionService:
         """
         session_logger = SessionLogger()
 
-        stmt = select(WebSession).where(WebSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await WebSessionRepository.find_by_id(db, session_id)
 
         if not session:
             logger.warning(f"Web heartbeat update failed - Session not found: {session_id}")
@@ -217,9 +204,7 @@ class WebSessionService:
         """
         session_logger = SessionLogger()
 
-        stmt = select(WebSession).where(WebSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await WebSessionRepository.find_by_id(db, session_id)
 
         if not session:
             logger.warning(f"Web disconnect failed - Session not found: {session_id}")
@@ -255,17 +240,7 @@ class WebSessionService:
         Returns:
             List of WebSession
         """
-        stmt = select(WebSession).where(WebSession.user_id == user_id)
-
-        if active_only:
-            stmt = stmt.where(WebSession.is_active)
-
-        stmt = stmt.order_by(WebSession.last_heartbeat.desc())
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await WebSessionRepository.find_by_user(db, user_id, active_only)
 
     @staticmethod
     @safe_database_query("get_active_web_sessions", default_return=[])
@@ -279,16 +254,7 @@ class WebSessionService:
         Returns:
             List of active WebSession
         """
-        stmt = (
-            select(WebSession)
-            .where(WebSession.is_active)
-            .order_by(WebSession.last_heartbeat.desc())
-        )
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await WebSessionRepository.find_all_active(db)
 
     @staticmethod
     @safe_database_query("get_active_web_sessions_with_users", default_return=[])
@@ -303,19 +269,7 @@ class WebSessionService:
         Returns:
             List of active WebSession with user relationship loaded
         """
-        from sqlalchemy.orm import selectinload
-
-        stmt = (
-            select(WebSession)
-            .options(selectinload(WebSession.user))
-            .where(WebSession.is_active)
-            .order_by(WebSession.last_heartbeat.desc())
-        )
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await WebSessionRepository.find_all_active_with_users(db)
 
     @staticmethod
     @transactional_database_operation("cleanup_stale_web_sessions")
@@ -338,20 +292,15 @@ class WebSessionService:
 
         cutoff_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
 
+        cutoff_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+
         logger.info(
             f"Starting stale web session cleanup | "
             f"Timeout: {timeout_minutes} minutes | Cutoff: {cutoff_time.isoformat()}"
         )
 
         # Find stale sessions
-        stmt = (
-            select(WebSession)
-            .where(WebSession.is_active)
-            .where(WebSession.last_heartbeat < cutoff_time)
-        )
-
-        result = await db.execute(stmt)
-        stale_sessions = result.scalars().all()
+        stale_sessions = await WebSessionRepository.find_stale_sessions(db, timeout_minutes)
 
         count = 0
         for session in stale_sessions:
@@ -393,11 +342,7 @@ class WebSessionService:
         Returns:
             WebSession or None
         """
-        stmt = select(WebSession).where(WebSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
-
-        return session
+        return await WebSessionRepository.find_by_id(db, session_id)
 
     @staticmethod
     @safe_database_query("revoke_web_session")
@@ -415,12 +360,7 @@ class WebSessionService:
         Returns:
             True if revoked, False if not found
         """
-        stmt = select(WebSession).where(
-            WebSession.id == session_id,
-            WebSession.user_id == user_id
-        )
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await WebSessionRepository.find_by_session_and_user(db, session_id, user_id)
 
         if not session:
             return False

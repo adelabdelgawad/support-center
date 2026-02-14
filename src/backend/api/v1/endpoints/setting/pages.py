@@ -5,9 +5,8 @@ Provides endpoints for managing pages (UI routes) and page-role permissions.
 Pages define the navigation structure and access control for the application.
 
 **Architecture Note:**
-Refactored to call CRUD directly - service layer removed.
-Previous service layer was pure passthrough to PageCRUD/PageRoleCRUD,
-so it was removed to simplify the architecture.
+Refactored to use PageService - all business logic delegated to service layer.
+Endpoints are thin HTTP wrappers focused on validation and response formatting.
 
 **Key Features:**
 - Page CRUD operations (create, read, update, delete)
@@ -16,13 +15,13 @@ so it was removed to simplify the architecture.
 - Hierarchical page structure (parent_id for nested pages)
 - Active/inactive status tracking
 """
+
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
 from db.database import get_session
 from core.dependencies import get_current_user
-from crud.page_crud import PageCRUD, PageRoleCRUD
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from db import User
 from api.schemas.page import (
@@ -33,6 +32,7 @@ from api.schemas.page import (
     PageRoleDetailedResponse,
     PageRoleListResponse,
 )
+from api.services.page_service import PageService
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ router = APIRouter()
 # =============================================================================
 # PAGE CRUD ENDPOINTS
 # =============================================================================
+
 
 @router.post("", response_model=PageRead, status_code=201)
 async def create_page(
@@ -73,18 +74,14 @@ async def create_page(
     **Permissions:** Authenticated users
     """
     try:
-        # Check if path exists
-        if page_data.path:
-            existing = await PageCRUD.find_by_path(db, page_data.path)
-            if existing:
-                raise HTTPException(status_code=400, detail="Page path already exists")
-
-        obj_in = page_data.model_dump()
-        obj_in["created_by"] = current_user.id
-        page = await PageCRUD.create(db, obj_in=obj_in, commit=True)
+        page = await PageService.create_page(
+            db=db,
+            page_data=page_data,
+            created_by=current_user.id,
+        )
         return page
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
@@ -128,14 +125,14 @@ async def list_pages(
     **Permissions:** Authenticated users (filtered by role access)
     """
     try:
-        pages, total = await PageCRUD.get_pages_for_user(
-            db,
-            current_user,
+        pages, total = await PageService.get_pages_for_user(
+            db=db,
+            current_user=current_user,
             title=title,
             is_active=is_active,
             parent_id=parent_id,
             page=page,
-            per_page=per_page
+            per_page=per_page,
         )
         response.headers["X-Total-Count"] = str(total)
         return pages
@@ -166,7 +163,7 @@ async def get_page(page_id: int, db: AsyncSession = Depends(get_session)):
     **Permissions:** No authentication required
     """
     try:
-        page = await PageCRUD.find_by_id_with_permissions(db, page_id)
+        page = await PageService.get_page_by_id(db, page_id)
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")
         return page
@@ -214,22 +211,17 @@ async def update_page(
     **Permissions:** Authenticated users
     """
     try:
-        # If path is being updated, check it doesn't conflict
-        if update_data.path:
-            existing = await PageCRUD.find_by_path(db, update_data.path)
-            if existing and existing.id != page_id:
-                raise HTTPException(status_code=400, detail="Page path already exists")
-
-        update_dict = update_data.model_dump(exclude_unset=True)
-        update_dict["updated_at"] = datetime.utcnow()
-        update_dict["updated_by"] = current_user.id
-
-        page = await PageCRUD.update(
-            db, id_value=page_id, obj_in=update_dict, commit=True
+        page = await PageService.update_page(
+            db=db,
+            page_id=page_id,
+            update_data=update_data,
+            updated_by=current_user.id,
         )
         if not page:
             raise HTTPException(status_code=404, detail="Page not found")
         return page
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except SQLAlchemyError as e:
@@ -266,7 +258,7 @@ async def delete_page(
     **Permissions:** Authenticated users
     """
     try:
-        success = await PageCRUD.soft_delete(db, page_id, commit=True)
+        success = await PageService.delete_page(db, page_id)
         if not success:
             raise HTTPException(status_code=404, detail="Page not found")
         return Response(status_code=204)
@@ -282,6 +274,7 @@ async def delete_page(
 # =============================================================================
 # PAGE PERMISSION ENDPOINTS
 # =============================================================================
+
 
 @router.get("/permissions", response_model=PageRoleListResponse)
 async def list_page_permissions(
@@ -316,13 +309,13 @@ async def list_page_permissions(
     **Permissions:** No authentication required
     """
     try:
-        permissions, total = await PageRoleCRUD.list_page_permissions_paginated(
-            db,
+        permissions, total = await PageService.list_page_permissions(
+            db=db,
             page_id=page_id,
             role_id=role_id,
             include_inactive=include_inactive,
             page=page,
-            per_page=per_page
+            per_page=per_page,
         )
 
         # Build detailed response
@@ -341,7 +334,8 @@ async def list_page_permissions(
         return PageRoleListResponse(permissions=permission_items, total=total)
     except SQLAlchemyError as e:
         raise HTTPException(
-            status_code=500, detail=f"Database error while listing permissions: {str(e)}"
+            status_code=500,
+            detail=f"Database error while listing permissions: {str(e)}",
         )
 
 
@@ -372,28 +366,25 @@ async def create_page_permission(
     **Permissions:** Authenticated users
     """
     try:
-        obj_in = permission_data.model_dump()
-        obj_in["created_by"] = current_user.id
-
-        permission = await PageRoleCRUD.create(db, obj_in=obj_in, commit=True)
-
-        # Load relationships using repository
-        permission_with_details = await PageRoleCRUD.find_by_id_with_details(
-            db, permission.id
+        permission = await PageService.create_page_permission(
+            db=db,
+            permission_data=permission_data,
+            created_by=current_user.id,
         )
 
         return PageRoleDetailedResponse(
-            id=permission_with_details.id,
-            role_id=permission_with_details.role_id,
-            page_id=permission_with_details.page_id,
-            is_active=permission_with_details.is_active,
-            role_name=permission_with_details.role.name if permission_with_details.role else None,
-            page_title=permission_with_details.page.title if permission_with_details.page else None,
+            id=permission.id,
+            role_id=permission.role_id,
+            page_id=permission.page_id,
+            is_active=permission.is_active,
+            role_name=permission.role.name if permission.role else None,
+            page_title=permission.page.title if permission.page else None,
         )
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
-            status_code=500, detail=f"Database error while creating permission: {str(e)}"
+            status_code=500,
+            detail=f"Database error while creating permission: {str(e)}",
         )
 
 
@@ -427,8 +418,11 @@ async def deactivate_page_permission(
     **Permissions:** Authenticated users
     """
     try:
-        permission = await PageRoleCRUD.toggle_active_status(
-            db, permission_id, is_active=False, updated_by=current_user.id, commit=True
+        permission = await PageService.toggle_page_permission(
+            db=db,
+            permission_id=permission_id,
+            is_active=False,
+            updated_by=current_user.id,
         )
         if not permission:
             raise HTTPException(status_code=404, detail="Permission not found")
@@ -443,7 +437,8 @@ async def deactivate_page_permission(
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
-            status_code=500, detail=f"Database error while deactivating permission: {str(e)}"
+            status_code=500,
+            detail=f"Database error while deactivating permission: {str(e)}",
         )
 
 
@@ -476,8 +471,11 @@ async def activate_page_permission(
     **Permissions:** Authenticated users
     """
     try:
-        permission = await PageRoleCRUD.toggle_active_status(
-            db, permission_id, is_active=True, updated_by=current_user.id, commit=True
+        permission = await PageService.toggle_page_permission(
+            db=db,
+            permission_id=permission_id,
+            is_active=True,
+            updated_by=current_user.id,
         )
         if not permission:
             raise HTTPException(status_code=404, detail="Permission not found")
@@ -492,5 +490,6 @@ async def activate_page_permission(
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
-            status_code=500, detail=f"Database error while activating permission: {str(e)}"
+            status_code=500,
+            detail=f"Database error while activating permission: {str(e)}",
         )

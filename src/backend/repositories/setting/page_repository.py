@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db import Page, PageRole, User, UserRole
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class PageCRUD(BaseCRUD[Page]):
+class PageRepository(BaseRepository[Page]):
     """CRUD for Page database operations."""
 
     model = Page
@@ -247,7 +247,7 @@ class PageCRUD(BaseCRUD[Page]):
         return True
 
 
-class PageRoleCRUD(BaseCRUD[PageRole]):
+class PageRoleRepository(BaseRepository[PageRole]):
     """CRUD for PageRole database operations."""
 
     model = PageRole

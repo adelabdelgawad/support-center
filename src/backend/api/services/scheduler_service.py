@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, case, delete, func, select, text, update
+from sqlalchemy import text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import (
@@ -39,6 +39,13 @@ from api.schemas.scheduler import (
     SchedulerJobTypeRead,
     ScheduledJobExecutionListResponse,
     ScheduledJobExecutionRead,
+)
+from repositories.management.scheduler_repository import (
+    TaskFunctionRepository,
+    SchedulerJobTypeRepository,
+    ScheduledJobRepository,
+    ScheduledJobExecutionRepository,
+    SchedulerInstanceRepository,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,24 +79,17 @@ class SchedulerService:
         Returns:
             TaskFunctionListResponse with task functions and total count
         """
-        query = select(TaskFunction)
-
-        if is_active is not None:
-            query = query.where(TaskFunction.is_active == is_active)
-
-        # Get total count
-        count_result = await db.execute(
-            select(func.count()).select_from(query.subquery())
+        task_functions, total = await TaskFunctionRepository.list_functions(
+            db,
+            is_active=is_active,
+            page=page,
+            per_page=per_page,
         )
-        total = count_result.scalar() or 0
-
-        # Get paginated results
-        query = query.order_by(TaskFunction.name).offset((page - 1) * per_page).limit(per_page)
-        result = await db.execute(query)
-        task_functions = result.scalars().all()
 
         return TaskFunctionListResponse(
-            task_functions=[TaskFunctionRead.model_validate(tf) for tf in task_functions],
+            task_functions=[
+                TaskFunctionRead.model_validate(tf) for tf in task_functions
+            ],
             total=total,
         )
 
@@ -109,13 +109,7 @@ class SchedulerService:
         Returns:
             List of job types
         """
-        result = await db.execute(
-            select(SchedulerJobType)
-            .where(SchedulerJobType.is_active)
-            .order_by(SchedulerJobType.id)
-        )
-        job_types = result.scalars().all()
-
+        job_types = await SchedulerJobTypeRepository.list_active_types(db)
         return [SchedulerJobTypeRead.model_validate(jt) for jt in job_types]
 
     # ==========================================================================
@@ -144,46 +138,20 @@ class SchedulerService:
         Returns:
             ScheduledJobListResponse with jobs and statistics
         """
-        # Build base query with filters
-        filters = []
-        if name:
-            filters.append(ScheduledJob.name.ilike(f"%{name}%"))
-        if is_enabled is not None:
-            filters.append(ScheduledJob.is_enabled == is_enabled)
-        if task_function_id is not None:
-            filters.append(ScheduledJob.task_function_id == task_function_id)
-
-        # Single query to get all counts efficiently using conditional aggregation
-        counts_query = select(
-            func.count().label("total"),
-            func.sum(case((ScheduledJob.is_enabled, 1), else_=0)).label("enabled_count"),
-            func.sum(case((ScheduledJob.last_status == "running", 1), else_=0)).label("running_count"),
+        (
+            jobs,
+            total,
+            enabled_count,
+            disabled_count,
+            running_count,
+        ) = await ScheduledJobRepository.list_jobs(
+            db,
+            name=name,
+            is_enabled=is_enabled,
+            task_function_id=task_function_id,
+            page=page,
+            per_page=per_page,
         )
-        if filters:
-            counts_query = counts_query.where(and_(*filters))
-
-        counts_result = await db.execute(counts_query)
-        counts = counts_result.one()
-
-        total = counts.total or 0
-        enabled_count = counts.enabled_count or 0
-        disabled_count = total - enabled_count
-        running_count = counts.running_count or 0
-
-        # Get paginated results
-        jobs_query = select(ScheduledJob)
-        if filters:
-            jobs_query = jobs_query.where(and_(*filters))
-
-        jobs_query = (
-            jobs_query
-            .order_by(ScheduledJob.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-        )
-
-        result = await db.execute(jobs_query)
-        jobs = result.scalars().all()
 
         return ScheduledJobListResponse(
             jobs=[ScheduledJobRead.model_validate(job) for job in jobs],
@@ -210,12 +178,7 @@ class SchedulerService:
         Raises:
             HTTPException: If job not found
         """
-        # Get job with task function and job type
-        result = await db.execute(
-            select(ScheduledJob)
-            .where(ScheduledJob.id == job_id)
-        )
-        job = result.scalar_one_or_none()
+        job = await ScheduledJobRepository.find_by_id(db, job_id)
 
         if not job:
             raise HTTPException(
@@ -224,31 +187,29 @@ class SchedulerService:
             )
 
         # Get task function
-        tf_result = await db.execute(
-            select(TaskFunction).where(TaskFunction.id == job.task_function_id)
+        task_function = await TaskFunctionRepository.find_by_id(
+            db, job.task_function_id
         )
-        task_function = tf_result.scalar_one_or_none()
 
         # Get job type
-        jt_result = await db.execute(
-            select(SchedulerJobType).where(SchedulerJobType.id == job.job_type_id)
-        )
-        job_type = jt_result.scalar_one_or_none()
+        job_type = await SchedulerJobTypeRepository.find_by_id(db, job.job_type_id)
 
         # Get recent executions
-        exec_result = await db.execute(
-            select(ScheduledJobExecution)
-            .where(ScheduledJobExecution.job_id == job_id)
-            .order_by(ScheduledJobExecution.started_at.desc())
-            .limit(10)
+        executions = await ScheduledJobExecutionRepository.find_recent_by_job_id(
+            db, job_id, limit=10
         )
-        executions = exec_result.scalars().all()
 
         return ScheduledJobDetail(
             **ScheduledJobRead.model_validate(job).model_dump(),
-            task_function=TaskFunctionRead.model_validate(task_function) if task_function else None,
-            job_type=SchedulerJobTypeRead.model_validate(job_type) if job_type else None,
-            recent_executions=[ScheduledJobExecutionRead.model_validate(e) for e in executions],
+            task_function=TaskFunctionRead.model_validate(task_function)
+            if task_function
+            else None,
+            job_type=SchedulerJobTypeRead.model_validate(job_type)
+            if job_type
+            else None,
+            recent_executions=[
+                ScheduledJobExecutionRead.model_validate(e) for e in executions
+            ],
         )
 
     async def create_scheduled_job(
@@ -271,10 +232,9 @@ class SchedulerService:
             HTTPException: If validation fails
         """
         # Validate task function exists
-        tf_result = await db.execute(
-            select(TaskFunction).where(TaskFunction.id == job_data.task_function_id)
+        task_function = await TaskFunctionRepository.find_by_id(
+            db, job_data.task_function_id
         )
-        task_function = tf_result.scalar_one_or_none()
         if not task_function:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -282,10 +242,7 @@ class SchedulerService:
             )
 
         # Validate job type exists
-        jt_result = await db.execute(
-            select(SchedulerJobType).where(SchedulerJobType.id == job_data.job_type_id)
-        )
-        job_type = jt_result.scalar_one_or_none()
+        job_type = await SchedulerJobTypeRepository.find_by_id(db, job_data.job_type_id)
         if not job_type:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -338,10 +295,7 @@ class SchedulerService:
             HTTPException: If job not found
         """
         # Get job
-        result = await db.execute(
-            select(ScheduledJob).where(ScheduledJob.id == job_id)
-        )
-        job = result.scalar_one_or_none()
+        job = await ScheduledJobRepository.find_by_id(db, job_id)
 
         if not job:
             raise HTTPException(
@@ -378,12 +332,7 @@ class SchedulerService:
             HTTPException: If job not found or is system job
         """
         # Get job with task function
-        result = await db.execute(
-            select(ScheduledJob)
-            .join(TaskFunction)
-            .where(ScheduledJob.id == job_id)
-        )
-        job = result.scalar_one_or_none()
+        job = await ScheduledJobRepository.find_by_id(db, job_id)
 
         if not job:
             raise HTTPException(
@@ -398,11 +347,7 @@ class SchedulerService:
                 detail="Cannot delete system jobs",
             )
 
-        await db.execute(
-            delete(ScheduledJob).where(ScheduledJob.id == job_id)
-        )
-        await db.commit()
-
+        await ScheduledJobRepository.delete(db, job_id)
         logger.info(f"Deleted scheduled job: {job_id}")
 
     async def toggle_job_status(
@@ -426,10 +371,9 @@ class SchedulerService:
         Raises:
             HTTPException: If job not found
         """
-        result = await db.execute(
-            select(ScheduledJob).where(ScheduledJob.id == job_id)
+        job = await ScheduledJobRepository.update_enabled(
+            db, job_id, is_enabled, updated_by
         )
-        job = result.scalar_one_or_none()
 
         if not job:
             raise HTTPException(
@@ -437,14 +381,9 @@ class SchedulerService:
                 detail=f"Scheduled job {job_id} not found",
             )
 
-        job.is_enabled = is_enabled
-        job.updated_by = updated_by
-        job.updated_at = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(job)
-
-        logger.info(f"{'Enabled' if is_enabled else 'Disabled'} scheduled job: {job_id}")
+        logger.info(
+            f"{'Enabled' if is_enabled else 'Disabled'} scheduled job: {job_id}"
+        )
         return ScheduledJobRead.model_validate(job)
 
     async def trigger_job_manually(
@@ -471,10 +410,7 @@ class SchedulerService:
             HTTPException: If job not found or not enabled
         """
         # Get job
-        result = await db.execute(
-            select(ScheduledJob).where(ScheduledJob.id == job_id)
-        )
-        job = result.scalar_one_or_none()
+        job = await ScheduledJobRepository.find_by_id(db, job_id)
 
         if not job:
             raise HTTPException(
@@ -501,21 +437,13 @@ class SchedulerService:
         await db.refresh(execution)
 
         # Update job's last_status to pending immediately
-        await db.execute(
-            update(ScheduledJob)
-            .where(ScheduledJob.id == job_id)
-            .values(last_status="pending")
-        )
-        await db.commit()
+        await ScheduledJobRepository.update_status(db, job_id, "pending")
 
         # Refresh job to get updated status
         await db.refresh(job)
 
         # Get current leader instance for scheduler_instance_id
-        leader_result = await db.execute(
-            select(SchedulerInstance).where(SchedulerInstance.is_leader)
-        )
-        leader = leader_result.scalar_one_or_none()
+        leader = await SchedulerInstanceRepository.find_leader(db)
         if leader:
             execution.scheduler_instance_id = leader.id
             await db.commit()
@@ -570,28 +498,18 @@ class SchedulerService:
         Returns:
             ScheduledJobExecutionListResponse with executions
         """
-        query = select(ScheduledJobExecution)
-
-        if job_id:
-            query = query.where(ScheduledJobExecution.job_id == job_id)
-        if status:
-            query = query.where(ScheduledJobExecution.status == status)
-
-        # Get total count
-        count_result = await db.execute(
-            select(func.count()).select_from(query.subquery())
+        executions, total = await ScheduledJobExecutionRepository.list_executions(
+            db,
+            job_id=job_id,
+            status=status,
+            page=page,
+            per_page=per_page,
         )
-        total = count_result.scalar() or 0
-
-        # Get paginated results
-        query = query.order_by(ScheduledJobExecution.started_at.desc())
-        query = query.offset((page - 1) * per_page).limit(per_page)
-
-        result = await db.execute(query)
-        executions = result.scalars().all()
 
         return ScheduledJobExecutionListResponse(
-            executions=[ScheduledJobExecutionRead.model_validate(e) for e in executions],
+            executions=[
+                ScheduledJobExecutionRead.model_validate(e) for e in executions
+            ],
             total=total,
         )
 
@@ -612,55 +530,28 @@ class SchedulerService:
             SchedulerStatusResponse with current status
         """
         # Check if scheduler is running (has any instances)
-        result = await db.execute(
-            select(func.count()).select_from(SchedulerInstance)
-        )
+        result = await db.execute(select(func.count()).select_from(SchedulerInstance))
         is_running = result.scalar() > 0
 
         # Get leader instance
-        leader_result = await db.execute(
-            select(SchedulerInstance)
-            .where(SchedulerInstance.is_leader)
+        leader = await SchedulerInstanceRepository.find_leader(db)
+        leader_instance = (
+            SchedulerInstanceRead.model_validate(leader) if leader else None
         )
-        leader = leader_result.scalar_one_or_none()
-        leader_instance = SchedulerInstanceRead.model_validate(leader) if leader else None
 
         # Get job counts
-        total_result = await db.execute(
-            select(func.count()).select_from(ScheduledJob)
-        )
-        total_jobs = total_result.scalar() or 0
-
-        enabled_result = await db.execute(
-            select(func.count()).where(ScheduledJob.is_enabled)
-        )
-        enabled_jobs = enabled_result.scalar() or 0
-
-        running_result = await db.execute(
-            select(func.count()).where(ScheduledJob.last_status == "running")
-        )
-        running_jobs = running_result.scalar() or 0
+        total_jobs = await ScheduledJobRepository.count_total(db)
+        enabled_jobs = await ScheduledJobRepository.count_enabled(db)
+        running_jobs = await ScheduledJobRepository.count_running(db)
 
         # Get next scheduled job
-        next_result = await db.execute(
-            select(ScheduledJob)
-            .where(
-                and_(
-                    ScheduledJob.is_enabled,
-                    ScheduledJob.next_run_time.isnot(None),
-                )
-            )
-            .order_by(ScheduledJob.next_run_time.asc())
-            .limit(1)
+        next_job = await ScheduledJobRepository.find_next_scheduled(db)
+        next_scheduled_job = (
+            ScheduledJobRead.model_validate(next_job) if next_job else None
         )
-        next_job = next_result.scalar_one_or_none()
-        next_scheduled_job = ScheduledJobRead.model_validate(next_job) if next_job else None
 
         # Get all instances
-        instances_result = await db.execute(
-            select(SchedulerInstance).order_by(SchedulerInstance.started_at.desc())
-        )
-        instances = instances_result.scalars().all()
+        instances = await SchedulerInstanceRepository.list_all(db)
 
         return SchedulerStatusResponse(
             is_running=is_running,
@@ -686,17 +577,16 @@ class SchedulerService:
         """
         import os
 
-        instance = SchedulerInstance(
+        instance = await SchedulerInstanceRepository.create_instance(
+            db,
             hostname=socket.gethostname(),
             pid=os.getpid(),
             version=self.version,
         )
 
-        db.add(instance)
-        await db.commit()
-        await db.refresh(instance)
-
-        logger.info(f"Registered scheduler instance: {instance.id} on {instance.hostname}")
+        logger.info(
+            f"Registered scheduler instance: {instance.id} on {instance.hostname}"
+        )
         return instance.id
 
     async def acquire_leader_lock(
@@ -713,48 +603,12 @@ class SchedulerService:
         Returns:
             True if lock acquired, False otherwise
         """
-        # Check for active leader
-        result = await db.execute(
-            select(SchedulerInstance).where(
-                and_(
-                    SchedulerInstance.is_leader,
-                    SchedulerInstance.last_heartbeat
-                    > datetime.utcnow() - timedelta(minutes=2),
-                )
-            )
-        )
-        current_leader = result.scalar_one_or_none()
+        acquired = await SchedulerInstanceRepository.update_leader(db, instance_id)
 
-        if current_leader and current_leader.id != instance_id:
-            return False
+        if acquired:
+            logger.debug(f"Instance {instance_id} acquired leader lock")
 
-        # Acquire lock
-        await db.execute(
-            update(SchedulerInstance)
-            .where(SchedulerInstance.id == instance_id)
-            .values(
-                is_leader=True,
-                leader_since=datetime.utcnow(),
-                last_heartbeat=datetime.utcnow(),
-            )
-        )
-
-        # Clear leader flag from other instances
-        await db.execute(
-            update(SchedulerInstance)
-            .where(
-                and_(
-                    SchedulerInstance.id != instance_id,
-                    SchedulerInstance.is_leader,
-                )
-            )
-            .values(is_leader=False, leader_since=None)
-        )
-
-        await db.commit()
-
-        logger.debug(f"Instance {instance_id} acquired leader lock")
-        return True
+        return acquired
 
     async def update_instance_heartbeat(
         self,
@@ -767,12 +621,7 @@ class SchedulerService:
             db: Database session
             instance_id: This instance's ID
         """
-        await db.execute(
-            update(SchedulerInstance)
-            .where(SchedulerInstance.id == instance_id)
-            .values(last_heartbeat=datetime.utcnow())
-        )
-        await db.commit()
+        await SchedulerInstanceRepository.update_heartbeat(db, instance_id)
 
     async def cleanup_stale_instances(
         self,
@@ -788,29 +637,9 @@ class SchedulerService:
         Returns:
             Number of instances removed
         """
-        timeout = datetime.utcnow() - timedelta(minutes=heartbeat_timeout_minutes)
-
-        # First, resign leadership from stale instances
-        await db.execute(
-            update(SchedulerInstance)
-            .where(
-                and_(
-                    SchedulerInstance.last_heartbeat < timeout,
-                    SchedulerInstance.is_leader,
-                )
-            )
-            .values(is_leader=False, leader_since=None)
+        count = await SchedulerInstanceRepository.cleanup_stale_instances(
+            db, heartbeat_timeout_minutes
         )
-
-        # Then delete stale instances
-        result = await db.execute(
-            delete(SchedulerInstance).where(
-                SchedulerInstance.last_heartbeat < timeout
-            )
-        )
-
-        await db.commit()
-        count = result.rowcount
 
         if count > 0:
             logger.info(f"Cleaned up {count} stale scheduler instances")
@@ -838,38 +667,17 @@ class SchedulerService:
             execution_id: Execution ID
             celery_task_id: Celery task ID
         """
-        # Get execution to find the job_id
-        result_exec = await db.execute(
-            select(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
+        job_id = await ScheduledJobExecutionRepository.update_started(
+            db, execution_id, celery_task_id
         )
-        execution = result_exec.scalar_one_or_none()
 
-        if not execution:
+        if not job_id:
             logger.warning(f"Execution {execution_id} not found for start")
             return
 
-        # Update execution status to running
-        await db.execute(
-            update(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
-            .values(
-                status="running",
-                celery_task_id=celery_task_id,
-            )
+        logger.info(
+            f"Marked execution {execution_id} and job {job_id} as running"
         )
-
-        # Update job's last_status to running
-        await db.execute(
-            update(ScheduledJob)
-            .where(ScheduledJob.id == execution.job_id)
-            .values(last_status="running")
-        )
-
-        # Use flush() for immediate visibility without committing
-        # This allows the caller to manage the transaction boundary
-        await db.flush()
-        logger.info(f"Marked execution {execution_id} and job {execution.job_id} as running")
 
     async def record_execution_complete(
         self,
@@ -894,53 +702,27 @@ class SchedulerService:
             error_message: Error message if failed
             error_traceback: Full traceback if failed
         """
-        # Get execution
-        result_exec = await db.execute(
-            select(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
+        job_id = await ScheduledJobExecutionRepository.update_completed(
+            db,
+            execution_id,
+            status,
+            result,
+            error_message,
+            error_traceback,
         )
-        execution = result_exec.scalar_one_or_none()
 
-        if not execution:
+        if not job_id:
             logger.warning(f"Execution {execution_id} not found for completion")
             return
 
-        # Calculate duration
-        completed_at = datetime.utcnow()
+        # Get execution for duration calculation (for logging)
+        execution = await ScheduledJobExecutionRepository.find_by_id(db, execution_id)
         duration = None
-        if execution.started_at:
-            duration = (completed_at - execution.started_at).total_seconds()
-
-        # Update execution
-        await db.execute(
-            update(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
-            .values(
-                status=status,
-                completed_at=completed_at,
-                duration_seconds=duration,
-                result=result,
-                error_message=error_message,
-                error_traceback=error_traceback,
-            )
-        )
-
-        # Update job
-        await db.execute(
-            update(ScheduledJob)
-            .where(ScheduledJob.id == execution.job_id)
-            .values(
-                last_run_time=completed_at,
-                last_status=status,
-            )
-        )
-
-        # Use flush() for immediate visibility without committing
-        # This allows the caller to manage the transaction boundary
-        await db.flush()
+        if execution and execution.duration_seconds:
+            duration = execution.duration_seconds
 
         logger.info(
-            f"Recorded execution completion: execution={execution_id}, job={execution.job_id}, "
+            f"Recorded execution completion: execution={execution_id}, job={job_id}, "
             f"status={status}, duration={duration}s"
         )
 
@@ -965,28 +747,16 @@ class SchedulerService:
                 - cutoff_date: ISO timestamp of cutoff date used
                 - timestamp: UTC timestamp of cleanup operation
         """
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
-
-        # Delete old execution records
-        result = await db.execute(
-            delete(ScheduledJobExecution).where(
-                ScheduledJobExecution.completed_at < cutoff_date
-            )
+        result = await ScheduledJobExecutionRepository.cleanup_old_executions(
+            db, retention_days
         )
-
-        await db.commit()
-        count = result.rowcount
 
         logger.info(
-            f"Cleaned up {count} old scheduler job execution records "
-            f"(retention: {retention_days} days, cutoff: {cutoff_date.isoformat()})"
+            f"Cleaned up {result['executions_deleted']} old scheduler job execution records "
+            f"(retention: {retention_days} days, cutoff: {result['cutoff_date']})"
         )
 
-        return {
-            "executions_deleted": count,
-            "cutoff_date": cutoff_date.isoformat(),
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        return result
 
     async def timeout_stale_executions(
         self,
@@ -1019,13 +789,15 @@ class SchedulerService:
         await db.execute(text("SET local statement_timeout = '5s'"))
 
         # Use raw SQL with SKIP LOCKED to avoid being blocked by other transactions
-        result = await db.execute(text("""
+        result = await db.execute(
+            text("""
             SELECT e.id, e.job_id, e.started_at, COALESCE(j.timeout_seconds, 300) as timeout_seconds
             FROM scheduled_job_executions e
             JOIN scheduled_jobs j ON e.job_id = j.id
             WHERE e.status IN ('pending', 'running')
             FOR UPDATE SKIP LOCKED
-        """))
+        """)
+        )
         executions_to_check = result.all()
 
         timed_out_executions = []
@@ -1066,10 +838,7 @@ class SchedulerService:
             await db.execute(
                 update(ScheduledJob)
                 .where(ScheduledJob.id.in_(timed_out_job_ids))
-                .values(
-                    last_run_time=completion_time,
-                    last_status="timeout"
-                )
+                .values(last_run_time=completion_time, last_status="timeout")
             )
             await db.commit()
 

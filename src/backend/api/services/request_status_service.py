@@ -21,6 +21,7 @@ from api.schemas.request_status import (
     RequestStatusSummary,
     RequestStatusUpdate,
 )
+from repositories.setting.request_status_repository import RequestStatusRepository
 
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
@@ -153,8 +154,12 @@ class RequestStatusService:
         total_count_stmt = select(
             func.count(RequestStatus.id).label("total"),
             func.sum(case((RequestStatus.is_active, 1), else_=0)).label("active_count"),
-            func.sum(case((not RequestStatus.is_active, 1), else_=0)).label("inactive_count"),
-            func.sum(case((RequestStatus.readonly, 1), else_=0)).label("readonly_count"),
+            func.sum(case((not RequestStatus.is_active, 1), else_=0)).label(
+                "inactive_count"
+            ),
+            func.sum(case((RequestStatus.readonly, 1), else_=0)).label(
+                "readonly_count"
+            ),
         )
 
         # Get total counts (unfiltered)
@@ -221,14 +226,16 @@ class RequestStatusService:
         # Readonly only prevents changing name, description, and color
         # Switches (isActive, countAsSolved, visibleOnRequesterPage) can still be toggled
         if status.readonly and (
-            update_data.name or
-            update_data.name_en or
-            update_data.name_ar or
-            update_data.description is not None or
-            update_data.color is not None or
-            update_data.readonly is not None
+            update_data.name
+            or update_data.name_en
+            or update_data.name_ar
+            or update_data.description is not None
+            or update_data.color is not None
+            or update_data.readonly is not None
         ):
-            raise ValueError("Cannot modify name, description, or color of readonly request status")
+            raise ValueError(
+                "Cannot modify name, description, or color of readonly request status"
+            )
 
         # Update fields (filter None to protect NOT NULL columns)
         update_dict = {
@@ -379,9 +386,7 @@ class RequestStatusService:
             Detailed request status or None
         """
         # Get status with request count
-        status_stmt = select(RequestStatus).where(
-            RequestStatus.id == status_id
-        )
+        status_stmt = select(RequestStatus).where(RequestStatus.id == status_id)
         count_stmt = select(func.count(ServiceRequest.id)).where(
             ServiceRequest.status_id == status_id
         )
@@ -449,11 +454,7 @@ class RequestStatusService:
         Returns:
             Default request status or None
         """
-        stmt = select(RequestStatus).where(RequestStatus.id == "1")
-        result = await db.execute(stmt)
-        status = result.scalar_one_or_none()
-
-        return status
+        return await RequestStatusRepository.find_by_id(db, 1)
 
     @staticmethod
     @safe_database_query("get_all_active_statuses", default_return=[])
@@ -471,8 +472,4 @@ class RequestStatusService:
         Returns:
             List of active request statuses
         """
-        stmt = select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
-        result = await db.execute(stmt)
-        statuses = result.scalars().all()
-
-        return list(statuses)
+        return await RequestStatusRepository.get_all_active_statuses(db)

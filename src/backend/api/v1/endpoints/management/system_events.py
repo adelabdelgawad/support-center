@@ -4,11 +4,6 @@ System Events API endpoints for managing event configurations.
 Provides endpoints for managing system events that trigger automated actions,
 such as sending notifications or executing workflows when specific conditions occur.
 
-**Architecture Note:**
-Refactored to inline DB queries - service and CRUD layers removed.
-Previous service layer used raw SQL with minor FK validation which has been
-simplified into helper functions within this module.
-
 **Key Features:**
 - System event CRUD operations
 - Event key-based lookups (used by event_trigger_service)
@@ -21,19 +16,17 @@ simplified into helper functions within this module.
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from core.dependencies import get_session, get_current_user
-from db import SystemEvent, SystemMessage, User
+from db import User
 from api.schemas.system_event import (
     SystemEventCreate,
     SystemEventUpdate,
     SystemEventRead,
     SystemEventListResponse,
 )
+from api.services.system_event_service import SystemEventService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -70,34 +63,17 @@ async def list_system_events(
     **Permissions:** Authenticated users
     """
     try:
-        stmt = select(SystemEvent).options(selectinload(SystemEvent.system_message))
-
-        if is_active is not None:
-            stmt = stmt.where(SystemEvent.is_active == is_active)
-
-        # Get total count
-        count_stmt = select(func.count()).select_from(SystemEvent)
-        if is_active is not None:
-            count_stmt = count_stmt.where(SystemEvent.is_active == is_active)
-
-        count_result = await db.execute(count_stmt)
-        total = count_result.scalar() or 0
-
-        # Get paginated results
-        stmt = stmt.offset(skip).limit(limit).order_by(SystemEvent.created_at.desc())
-        result = await db.execute(stmt)
-        events = result.scalars().all()
-
-        active_count = sum(1 for e in events if e.is_active)
-        inactive_count = len(events) - active_count
+        events, total, active_count, inactive_count = await SystemEventService.list_events(
+            db, skip=skip, limit=limit, is_active=is_active
+        )
 
         return SystemEventListResponse(
-            events=list(events),
+            events=events,
             total=total,
             active_count=active_count,
             inactive_count=inactive_count,
         )
-    except SQLAlchemyError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while fetching system events: {str(e)}"
@@ -130,13 +106,7 @@ async def get_system_event(
     **Permissions:** Authenticated users
     """
     try:
-        stmt = select(SystemEvent).where(SystemEvent.id == event_id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
-        )
-        result = await db.execute(stmt)
-        event = result.scalar_one_or_none()
+        event = await SystemEventService.get_event_by_id(db, event_id)
 
         if not event:
             raise HTTPException(status_code=404, detail="System event not found")
@@ -144,7 +114,7 @@ async def get_system_event(
         return event
     except HTTPException:
         raise
-    except SQLAlchemyError as e:
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while fetching system event: {str(e)}"
@@ -189,35 +159,21 @@ async def create_system_event(
         )
 
     try:
-        # Verify system_message exists if provided
-        if event_data.system_message_id:
-            stmt = select(SystemMessage).where(SystemMessage.id == event_data.system_message_id)
-            result = await db.execute(stmt)
-            if not result.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"SystemMessage {event_data.system_message_id} not found"
-                )
-
-        # Create event
-        event_dict = event_data.model_dump()
-        event = SystemEvent(**event_dict)
-        db.add(event)
-        await db.commit()
-        await db.refresh(event)
-
-        # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        event = await SystemEventService.create_event(
+            db,
+            event_key=event_data.event_key,
+            name=event_data.name,
+            description=event_data.description,
+            system_message_id=event_data.system_message_id,
+            is_active=event_data.is_active if event_data.is_active is not None else True,
         )
-        result = await db.execute(stmt)
-        return result.scalar_one()
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+        return event
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while creating system event: {str(e)}"

@@ -2,6 +2,7 @@
 Request Details Metadata service for consolidated metadata fetching.
 Fetches all metadata needed for request details page in parallel.
 """
+
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +11,7 @@ from api.services.priority_service import PriorityService
 from api.services.request_status_service import RequestStatusService
 from api.services.user_service import UserService
 from api.services.category_service import CategoryService
-from crud.section_crud import SectionCRUD
+from repositories.setting.section_repository import SectionRepository
 from api.schemas.priority import PriorityListItem
 from api.schemas.request_status import RequestStatusListItem
 from api.schemas.category import CategoryWithSubcategories
@@ -64,13 +65,15 @@ class RequestDetailsMetadataService:
                 self.db, active_only=True, include_subcategories=True
             )
 
-            sections = await SectionCRUD.find_all_active_sections(
+            sections = await SectionRepository.find_all_active_sections(
                 self.db, only_active=True, only_shown=False
             )
 
             # Convert to list item schemas
             priority_items = [PriorityListItem.model_validate(p) for p in priorities]
-            status_items = [RequestStatusListItem.model_validate(s) for s in statuses_list]
+            status_items = [
+                RequestStatusListItem.model_validate(s) for s in statuses_list
+            ]
             technician_items = technicians_list  # Already UserListItem from service
             category_items = [
                 CategoryWithSubcategories.model_validate(c) for c in categories

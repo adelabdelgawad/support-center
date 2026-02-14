@@ -4,11 +4,6 @@ Business Unit API endpoints.
 Provides endpoints for managing business units, including IP-based network detection
 for automatic business unit identification based on client IP addresses.
 
-**Architecture Note:**
-Refactored to inline DB queries - service and CRUD layers removed.
-Previous service layer used raw SQL with IP-to-CIDR logic which has been
-simplified into helper functions within this module.
-
 **Key Features:**
 - CRUD operations for business units
 - IP-based business unit detection (CIDR matching)
@@ -17,15 +12,13 @@ simplified into helper functions within this module.
 - Region-based filtering
 - Active/inactive status tracking
 """
-import ipaddress
 import logging
-from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from db.database import get_session
 from core.dependencies import get_current_user, require_admin
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from db import BusinessUnit, User
+from db import User
 from api.schemas.business_unit import (
     BusinessUnitCreate,
     BusinessUnitCountsResponse,
@@ -34,121 +27,11 @@ from api.schemas.business_unit import (
     BusinessUnitRead,
     BusinessUnitUpdate,
 )
-from sqlalchemy import case, func, select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from api.services.business_unit_service import BusinessUnitService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-async def list_business_units(
-    db: AsyncSession,
-    name: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    region_id: Optional[int] = None,
-    page: int = 1,
-    per_page: int = 50,
-) -> Tuple[List[BusinessUnit], int, int, int]:
-    """
-    List business units with filtering and pagination.
-
-    Returns:
-        Tuple of (list of business units, total, active_count, inactive_count)
-    """
-    # Build main query
-    stmt = select(BusinessUnit).where(BusinessUnit.is_deleted.is_(False))
-
-    # Build total count query - ALWAYS get total counts from database (no filters)
-    total_count_stmt = select(
-        func.count(BusinessUnit.id).label("total"),
-        func.count(case((BusinessUnit.is_active.is_(True), 1))).label("active_count"),
-        func.count(case((BusinessUnit.is_active.is_(False), 1))).label("inactive_count"),
-    ).where(BusinessUnit.is_deleted.is_(False))
-
-    # Get total counts (unfiltered)
-    total_count_result = await db.execute(total_count_stmt)
-    total_counts = total_count_result.one()
-    total = total_counts.total or 0
-    active_count = total_counts.active_count or 0
-    inactive_count = total_counts.inactive_count or 0
-
-    # Apply filters to main query only
-    if name:
-        name_filter = BusinessUnit.name.ilike(f"%{name}%")
-        stmt = stmt.where(name_filter)
-
-    if is_active is not None:
-        stmt = stmt.where(BusinessUnit.is_active == is_active)
-
-    if region_id is not None:
-        stmt = stmt.where(BusinessUnit.business_unit_region_id == region_id)
-
-    # Apply pagination
-    stmt = (
-        stmt.order_by(BusinessUnit.name)
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
-
-    # Execute query
-    result = await db.execute(stmt)
-    business_units = result.scalars().all()
-
-    return business_units, total, active_count, inactive_count
-
-
-async def get_business_unit(
-    db: AsyncSession,
-    business_unit_id: int,
-) -> Optional[BusinessUnit]:
-    """Get a business unit by ID."""
-    stmt = select(BusinessUnit).where(BusinessUnit.id == business_unit_id)
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-async def get_business_unit_by_ip(
-    db: AsyncSession,
-    ip_address: str,
-) -> Optional[BusinessUnit]:
-    """
-    Find a business unit by matching IP address to network CIDR.
-
-    Args:
-        db: Database session
-        ip_address: IP address to match
-
-    Returns:
-        Matching business unit or None
-    """
-    if not ip_address:
-        return None
-
-    try:
-        ip_obj = ipaddress.ip_address(ip_address)
-    except ValueError:
-        logger.warning(f"Invalid IP address format: {ip_address}")
-        return None
-
-    # Get all business units with network defined and not deleted
-    stmt = select(BusinessUnit).where(
-        (BusinessUnit.network.isnot(None)) & (BusinessUnit.is_deleted.is_(False))
-    )
-    result = await db.execute(stmt)
-    business_units = result.scalars().all()
-
-    # Match IP to network
-    for bu in business_units:
-        try:
-            network = ipaddress.ip_network(bu.network, strict=False)
-            if ip_obj in network:
-                return bu
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Invalid network CIDR for business unit {bu.id}: {bu.network} - {e}")
-            continue
-
-    return None
 
 
 @router.post("", response_model=BusinessUnitRead, status_code=201)
@@ -180,16 +63,18 @@ async def create_business_unit(
     **Permissions:** Admin only
     """
     try:
-        business_unit = BusinessUnit(
-            **business_unit_data.model_dump(),
-            created_by=current_user.id
+        business_unit = await BusinessUnitService.create_business_unit(
+            db,
+            name=business_unit_data.name,
+            description=business_unit_data.description,
+            network=business_unit_data.network,
+            business_unit_region_id=business_unit_data.business_unit_region_id,
+            is_active=business_unit_data.is_active if business_unit_data.is_active is not None else True,
+            working_hours=business_unit_data.working_hours,
+            created_by=current_user.id,
         )
-        db.add(business_unit)
-        await db.commit()
-        await db.refresh(business_unit)
         return business_unit
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -237,7 +122,7 @@ async def list_business_units_endpoint(
         if is_active is not None:
             is_active_bool = is_active.lower() == "true"
 
-        business_units, total, active_count, inactive_count = await list_business_units(
+        business_units, total, active_count, inactive_count = await BusinessUnitService.list_business_units(
             db=db,
             name=name,
             is_active=is_active_bool,
@@ -252,7 +137,7 @@ async def list_business_units_endpoint(
             active_count=active_count,
             inactive_count=inactive_count,
         )
-    except SQLAlchemyError as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -283,7 +168,7 @@ async def get_business_unit_counts(
     **Permissions:** Authenticated users
     """
     try:
-        _, total, active_count, inactive_count = await list_business_units(
+        _, total, active_count, inactive_count = await BusinessUnitService.list_business_units(
             db=db, page=1, per_page=1
         )
 
@@ -292,7 +177,7 @@ async def get_business_unit_counts(
             "active_count": active_count,
             "inactive_count": inactive_count,
         }
-    except SQLAlchemyError as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -320,7 +205,7 @@ async def get_business_unit_endpoint(
     **Permissions:** Authenticated users
     """
     try:
-        business_unit = await get_business_unit(db=db, business_unit_id=business_unit_id)
+        business_unit = await BusinessUnitService.get_business_unit(db=db, business_unit_id=business_unit_id)
 
         if not business_unit:
             raise HTTPException(status_code=404, detail="Business unit not found")
@@ -328,7 +213,7 @@ async def get_business_unit_endpoint(
         return business_unit
     except HTTPException:
         raise
-    except SQLAlchemyError as e:
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -366,28 +251,22 @@ async def update_business_unit(
     **Permissions:** Admin only
     """
     try:
-        stmt = select(BusinessUnit).where(BusinessUnit.id == business_unit_id)
-        result = await db.execute(stmt)
-        business_unit = result.scalar_one_or_none()
-
-        if not business_unit:
-            raise HTTPException(status_code=404, detail="Business unit not found")
-
         update_dict = update_data.model_dump(exclude_unset=True)
-        for field, value in update_dict.items():
-            setattr(business_unit, field, value)
-
-        business_unit.updated_at = datetime.utcnow()
-        business_unit.updated_by = current_user.id
-
-        await db.commit()
-        await db.refresh(business_unit)
-
+        business_unit = await BusinessUnitService.update_business_unit(
+            db,
+            business_unit_id=business_unit_id,
+            name=update_dict.get("name"),
+            description=update_dict.get("description"),
+            network=update_dict.get("network"),
+            business_unit_region_id=update_dict.get("business_unit_region_id"),
+            is_active=update_dict.get("is_active"),
+            working_hours=update_dict.get("working_hours"),
+            updated_by=current_user.id,
+        )
         return business_unit
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -417,25 +296,13 @@ async def toggle_business_unit_status(
     **Permissions:** Admin only
     """
     try:
-        stmt = select(BusinessUnit).where(BusinessUnit.id == business_unit_id)
-        result = await db.execute(stmt)
-        business_unit = result.scalar_one_or_none()
-
-        if not business_unit:
-            raise HTTPException(status_code=404, detail="Business unit not found")
-
-        business_unit.is_active = not business_unit.is_active
-        business_unit.updated_at = datetime.utcnow()
-        business_unit.updated_by = current_user.id
-
-        await db.commit()
-        await db.refresh(business_unit)
-
+        business_unit = await BusinessUnitService.toggle_business_unit_status(
+            db, business_unit_id=business_unit_id, updated_by=current_user.id
+        )
         return business_unit
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -468,25 +335,16 @@ async def update_business_unit_working_hours(
     **Permissions:** Admin only
     """
     try:
-        stmt = select(BusinessUnit).where(BusinessUnit.id == business_unit_id)
-        result = await db.execute(stmt)
-        business_unit = result.scalar_one_or_none()
-
-        if not business_unit:
-            raise HTTPException(status_code=404, detail="Business unit not found")
-
-        business_unit.working_hours = update_data.working_hours
-        business_unit.updated_at = datetime.utcnow()
-        business_unit.updated_by = current_user.id
-
-        await db.commit()
-        await db.refresh(business_unit)
-
+        business_unit = await BusinessUnitService.update_working_hours(
+            db,
+            business_unit_id=business_unit_id,
+            working_hours=update_data.working_hours,
+            updated_by=current_user.id,
+        )
         return business_unit
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -522,22 +380,17 @@ async def bulk_update_business_units_status(
         if not update_data.business_unit_ids:
             raise HTTPException(status_code=400, detail="No business unit IDs provided")
 
-        stmt = select(BusinessUnit).where(BusinessUnit.id.in_(update_data.business_unit_ids))
-        result = await db.execute(stmt)
-        business_units = result.scalars().all()
+        business_units = await BusinessUnitService.bulk_update_status(
+            db,
+            business_unit_ids=update_data.business_unit_ids,
+            is_active=update_data.is_active,
+            updated_by=current_user.id,
+        )
 
-        for bu in business_units:
-            bu.is_active = update_data.is_active
-            bu.updated_at = datetime.utcnow()
-            bu.updated_by = current_user.id
-
-        await db.commit()
-
-        return list(business_units)
+        return business_units
     except HTTPException:
         raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
@@ -568,21 +421,13 @@ async def delete_business_unit(
     **Permissions:** Admin only
     """
     try:
-        stmt = select(BusinessUnit).where(BusinessUnit.id == business_unit_id)
-        result = await db.execute(stmt)
-        business_unit = result.scalar_one_or_none()
+        deleted = await BusinessUnitService.delete_business_unit(db, business_unit_id=business_unit_id)
 
-        if not business_unit:
+        if not deleted:
             raise HTTPException(status_code=404, detail="Business unit not found")
-
-        business_unit.is_deleted = True
-        business_unit.updated_at = datetime.utcnow()
-
-        await db.commit()
 
         return Response(status_code=204)
     except HTTPException:
         raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

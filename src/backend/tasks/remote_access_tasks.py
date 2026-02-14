@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 from celery_app import celery_app
-from crud.remote_access_crud import RemoteAccessCRUD
+from repositories.management.remote_access_repository import RemoteAccessRepository
 from tasks.database import get_celery_session
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,9 @@ def cleanup_orphaned_remote_sessions():
     try:
         asyncio.run(_cleanup_orphaned_sessions_async())
     except Exception as e:
-        logger.error(f"Error in cleanup_orphaned_remote_sessions: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error in cleanup_orphaned_remote_sessions: {str(e)}", exc_info=True
+        )
 
 
 async def _cleanup_orphaned_sessions_async():
@@ -43,7 +45,7 @@ async def _cleanup_orphaned_sessions_async():
 
     async with get_celery_session() as db:
         try:
-            orphaned = await RemoteAccessCRUD.get_orphaned_sessions(db, threshold)
+            orphaned = await RemoteAccessRepository.get_orphaned_sessions(db, threshold)
 
             if not orphaned:
                 logger.debug("No orphaned remote sessions found")
@@ -59,14 +61,14 @@ async def _cleanup_orphaned_sessions_async():
                     f"last_heartbeat: {session.last_heartbeat}, "
                     f"created_at: {session.created_at})"
                 )
-                await RemoteAccessCRUD.end_session(
-                    db, session.id, "orphaned_cleanup"
-                )
+                await RemoteAccessRepository.end_session(db, session.id, "orphaned_cleanup")
 
             await db.commit()
             logger.info(f"✅ Cleaned up {len(orphaned)} orphaned remote sessions")
 
         except Exception as e:
-            logger.error(f"Error cleaning up orphaned sessions: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error cleaning up orphaned sessions: {str(e)}", exc_info=True
+            )
             await db.rollback()
             raise

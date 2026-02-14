@@ -1,13 +1,14 @@
 """
 Priority service with explicit error handling.
 """
+
 import logging
 from typing import List, Optional
 
 from db import Priority
 from api.schemas.priority import PriorityCreate, PriorityUpdate
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from repositories.setting.priority_repository import PriorityRepository
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,7 @@ class PriorityService:
         """
         self.db = session
 
-    async def list_priorities(
-        self,
-        active_only: bool = True
-    ) -> List[Priority]:
+    async def list_priorities(self, active_only: bool = True) -> List[Priority]:
         """
         List all priorities.
 
@@ -39,23 +37,12 @@ class PriorityService:
             List of priorities
         """
         try:
-            stmt = select(Priority).order_by(Priority.id)
-
-            if active_only:
-                stmt = stmt.where(Priority.is_active)
-
-            result = await self.db.execute(stmt)
-            priorities = result.scalars().all()
-
-            return priorities
+            return await PriorityRepository.find_all_ordered(self.db, active_only)
         except Exception as e:
             logger.error(f"Failed to list priorities: {e}")
             return []
 
-    async def get_priority(
-        self,
-        priority_id: int
-    ) -> Optional[Priority]:
+    async def get_priority(self, priority_id: int) -> Optional[Priority]:
         """
         Get a priority by ID.
 
@@ -67,17 +54,12 @@ class PriorityService:
             Priority or None
         """
         try:
-            stmt = select(Priority).where(Priority.id == priority_id)
-            result = await self.db.execute(stmt)
-            return result.scalar_one_or_none()
+            return await PriorityRepository.find_by_id(self.db, priority_id)
         except Exception as e:
             logger.error(f"Failed to get priority {priority_id}: {e}")
             return None
 
-    async def create_priority(
-        self,
-        priority_data: PriorityCreate
-    ) -> Priority:
+    async def create_priority(self, priority_data: PriorityCreate) -> Priority:
         """
         Create a new priority.
 
@@ -92,11 +74,9 @@ class PriorityService:
             Exception: If creation fails
         """
         try:
-            priority = Priority(**priority_data.model_dump())
-            self.db.add(priority)
-            await self.db.commit()
-            await self.db.refresh(priority)
-
+            priority = await PriorityRepository.create(
+                self.db, obj_in=priority_data.model_dump(), commit=True
+            )
             logger.info(f"Created priority: {priority.name_en}")
             return priority
         except Exception:
@@ -104,9 +84,7 @@ class PriorityService:
             raise
 
     async def update_priority(
-        self,
-        priority_id: int,
-        update_data: PriorityUpdate
+        self, priority_id: int, update_data: PriorityUpdate
     ) -> Optional[Priority]:
         """
         Update a priority.
@@ -123,30 +101,19 @@ class PriorityService:
             Exception: If update fails
         """
         try:
-            stmt = select(Priority).where(Priority.id == priority_id)
-            result = await self.db.execute(stmt)
-            priority = result.scalar_one_or_none()
-
-            if not priority:
-                return None
-
-            update_dict = update_data.model_dump(exclude_unset=True)
-            for field, value in update_dict.items():
-                setattr(priority, field, value)
-
-            await self.db.commit()
-            await self.db.refresh(priority)
-
+            priority = await PriorityRepository.update(
+                self.db,
+                id_value=priority_id,
+                obj_in=update_data.model_dump(exclude_unset=True),
+                commit=True,
+            )
             logger.info(f"Updated priority {priority_id}")
             return priority
         except Exception:
             await self.db.rollback()
             raise
 
-    async def delete_priority(
-        self,
-        priority_id: int
-    ) -> bool:
+    async def delete_priority(self, priority_id: int) -> bool:
         """
         Delete a priority (marks as inactive).
 
@@ -161,17 +128,13 @@ class PriorityService:
             Exception: If deletion fails
         """
         try:
-            stmt = select(Priority).where(Priority.id == priority_id)
-            result = await self.db.execute(stmt)
-            priority = result.scalar_one_or_none()
-
+            priority = await PriorityRepository.find_by_id(self.db, priority_id)
             if not priority:
                 return False
 
-            # Mark as inactive to preserve referential integrity
-            priority.is_active = False
-            await self.db.commit()
-
+            await PriorityRepository.update(
+                self.db, id_value=priority_id, obj_in={"is_active": False}, commit=True
+            )
             logger.info(f"Deactivated priority {priority_id}")
             return True
         except Exception:

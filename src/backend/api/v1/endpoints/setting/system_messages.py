@@ -31,17 +31,18 @@ DELETE is a hard delete and will permanently remove the message.
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_session, get_current_user
-from db import User, SystemMessage
+from db import User
 from api.schemas.system_message import (
     SystemMessageCreate,
     SystemMessageUpdate,
     SystemMessageRead,
     SystemMessageListResponse,
 )
+from api.services.system_message_service import SystemMessageService
+from repositories.setting.system_message_repository import SystemMessageRepository
 from pydantic import BaseModel
 
 class BulkStatusUpdate(BaseModel):
@@ -62,33 +63,26 @@ async def list_system_messages(
     current_user: User = Depends(get_current_user),
 ):
     """List all system message templates with counts."""
-    # Build query for messages
-    stmt = select(SystemMessage)
-
+    # Use repository to get filtered messages with pagination
+    filters = {}
     if is_active is not None:
-        stmt = stmt.where(SystemMessage.is_active == is_active)
+        filters["is_active"] = is_active
 
-    # Get paginated messages
-    messages_stmt = stmt.offset(skip).limit(limit).order_by(SystemMessage.created_at.desc())
-    result = await db.execute(messages_stmt)
-    messages = result.scalars().all()
+    from db import SystemMessage
+    messages = await SystemMessageRepository.find_all(
+        db,
+        filters=filters,
+        order_by=SystemMessage.created_at.desc(),
+        offset=skip,
+        limit=limit,
+    )
 
-    # Get total count (with filters applied)
-    count_stmt = select(func.count(SystemMessage.id))
-    if is_active is not None:
-        count_stmt = count_stmt.where(SystemMessage.is_active == is_active)
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar() or 0
+    # Get total count with filters
+    total = await SystemMessageRepository.count(db, filters=filters)
 
-    # Get active count (global counts)
-    active_stmt = select(func.count(SystemMessage.id)).where(SystemMessage.is_active)
-    active_result = await db.execute(active_stmt)
-    active_count = active_result.scalar() or 0
-
-    # Get inactive count (global counts)
-    inactive_stmt = select(func.count(SystemMessage.id)).where(not SystemMessage.is_active)
-    inactive_result = await db.execute(inactive_stmt)
-    inactive_count = inactive_result.scalar() or 0
+    # Get global active/inactive counts
+    active_count = await SystemMessageRepository.count(db, filters={"is_active": True})
+    inactive_count = await SystemMessageRepository.count(db, filters={"is_active": False})
 
     return SystemMessageListResponse(
         messages=messages,
@@ -105,9 +99,7 @@ async def get_system_message(
     current_user: User = Depends(get_current_user),
 ):
     """Get system message by ID."""
-    stmt = select(SystemMessage).where(SystemMessage.id == message_id)
-    result = await db.execute(stmt)
-    message = result.scalar_one_or_none()
+    message = await SystemMessageRepository.find_by_id(db, message_id)
 
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
@@ -126,20 +118,18 @@ async def create_system_message(
         raise HTTPException(status_code=403, detail="Admin only")
 
     # Check if message_type already exists
-    stmt = select(SystemMessage).where(
-        SystemMessage.message_type == message_data.message_type
+    existing = await SystemMessageRepository.find_one(
+        db, filters={"message_type": message_data.message_type}
     )
-    result = await db.execute(stmt)
-    if result.scalar_one_or_none():
+    if existing:
         raise HTTPException(
             status_code=400,
             detail=f"Message type '{message_data.message_type}' already exists",
         )
 
-    message = SystemMessage(**message_data.model_dump())
-    db.add(message)
-    await db.commit()
-    await db.refresh(message)
+    message = await SystemMessageRepository.create(
+        db, obj_in=message_data.model_dump()
+    )
 
     return message
 
@@ -155,23 +145,18 @@ async def update_system_message(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    stmt = select(SystemMessage).where(SystemMessage.id == message_id)
-    result = await db.execute(stmt)
-    message = result.scalar_one_or_none()
-
-    if not message:
-        raise HTTPException(status_code=404, detail="System message not found")
-
     update_dict = {
         k: v
         for k, v in message_data.model_dump(exclude_unset=True).items()
         if v is not None
     }
-    for field, value in update_dict.items():
-        setattr(message, field, value)
 
-    await db.commit()
-    await db.refresh(message)
+    message = await SystemMessageRepository.update(
+        db, id_value=message_id, obj_in=update_dict
+    )
+
+    if not message:
+        raise HTTPException(status_code=404, detail="System message not found")
 
     return message
 
@@ -186,9 +171,7 @@ async def toggle_system_message_status(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    stmt = select(SystemMessage).where(SystemMessage.id == message_id)
-    result = await db.execute(stmt)
-    message = result.scalar_one_or_none()
+    message = await SystemMessageRepository.find_by_id(db, message_id)
 
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
@@ -214,6 +197,8 @@ async def bulk_update_status(
         raise HTTPException(status_code=400, detail="No message IDs provided")
 
     # Fetch all messages
+    from sqlalchemy import select
+    from db import SystemMessage
     stmt = select(SystemMessage).where(SystemMessage.id.in_(update_data.message_ids))
     result = await db.execute(stmt)
     messages = result.scalars().all()
@@ -246,12 +231,9 @@ async def delete_system_message(
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    stmt = select(SystemMessage).where(SystemMessage.id == message_id)
-    result = await db.execute(stmt)
-    message = result.scalar_one_or_none()
+    deleted = await SystemMessageRepository.delete(
+        db, id_value=message_id, soft_delete=False
+    )
 
-    if not message:
+    if not deleted:
         raise HTTPException(status_code=404, detail="System message not found")
-
-    await db.delete(message)
-    await db.commit()

@@ -3,10 +3,10 @@
 import logging
 from typing import Dict, Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import SystemMessage
+from repositories.setting.system_message_repository import SystemMessageRepository
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,7 @@ class SystemMessageService:
         """
         self.db = session
 
-    async def get_template(
-        self, message_type: str
-    ) -> Optional[SystemMessage]:
+    async def get_template(self, message_type: str) -> Optional[SystemMessage]:
         """
         Get a system message template by type.
 
@@ -36,12 +34,9 @@ class SystemMessageService:
             SystemMessage or None if not found
         """
         try:
-            stmt = select(SystemMessage).where(
-                (SystemMessage.message_type == message_type)
-                & (SystemMessage.is_active)
+            return await SystemMessageRepository.find_by_message_type(
+                self.db, message_type
             )
-            result = await self.db.execute(stmt)
-            return result.scalar_one_or_none()
         except Exception as e:
             logger.error(f"Failed to get template for {message_type}: {e}")
             return None
@@ -73,9 +68,7 @@ class SystemMessageService:
             return template
 
     async def get_bilingual_message(
-        self,
-        message_type: str,
-        placeholders: Dict[str, str]
+        self, message_type: str, placeholders: Dict[str, str]
     ) -> tuple[str, str]:
         """
         Get formatted bilingual messages (English and Arabic).
@@ -98,7 +91,9 @@ class SystemMessageService:
         if not template:
             # Fallback to simple message if template not found
             fallback = " -> ".join(placeholders.values())
-            logger.warning(f"Template not found for message type: {message_type}, using fallback")
+            logger.warning(
+                f"Template not found for message type: {message_type}, using fallback"
+            )
             return fallback, fallback
 
         msg_en = self.format_message(template.template_en, placeholders)

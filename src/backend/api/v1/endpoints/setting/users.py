@@ -93,21 +93,28 @@ async def create_user(
             raise HTTPException(status_code=400, detail="Email already exists")
 
     # Set is_technician to True by default if not explicitly set
-    user_create_data = user_data.model_dump(exclude={'role_ids'})
-    if 'is_technician' not in user_create_data or user_create_data['is_technician'] is None:
-        user_create_data['is_technician'] = True
+    user_create_data = user_data.model_dump(exclude={"role_ids"})
+    if (
+        "is_technician" not in user_create_data
+        or user_create_data["is_technician"] is None
+    ):
+        user_create_data["is_technician"] = True
 
-    user = await UserService.create_user(db=db, user_data=UserCreate(**user_create_data))
+    user = await UserService.create_user(
+        db=db, user_data=UserCreate(**user_create_data)
+    )
 
     # Assign roles to the user if provided
     if user_data.role_ids:
-        from crud.user_role_crud import UserRoleCRUD
-        await UserRoleCRUD.create_multiple_user_roles(
-            db=db,
-            user_id=str(user.id),
-            role_ids=user_data.role_ids,
-            commit=True
-        )
+        try:
+            await UserService.update_user_roles(
+                db=db,
+                user_id=user.id,
+                original_role_ids=[],
+                updated_role_ids=user_data.role_ids,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
     return user
 
@@ -176,15 +183,11 @@ async def get_online_technicians(db: AsyncSession = Depends(get_session)):
     return await UserService.get_online_technicians(db=db)
 
 
-
-
 @router.get("/with-roles", response_model=UserListResponse)
 async def list_users_with_roles(
     response: Response,
     username: Optional[str] = Query(None, description="Filter by username"),
-    is_active: Optional[str] = Query(
-        None, description="Filter by active status"
-    ),
+    is_active: Optional[str] = Query(None, description="Filter by active status"),
     is_technician: Optional[str] = Query(
         None, description="Filter by technician status"
     ),
@@ -216,8 +219,6 @@ async def list_users_with_roles(
         - Returns scoped counts (filtered) and global counts
         - Includes role and business unit info for each user
     """
-    from crud.user_crud import UserCRUD
-
     # Convert string is_active to boolean
     is_active_bool = None
     if is_active is not None:
@@ -235,61 +236,16 @@ async def list_users_with_roles(
         # Fallback to is_technician param if user_type not provided
         is_technician_bool = is_technician.lower() == "true"
 
-    # Use repository to get users with roles and counts
-    users, counts = await UserCRUD.list_users_with_role_counts(
+    # Use service to get users with roles and counts
+    user_items, counts = await UserService.list_users_with_role_counts(
         db,
         is_active=is_active_bool,
         is_technician=is_technician_bool,
         username=username,
         role_id=str(role_id) if role_id else None,
         skip=(page - 1) * per_page,
-        limit=per_page
+        limit=per_page,
     )
-
-    # Build response with roles and business units
-    from api.schemas.user import UserBusinessUnitInfo
-    user_items = []
-    for user in users:
-        roles = [
-            UserRoleInfo(id=ur.role.id, name=ur.role.name)
-            for ur in user.user_roles
-            if ur.role
-        ]
-        role_ids = [ur.role_id for ur in user.user_roles]
-
-        # Get active business units for user
-        business_units = [
-            UserBusinessUnitInfo(
-                id=bu_assign.business_unit.id,
-                name=bu_assign.business_unit.name,
-                is_active=bu_assign.business_unit.is_active,
-            )
-            for bu_assign in user.business_unit_assigns
-            if bu_assign.business_unit
-            and not bu_assign.is_deleted
-            and bu_assign.is_active
-        ]
-
-        user_items.append(
-            UserWithRolesListItem(
-                id=user.id,
-                username=user.username,
-                full_name=user.full_name,
-                email=user.email,
-                title=user.title,
-                is_technician=user.is_technician,
-                is_online=user.is_online,
-                is_active=user.is_active,
-                is_super_admin=user.is_super_admin,
-                is_domain=user.is_domain,
-                is_blocked=user.is_blocked,
-                block_message=user.block_message,
-                manager_id=user.manager_id,
-                roles=roles,
-                role_ids=role_ids,
-                business_units=business_units,
-            )
-        )
 
     return UserListResponse(
         users=user_items,
@@ -319,9 +275,7 @@ async def get_user_counts(db: AsyncSession = Depends(get_session)):
     Returns:
         UserCountsResponse with count statistics
     """
-    from crud.user_crud import UserCRUD
-
-    counts = await UserCRUD.get_user_counts(db)
+    counts = await UserService.get_user_counts(db)
 
     return UserCountsResponse(
         total=counts["total"] or 0,
@@ -366,16 +320,24 @@ async def get_user_connection_status(
 
     if is_online:
         # Get active sessions from both desktop and web sessions to retrieve IP addresses
-        desktop_sessions = await DesktopSessionService.get_user_sessions(db, user_id, active_only=True)
-        web_sessions = await WebSessionService.get_user_sessions(db, user_id, active_only=True)
+        desktop_sessions = await DesktopSessionService.get_user_sessions(
+            db, user_id, active_only=True
+        )
+        web_sessions = await WebSessionService.get_user_sessions(
+            db, user_id, active_only=True
+        )
         sessions = list(desktop_sessions) + list(web_sessions)
 
         for session in sessions:
-            connections.append({
-                "ipAddress": session.ip_address,
-                "userAgent": getattr(session, 'user_agent', None),
-                "lastHeartbeat": session.last_heartbeat.isoformat() if session.last_heartbeat else None,
-            })
+            connections.append(
+                {
+                    "ipAddress": session.ip_address,
+                    "userAgent": getattr(session, "user_agent", None),
+                    "lastHeartbeat": session.last_heartbeat.isoformat()
+                    if session.last_heartbeat
+                    else None,
+                }
+            )
 
     return {
         "userId": user_id_str,
@@ -546,17 +508,17 @@ async def block_user(
 #     Regular users get pages from their assigned roles.
 #     """
 #     # Use repository to fetch user with pages
-#     from crud.user_crud import UserCRUD
+#     from repositories.setting.user_repository import UserRepository
 #
-#     user = await UserCRUD.find_by_id_with_pages(db, user_id)
+#     user = await UserRepository.find_by_id_with_pages(db, user_id)
 #
 #     if not user:
 #         raise HTTPException(status_code=404, detail="User not found")
 #
 #     # Super admins have access to all pages
 #     if user.is_super_admin:
-#         from crud.page_crud import PageCRUD
-#         pages, _ = await PageCRUD.list_pages_paginated(
+#         from repositories.setting.page_repository import PageRepository
+#         pages, _ = await PageRepository.list_pages_paginated(
 #             db, page=1, per_page=1000  # Get all pages
 #         )
 #         return [PageRead.model_validate(page) for page in pages]
@@ -574,9 +536,7 @@ async def block_user(
 
 
 @router.get("/{user_id}/block-status", response_model=UserBlockedResponse)
-async def get_user_block_status(
-    user_id: UUID, db: AsyncSession = Depends(get_session)
-):
+async def get_user_block_status(user_id: UUID, db: AsyncSession = Depends(get_session)):
     """Get user blocking status.
 
     Returns whether a user is blocked and the block message if applicable.
@@ -610,12 +570,8 @@ async def get_user_block_status(
 # Role management endpoints
 
 
-
-
 @router.get("/{user_id}/roles", response_model=List[UserRoleInfo])
-async def get_user_roles(
-    user_id: UUID, db: AsyncSession = Depends(get_session)
-):
+async def get_user_roles(user_id: UUID, db: AsyncSession = Depends(get_session)):
     """Get roles assigned to a user.
 
     Returns list of all roles assigned to the user.
@@ -630,19 +586,15 @@ async def get_user_roles(
     Raises:
         HTTPException 404: If user not found
     """
-    # Use repository to fetch user with roles
-    from crud.user_crud import UserCRUD
+    roles = await UserService.get_user_roles(db, user_id)
 
-    user = await UserCRUD.find_by_id_with_roles(db, user_id)
+    if not roles:
+        # Verify user exists
+        user = await UserService.get_user(db=db, user_id=user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return [
-        UserRoleInfo(id=ur.role.id, name=ur.role.name)
-        for ur in user.user_roles
-        if ur.role
-    ]
+    return roles
 
 
 @router.put("/{user_id}/roles")
@@ -673,55 +625,21 @@ async def update_user_roles(
     Notes:
         - Requires admin role
     """
-    from crud.user_role_crud import UserRoleCRUD
-
     # Verify user exists
     user = await UserService.get_user(db=db, user_id=user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Calculate differences
-    original_set = set(update_data.original_role_ids)
-    updated_set = set(update_data.updated_role_ids)
-
-    roles_to_add = list(updated_set - original_set)
-    roles_to_remove = list(original_set - updated_set)
-
-    added_count = 0
-    removed_count = 0
-
-    # Add new roles
-    if roles_to_add:
-        # Verify all roles exist
-        for role_id in roles_to_add:
-            role = await RoleService.get_role(db=db, role_id=role_id)
-            if not role:
-                raise HTTPException(
-                    status_code=404, detail=f"Role {role_id} not found"
-                )
-
-        # Commit during the last operation if we're only adding
-        should_commit = not roles_to_remove
-        await UserRoleCRUD.create_multiple_user_roles(
-            db, user_id, roles_to_add, commit=should_commit
+    try:
+        result = await UserService.update_user_roles(
+            db=db,
+            user_id=user_id,
+            original_role_ids=update_data.original_role_ids,
+            updated_role_ids=update_data.updated_role_ids,
         )
-        added_count = len(roles_to_add)
-
-    # Remove old roles
-    if roles_to_remove:
-        for i, role_id in enumerate(roles_to_remove):
-            # Commit on the last deletion
-            should_commit = (i == len(roles_to_remove) - 1)
-            await UserRoleCRUD.delete_by_user_and_role(
-                db, user_id, role_id, commit=should_commit
-            )
-        removed_count = len(roles_to_remove)
-
-    return {
-        "message": "User roles updated successfully",
-        "added": added_count,
-        "removed": removed_count,
-    }
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.put("/{user_id}/status", response_model=UserWithRolesListItem)
@@ -752,56 +670,15 @@ async def update_user_status(
         - Requires admin role
         - Inactive users cannot authenticate
     """
-    from crud.user_crud import UserCRUD
-
     update_data = UserUpdate(is_active=status_data.is_active)
-    user = await UserService.update_user(
+    user_with_data = await UserService.update_user_with_enrichment(
         db=db, user_id=user_id, update_data=update_data
     )
 
-    if not user:
+    if not user_with_data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Load user with roles and business units using repository
-    user_with_data = await UserCRUD.find_by_id_with_roles_and_business_units(
-        db, user_id
-    )
-
-    roles = [
-        UserRoleInfo(id=ur.role.id, name=ur.role.name)
-        for ur in user_with_data.user_roles
-        if ur.role
-    ]
-    role_ids = [ur.role_id for ur in user_with_data.user_roles]
-
-    business_units = [
-        UserBusinessUnitInfo(
-            id=assign.business_unit.id,
-            name=assign.business_unit.name,
-            is_active=assign.business_unit.is_active,
-        )
-        for assign in user_with_data.business_unit_assigns
-        if assign.business_unit
-    ]
-
-    return UserWithRolesListItem(
-        id=user.id,
-        username=user.username,
-        full_name=user.full_name,
-        email=user.email,
-        title=user.title,
-        is_technician=user.is_technician,
-        is_active=user.is_active,
-        is_online=user.is_online,
-        is_super_admin=user.is_super_admin,
-        is_domain=user.is_domain,
-        is_blocked=user.is_blocked,
-        block_message=user.block_message,
-        manager_id=user.manager_id,
-        roles=roles,
-        role_ids=role_ids,
-        business_units=business_units,
-    )
+    return user_with_data
 
 
 @router.put("/{user_id}/technician", response_model=UserWithRolesListItem)
@@ -832,56 +709,15 @@ async def update_user_technician_status(
         - Requires admin role
         - Technicians can access ticket management
     """
-    from crud.user_crud import UserCRUD
-
     update_data = UserUpdate(is_technician=technician_data.is_technician)
-    user = await UserService.update_user(
+    user_with_data = await UserService.update_user_with_enrichment(
         db=db, user_id=user_id, update_data=update_data
     )
 
-    if not user:
+    if not user_with_data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Load user with roles and business units using repository
-    user_with_data = await UserCRUD.find_by_id_with_roles_and_business_units(
-        db, user_id
-    )
-
-    roles = [
-        UserRoleInfo(id=ur.role.id, name=ur.role.name)
-        for ur in user_with_data.user_roles
-        if ur.role
-    ]
-    role_ids = [ur.role_id for ur in user_with_data.user_roles]
-
-    business_units = [
-        UserBusinessUnitInfo(
-            id=assign.business_unit.id,
-            name=assign.business_unit.name,
-            is_active=assign.business_unit.is_active,
-        )
-        for assign in user_with_data.business_unit_assigns
-        if assign.business_unit
-    ]
-
-    return UserWithRolesListItem(
-        id=user.id,
-        username=user.username,
-        full_name=user.full_name,
-        email=user.email,
-        title=user.title,
-        is_technician=user.is_technician,
-        is_active=user.is_active,
-        is_online=user.is_online,
-        is_super_admin=user.is_super_admin,
-        is_domain=user.is_domain,
-        is_blocked=user.is_blocked,
-        block_message=user.block_message,
-        manager_id=user.manager_id,
-        roles=roles,
-        role_ids=role_ids,
-        business_units=business_units,
-    )
+    return user_with_data
 
 
 @router.post("/bulk-status", response_model=BulkUserUpdateResponse)
@@ -905,55 +741,9 @@ async def bulk_update_user_status(
     Notes:
         - Requires admin role
     """
-    from crud.user_crud import UserCRUD
-
-    updated_users = []
-    for user_id in bulk_data.user_ids:
-        update_data = UserUpdate(is_active=bulk_data.is_active)
-        user = await UserService.update_user(
-            db=db, user_id=user_id, update_data=update_data
-        )
-
-        if user:
-            user_with_data = await UserCRUD.find_by_id_with_roles_and_business_units(
-                db, user_id
-            )
-            roles = [
-                UserRoleInfo(id=ur.role.id, name=ur.role.name)
-                for ur in user_with_data.user_roles
-                if ur.role
-            ]
-            role_ids = [ur.role_id for ur in user_with_data.user_roles]
-            business_units = [
-                UserBusinessUnitInfo(
-                    id=assign.business_unit.id,
-                    name=assign.business_unit.name,
-                    is_active=assign.business_unit.is_active,
-                )
-                for assign in user_with_data.business_unit_assigns
-                if assign.business_unit
-            ]
-
-            updated_users.append(
-                UserWithRolesListItem(
-                    id=user.id,
-                    username=user.username,
-                    email=user.email,
-                    full_name=user.full_name,
-                    title=user.title,
-                    is_technician=user.is_technician,
-                    is_active=user.is_active,
-                    is_online=user.is_online,
-                    is_super_admin=user.is_super_admin,
-                    is_domain=user.is_domain,
-                    is_blocked=user.is_blocked,
-                    block_message=user.block_message,
-                    manager_id=user.manager_id,
-                    roles=roles,
-                    role_ids=role_ids,
-                    business_units=business_units,
-                )
-            )
+    updated_users = await UserService.bulk_update_status(
+        db=db, user_ids=bulk_data.user_ids, is_active=bulk_data.is_active
+    )
 
     return BulkUserUpdateResponse(updated_users=updated_users)
 
@@ -979,58 +769,11 @@ async def bulk_update_user_technician(
     Notes:
         - Requires admin role
     """
-    from crud.user_crud import UserCRUD
-
-    updated_users = []
-    for user_id in bulk_data.user_ids:
-        update_data = UserUpdate(is_technician=bulk_data.is_technician)
-        user = await UserService.update_user(
-            db=db, user_id=user_id, update_data=update_data
-        )
-
-        if user:
-            user_with_data = await UserCRUD.find_by_id_with_roles_and_business_units(
-                db, user_id
-            )
-            roles = [
-                UserRoleInfo(id=ur.role.id, name=ur.role.name)
-                for ur in user_with_data.user_roles
-                if ur.role
-            ]
-            role_ids = [ur.role_id for ur in user_with_data.user_roles]
-            business_units = [
-                UserBusinessUnitInfo(
-                    id=assign.business_unit.id,
-                    name=assign.business_unit.name,
-                    is_active=assign.business_unit.is_active,
-                )
-                for assign in user_with_data.business_unit_assigns
-                if assign.business_unit
-            ]
-
-            updated_users.append(
-                UserWithRolesListItem(
-                    id=user.id,
-                    username=user.username,
-                    email=user.email,
-                    full_name=user.full_name,
-                    title=user.title,
-                    is_technician=user.is_technician,
-                    is_active=user.is_active,
-                    is_online=user.is_online,
-                    is_super_admin=user.is_super_admin,
-                    is_domain=user.is_domain,
-                    is_blocked=user.is_blocked,
-                    block_message=user.block_message,
-                    manager_id=user.manager_id,
-                    roles=roles,
-                    role_ids=role_ids,
-                    business_units=business_units,
-                )
-            )
+    updated_users = await UserService.bulk_update_technician(
+        db=db, user_ids=bulk_data.user_ids, is_technician=bulk_data.is_technician
+    )
 
     return BulkUserUpdateResponse(updated_users=updated_users)
-
 
 
 @router.get("/{user_id}/pages", response_model=List[PageRead])
@@ -1066,149 +809,11 @@ async def get_user_pages(
         - Regular users get pages from their assigned roles
         - Parent pages are auto-included for navigation hierarchy
     """
-    import logging
-    from sqlalchemy import select
-
-    logger = logging.getLogger(__name__)
-
-    # DEBUG: Log the user_id being requested
-    logger.debug(f"Loading navigation for user_id={user_id}")
-
-    # Fetch user to verify existence
-    user_query = select(User).where(User.id == user_id)
-    user_result = await db.execute(user_query)
-    user = user_result.scalar_one_or_none()
-
-    if not user:
-        logger.debug(f"User not found: user_id={user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # DEBUG: Log user info
-    logger.debug(f"User found: username={user.username}, is_super_admin={user.is_super_admin}")
-
-    # If user is super admin, return all active pages
-    if user.is_super_admin:
-        pages_query = select(Page).where(Page.is_active).order_by(Page.id)
-        pages_result = await db.execute(pages_query)
-        pages = pages_result.scalars().all()
-        logger.debug(f"Super admin - loaded {len(pages)} pages")
-        logger.debug(f"Super admin page IDs: {[p.id for p in pages]}")
+    try:
+        pages = await UserService.get_user_pages(db=db, user_id=user_id)
         return pages
-
-    # Get user's role IDs
-    user_roles_query = select(UserRole.role_id).where(UserRole.user_id == user_id)
-    user_roles_result = await db.execute(user_roles_query)
-    role_ids = [row[0] for row in user_roles_result.all()]
-
-    # DEBUG: Log user roles
-    logger.debug(f"User role_ids: {role_ids}")
-
-    # Get pages with no role restrictions (public pages)
-    # These are pages that have NO entries in page_roles table
-    public_pages_query = (
-        select(Page)
-        .where(Page.is_active)
-        .where(~Page.id.in_(select(PageRole.page_id)))
-        .order_by(Page.id)
-    )
-    public_pages_result = await db.execute(public_pages_query)
-    public_pages = list(public_pages_result.scalars().all())
-
-    # DEBUG: Log public pages
-    logger.debug(f"Public pages (no role restrictions): {len(public_pages)}")
-    logger.debug(f"Public page IDs: {[p.id for p in public_pages]}")
-
-    # If user has no roles, return only public pages
-    if not role_ids:
-        logger.debug("User has no roles assigned - returning only public pages")
-        return public_pages
-
-    # Get pages accessible through user's roles
-    page_roles_query = (
-        select(PageRole.page_id)
-        .where(PageRole.role_id.in_(role_ids))
-        .where(PageRole.is_active)
-        .distinct()
-    )
-    page_roles_result = await db.execute(page_roles_query)
-    page_ids = [row[0] for row in page_roles_result.all()]
-
-    # DEBUG: Log page IDs found
-    logger.debug(f"Page IDs found for user's roles: {page_ids}")
-
-    # Fetch the actual pages user has access to through roles
-    if page_ids:
-        pages_query = (
-            select(Page)
-            .where(Page.id.in_(page_ids))
-            .where(Page.is_active)
-            .order_by(Page.id)
-        )
-        pages_result = await db.execute(pages_query)
-        role_pages = list(pages_result.scalars().all())
-    else:
-        role_pages = []
-
-    # Combine public pages and role-based pages (avoid duplicates)
-    pages_dict = {page.id: page for page in public_pages}
-    for page in role_pages:
-        pages_dict[page.id] = page
-
-    pages = list(pages_dict.values())
-
-    # DEBUG: Log direct pages
-    logger.debug(f"Direct pages from permissions: {len(pages)}")
-    logger.debug(f"Direct page IDs: {[p.id for p in pages]}")
-
-    # AUTO-INCLUDE PARENT PAGES
-    # Automatically fetch all parent pages for proper navigation hierarchy
-    pages_dict = {page.id: page for page in pages}  # Use dict to avoid duplicates
-    parent_ids_to_fetch = set()
-
-    # Collect all parent IDs from the pages we have
-    for page in pages:
-        if page.parent_id and page.parent_id not in pages_dict:
-            parent_ids_to_fetch.add(page.parent_id)
-
-    # Recursively fetch parent pages up the hierarchy
-    while parent_ids_to_fetch:
-        logger.debug(f"Fetching parent pages: {parent_ids_to_fetch}")
-
-        parent_pages_query = (
-            select(Page)
-            .where(Page.id.in_(parent_ids_to_fetch))
-            .where(Page.is_active)
-        )
-        parent_pages_result = await db.execute(parent_pages_query)
-        parent_pages = list(parent_pages_result.scalars().all())
-
-        # Add fetched parents to our pages dict
-        new_parent_ids = set()
-        for parent_page in parent_pages:
-            if parent_page.id not in pages_dict:
-                pages_dict[parent_page.id] = parent_page
-                logger.debug(f"Auto-included parent: {parent_page.id} ({parent_page.title})")
-
-                # Check if this parent also has a parent
-                if parent_page.parent_id and parent_page.parent_id not in pages_dict:
-                    new_parent_ids.add(parent_page.parent_id)
-
-        # Continue with grandparents, etc.
-        parent_ids_to_fetch = new_parent_ids
-
-    # Convert dict back to list
-    final_pages = list(pages_dict.values())
-
-    # DEBUG: Log final result
-    logger.debug(f"Returning {len(final_pages)} pages (including auto-added parents)")
-    logger.debug(f"Final page IDs: {[p.id for p in final_pages]}")
-    logger.debug(f"Final page titles: {[p.title for p in final_pages]}")
-
-    # DEBUG: Log full page details
-    for page in final_pages:
-        logger.debug(f"Page {page.id}: path={page.path}, title={page.title}, icon={page.icon}, parent_id={page.parent_id}, is_active={page.is_active}")
-
-    return final_pages
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{user_id}/preferences", response_model=UserPreferencesRead)
@@ -1239,7 +844,9 @@ async def get_user_preferences(
     return UserPreferencesRead(
         language=user.language or "ar",
         theme=user.theme or "system",
-        notifications_enabled=user.notifications_enabled if user.notifications_enabled is not None else True,
+        notifications_enabled=user.notifications_enabled
+        if user.notifications_enabled is not None
+        else True,
         sound_enabled=user.sound_enabled if user.sound_enabled is not None else True,
         sound_volume=user.sound_volume if user.sound_volume is not None else 0.5,
     )
@@ -1291,7 +898,9 @@ async def update_user_preferences(
     return UserPreferencesRead(
         language=user.language or "ar",
         theme=user.theme or "system",
-        notifications_enabled=user.notifications_enabled if user.notifications_enabled is not None else True,
+        notifications_enabled=user.notifications_enabled
+        if user.notifications_enabled is not None
+        else True,
         sound_enabled=user.sound_enabled if user.sound_enabled is not None else True,
         sound_volume=user.sound_volume if user.sound_volume is not None else 0.5,
     )

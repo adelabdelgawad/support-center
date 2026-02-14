@@ -55,7 +55,7 @@ class LdapService:
         self,
         ad_config: object,
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
     ) -> None:
         """
         Initialize LDAP service using database configuration.
@@ -78,6 +78,7 @@ class LdapService:
 
         # Decrypt password
         from core.encryption import decrypt_value
+
         self.AD_BIND_PASSWORD = decrypt_value(ad_config.encrypted_password)
 
         self.username = (
@@ -96,18 +97,19 @@ class LdapService:
             port=ldap_port,
             use_ssl=use_ssl,
             get_info=ALL,
-            connect_timeout=self.TIMEOUT
+            connect_timeout=self.TIMEOUT,
         )
 
     async def connect(self) -> Connection:
         """Establish connection to LDAP server."""
+
         def _connect():
             conn = Connection(
                 self.server,
                 user=self.username,
                 password=self.password,
                 auto_bind=True,
-                receive_timeout=self.TIMEOUT
+                receive_timeout=self.TIMEOUT,
             )
             return conn
 
@@ -123,7 +125,7 @@ class LdapService:
                     search_base=self.domain_base,
                     search_filter=self.OU_FILTER,
                     search_scope=LEVEL,
-                    attributes=["distinguishedName"]
+                    attributes=["distinguishedName"],
                 )
                 return conn.entries
 
@@ -142,7 +144,10 @@ class LdapService:
         except LDAPException as e:
             error_msg = str(e)
             # Check for referral or operations errors
-            if "referral" in error_msg.lower() or "operations error" in error_msg.lower():
+            if (
+                "referral" in error_msg.lower()
+                or "operations error" in error_msg.lower()
+            ):
                 logger.warning(
                     f"LDAP referral/operations error encountered when fetching OUs: {error_msg}. "
                     "Falling back to full base DN search without OU filtering."
@@ -174,7 +179,7 @@ class LdapService:
                     search_base=self.domain_base,
                     search_filter="(objectClass=organizationalUnit)",
                     search_scope=SUBTREE,
-                    attributes=["distinguishedName", "name"]
+                    attributes=["distinguishedName", "name"],
                 )
                 return list(conn.entries)
 
@@ -184,7 +189,7 @@ class LdapService:
                     search_base=self.domain_base,
                     search_filter="(&(objectClass=container)(ou=*))",  # Only containers with OU attribute
                     search_scope=SUBTREE,
-                    attributes=["distinguishedName", "name"]
+                    attributes=["distinguishedName", "name"],
                 )
                 return list(conn.entries)
 
@@ -206,23 +211,28 @@ class LdapService:
                 seen_dns.add(dn)
 
                 # Only include entries that have OU= in their DN (not system containers like CN=Users)
-                if 'OU=' not in dn:
+                if "OU=" not in dn:
                     continue
 
                 # Try to use 'name' attribute if available, otherwise parse from DN
-                if hasattr(entry, 'name') and entry.name:
+                if hasattr(entry, "name") and entry.name:
                     ou_name = str(entry.name)
                 else:
                     ou_name = dn.split(",", 1)[0].split("=", 1)[1]
                 result.append((dn, ou_name))
 
             conn.unbind()
-            logger.debug(f"Successfully fetched {len(result)} OUs recursively from base DN")
+            logger.debug(
+                f"Successfully fetched {len(result)} OUs recursively from base DN"
+            )
             return result
 
         except LDAPException as e:
             error_msg = str(e)
-            if "referral" in error_msg.lower() or "operations error" in error_msg.lower():
+            if (
+                "referral" in error_msg.lower()
+                or "operations error" in error_msg.lower()
+            ):
                 logger.warning(
                     f"LDAP referral/operations error encountered when fetching OUs recursively: {error_msg}"
                 )
@@ -238,23 +248,29 @@ class LdapService:
         """Parse an LDAP entry into a DomainUser schema."""
         try:
             phone = None
-            if hasattr(entry, 'telephoneNumber') and str(entry.telephoneNumber):
+            if hasattr(entry, "telephoneNumber") and str(entry.telephoneNumber):
                 phone = str(entry.telephoneNumber)
-            elif hasattr(entry, 'mobile') and str(entry.mobile):
+            elif hasattr(entry, "mobile") and str(entry.mobile):
                 phone = str(entry.mobile)
 
             manager_name = None
-            if hasattr(entry, 'manager') and entry.manager:
+            if hasattr(entry, "manager") and entry.manager:
                 manager_dn = str(entry.manager)
                 if manager_dn and "CN=" in manager_dn:
                     manager_name = manager_dn.split(",")[0].split("=", 1)[1]
 
             return DomainUser(
-                username=str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') else "",
-                full_name=str(entry.displayName) if hasattr(entry, 'displayName') else None,
-                email=str(entry.mail) if hasattr(entry, 'mail') else None,
-                title=str(entry.title) if hasattr(entry, 'title') else None,
-                office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
+                username=str(entry.sAMAccountName)
+                if hasattr(entry, "sAMAccountName")
+                else "",
+                full_name=str(entry.displayName)
+                if hasattr(entry, "displayName")
+                else None,
+                email=str(entry.mail) if hasattr(entry, "mail") else None,
+                title=str(entry.title) if hasattr(entry, "title") else None,
+                office=str(entry.physicalDeliveryOfficeName)
+                if hasattr(entry, "physicalDeliveryOfficeName")
+                else None,
                 phone_number=phone,
                 direct_manager_name=manager_name,
             )
@@ -271,13 +287,15 @@ class LdapService:
 
             def _paged_search():
                 users = []
-                logger.info(f"LDAP search: base='{ou_dn}', scope=SUBTREE, filter='{self.USER_FILTER}'")
+                logger.info(
+                    f"LDAP search: base='{ou_dn}', scope=SUBTREE, filter='{self.USER_FILTER}'"
+                )
                 conn.search(
                     search_base=ou_dn,
                     search_filter=self.USER_FILTER,
                     search_scope=SUBTREE,
                     attributes=self.USER_DETAIL_ATTRS,
-                    paged_size=self.PAGE_SIZE
+                    paged_size=self.PAGE_SIZE,
                 )
                 logger.info(
                     f"LDAP search result: status='{conn.result.get('description')}', "
@@ -290,12 +308,14 @@ class LdapService:
                         users.append(user)
 
                 # Continue fetching pages if available
-                controls = conn.result.get('controls', {})
-                paging_control = controls.get('1.2.840.113556.1.4.319')
+                controls = conn.result.get("controls", {})
+                paging_control = controls.get("1.2.840.113556.1.4.319")
                 if not paging_control:
-                    logger.info(f"No paging control in response, returning {len(users)} users from first page")
+                    logger.info(
+                        f"No paging control in response, returning {len(users)} users from first page"
+                    )
                     return users
-                cookie = paging_control['value']['cookie']
+                cookie = paging_control["value"]["cookie"]
                 while cookie:
                     conn.search(
                         search_base=ou_dn,
@@ -303,28 +323,33 @@ class LdapService:
                         search_scope=SUBTREE,
                         attributes=self.USER_DETAIL_ATTRS,
                         paged_size=self.PAGE_SIZE,
-                        paged_cookie=cookie
+                        paged_cookie=cookie,
                     )
                     for entry in conn.entries:
                         user = self._parse_user_entry(entry)
                         if user:
                             users.append(user)
-                    next_controls = conn.result.get('controls', {})
-                    next_paging = next_controls.get('1.2.840.113556.1.4.319')
+                    next_controls = conn.result.get("controls", {})
+                    next_paging = next_controls.get("1.2.840.113556.1.4.319")
                     if not next_paging:
                         break
-                    cookie = next_paging['value']['cookie']
+                    cookie = next_paging["value"]["cookie"]
 
                 return users
 
             users = await asyncio.to_thread(_paged_search)
             conn.unbind()
 
-            logger.debug(f"Successfully fetched {len(users)} users from OU '{short_name}'")
+            logger.debug(
+                f"Successfully fetched {len(users)} users from OU '{short_name}'"
+            )
             return short_name, users
 
         except Exception as e:
-            logger.warning(f"Failed to fetch users from OU '{short_name}' ({ou_dn}): {type(e).__name__}: {e}", exc_info=True)
+            logger.warning(
+                f"Failed to fetch users from OU '{short_name}' ({ou_dn}): {type(e).__name__}: {e}",
+                exc_info=True,
+            )
             return short_name, []
 
     async def get_connected_user(self) -> DomainUser:
@@ -336,7 +361,7 @@ class LdapService:
                 search_base=self.domain_base,
                 search_filter=f"(&(objectClass=user)(sAMAccountName={self.AD_BIND_USERNAME}))",
                 search_scope=SUBTREE,
-                attributes=self.USER_ATTRS
+                attributes=self.USER_ATTRS,
             )
             return conn.entries
 
@@ -352,11 +377,15 @@ class LdapService:
         conn.unbind()
 
         return DomainUser(
-            username=str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') else "",
-            full_name=str(entry.displayName) if hasattr(entry, 'displayName') else None,
-            email=str(entry.mail) if hasattr(entry, 'mail') else None,
-            title=str(entry.title) if hasattr(entry, 'title') else None,
-            office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
+            username=str(entry.sAMAccountName)
+            if hasattr(entry, "sAMAccountName")
+            else "",
+            full_name=str(entry.displayName) if hasattr(entry, "displayName") else None,
+            email=str(entry.mail) if hasattr(entry, "mail") else None,
+            title=str(entry.title) if hasattr(entry, "title") else None,
+            office=str(entry.physicalDeliveryOfficeName)
+            if hasattr(entry, "physicalDeliveryOfficeName")
+            else None,
         )
 
     @staticmethod
@@ -423,7 +452,9 @@ class LdapService:
             )
 
         # Fetch users from each OU in parallel
-        logger.info(f"Searching {len(pruned_targets)} OUs: {[sn for _, sn in pruned_targets]}")
+        logger.info(
+            f"Searching {len(pruned_targets)} OUs: {[sn for _, sn in pruned_targets]}"
+        )
         fetch_tasks = [
             asyncio.create_task(self.fetch_enabled_users_for_ou(dn, sn))
             for dn, sn in pruned_targets
@@ -475,13 +506,13 @@ class LdapService:
             def _authenticate():
                 try:
                     # Extract domain from username (e.g., "user@DOMAIN")
-                    domain = self.username.split('@')[1] if '@' in self.username else ''
+                    domain = self.username.split("@")[1] if "@" in self.username else ""
                     conn = Connection(
                         self.server,
                         user=f"{username}@{domain}",
                         password=password,
                         auto_bind=True,
-                        receive_timeout=self.TIMEOUT
+                        receive_timeout=self.TIMEOUT,
                     )
                     conn.unbind()
                     return True
@@ -505,9 +536,7 @@ class LdapService:
             )
             return False
 
-    async def get_user_by_username(
-        self, username: str
-    ) -> Optional[DomainUser]:
+    async def get_user_by_username(self, username: str) -> Optional[DomainUser]:
         """
         Fetch user details from Active Directory by username.
 
@@ -526,7 +555,7 @@ class LdapService:
                     search_base=self.domain_base,
                     search_filter=f"(&(objectClass=user)(sAMAccountName={username}))",
                     search_scope=SUBTREE,
-                    attributes=self.USER_DETAIL_ATTRS
+                    attributes=self.USER_DETAIL_ATTRS,
                 )
                 return conn.entries
 
@@ -534,9 +563,7 @@ class LdapService:
 
             if not entries:
                 conn.unbind()
-                logger.warning(
-                    f"User {username} not found in Active Directory"
-                )
+                logger.warning(f"User {username} not found in Active Directory")
                 return None
 
             # Parse first entry
@@ -544,9 +571,9 @@ class LdapService:
 
             # Extract phone number (prefer mobile, fallback to telephone)
             phone_number = None
-            if hasattr(entry, 'mobile') and entry.mobile:
+            if hasattr(entry, "mobile") and entry.mobile:
                 phone_number = str(entry.mobile)
-            elif hasattr(entry, 'telephoneNumber') and entry.telephoneNumber:
+            elif hasattr(entry, "telephoneNumber") and entry.telephoneNumber:
                 phone_number = str(entry.telephoneNumber)
 
             # Extract and parse manager DN to get username and full name
@@ -554,7 +581,7 @@ class LdapService:
             manager_username = None
             direct_manager_name = None
 
-            if hasattr(entry, 'manager') and entry.manager:
+            if hasattr(entry, "manager") and entry.manager:
                 manager_dn = str(entry.manager)
 
                 # Parse CN=Username from DN
@@ -564,18 +591,19 @@ class LdapService:
 
                 # Fetch manager's full name from AD
                 try:
+
                     def _search_manager():
                         conn.search(
                             search_base=manager_dn,
                             search_filter="(objectClass=user)",
                             search_scope=BASE,
-                            attributes=["displayName"]
+                            attributes=["displayName"],
                         )
                         return conn.entries
 
                     manager_entries = await asyncio.to_thread(_search_manager)
 
-                    if manager_entries and hasattr(manager_entries[0], 'displayName'):
+                    if manager_entries and hasattr(manager_entries[0], "displayName"):
                         direct_manager_name = str(manager_entries[0].displayName)
 
                 except Exception as manager_error:
@@ -587,15 +615,23 @@ class LdapService:
 
             # Create DomainUser object
             domain_user = DomainUser(
-                username=str(entry.sAMAccountName) if hasattr(entry, 'sAMAccountName') else username,
-                email=str(entry.mail) if hasattr(entry, 'mail') else None,
-                full_name=str(entry.displayName) if hasattr(entry, 'displayName') else None,
+                username=str(entry.sAMAccountName)
+                if hasattr(entry, "sAMAccountName")
+                else username,
+                email=str(entry.mail) if hasattr(entry, "mail") else None,
+                full_name=str(entry.displayName)
+                if hasattr(entry, "displayName")
+                else None,
                 phone_number=phone_number,
                 manager_username=manager_username,
                 direct_manager_name=direct_manager_name,
-                title=str(entry.title) if hasattr(entry, 'title') else None,
-                office=str(entry.physicalDeliveryOfficeName) if hasattr(entry, 'physicalDeliveryOfficeName') else None,
-                department=str(entry.department) if hasattr(entry, 'department') else None,
+                title=str(entry.title) if hasattr(entry, "title") else None,
+                office=str(entry.physicalDeliveryOfficeName)
+                if hasattr(entry, "physicalDeliveryOfficeName")
+                else None,
+                department=str(entry.department)
+                if hasattr(entry, "department")
+                else None,
             )
 
             logger.info(f"Successfully retrieved user details for: {username}")
@@ -629,7 +665,9 @@ async def get_ldap_service(db=None):
     """
     if db is not None:
         try:
-            from crud import active_directory_config_crud as ad_crud
+            from repositories.setting.active_directory_config_repository import (
+                active_directory_config_crud as ad_crud,
+            )
 
             # Try to get active config from DB
             config = await ad_crud.get_active_config(db)
@@ -637,7 +675,9 @@ async def get_ldap_service(db=None):
                 logger.info(f"Using AD config from database: {config.name}")
                 return LdapService(ad_config=config)
         except Exception as e:
-            logger.warning(f"Failed to load AD config from DB, falling back to env vars: {e}")
+            logger.warning(
+                f"Failed to load AD config from DB, falling back to env vars: {e}"
+            )
 
     raise ValueError(
         "No Active Directory configuration found. "
@@ -683,7 +723,7 @@ class ActiveDirectoryService:
                 port=self.port,
                 use_ssl=self.use_ssl,
                 get_info=ALL,
-                connect_timeout=10
+                connect_timeout=10,
             )
 
             # Try to connect and bind
@@ -697,7 +737,7 @@ class ActiveDirectoryService:
                         user=full_username,
                         password=self.ldap_password,
                         auto_bind=True,
-                        receive_timeout=5
+                        receive_timeout=5,
                     )
 
                     # Try a simple search to verify the search base is valid
@@ -707,7 +747,7 @@ class ActiveDirectoryService:
                         conn.search(
                             search_base=self.base_dn,
                             search_filter="(objectClass=*)",
-                            search_scope=BASE
+                            search_scope=BASE,
                         )
                         search_success = True
                     except Exception as e:
@@ -719,32 +759,32 @@ class ActiveDirectoryService:
                     if search_success:
                         return {
                             "success": True,
-                            "message": "Connection successful and base DN is accessible"
+                            "message": "Connection successful and base DN is accessible",
                         }
                     else:
                         return {
                             "success": True,
                             "message": "Connection successful but base DN search failed",
-                            "details": search_error
+                            "details": search_error,
                         }
 
                 except LDAPBindError as e:
                     return {
                         "success": False,
                         "message": "Authentication failed",
-                        "details": str(e)
+                        "details": str(e),
                     }
                 except LDAPSocketOpenError as e:
                     return {
                         "success": False,
                         "message": "Cannot connect to LDAP server",
-                        "details": str(e)
+                        "details": str(e),
                     }
                 except Exception as e:
                     return {
                         "success": False,
                         "message": "Connection failed",
-                        "details": str(e)
+                        "details": str(e),
                     }
 
             result = await asyncio.to_thread(_test_bind)
@@ -755,5 +795,5 @@ class ActiveDirectoryService:
             return {
                 "success": False,
                 "message": "Connection test failed",
-                "details": str(e)
+                "details": str(e),
             }

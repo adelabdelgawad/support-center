@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db import Role, User, UserRole
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class UserCRUD(BaseCRUD[User]):
+class UserRepository(BaseRepository[User]):
     """CRUD for User database operations."""
 
     model = User

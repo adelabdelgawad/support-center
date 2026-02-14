@@ -63,7 +63,9 @@ async def list_organizational_units(
     return await OrganizationalUnitService.get_all_ous(db)
 
 
-@router.post("", response_model=OrganizationalUnitRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=OrganizationalUnitRead, status_code=status.HTTP_201_CREATED
+)
 async def create_organizational_unit(
     ou_data: OrganizationalUnitCreate,
     db: AsyncSession = Depends(get_session),
@@ -164,7 +166,10 @@ async def discover_ous_from_ad(
         error_msg = str(e)
 
         # Check for common connection errors
-        if "socket connection error" in error_msg or "Network is unreachable" in error_msg:
+        if (
+            "socket connection error" in error_msg
+            or "Network is unreachable" in error_msg
+        ):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Unable to connect to Active Directory server. Please verify the server address, port, and network connectivity in your AD configuration.",
@@ -210,16 +215,14 @@ async def get_organizational_unit(
 
     **Permissions:** Authenticated users
     """
-    from crud.organizational_unit_crud import OrganizationalUnitCRUD
-
-    ou = await OrganizationalUnitCRUD.get_by_id(db, ou_id)
+    ou = await OrganizationalUnitService.get_ou_by_id(db, ou_id)
     if not ou:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"OU with ID {ou_id} not found",
         )
 
-    return OrganizationalUnitRead.model_validate(ou)
+    return ou
 
 
 @router.patch("/{ou_id}", response_model=OrganizationalUnitRead)

@@ -9,10 +9,10 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import UserRole
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class UserRoleCRUD(BaseCRUD[UserRole]):
+class UserRoleRepository(BaseRepository[UserRole]):
     """CRUD for UserRole database operations."""
 
     model = UserRole

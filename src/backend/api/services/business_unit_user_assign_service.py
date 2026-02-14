@@ -17,6 +17,7 @@ from api.schemas.business_unit_user_assign import (
     BusinessUnitUserAssignCreate,
     BusinessUnitUserAssignUpdate,
 )
+from repositories.setting.business_unit_user_assign_repository import BusinessUnitUserAssignRepository
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -53,62 +54,9 @@ class BusinessUnitUserAssignService:
         Returns:
             Tuple of (list of assignments, total, active_count, inactive_count)
         """
-        # Build main query
-        stmt = (
-            select(BusinessUnitUserAssign)
-            .where(not BusinessUnitUserAssign.is_deleted)
-            .options(
-                selectinload(BusinessUnitUserAssign.user),
-                selectinload(BusinessUnitUserAssign.business_unit),
-            )
+        return await BusinessUnitUserAssignRepository.find_paginated_with_counts(
+            db, user_id, business_unit_id, is_active, page, per_page
         )
-
-        # Build count query
-        count_stmt = select(
-            func.count(BusinessUnitUserAssign.id).label("total"),
-            func.count(
-                case((BusinessUnitUserAssign.is_active.is_(True), 1))
-            ).label("active_count"),
-            func.count(
-                case((BusinessUnitUserAssign.is_active.is_(False), 1))
-            ).label("inactive_count"),
-        ).where(not BusinessUnitUserAssign.is_deleted)
-
-        # Apply filters
-        if user_id is not None:
-            user_filter = BusinessUnitUserAssign.technician_id == user_id
-            stmt = stmt.where(user_filter)
-            count_stmt = count_stmt.where(user_filter)
-
-        if business_unit_id is not None:
-            bu_filter = BusinessUnitUserAssign.business_unit_id == business_unit_id
-            stmt = stmt.where(bu_filter)
-            count_stmt = count_stmt.where(bu_filter)
-
-        if is_active is not None:
-            active_filter = BusinessUnitUserAssign.is_active == is_active
-            stmt = stmt.where(active_filter)
-            count_stmt = count_stmt.where(active_filter)
-
-        # Get counts
-        count_result = await db.execute(count_stmt)
-        counts = count_result.one()
-        total = counts.total or 0
-        active_count = counts.active_count or 0
-        inactive_count = counts.inactive_count or 0
-
-        # Apply pagination and ordering
-        stmt = (
-            stmt.order_by(BusinessUnitUserAssign.created_at.desc())
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-        )
-
-        # Execute query
-        result = await db.execute(stmt)
-        assignments = list(result.scalars().all())
-
-        return assignments, total, active_count, inactive_count
 
     @staticmethod
     @safe_database_query("get_business_unit_user_assign")

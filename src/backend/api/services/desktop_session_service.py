@@ -50,6 +50,8 @@ from core.decorators import (
 )
 from core.logging_config import SessionLogger
 from db import DesktopSession, User
+from repositories.management.desktop_session_repository import DesktopSessionRepository
+from repositories.setting.user_repository import UserRepository
 
 # Module-level logger
 logger = logging.getLogger(__name__)
@@ -73,9 +75,7 @@ class DesktopSessionService:
             Existing or newly created User
         """
         # Try to find existing user
-        stmt = select(User).where(User.username == username)
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = await UserRepository.find_by_username(db, username)
 
         if user:
             logger.debug(f"Found existing user: {username} (ID: {user.id})")
@@ -87,28 +87,26 @@ class DesktopSessionService:
         email = f"{username}@auto-generated.local"
 
         # Check if email already exists
-        email_stmt = select(User).where(User.email == email)
-        email_result = await db.execute(email_stmt)
-        if email_result.scalar_one_or_none():
+        if await UserRepository.find_by_email(db, email):
             email = f"{username}.{secrets.token_hex(4)}@auto-generated.local"
             logger.debug(f"Email collision detected, using: {email}")
 
         # Create user with placeholder data
-        new_user = User(
-            username=username,
-            email=email,
-            full_name=f"Auto-generated User ({username})",
-            password_hash=None,
-            is_technician=False,
-            is_active=True,
-            is_online=False,
-            is_super_admin=False,
-            is_domain=True,
+        new_user = await UserRepository.create(
+            db,
+            obj_in={
+                "username": username,
+                "email": email,
+                "full_name": f"Auto-generated User ({username})",
+                "password_hash": None,
+                "is_technician": False,
+                "is_active": True,
+                "is_online": False,
+                "is_super_admin": False,
+                "is_domain": True,
+            },
+            commit=True,
         )
-
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
 
         logger.info(f"Auto-created user: {username} (ID: {new_user.id})")
         return new_user
@@ -149,19 +147,18 @@ class DesktopSessionService:
 
         session_logger = SessionLogger()
 
-        logger.info(f"Creating desktop session for user: {user_id} | App version: {app_version}")
+        logger.info(
+            f"Creating desktop session for user: {user_id} | App version: {app_version}"
+        )
 
         # Check for existing active session with same device fingerprint
         # Users can have multiple active sessions from different devices
         if device_fingerprint:
-            stmt = (
-                select(DesktopSession)
-                .where(DesktopSession.user_id == user_id)
-                .where(DesktopSession.is_active)
-                .where(DesktopSession.device_fingerprint == device_fingerprint)
+            existing_session = (
+                await DesktopSessionRepository.find_active_by_user_and_fingerprint(
+                    db, user_id, device_fingerprint
+                )
             )
-            result = await db.execute(stmt)
-            existing_session = result.scalar_one_or_none()
 
             if existing_session:
                 logger.info(
@@ -190,6 +187,7 @@ class DesktopSessionService:
 
                 # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
                 from api.services.presence_service import presence_service
+
                 await presence_service.set_present(existing_session.id, user_id)
 
                 return existing_session
@@ -197,17 +195,12 @@ class DesktopSessionService:
         # Deactivate any existing active sessions for the same user + computer
         # This handles cases where device_fingerprint changes (app restart/reinstall)
         if computer_name:
-            deactivate_stmt = (
-                select(DesktopSession)
-                .where(DesktopSession.user_id == user_id)
-                .where(DesktopSession.computer_name == computer_name)
-                .where(DesktopSession.is_active)
+            old_sessions = (
+                await DesktopSessionRepository.mark_sessions_inactive_by_computer(
+                    db, user_id, computer_name
+                )
             )
-            result = await db.execute(deactivate_stmt)
-            old_sessions = result.scalars().all()
-
             for old_session in old_sessions:
-                old_session.is_active = False
                 logger.info(
                     f"Deactivated old session {old_session.id} for user {user_id} "
                     f"on computer {computer_name} (fingerprint: {old_session.device_fingerprint})"
@@ -217,13 +210,9 @@ class DesktopSessionService:
         max_concurrent = settings.security.session_max_concurrent
         if max_concurrent > 0:
             # Count current active desktop sessions for this user
-            count_stmt = (
-                select(DesktopSession)
-                .where(DesktopSession.user_id == user_id)
-                .where(DesktopSession.is_active)
+            active_sessions = await DesktopSessionRepository.find_active_by_user(
+                db, user_id
             )
-            result = await db.execute(count_stmt)
-            active_sessions = result.scalars().all()
             active_count = len(active_sessions)
 
             if active_count >= max_concurrent:
@@ -279,10 +268,13 @@ class DesktopSessionService:
             f"App version: {app_version} | IP: {ip_address} | "
             f"Computer: {computer_name} | OS: {os_info}"
         )
-        session_logger.session_created(user_id, session.id, 2, ip_address)  # type_id=2 for desktop
+        session_logger.session_created(
+            user_id, session.id, 2, ip_address
+        )  # type_id=2 for desktop
 
         # Dual-write: set Redis presence for new session (non-blocking, fail-safe)
         from api.services.presence_service import presence_service
+
         await presence_service.set_present(session.id, user_id)
 
         return session
@@ -308,35 +300,28 @@ class DesktopSessionService:
         """
         session_logger = SessionLogger()
 
-        stmt = select(DesktopSession).where(DesktopSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
-
-        if not session:
-            logger.warning(f"Desktop heartbeat update failed - Session not found: {session_id}")
-            return None
-
-        # Update heartbeat
-        old_heartbeat = session.last_heartbeat
-        session.last_heartbeat = datetime.utcnow()
-        session.is_active = True
-
-        if ip_address:
-            session.ip_address = ip_address
-
-        await db.commit()
-        await db.refresh(session)
-
-        duration = (session.last_heartbeat - old_heartbeat).total_seconds() / 60
-        logger.debug(
-            f"Desktop heartbeat updated for session {session_id} | "
-            f"User: {session.user_id} | Duration since last: {duration:.1f} min"
+        session = await DesktopSessionRepository.update_heartbeat(
+            db, session_id, ip_address
         )
 
-        session_logger.heartbeat_received(session_id, session.user_id, session.ip_address)
+        if not session:
+            logger.warning(
+                f"Desktop heartbeat update failed - Session not found: {session_id}"
+            )
+            return None
+
+        logger.debug(
+            f"Desktop heartbeat updated for session {session_id} | "
+            f"User: {session.user_id}"
+        )
+
+        session_logger.heartbeat_received(
+            session_id, session.user_id, session.ip_address
+        )
 
         # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
         from api.services.presence_service import presence_service
+
         await presence_service.set_present(session_id, session.user_id)
 
         return session
@@ -359,19 +344,19 @@ class DesktopSessionService:
         """
         session_logger = SessionLogger()
 
-        stmt = select(DesktopSession).where(DesktopSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
+        session = await DesktopSessionRepository.update_heartbeat(
+            db, session_id, ip_address
+        )
 
         if not session:
-            logger.warning(f"Desktop disconnect failed - Session not found: {session_id}")
+            logger.warning(
+                f"Desktop heartbeat update failed - Session not found: {session_id}"
+            )
             return None
 
-        duration = (datetime.utcnow() - session.created_at).total_seconds() / 60
-        session.is_active = False
-
-        await db.commit()
-        await db.refresh(session)
+        old_heartbeat = session.last_heartbeat - timedelta(seconds=0)
+        if old_heartbeat is None:
+            old_heartbeat = session.last_heartbeat - timedelta(minutes=1)
 
         logger.info(
             f"Desktop session disconnected: {session_id} | "
@@ -381,6 +366,7 @@ class DesktopSessionService:
 
         # Dual-write: remove Redis presence key (non-blocking, fail-safe)
         from api.services.presence_service import presence_service
+
         await presence_service.remove_present(session_id, session.user_id)
 
         return session
@@ -401,17 +387,9 @@ class DesktopSessionService:
         Returns:
             List of DesktopSession
         """
-        stmt = select(DesktopSession).where(DesktopSession.user_id == user_id)
-
-        if active_only:
-            stmt = stmt.where(DesktopSession.is_active)
-
-        stmt = stmt.order_by(DesktopSession.last_heartbeat.desc())
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await DesktopSessionRepository.find_by_user(
+            db, user_id, active_only=active_only
+        )
 
     @staticmethod
     @safe_database_query("get_active_desktop_sessions", default_return=[])
@@ -425,16 +403,7 @@ class DesktopSessionService:
         Returns:
             List of active DesktopSession
         """
-        stmt = (
-            select(DesktopSession)
-            .where(DesktopSession.is_active)
-            .order_by(DesktopSession.last_heartbeat.desc())
-        )
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await DesktopSessionRepository.find_all_active(db)
 
     @staticmethod
     @safe_database_query("get_active_desktop_sessions_with_users", default_return=[])
@@ -449,19 +418,7 @@ class DesktopSessionService:
         Returns:
             List of active DesktopSession with user relationship loaded
         """
-        from sqlalchemy.orm import selectinload
-
-        stmt = (
-            select(DesktopSession)
-            .options(selectinload(DesktopSession.user))
-            .where(DesktopSession.is_active)
-            .order_by(DesktopSession.last_heartbeat.desc())
-        )
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        return sessions
+        return await DesktopSessionRepository.find_all_active_with_users(db)
 
     @staticmethod
     @transactional_database_operation("cleanup_stale_desktop_sessions")
@@ -492,18 +449,15 @@ class DesktopSessionService:
         )
 
         # Find stale sessions
-        stmt = (
-            select(DesktopSession)
-            .where(DesktopSession.is_active)
-            .where(DesktopSession.last_heartbeat < cutoff_time)
+        stale_sessions = await DesktopSessionRepository.find_stale(
+            db, timeout_minutes=timeout_minutes
         )
-
-        result = await db.execute(stmt)
-        stale_sessions = result.scalars().all()
 
         count = 0
         for session in stale_sessions:
-            inactive_duration = (datetime.utcnow() - session.last_heartbeat).total_seconds() / 60
+            inactive_duration = (
+                datetime.utcnow() - session.last_heartbeat
+            ).total_seconds() / 60
             session.is_active = False
 
             session_logger.stale_session_cleaned(
@@ -520,7 +474,9 @@ class DesktopSessionService:
 
         if count > 0:
             await db.commit()
-            logger.info(f"Desktop cleanup completed | {count} stale sessions cleaned up")
+            logger.info(
+                f"Desktop cleanup completed | {count} stale sessions cleaned up"
+            )
         else:
             logger.info("Desktop cleanup completed | No stale sessions found")
 
@@ -541,8 +497,4 @@ class DesktopSessionService:
         Returns:
             DesktopSession or None
         """
-        stmt = select(DesktopSession).where(DesktopSession.id == session_id)
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
-
-        return session
+        return await DesktopSessionRepository.find_by_id(db, session_id)

@@ -4,7 +4,7 @@ Organizational Unit service for OU management.
 
 import logging
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,9 @@ from core.decorators import (
     transactional_database_operation,
 )
 from db.models import OrganizationalUnit
-from crud.organizational_unit_crud import OrganizationalUnitCRUD
+from repositories.setting.organizational_unit_repository import (
+    OrganizationalUnitRepository,
+)
 from api.schemas.organizational_unit import (
     OrganizationalUnitCreate,
     OrganizationalUnitListResponse,
@@ -31,12 +33,15 @@ class OrganizationalUnitService:
     """Service for managing organizational units."""
 
     @staticmethod
-    @safe_database_query("get_all_ous", default_return=OrganizationalUnitListResponse(
-        organizational_units=[],
-        total=0,
-        enabled_count=0,
-        disabled_count=0,
-    ))
+    @safe_database_query(
+        "get_all_ous",
+        default_return=OrganizationalUnitListResponse(
+            organizational_units=[],
+            total=0,
+            enabled_count=0,
+            disabled_count=0,
+        ),
+    )
     @log_database_operation("get all organizational units", level="debug")
     async def get_all_ous(db: AsyncSession) -> OrganizationalUnitListResponse:
         """
@@ -48,9 +53,11 @@ class OrganizationalUnitService:
         Returns:
             List response with OUs and statistics
         """
-        ous, enabled_count, disabled_count = (
-            await OrganizationalUnitCRUD.get_all_with_stats(db)
-        )
+        (
+            ous,
+            enabled_count,
+            disabled_count,
+        ) = await OrganizationalUnitRepository.get_all_with_stats(db)
 
         # Convert to read schemas
         items = [OrganizationalUnitRead.model_validate(ou) for ou in ous]
@@ -61,6 +68,28 @@ class OrganizationalUnitService:
             enabled_count=enabled_count,
             disabled_count=disabled_count,
         )
+
+    @staticmethod
+    @safe_database_query("get_ou_by_id", default_return=None)
+    @log_database_operation("get organizational unit by ID", level="debug")
+    async def get_ou_by_id(
+        db: AsyncSession, ou_id: int
+    ) -> Optional[OrganizationalUnitRead]:
+        """
+        Get a specific organizational unit by ID.
+
+        Args:
+            db: Database session
+            ou_id: OU ID
+
+        Returns:
+            OU details or None if not found
+        """
+        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
+        if not ou:
+            return None
+
+        return OrganizationalUnitRead.model_validate(ou)
 
     @staticmethod
     @transactional_database_operation("create_ou")
@@ -79,9 +108,7 @@ class OrganizationalUnitService:
             Created OU
         """
         # Check if OU already exists
-        existing = await OrganizationalUnitCRUD.find_by_ou_name(
-            db, ou_data.ou_name
-        )
+        existing = await OrganizationalUnitRepository.find_by_ou_name(db, ou_data.ou_name)
         if existing:
             raise ValueError(f"OU with name '{ou_data.ou_name}' already exists")
 
@@ -114,7 +141,7 @@ class OrganizationalUnitService:
         Raises:
             ValueError: If OU not found
         """
-        ou = await OrganizationalUnitCRUD.get_by_id(db, ou_id)
+        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
         if not ou:
             raise ValueError(f"OU with ID {ou_id} not found")
 
@@ -145,7 +172,7 @@ class OrganizationalUnitService:
         Returns:
             True if deleted, False if not found
         """
-        ou = await OrganizationalUnitCRUD.get_by_id(db, ou_id)
+        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
         if not ou:
             return False
 
@@ -175,13 +202,11 @@ class OrganizationalUnitService:
         Raises:
             ValueError: If OU not found
         """
-        ou = await OrganizationalUnitCRUD.toggle_enabled(db, ou_id, is_enabled)
+        ou = await OrganizationalUnitRepository.toggle_enabled(db, ou_id, is_enabled)
         if not ou:
             raise ValueError(f"OU with ID {ou_id} not found")
 
-        logger.info(
-            f"Toggled OU '{ou.ou_name}' enabled status to: {is_enabled}"
-        )
+        logger.info(f"Toggled OU '{ou.ou_name}' enabled status to: {is_enabled}")
         return OrganizationalUnitRead.model_validate(ou)
 
     @staticmethod
@@ -202,7 +227,9 @@ class OrganizationalUnitService:
             ValueError: If no active AD configuration is found
         """
         # Import here to avoid circular dependency
-        from crud import active_directory_config_crud as ad_crud
+        from repositories.setting.active_directory_config_repository import (
+            active_directory_config_crud as ad_crud,
+        )
 
         # Check if there's an active AD configuration
         active_config = await ad_crud.get_active_config(db)
@@ -220,7 +247,7 @@ class OrganizationalUnitService:
             logger.info(f"Discovered {len(ad_ous)} OUs from Active Directory")
 
             # Get existing OU names from database
-            existing_ous = await OrganizationalUnitCRUD.get_all(db)
+            existing_ous = await OrganizationalUnitRepository.get_all(db)
             existing_names = {ou.ou_name for ou in existing_ous}
 
             # Build response
@@ -267,7 +294,9 @@ class OrganizationalUnitService:
 
         # Create new OUs
         for ou_item in added:
-            existing = await OrganizationalUnitCRUD.find_by_ou_name(db, ou_item.ou_name)
+            existing = await OrganizationalUnitRepository.find_by_ou_name(
+                db, ou_item.ou_name
+            )
             if not existing:
                 ou = OrganizationalUnit(
                     ou_name=ou_item.ou_name,
@@ -280,7 +309,7 @@ class OrganizationalUnitService:
 
         # Delete removed OUs
         for ou_name in removed:
-            existing = await OrganizationalUnitCRUD.find_by_ou_name(db, ou_name)
+            existing = await OrganizationalUnitRepository.find_by_ou_name(db, ou_name)
             if existing:
                 await db.delete(existing)
                 deleted_count += 1
@@ -288,7 +317,9 @@ class OrganizationalUnitService:
 
         await db.commit()
 
-        logger.info(f"OU sync complete: {created_count} created, {deleted_count} deleted")
+        logger.info(
+            f"OU sync complete: {created_count} created, {deleted_count} deleted"
+        )
         return {"created_count": created_count, "deleted_count": deleted_count}
 
     @staticmethod
@@ -304,4 +335,4 @@ class OrganizationalUnitService:
         Returns:
             List of enabled OUs
         """
-        return await OrganizationalUnitCRUD.get_all(db, enabled_only=True)
+        return await OrganizationalUnitRepository.get_all(db, enabled_only=True)

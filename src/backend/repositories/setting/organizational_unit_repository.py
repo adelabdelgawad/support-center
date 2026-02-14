@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import OrganizationalUnit
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class OrganizationalUnitCRUD(BaseCRUD[OrganizationalUnit]):
+class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
     """CRUD for OrganizationalUnit database operations."""
 
     model = OrganizationalUnit

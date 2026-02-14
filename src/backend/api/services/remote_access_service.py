@@ -45,6 +45,7 @@ CURRENT ACCEPTABLE STATE:
 - Requester must approve remote access
 ============================================================================
 """
+
 import logging
 from typing import List, Optional, Tuple
 from uuid import UUID
@@ -57,7 +58,7 @@ from core.decorators import (
     transactional_database_operation,
 )
 from db import RemoteAccessSession, User
-from crud.remote_access_crud import RemoteAccessCRUD
+from repositories.management.remote_access_repository import RemoteAccessRepository
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +95,9 @@ class RemoteAccessService:
             ValueError: If service request not found or closed
         """
         # Get the service request
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
-        request = await ServiceRequestCRUD.find_by_id(db, request_id)
+        request = await ServiceRequestRepository.find_by_id(db, request_id)
         if not request:
             raise ValueError(f"Service request {request_id} not found")
 
@@ -119,9 +120,11 @@ class RemoteAccessService:
         logger.info(f"Requester {requester_id_str} is online via SignalR")
 
         # Auto-terminate existing active session for this requester
-        terminated_session = await RemoteAccessService.terminate_active_session_for_requester(
-            db=db,
-            requester_id=request.requester_id,
+        terminated_session = (
+            await RemoteAccessService.terminate_active_session_for_requester(
+                db=db,
+                requester_id=request.requester_id,
+            )
         )
 
         if terminated_session:
@@ -132,7 +135,7 @@ class RemoteAccessService:
             )
 
         # Create minimal session record (just for ID mapping and history)
-        session = await RemoteAccessCRUD.create_session(
+        session = await RemoteAccessRepository.create_session(
             db=db,
             request_id=request_id,
             agent_id=agent_id,
@@ -155,7 +158,9 @@ class RemoteAccessService:
                 "agent_username": agent.username,
                 "requester_id": str(request.requester_id),
                 "request_id": str(request_id),
-                "timestamp": session.created_at.isoformat() if session.created_at else None,
+                "timestamp": session.created_at.isoformat()
+                if session.created_at
+                else None,
             },
         )
 
@@ -200,7 +205,7 @@ class RemoteAccessService:
             Terminated session if found, None otherwise
         """
         # Find ANY active session for this requester (regardless of agent)
-        existing_session = await RemoteAccessCRUD.get_active_session_for_user(
+        existing_session = await RemoteAccessRepository.get_active_session_for_user(
             db=db,
             user_id=requester_id,
         )
@@ -215,7 +220,7 @@ class RemoteAccessService:
         )
 
         # End the session in database (no commit - handled by caller's transaction)
-        terminated_session = await RemoteAccessCRUD.end_session(
+        terminated_session = await RemoteAccessRepository.end_session(
             db=db,
             session_id=existing_session.id,
             end_reason="replaced_by_new_request",
@@ -266,7 +271,7 @@ class RemoteAccessService:
             ValueError: If session not found or agent mismatch
         """
         # Verify session exists
-        session = await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        session = await RemoteAccessRepository.get_session_by_id(db, session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -304,7 +309,7 @@ class RemoteAccessService:
         db: AsyncSession, session_id: UUID
     ) -> RemoteAccessSession:
         """Get session by ID."""
-        return await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        return await RemoteAccessRepository.get_session_by_id(db, session_id)
 
     @staticmethod
     async def get_sessions_by_request(
@@ -314,7 +319,7 @@ class RemoteAccessService:
         per_page: int = 20,
     ) -> Tuple[List[RemoteAccessSession], int]:
         """Get all sessions for a request (history view)."""
-        return await RemoteAccessCRUD.get_sessions_by_request(
+        return await RemoteAccessRepository.get_sessions_by_request(
             db, request_id, page, per_page
         )
 
@@ -346,7 +351,7 @@ class RemoteAccessService:
             ValueError: If session not found or unauthorized
         """
         # Verify session exists
-        session = await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        session = await RemoteAccessRepository.get_session_by_id(db, session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -359,11 +364,9 @@ class RemoteAccessService:
             raise ValueError("Session is already ended")
 
         # End the session (DB persistence FIRST)
-        session = await RemoteAccessCRUD.end_session(db, session_id, end_reason)
+        session = await RemoteAccessRepository.end_session(db, session_id, end_reason)
 
-        logger.info(
-            f"Ended remote access session {session_id} - reason: {end_reason}"
-        )
+        logger.info(f"Ended remote access session {session_id} - reason: {end_reason}")
 
         # AUDIT LOG: remote_session_ended (FR-011)
         # Log structured audit event for session end with all required fields
@@ -429,7 +432,7 @@ class RemoteAccessService:
             ValueError: If session not found or unauthorized
         """
         # Verify session exists
-        session = await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        session = await RemoteAccessRepository.get_session_by_id(db, session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -442,7 +445,7 @@ class RemoteAccessService:
             raise ValueError("Cannot toggle control on ended session")
 
         # Toggle control (DB persistence FIRST)
-        session = await RemoteAccessCRUD.toggle_control(db, session_id, enabled)
+        session = await RemoteAccessRepository.toggle_control(db, session_id, enabled)
 
         logger.info(
             f"Toggled control mode for session {session_id} - enabled: {enabled}"
@@ -478,18 +481,74 @@ class RemoteAccessService:
         Returns:
             Session with current state or None
         """
-        return await RemoteAccessCRUD.get_session_by_id(db, session_id)
+        return await RemoteAccessRepository.get_session_by_id(db, session_id)
 
     @staticmethod
     async def get_active_session_for_user(
         db: AsyncSession, user_id: UUID
     ) -> Optional[RemoteAccessSession]:
         """Get active session where user is requester (for recovery)."""
-        return await RemoteAccessCRUD.get_active_session_for_user(db, user_id)
+        return await RemoteAccessRepository.get_active_session_for_user(db, user_id)
 
     @staticmethod
     async def get_active_session_for_agent(
         db: AsyncSession, agent_id: UUID
     ) -> Optional[RemoteAccessSession]:
         """Get active session where user is agent (for recovery)."""
-        return await RemoteAccessCRUD.get_active_session_for_agent(db, agent_id)
+        return await RemoteAccessRepository.get_active_session_for_agent(db, agent_id)
+
+    @staticmethod
+    @transactional_database_operation("create_direct_session")
+    @log_database_operation("create direct remote access session", level="info")
+    async def create_direct_session(
+        db: AsyncSession,
+        agent_id: UUID,
+        requester_id: UUID,
+    ) -> RemoteAccessSession:
+        """
+        Create a direct remote access session without a request.
+
+        Used when initiating remote access from Active Sessions page
+        rather than from a specific ticket.
+
+        Args:
+            db: Database session
+            agent_id: Agent/technician UUID
+            requester_id: Requester UUID
+
+        Returns:
+            Created session
+        """
+        session = await RemoteAccessRepository.create_session(
+            db=db,
+            request_id=None,  # No request for direct sessions
+            agent_id=agent_id,
+            requester_id=requester_id,
+        )
+
+        logger.info(f"Created direct remote access session {session.id}")
+        return session
+
+    @staticmethod
+    @transactional_database_operation("update_heartbeat")
+    @log_database_operation("update session heartbeat", level="debug")
+    async def update_heartbeat(
+        db: AsyncSession,
+        session_id: UUID,
+    ) -> Optional[RemoteAccessSession]:
+        """
+        Update session heartbeat timestamp.
+
+        Args:
+            db: Database session
+            session_id: Session UUID
+
+        Returns:
+            Updated session or None if not found/not active
+        """
+        updated_session = await RemoteAccessRepository.update_heartbeat(db, session_id)
+
+        if updated_session:
+            logger.debug(f"Updated heartbeat for session {session_id}")
+
+        return updated_session

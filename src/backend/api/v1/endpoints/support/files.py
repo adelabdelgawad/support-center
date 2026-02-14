@@ -108,23 +108,9 @@ async def get_stuck_attachments(
 
     **Permissions:** Technicians and above
     """
-    from datetime import datetime, timedelta
-    from sqlalchemy import select
-    from db import Screenshot
-
-    # Use naive datetime since database stores naive timestamps
-    threshold_time = datetime.utcnow() - timedelta(minutes=minutes_threshold)
-
-    stmt = (
-        select(Screenshot)
-        .where(Screenshot.upload_status == "pending")
-        .where(Screenshot.created_at < threshold_time)
-        .order_by(Screenshot.created_at.asc())
+    stuck_attachments = await FileService.get_stuck_attachments(
+        db=db, minutes_threshold=minutes_threshold
     )
-
-    result = await db.execute(stmt)
-    stuck_attachments = result.scalars().all()
-
     return stuck_attachments
 
 
@@ -505,39 +491,22 @@ async def mark_attachment_failed(
 
     **Permissions:** Technicians and above
     """
-    from sqlalchemy import update
-
-    # Check if attachment exists
-    attachment = await FileService.get_attachment(db=db, attachment_id=attachment_id)
-
-    if not attachment:
-        raise HTTPException(status_code=404, detail="Screenshot not found")
-
-    # Only allow marking pending uploads as failed
-    if attachment.upload_status != "pending":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Screenshot is not in pending status (current: {attachment.upload_status})"
+    try:
+        attachment = await FileService.mark_attachment_failed(
+            db=db, attachment_id=attachment_id
         )
 
-    # Update status to failed
-    from db import Screenshot
-    stmt = (
-        update(Screenshot)
-        .where(Screenshot.id == attachment_id)
-        .values(upload_status="failed")
-    )
-    await db.execute(stmt)
-    await db.commit()
-
-    # Refresh to get updated data
-    await db.refresh(attachment)
-
-    return {
-        "message": "Screenshot marked as failed",
-        "attachment_id": attachment_id,
-        "filename": attachment.filename,
-        "old_status": "pending",
-        "new_status": "failed",
-        "celery_task_id": attachment.celery_task_id,
-    }
+        return {
+            "message": "Screenshot marked as failed",
+            "attachment_id": attachment_id,
+            "filename": attachment.filename,
+            "old_status": "pending",
+            "new_status": "failed",
+            "celery_task_id": attachment.celery_task_id,
+        }
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)

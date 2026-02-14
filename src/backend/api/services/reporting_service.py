@@ -1,25 +1,16 @@
 """
 Reporting service for generating reports and aggregating metrics.
 """
+
 import logging
 from datetime import datetime, date, timedelta
 from typing import List, Optional
 
-from sqlalchemy import select, func, and_, or_, case, extract
+from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from core.decorators import log_database_operation, safe_database_query
-from db.models import (
-    ServiceRequest,
-    RequestStatus,
-    Priority,
-    Category,
-    Subcategory,
-    BusinessUnit,
-    User,
-    RequestAssignee,
-)
+from db.models import ServiceRequest, User
 from api.schemas.reports import (
     ExecutiveDashboardData,
     KPICard,
@@ -38,6 +29,7 @@ from api.schemas.reports import (
     ReportDateRange,
     DateRangePreset,
 )
+from repositories.reporting.reporting_query_repository import ReportingQueryRepository
 
 logger = logging.getLogger(__name__)
 
@@ -141,173 +133,73 @@ class ReportingService:
         # Resolve date range
         date_range = filters.date_range if filters else None
         start_date, end_date = ReportingService.resolve_date_range(date_range)
-        comp_start, comp_end = ReportingService.get_comparison_period(start_date, end_date)
+        comp_start, comp_end = ReportingService.get_comparison_period(
+            start_date, end_date
+        )
 
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
         comp_start_dt = datetime.combine(comp_start, datetime.min.time())
         comp_end_dt = datetime.combine(comp_end, datetime.max.time())
 
-        # Build base filter conditions
-        base_conditions = [
-            ServiceRequest.created_at >= start_dt,
-            ServiceRequest.created_at <= end_dt,
-        ]
+        # Build business unit filter
+        business_unit_ids = filters.business_unit_ids if filters else None
 
-        comp_conditions = [
-            ServiceRequest.created_at >= comp_start_dt,
-            ServiceRequest.created_at <= comp_end_dt,
-        ]
-
-        if filters:
-            if filters.business_unit_ids:
-                base_conditions.append(
-                    ServiceRequest.business_unit_id.in_(filters.business_unit_ids)
-                )
-                comp_conditions.append(
-                    ServiceRequest.business_unit_id.in_(filters.business_unit_ids)
-                )
-
-        # Get current period totals
-        total_stmt = select(func.count(ServiceRequest.id)).where(and_(*base_conditions))
-        total_result = await db.execute(total_stmt)
-        total_tickets = total_result.scalar() or 0
-
-        # Get comparison period totals
-        comp_total_stmt = select(func.count(ServiceRequest.id)).where(and_(*comp_conditions))
-        comp_total_result = await db.execute(comp_total_stmt)
-        comp_total_tickets = comp_total_result.scalar() or 0
-
-        # Get resolved tickets (status_id in [3, 5] or status.count_as_solved)
-        resolved_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.resolved_at is not None,
-            )
-        )
-        resolved_result = await db.execute(resolved_stmt)
-        resolved_tickets = resolved_result.scalar() or 0
-
-        comp_resolved_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *comp_conditions,
-                ServiceRequest.resolved_at is not None,
-            )
-        )
-        comp_resolved_result = await db.execute(comp_resolved_stmt)
-        comp_resolved_tickets = comp_resolved_result.scalar() or 0
-
-        # Get current open tickets (all time, not filtered by date)
-        open_conditions = []
-        if filters and filters.business_unit_ids:
-            open_conditions.append(
-                ServiceRequest.business_unit_id.in_(filters.business_unit_ids)
-            )
-
-        # Get statuses that are not resolved/closed
-        status_stmt = select(RequestStatus.id).where(
-            not RequestStatus.count_as_solved,
-            RequestStatus.is_active,
-        )
-        status_result = await db.execute(status_stmt)
-        open_status_ids = [r for r in status_result.scalars().all()]
-
-        open_stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.status_id.in_(open_status_ids),
-            *open_conditions,
-        )
-        open_result = await db.execute(open_stmt)
-        open_tickets = open_result.scalar() or 0
-
-        # SLA compliance
-        sla_met_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                not ServiceRequest.sla_resolution_breached,
-                ServiceRequest.resolved_at is not None,
-            )
-        )
-        sla_met_result = await db.execute(sla_met_stmt)
-        sla_met = sla_met_result.scalar() or 0
-
-        sla_compliance = (sla_met / resolved_tickets * 100) if resolved_tickets > 0 else 100.0
-
-        comp_sla_met_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *comp_conditions,
-                not ServiceRequest.sla_resolution_breached,
-                ServiceRequest.resolved_at is not None,
-            )
-        )
-        comp_sla_met_result = await db.execute(comp_sla_met_stmt)
-        comp_sla_met = comp_sla_met_result.scalar() or 0
-        comp_sla_compliance = (
-            (comp_sla_met / comp_resolved_tickets * 100)
-            if comp_resolved_tickets > 0
-            else 100.0
+        # Get current period totals using repository
+        (
+            total_tickets,
+            resolved_tickets,
+        ) = await ReportingQueryRepository.get_ticket_counts_by_period(
+            db, start_dt, end_dt, business_unit_ids
         )
 
-        # Average resolution time (in hours)
-        avg_resolution_stmt = select(
-            func.avg(
-                extract("epoch", ServiceRequest.resolved_at - ServiceRequest.created_at)
-                / 3600
-            )
-        ).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.resolved_at is not None,
-            )
+        # Get comparison period totals using repository
+        (
+            comp_total_tickets,
+            comp_resolved_tickets,
+        ) = await ReportingQueryRepository.get_ticket_counts_by_period(
+            db, comp_start_dt, comp_end_dt, business_unit_ids
         )
-        avg_resolution_result = await db.execute(avg_resolution_stmt)
-        avg_resolution_hours = avg_resolution_result.scalar() or 0
 
-        comp_avg_resolution_stmt = select(
-            func.avg(
-                extract("epoch", ServiceRequest.resolved_at - ServiceRequest.created_at)
-                / 3600
-            )
-        ).where(
-            and_(
-                *comp_conditions,
-                ServiceRequest.resolved_at is not None,
-            )
+        # Get current open tickets using repository
+        open_tickets = await ReportingQueryRepository.get_open_tickets_count(
+            db, business_unit_ids
         )
-        comp_avg_resolution_result = await db.execute(comp_avg_resolution_stmt)
-        comp_avg_resolution_hours = comp_avg_resolution_result.scalar() or 0
 
-        # Average first response time (in minutes)
-        avg_frt_stmt = select(
-            func.avg(
-                extract(
-                    "epoch", ServiceRequest.first_response_at - ServiceRequest.created_at
-                )
-                / 60
-            )
-        ).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.first_response_at is not None,
-            )
+        # Get SLA compliance using repository
+        sla_compliance, sla_met = await ReportingQueryRepository.get_sla_compliance(
+            db, start_dt, end_dt, business_unit_ids
         )
-        avg_frt_result = await db.execute(avg_frt_stmt)
-        avg_frt_minutes = avg_frt_result.scalar() or 0
+        (
+            comp_sla_compliance,
+            comp_sla_met,
+        ) = await ReportingQueryRepository.get_sla_compliance(
+            db, comp_start_dt, comp_end_dt, business_unit_ids
+        )
 
-        comp_avg_frt_stmt = select(
-            func.avg(
-                extract(
-                    "epoch", ServiceRequest.first_response_at - ServiceRequest.created_at
-                )
-                / 60
-            )
-        ).where(
-            and_(
-                *comp_conditions,
-                ServiceRequest.first_response_at is not None,
+        # Get average resolution time using repository
+        avg_resolution_hours = (
+            await ReportingQueryRepository.get_average_resolution_time(
+                db, start_dt, end_dt, business_unit_ids
             )
         )
-        comp_avg_frt_result = await db.execute(comp_avg_frt_stmt)
-        comp_avg_frt_minutes = comp_avg_frt_result.scalar() or 0
+        comp_avg_resolution_hours = (
+            await ReportingQueryRepository.get_average_resolution_time(
+                db, comp_start_dt, comp_end_dt, business_unit_ids
+            )
+        )
+
+        # Get average first response time using repository
+        avg_frt_minutes = (
+            await ReportingQueryRepository.get_average_first_response_time(
+                db, start_dt, end_dt, business_unit_ids
+            )
+        )
+        comp_avg_frt_minutes = (
+            await ReportingQueryRepository.get_average_first_response_time(
+                db, comp_start_dt, comp_end_dt, business_unit_ids
+            )
+        )
 
         # Helper to create KPI cards
         def create_kpi_card(
@@ -327,11 +219,15 @@ class ReportingService:
                 if abs(change_percent) > 1:  # More than 1% change
                     if change_percent > 0:
                         trend_direction = (
-                            TrendDirection.UP if higher_is_better else TrendDirection.DOWN
+                            TrendDirection.UP
+                            if higher_is_better
+                            else TrendDirection.DOWN
                         )
                     else:
                         trend_direction = (
-                            TrendDirection.DOWN if higher_is_better else TrendDirection.UP
+                            TrendDirection.DOWN
+                            if higher_is_better
+                            else TrendDirection.UP
                         )
 
             is_target_met = None
@@ -348,6 +244,16 @@ class ReportingService:
                 trend_direction=trend_direction,
                 target=target,
                 is_target_met=is_target_met,
+            )
+
+        # Build base conditions for filtering
+        base_conditions = [
+            ServiceRequest.created_at >= start_dt,
+            ServiceRequest.created_at <= end_dt,
+        ]
+        if business_unit_ids:
+            base_conditions.append(
+                ServiceRequest.business_unit_id.in_(business_unit_ids)
             )
 
         # Get ticket volume trend
@@ -447,22 +353,10 @@ class ReportingService:
         base_conditions: list,
     ) -> List[TrendDataPoint]:
         """Get daily ticket volume trend."""
-        stmt = (
-            select(
-                func.date(ServiceRequest.created_at).label("day"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .where(and_(*base_conditions))
-            .group_by(func.date(ServiceRequest.created_at))
-            .order_by(func.date(ServiceRequest.created_at))
+        rows = await ReportingQueryRepository.get_volume_trend(
+            db, start_date, end_date, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
-
-        return [
-            TrendDataPoint(date=row.day, value=row.count)
-            for row in rows
-        ]
+        return [TrendDataPoint(date=row.day, value=row.count) for row in rows]
 
     @staticmethod
     async def _get_status_distribution(
@@ -470,20 +364,9 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by status."""
-        stmt = (
-            select(
-                RequestStatus.id,
-                RequestStatus.name.label("name"),
-                RequestStatus.color,
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .join(RequestStatus, ServiceRequest.status_id == RequestStatus.id)
-            .where(and_(*base_conditions))
-            .group_by(RequestStatus.id, RequestStatus.name, RequestStatus.color)
-            .order_by(func.count(ServiceRequest.id).desc())
+        rows = await ReportingQueryRepository.get_status_distribution(
+            db, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
 
         total = sum(row.count for row in rows)
         return [
@@ -503,19 +386,9 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by priority."""
-        stmt = (
-            select(
-                Priority.id,
-                Priority.name.label("name"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .join(Priority, ServiceRequest.priority_id == Priority.id)
-            .where(and_(*base_conditions))
-            .group_by(Priority.id, Priority.name)
-            .order_by(Priority.id)
+        rows = await ReportingQueryRepository.get_priority_distribution(
+            db, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
 
         # Priority colors
         priority_colors = {
@@ -544,20 +417,9 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by category."""
-        stmt = (
-            select(
-                Category.id,
-                Category.name_en.label("name"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .join(Subcategory, ServiceRequest.subcategory_id == Subcategory.id)
-            .join(Category, Subcategory.category_id == Category.id)
-            .where(and_(*base_conditions))
-            .group_by(Category.id, Category.name_en)
-            .order_by(func.count(ServiceRequest.id).desc())
+        rows = await ReportingQueryRepository.get_category_distribution(
+            db, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
 
         total = sum(row.count for row in rows)
         return [
@@ -576,19 +438,9 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by business unit."""
-        stmt = (
-            select(
-                BusinessUnit.id,
-                BusinessUnit.name.label("name"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .join(BusinessUnit, ServiceRequest.business_unit_id == BusinessUnit.id)
-            .where(and_(*base_conditions))
-            .group_by(BusinessUnit.id, BusinessUnit.name)
-            .order_by(func.count(ServiceRequest.id).desc())
+        rows = await ReportingQueryRepository.get_business_unit_distribution(
+            db, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
 
         total = sum(row.count for row in rows)
         return [
@@ -616,29 +468,9 @@ class ReportingService:
             day_start = datetime.combine(current_date, datetime.min.time())
             day_end = datetime.combine(current_date, datetime.max.time())
 
-            day_conditions = base_conditions + [
-                ServiceRequest.resolved_at >= day_start,
-                ServiceRequest.resolved_at <= day_end,
-            ]
-
-            # Total resolved on this day
-            total_stmt = select(func.count(ServiceRequest.id)).where(
-                and_(*day_conditions)
+            compliance_rate = await ReportingQueryRepository.get_daily_compliance_rate(
+                db, day_start, day_end
             )
-            total_result = await db.execute(total_stmt)
-            total = total_result.scalar() or 0
-
-            # SLA met on this day
-            met_stmt = select(func.count(ServiceRequest.id)).where(
-                and_(
-                    *day_conditions,
-                    not ServiceRequest.sla_resolution_breached,
-                )
-            )
-            met_result = await db.execute(met_stmt)
-            met = met_result.scalar() or 0
-
-            compliance_rate = (met / total * 100) if total > 0 else 0
 
             trend_data.append(
                 TrendDataPoint(date=current_date, value=round(compliance_rate, 2))
@@ -666,30 +498,9 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get SLA compliance breakdown by priority."""
-        stmt = (
-            select(
-                Priority.id,
-                Priority.name,
-                func.count(ServiceRequest.id).label("total"),
-                func.sum(
-                    case(
-                        (not ServiceRequest.sla_resolution_breached, 1),
-                        else_=0
-                    )
-                ).label("met"),
-            )
-            .join(Priority, ServiceRequest.priority_id == Priority.id)
-            .where(
-                and_(
-                    *base_conditions,
-                    ServiceRequest.resolved_at is not None,
-                )
-            )
-            .group_by(Priority.id, Priority.name)
-            .order_by(Priority.id)
+        rows = await ReportingQueryRepository.get_compliance_by_priority(
+            db, base_conditions
         )
-        result = await db.execute(stmt)
-        rows = result.all()
 
         priority_colors = {
             "Critical": "#ef4444",
@@ -704,7 +515,9 @@ class ReportingService:
                 id=str(row.id),
                 label=row.name,
                 value=round((row.met / row.total * 100) if row.total > 0 else 0, 2),
-                percentage=round((row.met / row.total * 100) if row.total > 0 else 0, 1),
+                percentage=round(
+                    (row.met / row.total * 100) if row.total > 0 else 0, 1
+                ),
                 color=priority_colors.get(row.name),
             )
             for row in rows
@@ -716,17 +529,14 @@ class ReportingService:
         base_conditions: list,
     ) -> List[SLAAgingBucket]:
         """Get aging buckets for open tickets approaching SLA breach."""
-        # Get open tickets
-        status_stmt = select(RequestStatus.id).where(
-            not RequestStatus.count_as_solved,
-            RequestStatus.is_active,
+        # Get open status IDs
+        open_status_ids = await ReportingQueryRepository.get_aging_buckets_by_status_ids(
+            db, []
         )
-        status_result = await db.execute(status_stmt)
-        open_status_ids = [r for r in status_result.scalars().all()]
 
         aging_conditions = base_conditions + [
             ServiceRequest.status_id.in_(open_status_ids),
-            ServiceRequest.due_date is not None,
+            ServiceRequest.due_date.isnot(None),
         ]
 
         now = datetime.utcnow()
@@ -735,51 +545,38 @@ class ReportingService:
         buckets = [
             ("overdue", "Overdue", None, now),  # Past due date
             ("critical", "< 2 hours", now, now + timedelta(hours=2)),
-            ("warning", "2-8 hours", now + timedelta(hours=2), now + timedelta(hours=8)),
-            ("normal", "8-24 hours", now + timedelta(hours=8), now + timedelta(hours=24)),
+            (
+                "warning",
+                "2-8 hours",
+                now + timedelta(hours=2),
+                now + timedelta(hours=8),
+            ),
+            (
+                "normal",
+                "8-24 hours",
+                now + timedelta(hours=8),
+                now + timedelta(hours=24),
+            ),
             ("healthy", "> 24 hours", now + timedelta(hours=24), None),
         ]
 
         # First, get total count for percentage calculation
-        total_stmt = select(func.count(ServiceRequest.id)).where(and_(*aging_conditions))
-        total_result = await db.execute(total_stmt)
-        total_count = total_result.scalar() or 0
+        total_count = await ReportingQueryRepository.get_total_tickets_count(
+            db, aging_conditions
+        )
 
         aging_data = []
         for bucket_id, label, range_start, range_end in buckets:
-            if range_start is None:
-                # Overdue
-                bucket_stmt = select(ServiceRequest.id, ServiceRequest.created_at).where(
-                    and_(
-                        *aging_conditions,
-                        ServiceRequest.due_date < range_end,
-                    )
-                )
-            elif range_end is None:
-                # Healthy
-                bucket_stmt = select(ServiceRequest.id, ServiceRequest.created_at).where(
-                    and_(
-                        *aging_conditions,
-                        ServiceRequest.due_date >= range_start,
-                    )
-                )
-            else:
-                # Middle ranges
-                bucket_stmt = select(ServiceRequest.id, ServiceRequest.created_at).where(
-                    and_(
-                        *aging_conditions,
-                        ServiceRequest.due_date >= range_start,
-                        ServiceRequest.due_date < range_end,
-                    )
-                )
-
-            bucket_result = await db.execute(bucket_stmt)
-            tickets = bucket_result.all()
+            tickets = await ReportingQueryRepository.get_aging_bucket_tickets(
+                db, aging_conditions, range_start, range_end
+            )
             count = len(tickets)
 
             # Calculate average age in hours
             if count > 0:
-                total_age_seconds = sum((now - ticket.created_at).total_seconds() for ticket in tickets)
+                total_age_seconds = sum(
+                    (now - ticket.created_at).total_seconds() for ticket in tickets
+                )
                 average_age_hours = total_age_seconds / count / 3600
             else:
                 average_age_hours = 0.0
@@ -832,63 +629,45 @@ class ReportingService:
                 )
 
         # Total tickets
-        total_stmt = select(func.count(ServiceRequest.id)).where(and_(*base_conditions))
-        total_result = await db.execute(total_stmt)
-        total_tickets = total_result.scalar() or 0
+        total_tickets = await ReportingQueryRepository.get_total_tickets_count(
+            db, base_conditions
+        )
 
         # Tickets with SLA (those that have been resolved or have due dates)
         sla_conditions = base_conditions + [
             or_(
-                ServiceRequest.resolved_at is not None,
-                ServiceRequest.due_date is not None,
+                ServiceRequest.resolved_at.isnot(None),
+                ServiceRequest.due_date.isnot(None),
             )
         ]
-        sla_stmt = select(func.count(ServiceRequest.id)).where(and_(*sla_conditions))
-        sla_result = await db.execute(sla_stmt)
-        tickets_with_sla = sla_result.scalar() or 0
+        tickets_with_sla = await ReportingQueryRepository.get_total_tickets_count(
+            db, sla_conditions
+        )
 
         # First response SLA
-        frt_met_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.first_response_at is not None,
-                not ServiceRequest.sla_first_response_breached,
-            )
+        frt_met_conditions = base_conditions + [
+            ServiceRequest.first_response_at.isnot(None),
+            ~ServiceRequest.sla_first_response_breached,
+        ]
+        frt_met = await ReportingQueryRepository.get_total_tickets_count(
+            db, frt_met_conditions
         )
-        frt_met_result = await db.execute(frt_met_stmt)
-        frt_met = frt_met_result.scalar() or 0
 
-        frt_breached_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.sla_first_response_breached,
-            )
+        frt_breached = await ReportingQueryRepository.get_sla_breached_count(
+            db, base_conditions, "sla_first_response_breached"
         )
-        frt_breached_result = await db.execute(frt_breached_stmt)
-        frt_breached = frt_breached_result.scalar() or 0
 
         frt_total = frt_met + frt_breached
         frt_compliance = (frt_met / frt_total * 100) if frt_total > 0 else 100.0
 
         # Resolution SLA
-        res_met_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.resolved_at is not None,
-                not ServiceRequest.sla_resolution_breached,
-            )
+        res_met = await ReportingQueryRepository.get_sla_met_count(
+            db, base_conditions
         )
-        res_met_result = await db.execute(res_met_stmt)
-        res_met = res_met_result.scalar() or 0
 
-        res_breached_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.sla_resolution_breached,
-            )
+        res_breached = await ReportingQueryRepository.get_sla_breached_count(
+            db, base_conditions, "sla_resolution_breached"
         )
-        res_breached_result = await db.execute(res_breached_stmt)
-        res_breached = res_breached_result.scalar() or 0
 
         res_total = res_met + res_breached
         res_compliance = (res_met / res_total * 100) if res_total > 0 else 100.0
@@ -901,35 +680,13 @@ class ReportingService:
         )
 
         # Average times
-        avg_frt_stmt = select(
-            func.avg(
-                extract(
-                    "epoch", ServiceRequest.first_response_at - ServiceRequest.created_at
-                )
-                / 60
-            )
-        ).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.first_response_at is not None,
-            )
+        avg_frt = await ReportingQueryRepository.get_avg_first_response_time(
+            db, base_conditions
         )
-        avg_frt_result = await db.execute(avg_frt_stmt)
-        avg_frt = avg_frt_result.scalar()
 
-        avg_res_stmt = select(
-            func.avg(
-                extract("epoch", ServiceRequest.resolved_at - ServiceRequest.created_at)
-                / 3600
-            )
-        ).where(
-            and_(
-                *base_conditions,
-                ServiceRequest.resolved_at is not None,
-            )
+        avg_res = await ReportingQueryRepository.get_avg_resolution_time(
+            db, base_conditions
         )
-        avg_res_result = await db.execute(avg_res_stmt)
-        avg_res = avg_res_result.scalar()
 
         # Get compliance trend
         compliance_trend = await ReportingService._get_sla_compliance_trend(
@@ -942,32 +699,12 @@ class ReportingService:
         )
 
         # Get aging buckets
-        aging_buckets = await ReportingService._get_aging_buckets(
-            db, base_conditions
-        )
+        aging_buckets = await ReportingService._get_aging_buckets(db, base_conditions)
 
         # Recent breaches (last 10)
-        breaches_stmt = (
-            select(ServiceRequest)
-            .options(
-                selectinload(ServiceRequest.requester),
-                selectinload(ServiceRequest.priority),
-                selectinload(ServiceRequest.status),
-            )
-            .where(
-                and_(
-                    *base_conditions,
-                    or_(
-                        ServiceRequest.sla_first_response_breached,
-                        ServiceRequest.sla_resolution_breached,
-                    ),
-                )
-            )
-            .order_by(ServiceRequest.created_at.desc())
-            .limit(10)
+        breach_requests = await ReportingQueryRepository.get_sla_breached_requests(
+            db, base_conditions, limit=10
         )
-        breaches_result = await db.execute(breaches_stmt)
-        breach_requests = breaches_result.scalars().all()
 
         recent_breaches = []
         for req in breach_requests:
@@ -1057,123 +794,63 @@ class ReportingService:
                 )
 
         # Total created
-        created_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(*base_conditions)
+        total_created = await ReportingQueryRepository.get_total_tickets_count(
+            db, base_conditions
         )
-        created_result = await db.execute(created_stmt)
-        total_created = created_result.scalar() or 0
 
         # Total resolved in period
-        resolved_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                ServiceRequest.resolved_at >= start_dt,
-                ServiceRequest.resolved_at <= end_dt,
-            )
+        total_resolved = await ReportingQueryRepository.get_resolved_count_in_period(
+            db, start_dt, end_dt
         )
-        resolved_result = await db.execute(resolved_stmt)
-        total_resolved = resolved_result.scalar() or 0
 
         # Total closed in period
-        closed_stmt = select(func.count(ServiceRequest.id)).where(
-            and_(
-                ServiceRequest.closed_at >= start_dt,
-                ServiceRequest.closed_at <= end_dt,
-            )
+        total_closed = await ReportingQueryRepository.get_closed_count_in_period(
+            db, start_dt, end_dt
         )
-        closed_result = await db.execute(closed_stmt)
-        total_closed = closed_result.scalar() or 0
 
         # Total reopened
-        reopened_stmt = select(func.sum(ServiceRequest.reopen_count)).where(
-            and_(*base_conditions)
+        total_reopened = await ReportingQueryRepository.get_reopened_sum(
+            db, base_conditions
         )
-        reopened_result = await db.execute(reopened_stmt)
-        total_reopened = reopened_result.scalar() or 0
 
         # Current backlog (open tickets)
-        status_stmt = select(RequestStatus.id).where(
-            not RequestStatus.count_as_solved,
-            RequestStatus.is_active,
+        open_status_ids = await ReportingQueryRepository.get_aging_buckets_by_status_ids(
+            db, []
         )
-        status_result = await db.execute(status_stmt)
-        open_status_ids = [r for r in status_result.scalars().all()]
 
-        backlog_stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.status_id.in_(open_status_ids)
+        current_backlog = await ReportingQueryRepository.get_backlog_count(
+            db, open_status_ids
         )
-        backlog_result = await db.execute(backlog_stmt)
-        current_backlog = backlog_result.scalar() or 0
 
         # Calculate averages
         days_in_period = (end_date - start_date).days + 1
         avg_per_day = total_created / days_in_period if days_in_period > 0 else 0
 
         # Peak day
-        peak_stmt = (
-            select(
-                func.date(ServiceRequest.created_at).label("day"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .where(and_(*base_conditions))
-            .group_by(func.date(ServiceRequest.created_at))
-            .order_by(func.count(ServiceRequest.id).desc())
-            .limit(1)
+        peak_day, peak_count = await ReportingQueryRepository.get_peak_day(
+            db, base_conditions
         )
-        peak_result = await db.execute(peak_stmt)
-        peak_row = peak_result.first()
-        peak_day = peak_row.day if peak_row else None
-        peak_count = peak_row.count if peak_row else 0
 
         # Volume trend
-        trend_stmt = (
-            select(
-                func.date(ServiceRequest.created_at).label("day"),
-                func.count(ServiceRequest.id).label("created"),
-            )
-            .where(and_(*base_conditions))
-            .group_by(func.date(ServiceRequest.created_at))
-            .order_by(func.date(ServiceRequest.created_at))
+        volume_trend_data = await ReportingQueryRepository.get_volume_trend_with_resolved_closed(
+            db, base_conditions, start_date, end_date
         )
-        trend_result = await db.execute(trend_stmt)
-        trend_rows = trend_result.all()
 
-        volume_trend = []
-        for row in trend_rows:
-            # Get resolved count for this day
-            resolved_day_stmt = select(func.count(ServiceRequest.id)).where(
-                func.date(ServiceRequest.resolved_at) == row.day
+        volume_trend = [
+            VolumeTrendItem(
+                date=item["day"],
+                created_count=item["created"],
+                resolved_count=item["resolved_count"],
+                closed_count=item["closed_count"],
+                net_change=item["created"] - item["resolved_count"],
             )
-            resolved_day_result = await db.execute(resolved_day_stmt)
-            resolved_count = resolved_day_result.scalar() or 0
-
-            closed_day_stmt = select(func.count(ServiceRequest.id)).where(
-                func.date(ServiceRequest.closed_at) == row.day
-            )
-            closed_day_result = await db.execute(closed_day_stmt)
-            closed_count = closed_day_result.scalar() or 0
-
-            volume_trend.append(
-                VolumeTrendItem(
-                    date=row.day,
-                    created_count=row.created,
-                    resolved_count=resolved_count,
-                    closed_count=closed_count,
-                    net_change=row.created - resolved_count,
-                )
-            )
+            for item in volume_trend_data
+        ]
 
         # Hourly distribution
-        hourly_stmt = (
-            select(
-                extract("hour", ServiceRequest.created_at).label("hour"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .where(and_(*base_conditions))
-            .group_by(extract("hour", ServiceRequest.created_at))
-            .order_by(extract("hour", ServiceRequest.created_at))
+        hourly_rows = await ReportingQueryRepository.get_hourly_distribution(
+            db, base_conditions
         )
-        hourly_result = await db.execute(hourly_stmt)
-        hourly_rows = hourly_result.all()
 
         hourly_total = sum(r.count for r in hourly_rows)
         hourly_distribution = [
@@ -1181,32 +858,36 @@ class ReportingService:
                 id=f"hour_{int(r.hour)}",
                 label=f"{int(r.hour):02d}:00",
                 value=r.count,
-                percentage=round((r.count / hourly_total * 100) if hourly_total > 0 else 0, 1),
+                percentage=round(
+                    (r.count / hourly_total * 100) if hourly_total > 0 else 0, 1
+                ),
             )
             for r in hourly_rows
         ]
 
         # Day of week distribution
-        dow_stmt = (
-            select(
-                extract("dow", ServiceRequest.created_at).label("dow"),
-                func.count(ServiceRequest.id).label("count"),
-            )
-            .where(and_(*base_conditions))
-            .group_by(extract("dow", ServiceRequest.created_at))
-            .order_by(extract("dow", ServiceRequest.created_at))
+        dow_rows = await ReportingQueryRepository.get_day_of_week_distribution(
+            db, base_conditions
         )
-        dow_result = await db.execute(dow_stmt)
-        dow_rows = dow_result.all()
 
-        day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        day_names = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        ]
         dow_total = sum(r.count for r in dow_rows)
         day_of_week_distribution = [
             DistributionItem(
                 id=f"dow_{int(r.dow)}",
                 label=day_names[int(r.dow)],
                 value=r.count,
-                percentage=round((r.count / dow_total * 100) if dow_total > 0 else 0, 1),
+                percentage=round(
+                    (r.count / dow_total * 100) if dow_total > 0 else 0, 1
+                ),
             )
             for r in dow_rows
         ]
@@ -1261,47 +942,26 @@ class ReportingService:
 
         rankings = []
 
+        # Get open status IDs once
+        open_status_ids = await ReportingQueryRepository.get_aging_buckets_by_status_ids(
+            db, []
+        )
+
         for tech in technicians:
             # Get assignments in period
-            assigned_stmt = select(func.count(RequestAssignee.id)).where(
-                RequestAssignee.assignee_id == tech.id,
-                RequestAssignee.created_at >= start_dt,
-                RequestAssignee.created_at <= end_dt,
+            assigned_count = await ReportingQueryRepository.get_technician_assignments(
+                db, tech.id, start_dt, end_dt
             )
-            assigned_result = await db.execute(assigned_stmt)
-            assigned_count = assigned_result.scalar() or 0
 
             # Get resolved count
-            resolved_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.resolved_at >= start_dt,
-                ServiceRequest.resolved_at <= end_dt,
+            resolved_count = await ReportingQueryRepository.get_technician_resolved_tickets(
+                db, tech.id, start_dt, end_dt
             )
-            resolved_result = await db.execute(resolved_stmt)
-            resolved_count = resolved_result.scalar() or 0
 
             # Current open tickets
-            status_stmt = select(RequestStatus.id).where(
-                not RequestStatus.count_as_solved,
-                RequestStatus.is_active,
+            open_count = await ReportingQueryRepository.get_technician_open_tickets(
+                db, tech.id, open_status_ids
             )
-            status_result = await db.execute(status_stmt)
-            open_status_ids = [r for r in status_result.scalars().all()]
-
-            open_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.status_id.in_(open_status_ids),
-            )
-            open_result = await db.execute(open_stmt)
-            open_count = open_result.scalar() or 0
 
             if assigned_count > 0 or resolved_count > 0:
                 active_technicians += 1
@@ -1312,40 +972,18 @@ class ReportingService:
             )
 
             # Average resolution time for this tech
-            avg_res_stmt = select(
-                func.avg(
-                    extract(
-                        "epoch", ServiceRequest.resolved_at - ServiceRequest.created_at
-                    )
-                    / 3600
-                )
-            ).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.resolved_at >= start_dt,
-                ServiceRequest.resolved_at <= end_dt,
+            avg_res_hours = await ReportingQueryRepository.get_technician_avg_resolution_time(
+                db, tech.id, start_dt, end_dt
             )
-            avg_res_result = await db.execute(avg_res_stmt)
-            avg_res_hours = avg_res_result.scalar()
 
             # SLA compliance for this tech
-            sla_met_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.resolved_at >= start_dt,
-                ServiceRequest.resolved_at <= end_dt,
-                not ServiceRequest.sla_resolution_breached,
+            sla_met = await ReportingQueryRepository.get_technician_sla_met_count(
+                db, tech.id, start_dt, end_dt
             )
-            sla_met_result = await db.execute(sla_met_stmt)
-            sla_met = sla_met_result.scalar() or 0
 
-            sla_compliance = (sla_met / resolved_count * 100) if resolved_count > 0 else 100.0
+            sla_compliance = (
+                (sla_met / resolved_count * 100) if resolved_count > 0 else 100.0
+            )
 
             rankings.append(
                 AgentRankingItem(
@@ -1357,7 +995,9 @@ class ReportingService:
                     tickets_assigned=assigned_count,
                     open_tickets=open_count,
                     resolution_rate=round(resolution_rate, 2),
-                    avg_resolution_hours=round(avg_res_hours, 2) if avg_res_hours else None,
+                    avg_resolution_hours=round(avg_res_hours, 2)
+                    if avg_res_hours
+                    else None,
                     sla_compliance_rate=round(sla_compliance, 2),
                 )
             )
@@ -1370,18 +1010,26 @@ class ReportingService:
             r.rank = i + 1
 
         top_performers = rankings[:limit]
-        needs_attention = [r for r in rankings if r.sla_compliance_rate < 90 or r.resolution_rate < 50][:limit]
+        needs_attention = [
+            r for r in rankings if r.sla_compliance_rate < 90 or r.resolution_rate < 50
+        ][:limit]
 
         # Team averages
         team_avg_res = None
         team_sla = None
 
         if active_technicians > 0:
-            avg_res_hours_list = [r.avg_resolution_hours for r in rankings if r.avg_resolution_hours]
+            avg_res_hours_list = [
+                r.avg_resolution_hours for r in rankings if r.avg_resolution_hours
+            ]
             if avg_res_hours_list:
                 team_avg_res = sum(avg_res_hours_list) / len(avg_res_hours_list)
 
-            sla_rates = [r.sla_compliance_rate for r in rankings if r.sla_compliance_rate is not None]
+            sla_rates = [
+                r.sla_compliance_rate
+                for r in rankings
+                if r.sla_compliance_rate is not None
+            ]
             if sla_rates:
                 team_sla = sum(sla_rates) / len(sla_rates)
 
@@ -1397,7 +1045,10 @@ class ReportingService:
             active_technicians=active_technicians,
             total_tickets_handled=total_tickets_handled,
             avg_tickets_per_technician=round(
-                total_tickets_handled / active_technicians if active_technicians > 0 else 0, 2
+                total_tickets_handled / active_technicians
+                if active_technicians > 0
+                else 0,
+                2,
             ),
             team_avg_resolution_hours=round(team_avg_res, 2) if team_avg_res else None,
             team_sla_compliance_rate=round(team_sla, 2) if team_sla else None,
@@ -1413,78 +1064,33 @@ class ReportingService:
     ) -> List[WorkloadDistributionItem]:
         """Get current workload distribution across technicians."""
         # Get open status IDs
-        status_stmt = select(RequestStatus.id).where(
-            not RequestStatus.count_as_solved,
-            RequestStatus.is_active,
+        open_status_ids = await ReportingQueryRepository.get_aging_buckets_by_status_ids(
+            db, []
         )
-        status_result = await db.execute(status_stmt)
-        open_status_ids = [r for r in status_result.scalars().all()]
+
+        # Calculate today's time range
+        today_start = datetime.utcnow().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_end = today_start + timedelta(days=1)
 
         workload_items = []
         for tech in technicians:
-            # Get current open tickets count
-            open_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.status_id.in_(open_status_ids),
+            # Get all workload metrics for this technician
+            workload_metrics = await ReportingQueryRepository.get_workload_by_technician(
+                db, tech.id, open_status_ids, today_start, today_end
             )
-            open_result = await db.execute(open_stmt)
-            open_count = open_result.scalar() or 0
 
-            # Get overdue count (past due date)
-            overdue_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.status_id.in_(open_status_ids),
-                ServiceRequest.due_date is not None,
-                ServiceRequest.due_date < datetime.utcnow(),
-            )
-            overdue_result = await db.execute(overdue_stmt)
-            overdue_count = overdue_result.scalar() or 0
-
-            # Get tickets due today
-            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            today_end = today_start + timedelta(days=1)
-
-            due_today_stmt = select(func.count(ServiceRequest.id)).where(
-                ServiceRequest.id.in_(
-                    select(RequestAssignee.request_id).where(
-                        RequestAssignee.assignee_id == tech.id
-                    )
-                ),
-                ServiceRequest.status_id.in_(open_status_ids),
-                ServiceRequest.due_date is not None,
-                ServiceRequest.due_date >= today_start,
-                ServiceRequest.due_date < today_end,
-            )
-            due_today_result = await db.execute(due_today_stmt)
-            due_today_count = due_today_result.scalar() or 0
-
-            # Get tickets assigned today
-            assigned_today_stmt = select(func.count(RequestAssignee.id)).where(
-                RequestAssignee.assignee_id == tech.id,
-                RequestAssignee.created_at >= today_start,
-                RequestAssignee.created_at < today_end,
-            )
-            assigned_today_result = await db.execute(assigned_today_stmt)
-            assigned_today_count = assigned_today_result.scalar() or 0
-
-            if open_count > 0:  # Only include techs with current workload
+            if workload_metrics["open_count"] > 0:  # Only include techs with current workload
                 workload_items.append(
                     WorkloadDistributionItem(
                         technician_id=tech.id,
                         technician_name=tech.username,
                         full_name=tech.full_name,
-                        open_tickets=open_count,
-                        overdue_tickets=overdue_count,
-                        tickets_due_today=due_today_count,
-                        tickets_assigned_today=assigned_today_count,
+                        open_tickets=workload_metrics["open_count"],
+                        overdue_tickets=workload_metrics["overdue_count"],
+                        tickets_due_today=workload_metrics["due_today_count"],
+                        tickets_assigned_today=workload_metrics["assigned_today_count"],
                     )
                 )
 

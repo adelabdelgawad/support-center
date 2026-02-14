@@ -20,22 +20,19 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import (
-    ServiceRequest, User, RequestStatus, Priority
-)
+from db.models import ServiceRequest, User, RequestStatus, Priority
 from api.schemas import (
     ServiceRequestCreateByRequester,
     ServiceRequestUpdate,
 )
 from api.services.request_service import RequestService
-from tests.factories import (
-    UserFactory, ServiceRequestFactory
-)
+from tests.factories import UserFactory, ServiceRequestFactory
 
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest_asyncio.fixture
 async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
@@ -51,16 +48,47 @@ async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
 
     # Create new statuses with unique names if none exist
     import uuid
+
     suffix = uuid.uuid4().hex[:6]
     statuses = [
-        RequestStatus(name=f"New_{suffix}", name_en="New", name_ar="جديد", color="#3B82F6"),
-        RequestStatus(name=f"Open_{suffix}", name_en="Open", name_ar="مفتوح", color="#10B981"),
-        RequestStatus(name=f"InProgress_{suffix}", name_en="In Progress", name_ar="قيد التنفيذ", color="#F59E0B"),
-        RequestStatus(name=f"OnHold_{suffix}", name_en="On Hold", name_ar="معلق", color="#6B7280"),
-        RequestStatus(name=f"Pending_{suffix}", name_en="Pending", name_ar="معلق", color="#8B5CF6"),
-        RequestStatus(name=f"Resolved_{suffix}", name_en="Resolved", name_ar="تم الحل", color="#22C55E", count_as_solved=True),
-        RequestStatus(name=f"Closed_{suffix}", name_en="Closed", name_ar="مغلق", color="#EF4444", count_as_solved=True),
-        RequestStatus(name=f"Cancelled_{suffix}", name_en="Cancelled", name_ar="ملغي", color="#DC2626"),
+        RequestStatus(
+            name=f"New_{suffix}", name_en="New", name_ar="جديد", color="#3B82F6"
+        ),
+        RequestStatus(
+            name=f"Open_{suffix}", name_en="Open", name_ar="مفتوح", color="#10B981"
+        ),
+        RequestStatus(
+            name=f"InProgress_{suffix}",
+            name_en="In Progress",
+            name_ar="قيد التنفيذ",
+            color="#F59E0B",
+        ),
+        RequestStatus(
+            name=f"OnHold_{suffix}", name_en="On Hold", name_ar="معلق", color="#6B7280"
+        ),
+        RequestStatus(
+            name=f"Pending_{suffix}", name_en="Pending", name_ar="معلق", color="#8B5CF6"
+        ),
+        RequestStatus(
+            name=f"Resolved_{suffix}",
+            name_en="Resolved",
+            name_ar="تم الحل",
+            color="#22C55E",
+            count_as_solved=True,
+        ),
+        RequestStatus(
+            name=f"Closed_{suffix}",
+            name_en="Closed",
+            name_ar="مغلق",
+            color="#EF4444",
+            count_as_solved=True,
+        ),
+        RequestStatus(
+            name=f"Cancelled_{suffix}",
+            name_en="Cancelled",
+            name_ar="ملغي",
+            color="#DC2626",
+        ),
     ]
     for status in statuses:
         db_session.add(status)
@@ -76,7 +104,9 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
     """Get or create standard priorities."""
     # First try to get existing priorities
     result = await db_session.execute(
-        select(Priority).where(Priority.is_active).order_by(Priority.response_time_minutes)
+        select(Priority)
+        .where(Priority.is_active)
+        .order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 
@@ -85,12 +115,33 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
 
     # Create new priorities with unique names if none exist
     import uuid
+
     suffix = uuid.uuid4().hex[:6]
     priorities = [
-        Priority(name=f"Critical_{suffix}", response_time_minutes=15, resolution_time_hours=4, is_active=True),
-        Priority(name=f"High_{suffix}", response_time_minutes=60, resolution_time_hours=8, is_active=True),
-        Priority(name=f"Medium_{suffix}", response_time_minutes=240, resolution_time_hours=24, is_active=True),
-        Priority(name=f"Low_{suffix}", response_time_minutes=480, resolution_time_hours=72, is_active=True),
+        Priority(
+            name=f"Critical_{suffix}",
+            response_time_minutes=15,
+            resolution_time_hours=4,
+            is_active=True,
+        ),
+        Priority(
+            name=f"High_{suffix}",
+            response_time_minutes=60,
+            resolution_time_hours=8,
+            is_active=True,
+        ),
+        Priority(
+            name=f"Medium_{suffix}",
+            response_time_minutes=240,
+            resolution_time_hours=24,
+            is_active=True,
+        ),
+        Priority(
+            name=f"Low_{suffix}",
+            response_time_minutes=480,
+            resolution_time_hours=72,
+            is_active=True,
+        ),
     ]
     for priority in priorities:
         db_session.add(priority)
@@ -157,6 +208,7 @@ async def sample_request(
 # Request Creation Tests
 # ============================================================================
 
+
 class TestRequestCreation:
     """Tests for creating service requests."""
 
@@ -165,12 +217,12 @@ class TestRequestCreation:
         self, db_session, requester_user, sample_statuses, sample_priorities
     ):
         """Test successful request creation by requester."""
-        request_data = ServiceRequestCreateByRequester(
-            title="Network connection issue"
-        )
+        request_data = ServiceRequestCreateByRequester(title="Network connection issue")
 
         # Mock the service method
-        with patch("services.request_service.RequestService.create_service_request_by_requester") as mock_create:
+        with patch(
+            "services.request_service.RequestService.create_service_request_by_requester"
+        ) as mock_create:
             mock_request = ServiceRequestFactory.create(
                 title=request_data.title,
                 requester_id=requester_user.id,
@@ -190,9 +242,7 @@ class TestRequestCreation:
             mock_create.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_request_empty_title_fails(
-        self, db_session, requester_user
-    ):
+    async def test_create_request_empty_title_fails(self, db_session, requester_user):
         """Test that empty title is rejected."""
         with pytest.raises(Exception):
             # Pydantic validation should reject empty title
@@ -205,10 +255,12 @@ class TestRequestCreation:
         """Test request creation with service section."""
         request_data = ServiceRequestCreateByRequester(
             title="Software installation",
-            service_section_id=1  # Assuming service section exists
+            service_section_id=1,  # Assuming service section exists
         )
 
-        with patch("services.request_service.RequestService.create_service_request_by_requester") as mock_create:
+        with patch(
+            "services.request_service.RequestService.create_service_request_by_requester"
+        ) as mock_create:
             mock_request = ServiceRequestFactory.create(
                 title=request_data.title,
                 requester_id=requester_user.id,
@@ -228,6 +280,7 @@ class TestRequestCreation:
 # ============================================================================
 # Request Listing Tests
 # ============================================================================
+
 
 class TestRequestListing:
     """Tests for listing service requests."""
@@ -313,13 +366,12 @@ class TestRequestListing:
 # Request Detail Tests
 # ============================================================================
 
+
 class TestRequestDetail:
     """Tests for getting request details."""
 
     @pytest.mark.asyncio
-    async def test_get_request_by_id_success(
-        self, db_session, sample_request
-    ):
+    async def test_get_request_by_id_success(self, db_session, sample_request):
         """Test getting request by ID."""
         result = await RequestService.get_service_request_by_id(
             db=db_session,
@@ -331,9 +383,7 @@ class TestRequestDetail:
         assert result.title == sample_request.title
 
     @pytest.mark.asyncio
-    async def test_get_request_not_found(
-        self, db_session
-    ):
+    async def test_get_request_not_found(self, db_session):
         """Test getting non-existent request."""
         fake_id = uuid4()
         result = await RequestService.get_service_request_by_id(
@@ -355,12 +405,13 @@ class TestRequestDetail:
 
         assert result is not None
         # Should have nested data
-        assert hasattr(result, 'status') or 'status' in str(type(result))
+        assert hasattr(result, "status") or "status" in str(type(result))
 
 
 # ============================================================================
 # Request Update Tests
 # ============================================================================
+
 
 class TestRequestUpdate:
     """Tests for updating service requests."""
@@ -372,9 +423,7 @@ class TestRequestUpdate:
         """Test updating request status."""
         new_status = sample_statuses[2]  # In Progress
 
-        update_data = ServiceRequestUpdate(
-            status_id=new_status.id
-        )
+        update_data = ServiceRequestUpdate(status_id=new_status.id)
 
         result = await RequestService.update_service_request(
             db=db_session,
@@ -392,9 +441,7 @@ class TestRequestUpdate:
         """Test updating request priority."""
         new_priority = sample_priorities[0]  # Critical
 
-        update_data = ServiceRequestUpdate(
-            priority_id=new_priority.id
-        )
+        update_data = ServiceRequestUpdate(priority_id=new_priority.id)
 
         result = await RequestService.update_service_request(
             db=db_session,
@@ -413,7 +460,7 @@ class TestRequestUpdate:
         # Find status with count_as_solved=True (Resolved or Closed)
         resolved_status = next(
             (s for s in sample_statuses if s.count_as_solved),
-            sample_statuses[5] if len(sample_statuses) > 5 else sample_statuses[-1]
+            sample_statuses[5] if len(sample_statuses) > 5 else sample_statuses[-1],
         )
 
         # Try to update to resolved status without resolution
@@ -424,8 +471,10 @@ class TestRequestUpdate:
 
         # The behavior depends on service configuration
         # Mock the service to verify the business rule check logic
-        with patch.object(RequestService, 'update_service_request') as mock_update:
-            mock_update.side_effect = ValueError("Resolution required for resolved status")
+        with patch.object(RequestService, "update_service_request") as mock_update:
+            mock_update.side_effect = ValueError(
+                "Resolution required for resolved status"
+            )
 
             with pytest.raises(ValueError):
                 await RequestService.update_service_request(
@@ -440,13 +489,12 @@ class TestRequestUpdate:
     ):
         """Test that resolved status with resolution succeeds."""
         resolved_status = next(
-            (s for s in sample_statuses if s.count_as_solved),
-            sample_statuses[5]
+            (s for s in sample_statuses if s.count_as_solved), sample_statuses[5]
         )
 
         update_data = ServiceRequestUpdate(
             status_id=resolved_status.id,
-            resolution="Issue resolved by resetting the network adapter."
+            resolution="Issue resolved by resetting the network adapter.",
         )
 
         result = await RequestService.update_service_request(
@@ -460,15 +508,12 @@ class TestRequestUpdate:
         assert result.resolution == "Issue resolved by resetting the network adapter."
 
     @pytest.mark.asyncio
-    async def test_update_nonexistent_request(
-        self, db_session, sample_statuses
-    ):
+    async def test_update_nonexistent_request(self, db_session, sample_statuses):
         """Test updating non-existent request raises NotFoundError."""
         from api.services.request_service import NotFoundError
+
         fake_id = uuid4()
-        update_data = ServiceRequestUpdate(
-            status_id=sample_statuses[1].id
-        )
+        update_data = ServiceRequestUpdate(status_id=sample_statuses[1].id)
 
         with pytest.raises(NotFoundError):
             await RequestService.update_service_request(
@@ -482,6 +527,7 @@ class TestRequestUpdate:
 # Request Assignment Tests
 # ============================================================================
 
+
 class TestRequestAssignment:
     """Tests for technician assignment to requests."""
 
@@ -490,7 +536,7 @@ class TestRequestAssignment:
         self, db_session, sample_request, technician_user, admin_user
     ):
         """Test assigning a technician to a request."""
-        with patch.object(RequestService, 'assign_user_to_request') as mock_assign:
+        with patch.object(RequestService, "assign_user_to_request") as mock_assign:
             mock_assign.return_value = sample_request
 
             result = await RequestService.assign_user_to_request(
@@ -509,7 +555,7 @@ class TestRequestAssignment:
         self, db_session, sample_request, technician_user
     ):
         """Test technician taking (self-assigning) a request."""
-        with patch.object(RequestService, 'take_request') as mock_take:
+        with patch.object(RequestService, "take_request") as mock_take:
             mock_take.return_value = sample_request
 
             result = await RequestService.take_request(
@@ -526,7 +572,7 @@ class TestRequestAssignment:
         self, db_session, sample_request, technician_user
     ):
         """Test that taking an already assigned request fails."""
-        with patch.object(RequestService, 'take_request') as mock_take:
+        with patch.object(RequestService, "take_request") as mock_take:
             mock_take.side_effect = Exception("Request already assigned")
 
             with pytest.raises(Exception) as exc_info:
@@ -539,11 +585,9 @@ class TestRequestAssignment:
             assert "already assigned" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_get_request_assignees(
-        self, db_session, sample_request
-    ):
+    async def test_get_request_assignees(self, db_session, sample_request):
         """Test getting list of assignees for a request."""
-        with patch.object(RequestService, 'get_request_assignees') as mock_get:
+        with patch.object(RequestService, "get_request_assignees") as mock_get:
             mock_get.return_value = []
 
             result = await RequestService.get_request_assignees(
@@ -558,12 +602,18 @@ class TestRequestAssignment:
 # Technician Views Tests
 # ============================================================================
 
+
 class TestTechnicianViews:
     """Tests for technician-specific request views."""
 
     @pytest.mark.asyncio
     async def test_get_unassigned_view(
-        self, db_session, technician_user, requester_user, sample_statuses, sample_priorities
+        self,
+        db_session,
+        technician_user,
+        requester_user,
+        sample_statuses,
+        sample_priorities,
     ):
         """Test getting unassigned requests view."""
         # Create unassigned requests with valid requester_id
@@ -572,12 +622,14 @@ class TestTechnicianViews:
                 title=f"Unassigned Request {i}",
                 requester_id=requester_user.id,
                 status_id=sample_statuses[0].id,
-                priority_id=sample_priorities[2].id if len(sample_priorities) > 2 else sample_priorities[0].id,
+                priority_id=sample_priorities[2].id
+                if len(sample_priorities) > 2
+                else sample_priorities[0].id,
             )
             db_session.add(request)
         await db_session.commit()
 
-        with patch.object(RequestService, 'get_technician_view_requests') as mock_view:
+        with patch.object(RequestService, "get_technician_view_requests") as mock_view:
             mock_view.return_value = ([], 0)
 
             requests, total = await RequestService.get_technician_view_requests(
@@ -591,11 +643,9 @@ class TestTechnicianViews:
             mock_view.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_my_unsolved_view(
-        self, db_session, technician_user
-    ):
+    async def test_get_my_unsolved_view(self, db_session, technician_user):
         """Test getting my unsolved requests view."""
-        with patch.object(RequestService, 'get_technician_view_requests') as mock_view:
+        with patch.object(RequestService, "get_technician_view_requests") as mock_view:
             mock_view.return_value = ([], 0)
 
             requests, total = await RequestService.get_technician_view_requests(
@@ -609,11 +659,9 @@ class TestTechnicianViews:
             mock_view.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_view_counts(
-        self, db_session, technician_user
-    ):
+    async def test_get_view_counts(self, db_session, technician_user):
         """Test getting view counts for sidebar."""
-        with patch.object(RequestService, 'get_technician_view_counts') as mock_counts:
+        with patch.object(RequestService, "get_technician_view_counts") as mock_counts:
             mock_counts.return_value = {
                 "unassigned": 5,
                 "all_unsolved": 10,
@@ -635,13 +683,12 @@ class TestTechnicianViews:
 # Sub-Task Tests
 # ============================================================================
 
+
 class TestSubTasks:
     """Tests for sub-task functionality."""
 
     @pytest.mark.asyncio
-    async def test_create_sub_task(
-        self, db_session, sample_request, technician_user
-    ):
+    async def test_create_sub_task(self, db_session, sample_request, technician_user):
         """Test creating a sub-task under a parent request."""
         sub_task_data = {
             "title": "Investigate network issue",
@@ -649,7 +696,7 @@ class TestSubTasks:
             "priority_id": 2,
         }
 
-        with patch.object(RequestService, 'create_sub_task') as mock_create:
+        with patch.object(RequestService, "create_sub_task") as mock_create:
             mock_sub_task = ServiceRequestFactory.create(
                 title=sub_task_data["title"],
                 parent_task_id=sample_request.id,
@@ -668,7 +715,12 @@ class TestSubTasks:
 
     @pytest.mark.asyncio
     async def test_get_sub_tasks(
-        self, db_session, sample_request, requester_user, sample_statuses, sample_priorities
+        self,
+        db_session,
+        sample_request,
+        requester_user,
+        sample_statuses,
+        sample_priorities,
     ):
         """Test getting sub-tasks for a parent request."""
         # Create sub-tasks with valid requester_id
@@ -695,7 +747,12 @@ class TestSubTasks:
 
     @pytest.mark.asyncio
     async def test_get_sub_task_stats(
-        self, db_session, sample_request, requester_user, sample_statuses, sample_priorities
+        self,
+        db_session,
+        sample_request,
+        requester_user,
+        sample_statuses,
+        sample_priorities,
     ):
         """Test getting sub-task statistics."""
         # Create sub-tasks with different statuses using valid requester_id
@@ -710,7 +767,7 @@ class TestSubTasks:
             db_session.add(sub_task)
         await db_session.commit()
 
-        with patch.object(RequestService, 'get_sub_task_stats') as mock_stats:
+        with patch.object(RequestService, "get_sub_task_stats") as mock_stats:
             mock_stats.return_value = {
                 "total": 3,
                 "by_status": {"New": 1, "Open": 1, "In Progress": 1},
@@ -731,17 +788,16 @@ class TestSubTasks:
 # Request Deletion Tests
 # ============================================================================
 
+
 class TestRequestDeletion:
     """Tests for request deletion."""
 
     @pytest.mark.asyncio
-    async def test_delete_request_success(
-        self, db_session, sample_request
-    ):
+    async def test_delete_request_success(self, db_session, sample_request):
         """Test soft-deleting a request using is_deleted flag."""
 
         # Use mock since the actual service may have different implementation
-        with patch.object(RequestService, 'delete_service_request') as mock_delete:
+        with patch.object(RequestService, "delete_service_request") as mock_delete:
             mock_delete.return_value = True
 
             success = await RequestService.delete_service_request(
@@ -753,11 +809,10 @@ class TestRequestDeletion:
             mock_delete.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_delete_nonexistent_request(
-        self, db_session
-    ):
+    async def test_delete_nonexistent_request(self, db_session):
         """Test deleting non-existent request raises NotFoundError."""
         from api.services.request_service import NotFoundError
+
         fake_id = uuid4()
 
         with pytest.raises(NotFoundError):
@@ -771,23 +826,24 @@ class TestRequestDeletion:
 # Business Unit Counts Tests
 # ============================================================================
 
+
 class TestBusinessUnitCounts:
     """Tests for business unit request counts."""
 
     @pytest.mark.asyncio
-    async def test_get_business_unit_counts(
-        self, db_session, technician_user
-    ):
+    async def test_get_business_unit_counts(self, db_session, technician_user):
         """Test getting request counts by business unit."""
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
-        with patch.object(ServiceRequestCRUD, 'get_business_unit_counts') as mock_counts:
+        with patch.object(
+            ServiceRequestRepository, "get_business_unit_counts"
+        ) as mock_counts:
             mock_counts.return_value = (
                 [{"id": 1, "name": "HQ", "count": 10}],
-                5  # unassigned count
+                5,  # unassigned count
             )
 
-            bu_counts, unassigned = await ServiceRequestCRUD.get_business_unit_counts(
+            bu_counts, unassigned = await ServiceRequestRepository.get_business_unit_counts(
                 db=db_session,
                 user=technician_user,
             )

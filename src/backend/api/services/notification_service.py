@@ -17,7 +17,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -25,6 +24,9 @@ from core.decorators import (
     transactional_database_operation,
 )
 from db import NotificationEvent
+from repositories.support.notification_event_repository import (
+    NotificationEventRepository,
+)
 from api.services.signalr_client import SignalRClient
 
 logger = logging.getLogger(__name__)
@@ -65,14 +67,17 @@ class NotificationService:
         Returns:
             Created NotificationEvent
         """
-        notification = NotificationEvent(
-            id=uuid4(),
-            user_id=user_id,
-            event_type=event_type,
-            request_id=request_id,
-            payload=payload,
+        notification = await NotificationEventRepository.create(
+            db,
+            obj_in={
+                "id": uuid4(),
+                "user_id": user_id,
+                "event_type": event_type,
+                "request_id": request_id,
+                "payload": payload,
+            },
+            commit=False,
         )
-        db.add(notification)
         await db.flush()
 
         logger.info(
@@ -101,19 +106,9 @@ class NotificationService:
         Returns:
             List of pending NotificationEvent records
         """
-        stmt = (
-            select(NotificationEvent)
-            .where(
-                and_(
-                    NotificationEvent.user_id == user_id,
-                    NotificationEvent.delivered_at.is_(None),
-                )
-            )
-            .order_by(NotificationEvent.created_at.asc())
-            .limit(limit)
+        return await NotificationEventRepository.find_by_user(
+            db, user_id, limit
         )
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
 
     @staticmethod
     @transactional_database_operation("mark_notifications_delivered")
@@ -133,18 +128,11 @@ class NotificationService:
         Returns:
             Number of notifications marked
         """
-        if not notification_ids:
-            return 0
-
-        stmt = (
-            update(NotificationEvent)
-            .where(NotificationEvent.id.in_(notification_ids))
-            .values(delivered_at=datetime.utcnow())
+        count = await NotificationEventRepository.mark_multiple_read(
+            db, notification_ids
         )
-        result = await db.execute(stmt)
-
-        logger.info(f"[NOTIFICATION] Marked {result.rowcount} notifications as delivered")
-        return result.rowcount
+        logger.info(f"[NOTIFICATION] Marked {count} notifications as delivered")
+        return count
 
     @staticmethod
     @transactional_database_operation("mark_user_notifications_delivered")
@@ -166,23 +154,13 @@ class NotificationService:
         Returns:
             Number of notifications marked
         """
-        conditions = [
-            NotificationEvent.user_id == user_id,
-            NotificationEvent.delivered_at.is_(None),
-        ]
-
-        if before_timestamp:
-            conditions.append(NotificationEvent.created_at <= before_timestamp)
-
-        stmt = (
-            update(NotificationEvent)
-            .where(and_(*conditions))
-            .values(delivered_at=datetime.utcnow())
+        count = await NotificationEventRepository.mark_user_notifications_delivered(
+            db, user_id, before_timestamp
         )
-        result = await db.execute(stmt)
-
-        logger.info(f"[NOTIFICATION] Marked {result.rowcount} notifications as delivered for user {user_id}")
-        return result.rowcount
+        logger.info(
+            f"[NOTIFICATION] Marked {count} notifications as delivered for user {user_id}"
+        )
+        return count
 
     # ==================== High-Level Notification Methods ====================
     # These persist first, then broadcast
@@ -205,7 +183,6 @@ class NotificationService:
             "requestTitle": request_title,
         }
 
-        # 1. Persist to DB
         notification = await cls.create_notification(
             db=db,
             user_id=user_id,
@@ -214,17 +191,16 @@ class NotificationService:
             payload=payload,
         )
 
-        # 2. Broadcast via SignalR (fire-and-forget, DB is source of truth)
         try:
             await SignalRClient.notify_subscription_added(
                 user_id=str(user_id),
                 request_id=str(request_id),
             )
-            # Mark as delivered on successful broadcast
             await cls.mark_notifications_delivered(db, [notification.id])
         except Exception as e:
-            logger.warning(f"[NOTIFICATION] Failed to broadcast subscription_added: {e}")
-            # Don't fail - notification is persisted, client can recover via HTTP
+            logger.warning(
+                f"[NOTIFICATION] Failed to broadcast subscription_added: {e}"
+            )
 
         return notification
 
@@ -246,7 +222,6 @@ class NotificationService:
             "requestTitle": request_title,
         }
 
-        # 1. Persist to DB
         notification = await cls.create_notification(
             db=db,
             user_id=user_id,
@@ -255,7 +230,6 @@ class NotificationService:
             payload=payload,
         )
 
-        # 2. Broadcast via SignalR
         try:
             await SignalRClient.notify_subscription_removed(
                 user_id=str(user_id),
@@ -263,7 +237,9 @@ class NotificationService:
             )
             await cls.mark_notifications_delivered(db, [notification.id])
         except Exception as e:
-            logger.warning(f"[NOTIFICATION] Failed to broadcast subscription_removed: {e}")
+            logger.warning(
+                f"[NOTIFICATION] Failed to broadcast subscription_removed: {e}"
+            )
 
         return notification
 
@@ -287,7 +263,6 @@ class NotificationService:
             "updateData": update_data,
         }
 
-        # 1. Persist to DB
         notification = await cls.create_notification(
             db=db,
             user_id=user_id,
@@ -296,7 +271,6 @@ class NotificationService:
             payload=payload,
         )
 
-        # 2. Broadcast via SignalR
         try:
             await SignalRClient.broadcast_ticket_update(
                 request_id=str(request_id),
@@ -323,7 +297,6 @@ class NotificationService:
 
         Persists to DB first, then broadcasts via SignalR.
         """
-        # 1. Persist to DB
         notification = await cls.create_notification(
             db=db,
             user_id=user_id,
@@ -332,7 +305,6 @@ class NotificationService:
             payload=notification_data,
         )
 
-        # 2. Broadcast via SignalR
         try:
             await SignalRClient.send_user_notification(
                 user_id=str(user_id),

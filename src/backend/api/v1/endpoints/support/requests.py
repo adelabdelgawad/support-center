@@ -328,21 +328,18 @@ async def get_technician_views(
     )
 
     # Execute sequentially - asyncpg doesn't support concurrent operations on the same session
-    from crud.service_request_crud import ServiceRequestCRUD
-    from crud.chat_crud import ChatMessageCRUD
-
     request_ids = [req.id for req in requests]
 
     counts_dict = await RequestService.get_technician_view_counts(
         db, current_user, business_unit_ids
     )
-    last_messages_dict = await ServiceRequestCRUD.get_last_messages_for_requests(
+    last_messages_dict = await RequestService.get_last_messages_for_requests(
         db, request_ids
     )
-    requester_unread_dict = await ChatMessageCRUD.check_requester_unread_for_requests(
+    requester_unread_dict = await RequestService.check_requester_unread_for_requests(
         db, request_ids
     )
-    technician_unread_dict = await ChatMessageCRUD.check_technician_unread_for_requests(
+    technician_unread_dict = await RequestService.check_technician_unread_for_requests(
         db, request_ids
     )
     filter_counts_dict = await RequestService.get_view_filter_counts(
@@ -613,9 +610,7 @@ async def get_business_unit_counts(
 
     **Permission:** Technicians only (require_technician)
     """
-    from crud.service_request_crud import ServiceRequestCRUD
-
-    bu_counts, unassigned_count = await ServiceRequestCRUD.get_business_unit_counts(
+    bu_counts, unassigned_count = await RequestService.get_business_unit_counts(
         db=db, user=current_user, view=view
     )
 
@@ -650,9 +645,7 @@ async def get_ticket_type_counts(
 
     **Permission:** Technicians only (require_technician)
     """
-    from crud.service_request_crud import ServiceRequestCRUD
-
-    counts = await ServiceRequestCRUD.get_ticket_type_counts(db=db, user=current_user)
+    counts = await RequestService.get_ticket_type_counts(db=db, user=current_user)
 
     return TicketTypeCounts(
         all=counts["all"],
@@ -1189,9 +1182,7 @@ async def assign_request(
     """
 
     # Check if this is the first assignment (before creating the assignment)
-    from crud.service_request_crud import ServiceRequestCRUD
-
-    await ServiceRequestCRUD.count_assignees(db, request_id)
+    await RequestService.count_assignees(db, request_id)
 
     # Use service layer to assign technician
     try:
@@ -1217,9 +1208,8 @@ async def assign_request(
     # (Removed is_first_assignment condition - each new assignee should receive notification)
     try:
         from api.services.event_trigger_service import EventTriggerService
-        from crud.user_crud import UserCRUD
 
-        technician = await UserCRUD.find_by_id(db, assign_data.technician_id)
+        technician = await RequestService.get_user_by_id(db, assign_data.technician_id)
         if technician:
             await EventTriggerService.trigger_ticket_assigned(
                 db=db, request_id=request_id, technician=technician
@@ -1463,56 +1453,17 @@ async def reassign_section(
             detail="Only supervisors can reassign requests to different sections",
         )
 
-    # Get the request
-    stmt = (
-        select(ServiceRequest)
-        .options(
-            selectinload(ServiceRequest.assignees),
-        )
-        .where(ServiceRequest.id == request_id)
-    )
-    result = await db.execute(stmt)
-    request = result.scalar_one_or_none()
-
-    if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
-
-    # Update section assignment
-    request.assigned_to_section_id = reassign_data.section_id
-    request.updated_at = datetime.utcnow()
-
-    # Optional: Clear technician assignments when changing section
-    # Uncomment the following if you want to clear assignees on section change
-    # if request.assignees:
-    #     for assignee in request.assignees:
-    #         await db.delete(assignee)
-
-    await db.commit()
-    await db.refresh(request)
-
-    # Broadcast update via SignalR
+    # Reassign section using service
     try:
-        from api.services.signalr_client import signalr_client
-
-        await signalr_client.broadcast_ticket_update(
-            request_id=str(request_id),
-            update_type="section_reassigned",
-            update_data={
-                "updatedFields": ["assignedToSection"],
-                "newValues": {
-                    "assignedToSectionId": reassign_data.section_id,
-                },
-                "updatedBy": {
-                    "id": str(current_user.id),
-                    "username": current_user.username,
-                    "fullName": current_user.full_name,
-                },
-            },
+        request = await RequestService.reassign_section(
+            db=db,
+            request_id=request_id,
+            section_id=reassign_data.section_id,
+            current_user=current_user,
         )
-    except Exception as e:
-        logger.warning(f"Failed to broadcast section reassignment update: {e}")
-
-    return request
+        return request
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/{parent_id}/sub-tasks/reorder")

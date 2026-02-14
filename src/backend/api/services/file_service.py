@@ -738,3 +738,108 @@ class FileService:
         logger.info(f"Dispatched MinIO upload task {task.id} for chat attachment {attachment.id}")
 
         return attachment
+
+    @staticmethod
+    @safe_database_query("get_stuck_attachments", default_return=[])
+    @log_database_operation("stuck attachments retrieval", level="debug")
+    async def get_stuck_attachments(
+        db: AsyncSession, minutes_threshold: int = 5
+    ) -> list[Screenshot]:
+        """
+        Get all attachments stuck in pending status.
+
+        Args:
+            db: Database session
+            minutes_threshold: Minutes in pending before considering stuck
+
+        Returns:
+            List of stuck attachments
+        """
+        from datetime import datetime, timedelta
+
+        # Use naive datetime since database stores naive timestamps
+        threshold_time = datetime.utcnow() - timedelta(minutes=minutes_threshold)
+
+        stmt = (
+            select(Screenshot)
+            .where(Screenshot.upload_status == "pending")
+            .where(Screenshot.created_at < threshold_time)
+            .order_by(Screenshot.created_at.asc())
+        )
+
+        result = await db.execute(stmt)
+        stuck_attachments = result.scalars().all()
+
+        return stuck_attachments
+
+    @staticmethod
+    @transactional_database_operation("mark_attachment_failed")
+    @log_database_operation("mark attachment failed", level="debug")
+    async def mark_attachment_failed(
+        db: AsyncSession, attachment_id: int
+    ) -> Screenshot:
+        """
+        Mark a stuck upload as failed.
+
+        Args:
+            db: Database session
+            attachment_id: Attachment ID
+
+        Returns:
+            Updated attachment
+
+        Raises:
+            ValueError: If attachment not found or not in pending status
+        """
+        # Get attachment
+        attachment = await FileService.get_attachment(db=db, attachment_id=attachment_id)
+
+        if not attachment:
+            raise ValueError("Screenshot not found")
+
+        # Only allow marking pending uploads as failed
+        if attachment.upload_status != "pending":
+            raise ValueError(
+                f"Screenshot is not in pending status (current: {attachment.upload_status})"
+            )
+
+        # Update status to failed
+        stmt = (
+            update(Screenshot)
+            .where(Screenshot.id == attachment_id)
+            .values(upload_status="failed")
+        )
+        await db.execute(stmt)
+        await db.commit()
+
+        # Refresh to get updated data
+        await db.refresh(attachment)
+
+        return attachment
+
+    @staticmethod
+    @safe_database_query("get_allowed_extensions", default_return=[])
+    @log_database_operation("allowed extensions retrieval", level="debug")
+    async def get_allowed_extensions(
+        db: AsyncSession, is_image_only: bool = False
+    ) -> list[str]:
+        """
+        Get allowed file extensions from database.
+
+        Args:
+            db: Database session
+            is_image_only: If True, return only image extensions
+
+        Returns:
+            List of allowed extensions (without dot)
+        """
+        # This is a placeholder - implement based on your database schema
+        # For now, return common allowed extensions
+        if is_image_only:
+            return ["jpg", "jpeg", "png", "gif", "bmp", "webp"]
+        else:
+            return [
+                "jpg", "jpeg", "png", "gif", "bmp", "webp",
+                "pdf", "doc", "docx", "xls", "xlsx", "txt",
+                "zip", "rar", "7z"
+            ]

@@ -23,7 +23,7 @@ from db.models import (
     RequestStatus,
     Priority,
 )
-from crud.service_request_crud import ServiceRequestCRUD
+from repositories.support.request_repository import ServiceRequestRepository
 from tests.factories import (
     UserFactory,
     ServiceRequestFactory,
@@ -276,7 +276,7 @@ class TestRegionBasedAuthorization:
         await db_session.refresh(technician_user, ["business_unit_assigns"])
 
         # Get unassigned requests (should show both SMH and ARC requests)
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
             page=1,
@@ -341,7 +341,7 @@ class TestRegionBasedAuthorization:
         await db_session.refresh(technician_user, ["business_unit_assigns"])
 
         # Get unassigned requests
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
             page=1,
@@ -410,7 +410,7 @@ class TestRegionBasedAuthorization:
         await db_session.refresh(technician_user, ["business_unit_assigns"])
 
         # Get unassigned requests
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
             page=1,
@@ -461,7 +461,7 @@ class TestRegionBasedAuthorization:
         await db_session.commit()
 
         # Get unassigned requests as super admin
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=super_admin,
             page=1,
@@ -505,7 +505,7 @@ class TestRegionBasedAuthorization:
         await db_session.refresh(technician_user)
 
         # Get unassigned requests
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
             page=1,
@@ -567,7 +567,7 @@ class TestRegionBasedAuthorization:
         await db_session.refresh(technician_user, ["business_unit_assigns"])
 
         # Get requests filtered by ARC business unit only
-        requests, total = await ServiceRequestCRUD.find_unassigned_requests(
+        requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
             business_unit_id=arc_business_unit.id,  # Filter to ARC only

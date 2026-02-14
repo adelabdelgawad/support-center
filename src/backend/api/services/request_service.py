@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1226,11 +1226,11 @@ class RequestService:
         Returns:
             Tuple of (requests list, total count)
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
         # Existing views
         if view_type == "unassigned":
-            return await ServiceRequestCRUD.find_unassigned_requests(
+            return await ServiceRequestRepository.find_unassigned_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1238,7 +1238,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "all_unsolved":
-            return await ServiceRequestCRUD.find_unsolved_requests(
+            return await ServiceRequestRepository.find_unsolved_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1246,7 +1246,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "my_unsolved":
-            return await ServiceRequestCRUD.find_my_unsolved_requests(
+            return await ServiceRequestRepository.find_my_unsolved_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1254,7 +1254,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "recently_updated":
-            return await ServiceRequestCRUD.find_recently_updated_requests(
+            return await ServiceRequestRepository.find_recently_updated_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1262,7 +1262,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "recently_solved":
-            return await ServiceRequestCRUD.find_recently_solved_requests(
+            return await ServiceRequestRepository.find_recently_solved_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1271,7 +1271,7 @@ class RequestService:
             )
         # New views
         elif view_type == "all_your_requests":
-            return await ServiceRequestCRUD.find_all_your_requests(
+            return await ServiceRequestRepository.find_all_your_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1279,7 +1279,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "urgent_high_priority":
-            return await ServiceRequestCRUD.find_urgent_high_priority_requests(
+            return await ServiceRequestRepository.find_urgent_high_priority_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1287,7 +1287,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "pending_requester_response":
-            return await ServiceRequestCRUD.find_pending_requester_response_requests(
+            return await ServiceRequestRepository.find_pending_requester_response_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1295,7 +1295,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "pending_subtask":
-            return await ServiceRequestCRUD.find_pending_subtask_requests(
+            return await ServiceRequestRepository.find_pending_subtask_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1303,7 +1303,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "new_today":
-            return await ServiceRequestCRUD.find_new_today_requests(
+            return await ServiceRequestRepository.find_new_today_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1311,7 +1311,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "in_progress":
-            return await ServiceRequestCRUD.find_in_progress_requests(
+            return await ServiceRequestRepository.find_in_progress_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1319,7 +1319,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "all_tickets":
-            return await ServiceRequestCRUD.find_all_tickets_requests(
+            return await ServiceRequestRepository.find_all_tickets_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1327,7 +1327,7 @@ class RequestService:
                 per_page=per_page,
             )
         elif view_type == "all_solved":
-            return await ServiceRequestCRUD.find_all_solved_requests(
+            return await ServiceRequestRepository.find_all_solved_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1336,7 +1336,7 @@ class RequestService:
             )
         else:
             # Default to unassigned
-            return await ServiceRequestCRUD.find_unassigned_requests(
+            return await ServiceRequestRepository.find_unassigned_requests(
                 db,
                 user,
                 business_unit_ids=business_unit_ids,
@@ -1363,9 +1363,9 @@ class RequestService:
         Returns:
             Dict with view counts
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
-        return await ServiceRequestCRUD.get_view_counts(db, user, business_unit_ids)
+        return await ServiceRequestRepository.get_view_counts(db, user, business_unit_ids)
 
     @staticmethod
     @safe_database_query(
@@ -1392,11 +1392,11 @@ class RequestService:
         Returns:
             Dict with keys: all, parents, subtasks
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
         # Build the base query using the same logic as the view methods
         # but WITHOUT selectinload options (we only need counts)
-        base_stmt = await ServiceRequestCRUD.build_view_base_query(
+        base_stmt = await ServiceRequestRepository.build_view_base_query(
             user=user, view_type=view_type, business_unit_ids=business_unit_ids
         )
 
@@ -1451,7 +1451,7 @@ class RequestService:
             Permission model (NF-3): Any technician can modify any request that is NOT solved.
             The assignee concept is informational only, not a permission gate.
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
         # Check if request exists and load status for count_as_solved check
         request = await RequestService.get_service_request_by_id(db, request_id)
@@ -1464,14 +1464,14 @@ class RequestService:
             raise ValueError("Cannot add assignees to a solved request")
 
         # Check if user is already assigned
-        existing_assignment = await ServiceRequestCRUD.check_existing_assignment(
+        existing_assignment = await ServiceRequestRepository.check_existing_assignment(
             db, request_id, user_id
         )
         if existing_assignment:
             raise ValueError("This user is already assigned to this request")
 
         # Create the assignment
-        await ServiceRequestCRUD.create_assignment(db, request_id, user_id, assigned_by)
+        await ServiceRequestRepository.create_assignment(db, request_id, user_id, assigned_by)
 
         # Update request status to "in-progress" (status_id=8) if currently Open (status_id=1)
         if request.status_id == 1:
@@ -1559,7 +1559,7 @@ class RequestService:
             Permission model (NF-3): Any technician can modify any request that is NOT solved.
             The assignee concept is informational only, not a permission gate.
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
         # Check if request exists
         request = await RequestService.get_service_request_by_id(db, request_id)
@@ -1572,14 +1572,14 @@ class RequestService:
             raise ValueError("Cannot remove assignees from a solved request")
 
         # Check assignee count
-        assignee_count = await ServiceRequestCRUD.count_assignees(db, request_id)
+        assignee_count = await ServiceRequestRepository.count_assignees(db, request_id)
 
         # Cannot remove the last assignee (still enforced)
         if assignee_count == 1:
             raise ValueError("must_have_assignee")
 
         # Check if user is assigned and remove the assignment
-        success = await ServiceRequestCRUD.delete_assignment(db, request_id, user_id)
+        success = await ServiceRequestRepository.delete_assignment(db, request_id, user_id)
 
         if not success:
             raise ValueError("This user is not assigned to this request")
@@ -1652,12 +1652,12 @@ class RequestService:
             NotFoundError: If request or technician not found
         """
         from db import User, UserRole
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
 
         # Check assignee count FIRST - must be 0 for take to work
-        assignee_count = await ServiceRequestCRUD.count_assignees(db, request_id)
+        assignee_count = await ServiceRequestRepository.count_assignees(db, request_id)
 
         if assignee_count > 0:
             raise ValueError(
@@ -1698,7 +1698,7 @@ class RequestService:
         Raises:
             NotFoundError: If request not found
         """
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
         # Check if request exists
         request = await RequestService.get_service_request_by_id(db, request_id)
@@ -1706,7 +1706,7 @@ class RequestService:
             raise NotFoundError(f"Service request with ID {request_id} not found")
 
         # Get all assignments for this request
-        return await ServiceRequestCRUD.get_request_assignees(db, request_id)
+        return await ServiceRequestRepository.get_request_assignees(db, request_id)
 
     # ==================================================================================
     # SUB-TASK METHODS
@@ -1988,9 +1988,9 @@ class RequestService:
         """
         from datetime import datetime
 
-        from crud.chat_crud import ChatMessageCRUD
+        from repositories.support.chat_repository import ChatMessageRepository
         from api.services.request_note_service import RequestNoteService
-        from crud.service_request_crud import ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
         from api.schemas.full_details import FullRequestDetailsResponse
         from api.schemas.service_request import (
             AssigneeInfo,
@@ -2006,8 +2006,8 @@ class RequestService:
             notes_result = await RequestNoteService.get_request_notes(
                 db, request_id, page=1, per_page=100
             )
-            assignees = await ServiceRequestCRUD.get_request_assignees(db, request_id)
-            messages_result = await ChatMessageCRUD.find_by_request_id_with_relations(
+            assignees = await ServiceRequestRepository.get_request_assignees(db, request_id)
+            messages_result = await ChatMessageRepository.find_by_request_id_with_relations(
                 db, request_id, limit=messages_limit, offset=0
             )
             sub_tasks = await RequestService.get_sub_tasks(
@@ -2152,6 +2152,246 @@ class RequestService:
             sub_task_stats=sub_task_stats,
             fetched_at=datetime.utcnow(),
         )
+
+    @staticmethod
+    @safe_database_query("get_last_messages_for_requests", default_return={})
+    async def get_last_messages_for_requests(
+        db: AsyncSession, request_ids: List[UUID]
+    ) -> dict[UUID, "ChatMessage"]:
+        """
+        Get the last message for each request in a batch.
+
+        Args:
+            db: Database session
+            request_ids: List of request IDs
+
+        Returns:
+            Dictionary mapping request_id to ChatMessage (last message)
+        """
+        from db import ChatMessage
+
+        if not request_ids:
+            return {}
+
+        # Subquery to get the ID of the last message for each request
+        last_msg_subquery = (
+            select(
+                ChatMessage.request_id,
+                func.max(ChatMessage.created_at).label("last_created_at"),
+            )
+            .where(ChatMessage.request_id.in_(request_ids))
+            .group_by(ChatMessage.request_id)
+            .subquery()
+        )
+
+        # Main query to get the full ChatMessage objects
+        stmt = (
+            select(ChatMessage)
+            .join(
+                last_msg_subquery,
+                and_(
+                    ChatMessage.request_id == last_msg_subquery.c.request_id,
+                    ChatMessage.created_at == last_msg_subquery.c.last_created_at,
+                ),
+            )
+            .options(selectinload(ChatMessage.sender))
+        )
+
+        result = await db.execute(stmt)
+        messages = result.scalars().all()
+
+        # Build dictionary: request_id -> ChatMessage
+        return {msg.request_id: msg for msg in messages}
+
+    @staticmethod
+    @safe_database_query("check_requester_unread_for_requests", default_return={})
+    async def check_requester_unread_for_requests(
+        db: AsyncSession, request_ids: List[UUID]
+    ) -> dict[UUID, bool]:
+        """
+        Check if requesters have unread messages for multiple requests.
+
+        Args:
+            db: Database session
+            request_ids: List of request IDs to check
+
+        Returns:
+            Dictionary mapping request_id to boolean (True if requester has unread messages)
+        """
+        from repositories.support.chat_repository import ChatMessageRepository
+
+        return await ChatMessageRepository.check_requester_unread_for_requests(
+            db, request_ids
+        )
+
+    @staticmethod
+    @safe_database_query("check_technician_unread_for_requests", default_return={})
+    async def check_technician_unread_for_requests(
+        db: AsyncSession, request_ids: List[UUID]
+    ) -> dict[UUID, bool]:
+        """
+        Check if technicians have unread messages for multiple requests.
+
+        Args:
+            db: Database session
+            request_ids: List of request IDs to check
+
+        Returns:
+            Dictionary mapping request_id to boolean (True if technician has unread messages)
+        """
+        from repositories.support.chat_repository import ChatMessageRepository
+
+        return await ChatMessageRepository.check_technician_unread_for_requests(
+            db, request_ids
+        )
+
+    @staticmethod
+    @safe_database_query("get_business_unit_counts", default_return=([], 0))
+    async def get_business_unit_counts(
+        db: AsyncSession, user: User, view: Optional[str] = None
+    ) -> Tuple[List[dict], int]:
+        """
+        Get ticket counts grouped by business unit.
+
+        Args:
+            db: Database session
+            user: Current user (for permission filtering)
+            view: Optional view filter (e.g., 'all_unsolved', 'unassigned')
+
+        Returns:
+            Tuple of (list of business unit dicts with id/name/count, unassigned_count)
+        """
+        from repositories.support.request_repository import ServiceRequestRepository
+
+        return await ServiceRequestRepository.get_business_unit_counts(db, user, view)
+
+    @staticmethod
+    @safe_database_query("get_ticket_type_counts", default_return={"all": 0, "parents": 0, "subtasks": 0})
+    async def get_ticket_type_counts(
+        db: AsyncSession, user: User
+    ) -> dict[str, int]:
+        """
+        Get global ticket type counts (all/parents/subtasks).
+
+        Args:
+            db: Database session
+            user: Current user (for permission filtering)
+
+        Returns:
+            Dictionary with 'all', 'parents', 'subtasks' counts
+        """
+        from repositories.support.request_repository import ServiceRequestRepository
+
+        return await ServiceRequestRepository.get_ticket_type_counts(db, user)
+
+    @staticmethod
+    @safe_database_query("count_assignees", default_return=0)
+    async def count_assignees(db: AsyncSession, request_id: UUID) -> int:
+        """
+        Count the number of assignees for a request.
+
+        Args:
+            db: Database session
+            request_id: Service request ID
+
+        Returns:
+            Number of assignees
+        """
+        from repositories.support.request_repository import ServiceRequestRepository
+
+        return await ServiceRequestRepository.count_assignees(db, request_id)
+
+    @staticmethod
+    @safe_database_query("get_user_by_id", default_return=None)
+    async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
+        """
+        Get a user by ID.
+
+        Args:
+            db: Database session
+            user_id: User ID
+
+        Returns:
+            User object or None if not found
+        """
+        from repositories.setting.user_repository import UserRepository
+
+        return await UserRepository.find_by_id(db, user_id)
+
+    @staticmethod
+    @transactional_database_operation("reassign_section")
+    @log_database_operation("section reassignment", level="debug")
+    async def reassign_section(
+        db: AsyncSession,
+        request_id: UUID,
+        section_id: int,
+        current_user: User,
+    ) -> ServiceRequest:
+        """
+        Reassign a service request to a different section.
+
+        Args:
+            db: Database session
+            request_id: Service request ID
+            section_id: New section ID
+            current_user: User making the change
+
+        Returns:
+            Updated ServiceRequest
+
+        Raises:
+            ValueError: If request not found
+        """
+        # Get the request
+        stmt = (
+            select(ServiceRequest)
+            .options(
+                selectinload(ServiceRequest.assignees),
+            )
+            .where(ServiceRequest.id == request_id)
+        )
+        result = await db.execute(stmt)
+        request = result.scalar_one_or_none()
+
+        if not request:
+            raise ValueError("Request not found")
+
+        # Update section assignment
+        request.assigned_to_section_id = section_id
+        request.updated_at = datetime.utcnow()
+
+        # Optional: Clear technician assignments when changing section
+        # Uncomment the following if you want to clear assignees on section change
+        # if request.assignees:
+        #     for assignee in request.assignees:
+        #         await db.delete(assignee)
+
+        await db.commit()
+        await db.refresh(request)
+
+        # Broadcast update via SignalR
+        try:
+            from api.services.signalr_client import signalr_client
+
+            await signalr_client.broadcast_ticket_update(
+                request_id=str(request_id),
+                update_type="section_reassigned",
+                update_data={
+                    "updatedFields": ["assignedToSection"],
+                    "newValues": {
+                        "assignedToSectionId": section_id,
+                    },
+                    "updatedBy": {
+                        "id": str(current_user.id),
+                        "username": current_user.username,
+                        "fullName": current_user.full_name,
+                    },
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to broadcast section reassignment update: {e}")
+
+        return request
 
 
 # Helper exception classes

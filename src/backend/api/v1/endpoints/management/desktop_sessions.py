@@ -413,15 +413,11 @@ async def push_update_to_desktop_session(
         HTTPException: 400 if no latest version configured
     """
     from datetime import datetime
-    from sqlalchemy import select
     from api.services.client_version_service import ClientVersionService
     from api.services.signalr_client import signalr_client
-    from db import DesktopSession
 
-    # Get the session by UUID
-    stmt = select(DesktopSession).where(DesktopSession.id == session_id)
-    result = await db.execute(stmt)
-    session = result.scalar_one_or_none()
+    # Get the session by UUID using service
+    session = await DesktopSessionService.get_session_by_id(db=db, session_id=session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Desktop session not found")

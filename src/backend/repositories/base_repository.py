@@ -1,8 +1,9 @@
 """
-Base CRUD with generic CRUD operations.
+Base Repository with generic CRUD operations.
 
 Provides reusable database operations that can be inherited by specific repositories.
 """
+
 from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,12 +14,12 @@ from sqlmodel import SQLModel
 ModelType = TypeVar("ModelType", bound=SQLModel)
 
 
-class BaseCRUD(Generic[ModelType]):
+class BaseRepository(Generic[ModelType]):
     """
     Generic repository providing common CRUD operations.
 
     Usage:
-        class UserCRUD(BaseCRUD[User]):
+        class UserRepository(BaseRepository[User]):
             model = User
     """
 
@@ -26,11 +27,7 @@ class BaseCRUD(Generic[ModelType]):
 
     @classmethod
     async def find_by_id(
-        cls,
-        db: AsyncSession,
-        id_value: Any,
-        *,
-        eager_load: Optional[List] = None
+        cls, db: AsyncSession, id_value: Any, *, eager_load: Optional[List] = None
     ) -> Optional[ModelType]:
         """
         Find a single record by ID.
@@ -58,7 +55,7 @@ class BaseCRUD(Generic[ModelType]):
         db: AsyncSession,
         *,
         filters: Optional[Dict[str, Any]] = None,
-        eager_load: Optional[List] = None
+        eager_load: Optional[List] = None,
     ) -> Optional[ModelType]:
         """
         Find a single record matching filters.
@@ -93,7 +90,7 @@ class BaseCRUD(Generic[ModelType]):
         eager_load: Optional[List] = None,
         order_by: Optional[Any] = None,
         limit: Optional[int] = None,
-        offset: Optional[int] = None
+        offset: Optional[int] = None,
     ) -> List[ModelType]:
         """
         Find all records matching filters with pagination.
@@ -141,7 +138,7 @@ class BaseCRUD(Generic[ModelType]):
         per_page: int = 50,
         filters: Optional[Dict[str, Any]] = None,
         eager_load: Optional[List] = None,
-        order_by: Optional[Any] = None
+        order_by: Optional[Any] = None,
     ) -> Tuple[List[ModelType], int]:
         """
         Find records with pagination and total count.
@@ -194,10 +191,7 @@ class BaseCRUD(Generic[ModelType]):
 
     @classmethod
     async def count(
-        cls,
-        db: AsyncSession,
-        *,
-        filters: Optional[Dict[str, Any]] = None
+        cls, db: AsyncSession, *, filters: Optional[Dict[str, Any]] = None
     ) -> int:
         """
         Count records matching filters.
@@ -221,11 +215,7 @@ class BaseCRUD(Generic[ModelType]):
 
     @classmethod
     async def create(
-        cls,
-        db: AsyncSession,
-        *,
-        obj_in: Dict[str, Any],
-        commit: bool = True
+        cls, db: AsyncSession, *, obj_in: Dict[str, Any], commit: bool = True
     ) -> ModelType:
         """
         Create a new record.
@@ -254,7 +244,7 @@ class BaseCRUD(Generic[ModelType]):
         *,
         id_value: Any,
         obj_in: Dict[str, Any],
-        commit: bool = True
+        commit: bool = True,
     ) -> Optional[ModelType]:
         """
         Update an existing record.
@@ -288,7 +278,7 @@ class BaseCRUD(Generic[ModelType]):
         *,
         id_value: Any,
         soft_delete: bool = False,
-        commit: bool = True
+        commit: bool = True,
     ) -> bool:
         """
         Delete a record (soft or hard delete).
@@ -306,7 +296,7 @@ class BaseCRUD(Generic[ModelType]):
         if not db_obj:
             return False
 
-        if soft_delete and hasattr(db_obj, 'is_deleted'):
+        if soft_delete and hasattr(db_obj, "is_deleted"):
             db_obj.is_deleted = True
         else:
             await db.delete(db_obj)
@@ -317,12 +307,7 @@ class BaseCRUD(Generic[ModelType]):
         return True
 
     @classmethod
-    async def exists(
-        cls,
-        db: AsyncSession,
-        *,
-        filters: Dict[str, Any]
-    ) -> bool:
+    async def exists(cls, db: AsyncSession, *, filters: Dict[str, Any]) -> bool:
         """
         Check if a record exists matching filters.
 

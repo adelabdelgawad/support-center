@@ -20,8 +20,8 @@ Authentication:
 - No authentication required for GET endpoints (public access)
 
 Architecture Note:
-This module has been refactored to call CRUD directly instead of using a service layer,
-as the previous service was a pure passthrough with no additional business logic.
+Refactored to use SectionService - all business logic delegated to service layer.
+Endpoints are thin HTTP wrappers focused on validation and response formatting.
 """
 
 from typing import List
@@ -30,7 +30,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import get_session
-from crud.section_crud import SectionCRUD
+from api.services.section_service import SectionService
 from api.schemas.section import (
     SectionRead,
     SectionWithTechnicians,
@@ -62,11 +62,10 @@ async def get_sections(
         List of service sections with optional technician data
     """
     try:
-        sections = await SectionCRUD.find_all_active_sections(
-            db,
+        sections = await SectionService.get_all_sections(
+            db=db,
             only_active=only_active,
             only_shown=only_shown,
-            order_by_id=True,
             include_technicians=include_technicians,
         )
     except SQLAlchemyError as e:
@@ -122,7 +121,7 @@ async def get_section(
         HTTPException: 404 if section not found
     """
     try:
-        section = await SectionCRUD.find_by_id_active(db, section_id)
+        section = await SectionService.get_section_by_id(db, section_id)
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -154,7 +153,7 @@ async def get_section_technicians(
         List of technicians assigned to section
     """
     try:
-        technicians = await SectionCRUD.find_section_technicians(db, section_id)
+        technicians = await SectionService.get_section_technicians(db, section_id)
     except SQLAlchemyError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

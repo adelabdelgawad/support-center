@@ -11,7 +11,6 @@ from typing import BinaryIO, List, Optional
 from uuid import UUID
 
 import magic
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -19,7 +18,8 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import ChatFile, ServiceRequest
+from db import ChatFile
+from repositories.support.chat_file_repository import ChatFileRepository
 from api.services.minio_service import MinIOStorageService
 
 # Module-level logger
@@ -27,10 +27,28 @@ logger = logging.getLogger(__name__)
 
 # Allowed file extensions for chat attachments (non-image)
 ALLOWED_EXTENSIONS = {
-    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-    "txt", "log", "csv", "json", "xml",
-    "zip", "rar", "7z", "tar", "gz",
-    "mp3", "mp4", "wav", "avi", "mov",
+    "pdf",
+    "doc",
+    "docx",
+    "xls",
+    "xlsx",
+    "ppt",
+    "pptx",
+    "txt",
+    "log",
+    "csv",
+    "json",
+    "xml",
+    "zip",
+    "rar",
+    "7z",
+    "tar",
+    "gz",
+    "mp3",
+    "mp4",
+    "wav",
+    "avi",
+    "mov",
 }
 
 # Max file size: 50MB
@@ -75,11 +93,9 @@ class ChatFileService:
         from tasks.minio_file_tasks import upload_file_to_minio
 
         # Verify request exists
-        stmt = select(ServiceRequest).where(ServiceRequest.id == request_id)
-        result = await db.execute(stmt)
-        request = result.scalar_one_or_none()
+        request_exists = await ChatFileRepository.verify_request_exists(db, request_id)
 
-        if not request:
+        if not request_exists:
             raise ValueError("Service request not found")
 
         # Read file content
@@ -89,9 +105,7 @@ class ChatFileService:
         # Check file size
         max_size = MAX_FILE_SIZE_MB * 1024 * 1024
         if file_size > max_size:
-            raise ValueError(
-                f"File size exceeds maximum of {MAX_FILE_SIZE_MB} MB"
-            )
+            raise ValueError(f"File size exceeds maximum of {MAX_FILE_SIZE_MB} MB")
 
         # Validate extension
         ext = Path(filename).suffix.lower().lstrip(".")
@@ -106,9 +120,7 @@ class ChatFileService:
 
         # Block images - they should go through screenshot service
         if ChatFileService.is_image_mime_type(mime_type):
-            raise ValueError(
-                "Image files should be uploaded via screenshot endpoint"
-            )
+            raise ValueError("Image files should be uploaded via screenshot endpoint")
 
         # Generate unique stored filename
         stored_filename = f"{uuid.uuid4()}.{ext}"
@@ -125,22 +137,24 @@ class ChatFileService:
         logger.info(f"Chat file saved to temporary storage: {temp_file_path}")
 
         # Create ChatFile record with pending status
-        chat_file = ChatFile(
-            request_id=request_id,
-            uploaded_by=user_id,
-            original_filename=filename,
-            stored_filename=stored_filename,
-            file_size=file_size,
-            mime_type=mime_type,
-            minio_object_key=None,  # Will be set by Celery task
-            bucket_name="servicecatalog-files",
-            file_hash=None,  # Will be calculated by Celery task
-            upload_status="pending",
-            is_corrupted=False,
-            temp_local_path=str(temp_file_path),
-        )
+        chat_file_data = {
+            "request_id": request_id,
+            "uploaded_by": user_id,
+            "original_filename": filename,
+            "stored_filename": stored_filename,
+            "file_size": file_size,
+            "mime_type": mime_type,
+            "minio_object_key": None,  # Will be set by Celery task
+            "bucket_name": "servicecatalog-files",
+            "file_hash": None,  # Will be calculated by Celery task
+            "upload_status": "pending",
+            "is_corrupted": False,
+            "temp_local_path": str(temp_file_path),
+        }
 
-        db.add(chat_file)
+        chat_file = await ChatFileRepository.create(
+            db, obj_in=chat_file_data, commit=False
+        )
         await db.commit()
         await db.refresh(chat_file)
 
@@ -159,9 +173,9 @@ class ChatFileService:
         )
 
         # Store task ID
-        chat_file.celery_task_id = task.id
-        await db.commit()
-        await db.refresh(chat_file)
+        chat_file = await ChatFileRepository.update_celery_task_id(
+            db, chat_file.id, task.id
+        )
 
         logger.info(
             f"Dispatched MinIO upload task {task.id} for chat file {chat_file.id}"
@@ -172,9 +186,7 @@ class ChatFileService:
     @staticmethod
     @safe_database_query("get_chat_file")
     @log_database_operation("chat file retrieval", level="debug")
-    async def get_file(
-        db: AsyncSession, file_id: int
-    ) -> Optional[ChatFile]:
+    async def get_file(db: AsyncSession, file_id: int) -> Optional[ChatFile]:
         """
         Get chat file by ID.
 
@@ -185,9 +197,7 @@ class ChatFileService:
         Returns:
             ChatFile or None
         """
-        stmt = select(ChatFile).where(ChatFile.id == file_id)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await ChatFileRepository.find_by_id(db, file_id)
 
     @staticmethod
     @safe_database_query("get_chat_file_by_filename")
@@ -205,16 +215,12 @@ class ChatFileService:
         Returns:
             ChatFile or None
         """
-        stmt = select(ChatFile).where(ChatFile.stored_filename == stored_filename)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await ChatFileRepository.find_by_filename(db, stored_filename)
 
     @staticmethod
     @safe_database_query("get_request_files", default_return=[])
     @log_database_operation("request chat files retrieval", level="debug")
-    async def get_request_files(
-        db: AsyncSession, request_id: UUID
-    ) -> List[ChatFile]:
+    async def get_request_files(db: AsyncSession, request_id: UUID) -> List[ChatFile]:
         """
         Get all chat files for a request.
 
@@ -225,16 +231,7 @@ class ChatFileService:
         Returns:
             List of chat files
         """
-        stmt = (
-            select(ChatFile)
-            .where(ChatFile.request_id == request_id)
-            .order_by(ChatFile.created_at.desc())
-        )
-
-        result = await db.execute(stmt)
-        files = result.scalars().all()
-
-        return list(files)
+        return await ChatFileRepository.find_by_request(db, request_id)
 
     @staticmethod
     @log_database_operation("chat file download from MinIO", level="debug")
@@ -256,9 +253,7 @@ class ChatFileService:
                     try:
                         with open(temp_path, "rb") as f:
                             content = f.read()
-                        logger.info(
-                            f"Read chat file from temp storage: {temp_path}"
-                        )
+                        logger.info(f"Read chat file from temp storage: {temp_path}")
                         return content
                     except Exception as e:
                         logger.warning(
@@ -273,9 +268,7 @@ class ChatFileService:
 
         # Otherwise, download from MinIO
         if not chat_file.minio_object_key:
-            logger.warning(
-                f"No MinIO object key for chat file {chat_file.id}"
-            )
+            logger.warning(f"No MinIO object key for chat file {chat_file.id}")
             return None
 
         try:
@@ -321,7 +314,9 @@ class ChatFileService:
         if chat_file.minio_object_key:
             try:
                 await MinIOStorageService.delete_file(chat_file.minio_object_key)
-                logger.info(f"Deleted chat file from MinIO: {chat_file.minio_object_key}")
+                logger.info(
+                    f"Deleted chat file from MinIO: {chat_file.minio_object_key}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to delete from MinIO: {e}")
 
@@ -336,8 +331,7 @@ class ChatFileService:
                     logger.warning(f"Failed to delete temp file: {e}")
 
         # Delete database record
-        await db.delete(chat_file)
-        await db.commit()
+        await ChatFileRepository.delete(db, chat_file.id, commit=True)
 
         logger.info(f"Deleted chat file record: {file_id}")
         return True

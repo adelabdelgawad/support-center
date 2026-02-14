@@ -5,7 +5,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +16,8 @@ from core.decorators import (
 )
 from db.models import SLAConfig, Priority, ServiceRequest
 from api.schemas.sla_config import SLAConfigCreate, SLAConfigUpdate
+from repositories.setting.sla_config_repository import SLAConfigRepository
+from repositories.setting.priority_repository import PriorityRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,30 +36,26 @@ class SLAConfigService:
         business_unit_id: Optional[int] = None,
     ) -> List[SLAConfig]:
         """List all SLA configurations with optional filters."""
-        stmt = (
-            select(SLAConfig)
-            .options(
-                selectinload(SLAConfig.priority),
-                selectinload(SLAConfig.category),
-                selectinload(SLAConfig.business_unit),
-            )
-            .order_by(SLAConfig.priority_id, SLAConfig.id)
-        )
-
+        filters = {}
         if active_only:
-            stmt = stmt.where(SLAConfig.is_active)
-
+            filters["is_active"] = True
         if priority_id is not None:
-            stmt = stmt.where(SLAConfig.priority_id == priority_id)
-
+            filters["priority_id"] = priority_id
         if category_id is not None:
-            stmt = stmt.where(SLAConfig.category_id == category_id)
-
+            filters["category_id"] = category_id
         if business_unit_id is not None:
-            stmt = stmt.where(SLAConfig.business_unit_id == business_unit_id)
+            filters["business_unit_id"] = business_unit_id
 
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
+        return await SLAConfigRepository.find_all(
+            db,
+            filters=filters if filters else None,
+            eager_load=[
+                SLAConfig.priority,
+                SLAConfig.category,
+                SLAConfig.business_unit,
+            ],
+            order_by=[SLAConfig.priority_id, SLAConfig.id],
+        )
 
     @staticmethod
     @safe_database_query("get_sla_config")
@@ -67,17 +65,15 @@ class SLAConfigService:
         config_id: int,
     ) -> Optional[SLAConfig]:
         """Get an SLA config by ID."""
-        stmt = (
-            select(SLAConfig)
-            .options(
-                selectinload(SLAConfig.priority),
-                selectinload(SLAConfig.category),
-                selectinload(SLAConfig.business_unit),
-            )
-            .where(SLAConfig.id == config_id)
+        return await SLAConfigRepository.find_by_id(
+            db,
+            config_id,
+            eager_load=[
+                SLAConfig.priority,
+                SLAConfig.category,
+                SLAConfig.business_unit,
+            ],
         )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
 
     @staticmethod
     @transactional_database_operation("create_sla_config")
@@ -87,11 +83,9 @@ class SLAConfigService:
         config_data: SLAConfigCreate,
     ) -> SLAConfig:
         """Create a new SLA configuration."""
-        config = SLAConfig(**config_data.model_dump())
-        db.add(config)
-        await db.commit()
-        await db.refresh(config)
-        return config
+        return await SLAConfigRepository.create(
+            db, obj_in=config_data.model_dump(), commit=True
+        )
 
     @staticmethod
     @transactional_database_operation("update_sla_config")
@@ -102,20 +96,12 @@ class SLAConfigService:
         update_data: SLAConfigUpdate,
     ) -> Optional[SLAConfig]:
         """Update an SLA configuration."""
-        stmt = select(SLAConfig).where(SLAConfig.id == config_id)
-        result = await db.execute(stmt)
-        config = result.scalar_one_or_none()
-
-        if not config:
-            return None
-
-        update_dict = update_data.model_dump(exclude_unset=True)
-        for field, value in update_dict.items():
-            setattr(config, field, value)
-
-        await db.commit()
-        await db.refresh(config)
-        return config
+        return await SLAConfigRepository.update(
+            db,
+            id_value=config_id,
+            obj_in=update_data.model_dump(exclude_unset=True),
+            commit=True,
+        )
 
     @staticmethod
     @transactional_database_operation("delete_sla_config")
@@ -125,10 +111,7 @@ class SLAConfigService:
         config_id: int,
     ) -> bool:
         """Delete an SLA configuration (mark as inactive)."""
-        stmt = select(SLAConfig).where(SLAConfig.id == config_id)
-        result = await db.execute(stmt)
-        config = result.scalar_one_or_none()
-
+        config = await SLAConfigRepository.find_by_id(db, config_id)
         if not config:
             return False
 
@@ -157,70 +140,22 @@ class SLAConfigService:
         Returns:
             dict with first_response_minutes, resolution_hours, business_hours_only
         """
-        # Try to find most specific SLA config first
-        configs_to_try = []
-
-        # 1. Most specific: priority + category + business_unit
-        if category_id and business_unit_id:
-            configs_to_try.append(
-                and_(
-                    SLAConfig.priority_id == priority_id,
-                    SLAConfig.category_id == category_id,
-                    SLAConfig.business_unit_id == business_unit_id,
-                    SLAConfig.is_active,
-                )
-            )
-
-        # 2. priority + category
-        if category_id:
-            configs_to_try.append(
-                and_(
-                    SLAConfig.priority_id == priority_id,
-                    SLAConfig.category_id == category_id,
-                    SLAConfig.business_unit_id is None,
-                    SLAConfig.is_active,
-                )
-            )
-
-        # 3. priority + business_unit
-        if business_unit_id:
-            configs_to_try.append(
-                and_(
-                    SLAConfig.priority_id == priority_id,
-                    SLAConfig.category_id is None,
-                    SLAConfig.business_unit_id == business_unit_id,
-                    SLAConfig.is_active,
-                )
-            )
-
-        # 4. priority only
-        configs_to_try.append(
-            and_(
-                SLAConfig.priority_id == priority_id,
-                SLAConfig.category_id is None,
-                SLAConfig.business_unit_id is None,
-                SLAConfig.is_active,
-            )
+        # Try to find most specific SLA config using repository method
+        config = await SLAConfigRepository.find_matching_config(
+            db, category_id, priority_id, business_unit_id
         )
 
-        # Try each config in order
-        for condition in configs_to_try:
-            stmt = select(SLAConfig).where(condition)
-            result = await db.execute(stmt)
-            config = result.scalar_one_or_none()
-            if config:
-                return {
-                    "first_response_minutes": config.first_response_minutes,
-                    "resolution_hours": config.resolution_hours,
-                    "business_hours_only": config.business_hours_only,
-                    "source": "sla_config",
-                    "config_id": config.id,
-                }
+        if config:
+            return {
+                "first_response_minutes": config.first_response_minutes,
+                "resolution_hours": config.resolution_hours,
+                "business_hours_only": config.business_hours_only,
+                "source": "sla_config",
+                "config_id": config.id,
+            }
 
-        # 5. Fall back to Priority table defaults
-        stmt = select(Priority).where(Priority.id == priority_id)
-        result = await db.execute(stmt)
-        priority = result.scalar_one_or_none()
+        # Fall back to Priority table defaults
+        priority = await PriorityRepository.find_by_id(db, priority_id)
 
         if priority:
             return {

@@ -509,3 +509,32 @@ class ScreenshotService:
         unique_screenshots = {s.id: s for s in all_screenshots}.values()
 
         return list(unique_screenshots)
+
+    @staticmethod
+    @safe_database_query("get_screenshot_by_filename")
+    @log_database_operation("screenshot by filename retrieval", level="debug")
+    async def get_screenshot_by_filename(
+        db: AsyncSession, filename: str
+    ) -> Optional[Screenshot]:
+        """
+        Get screenshot by filename.
+
+        Args:
+            db: Database session
+            filename: Screenshot filename
+
+        Returns:
+            Screenshot or None
+        """
+        # Find screenshot by filename (use LIMIT 1 to handle duplicates)
+        # Order by created_at DESC to get the most recent one if duplicates exist
+        stmt = (
+            select(Screenshot)
+            .where(Screenshot.filename == filename)
+            .order_by(Screenshot.created_at.desc())
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        screenshot = result.scalar_one_or_none()
+
+        return screenshot

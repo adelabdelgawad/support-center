@@ -45,8 +45,6 @@ from api.schemas.remote_access import (
     ToggleControlRequest,
 )
 from api.services.remote_access_service import RemoteAccessService
-from crud.remote_access_crud import RemoteAccessCRUD
-
 router = APIRouter()
 
 
@@ -110,9 +108,11 @@ async def request_remote_access(
         )
 
         # Convert to dict and add server timestamp
-        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(by_alias=True)
+        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(
+            by_alias=True
+        )
         server_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session_dict['serverTime'] = server_now.isoformat() + 'Z'
+        session_dict["serverTime"] = server_now.isoformat() + "Z"
 
         logger.info(f"[Backend] ✅ Session created: {session.id}")
         return session_dict
@@ -156,7 +156,9 @@ async def get_remote_session(
     return session
 
 
-@router.post("/remote-access/{session_id}/resume", response_model=RemoteAccessSessionRead)
+@router.post(
+    "/remote-access/{session_id}/resume", response_model=RemoteAccessSessionRead
+)
 async def resume_remote_session(
     session_id: UUID,
     db: AsyncSession = Depends(get_session),
@@ -204,9 +206,11 @@ async def resume_remote_session(
         )
 
         # Convert to dict and add server timestamp
-        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(by_alias=True)
+        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(
+            by_alias=True
+        )
         server_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session_dict['serverTime'] = server_now.isoformat() + 'Z'
+        session_dict["serverTime"] = server_now.isoformat() + "Z"
 
         logger.info(f"[Backend] ✅ Session resumed: {session_id}")
         return session_dict
@@ -224,7 +228,10 @@ async def resume_remote_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/requests/{request_id}/remote-access/history", response_model=RemoteAccessSessionList)
+@router.get(
+    "/requests/{request_id}/remote-access/history",
+    response_model=RemoteAccessSessionList,
+)
 async def get_request_remote_sessions(
     request_id: UUID,
     response: Response,
@@ -324,40 +331,37 @@ async def start_remote_access_by_user(
     if not is_online:
         logger.warning(f"Cannot start remote access - user {user_id_str} is not online")
         raise HTTPException(
-            status_code=400,
-            detail="Cannot start remote access - user is not online"
+            status_code=400, detail="Cannot start remote access - user is not online"
         )
 
     logger.info(f"User {user_id_str} is online via SignalR")
 
-    # Find user's most recent open (unsolved) request
-    stmt = (
-        select(ServiceRequest)
-        .join(RequestStatus, ServiceRequest.status_id == RequestStatus.id)
-        .where(
-            ServiceRequest.requester_id == user_id,
-            not ServiceRequest.is_deleted,
-            not RequestStatus.count_as_solved,
-        )
-        .options(
-            selectinload(ServiceRequest.requester),
-            selectinload(ServiceRequest.status),
-        )
-        .order_by(ServiceRequest.created_at.desc())
-        .limit(1)
+    # Find user's most recent open (unsolved) request using service
+    from api.services.request_service import RequestService
+
+    # Get user's most recent unsolved request
+    requests, _ = await RequestService.get_service_requests(
+        db=db,
+        requester_id=user_id,
+        page=1,
+        per_page=1,
+        requester_view=False,  # Get all statuses, then filter by not solved
     )
-    result = await db.execute(stmt)
-    request = result.scalar_one_or_none()
+
+    # Filter to only unsolved requests
+    request = None
+    for req in requests:
+        if req.status and not req.status.count_as_solved:
+            request = req
+            break
 
     if not request:
         # User has no open requests - start direct session
         logger.info(f"User {user_id_str} has no open requests, starting direct session")
 
-        # Get user info for notification
-        user_result = await db.execute(
-            select(User).where(User.id == user_id)
-        )
-        user = user_result.scalar_one_or_none()
+        # Get user info for notification using service
+        from api.services.user_service import UserService
+        user = await UserService.get_user_by_id(db=db, user_id=user_id)
 
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -365,14 +369,15 @@ async def start_remote_access_by_user(
         # Check if user is blocked
         if user.is_blocked:
             raise HTTPException(
-                status_code=403,
-                detail=user.block_message or "User account is blocked"
+                status_code=403, detail=user.block_message or "User account is blocked"
             )
 
         # Auto-terminate existing session before creating
-        terminated_session = await RemoteAccessService.terminate_active_session_for_requester(
-            db=db,
-            requester_id=user_id,
+        terminated_session = (
+            await RemoteAccessService.terminate_active_session_for_requester(
+                db=db,
+                requester_id=user_id,
+            )
         )
 
         if terminated_session:
@@ -381,15 +386,12 @@ async def start_remote_access_by_user(
                 f"(old agent: {terminated_session.agent_id})"
             )
 
-        # Create session without request
-        session = await RemoteAccessCRUD.create_session(
+        # Create direct session (no request)
+        session = await RemoteAccessService.create_direct_session(
             db=db,
-            request_id=None,  # No request
             agent_id=current_user.id,
             requester_id=user_id,
         )
-
-        await db.commit()  # CRITICAL: Commit transaction
 
         logger.info(f"Created direct remote access session {session.id}")
 
@@ -410,9 +412,11 @@ async def start_remote_access_by_user(
         except Exception as e:
             logger.warning(f"Failed to notify via SignalR: {e}")
 
-        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(by_alias=True)
+        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(
+            by_alias=True
+        )
         server_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session_dict['serverTime'] = server_now.isoformat() + 'Z'
+        session_dict["serverTime"] = server_now.isoformat() + "Z"
 
         logger.info(f"[Backend] ✅ Direct session created: {session.id}")
         return session_dict
@@ -428,9 +432,11 @@ async def start_remote_access_by_user(
             agent=current_user,
         )
 
-        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(by_alias=True)
+        session_dict = RemoteAccessSessionRead.model_validate(session).model_dump(
+            by_alias=True
+        )
         server_now = datetime.now(timezone.utc).replace(tzinfo=None)
-        session_dict['serverTime'] = server_now.isoformat() + 'Z'
+        session_dict["serverTime"] = server_now.isoformat() + "Z"
 
         logger.info(f"[Backend] ✅ Session created: {session.id}")
         return session_dict
@@ -514,7 +520,9 @@ async def end_remote_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/remote-access/{session_id}/control", response_model=RemoteAccessSessionRead)
+@router.post(
+    "/remote-access/{session_id}/control", response_model=RemoteAccessSessionRead
+)
 async def toggle_control_mode(
     session_id: UUID,
     body: ToggleControlRequest,
@@ -583,7 +591,9 @@ async def toggle_control_mode(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/remote-access/{session_id}/state", response_model=RemoteAccessSessionState)
+@router.get(
+    "/remote-access/{session_id}/state", response_model=RemoteAccessSessionState
+)
 async def get_session_state(
     session_id: UUID,
     db: AsyncSession = Depends(get_session),
@@ -619,7 +629,9 @@ async def get_session_state(
 
     # Verify user is participant
     if session.agent_id != current_user.id and session.requester_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to view this session")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this session"
+        )
 
     return RemoteAccessSessionState(
         session_id=session.id,
@@ -665,7 +677,9 @@ async def get_active_session(
 
     # If not, check if user is an agent
     if not session:
-        session = await RemoteAccessService.get_active_session_for_agent(db, current_user.id)
+        session = await RemoteAccessService.get_active_session_for_agent(
+            db, current_user.id
+        )
 
     if not session:
         raise HTTPException(status_code=404, detail="No active session found")
@@ -723,7 +737,7 @@ async def send_heartbeat(
     logger = logging.getLogger(__name__)
 
     # Get session to verify user is participant
-    session = await RemoteAccessCRUD.get_session_by_id(db, session_id)
+    session = await RemoteAccessService.get_session_by_id(db, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -736,8 +750,7 @@ async def send_heartbeat(
         raise HTTPException(status_code=400, detail="Session is not active")
 
     # Update heartbeat
-    updated_session = await RemoteAccessCRUD.update_heartbeat(db, session_id)
-    await db.commit()
+    updated_session = await RemoteAccessService.update_heartbeat(db, session_id)
 
     if not updated_session:
         raise HTTPException(status_code=404, detail="Session not found or not active")

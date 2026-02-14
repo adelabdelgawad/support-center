@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from db.models import Section, TechnicianSection, User
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class SectionCRUD(BaseCRUD[Section]):
+class SectionRepository(BaseRepository[Section]):
     """CRUD for Section database operations."""
 
     model = Section

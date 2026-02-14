@@ -284,21 +284,13 @@ async def download_screenshot_by_filename(
     """
     import logging
     from pathlib import Path
-    from sqlalchemy import select
-    from db.models import Screenshot
 
     logger = logging.getLogger(__name__)
 
-    # Find screenshot by filename (use LIMIT 1 to handle duplicates)
-    # Order by created_at DESC to get the most recent one if duplicates exist
-    stmt = (
-        select(Screenshot)
-        .where(Screenshot.filename == filename)
-        .order_by(Screenshot.created_at.desc())
-        .limit(1)
+    # Get screenshot by filename using service
+    screenshot = await ScreenshotService.get_screenshot_by_filename(
+        db=db, filename=filename
     )
-    result = await db.execute(stmt)
-    screenshot = result.scalar_one_or_none()
 
     if not screenshot:
         raise HTTPException(status_code=404, detail="Screenshot not found")

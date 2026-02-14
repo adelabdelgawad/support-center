@@ -3,6 +3,7 @@ Device service for the Deployment Control Plane.
 
 Handles device discovery, lifecycle management, and installation triggers.
 """
+
 import asyncio
 import ipaddress
 import logging
@@ -14,9 +15,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from core.decorators import (
     log_database_operation,
@@ -29,7 +28,13 @@ from db.enums import (
     DeviceLifecycleState,
     DeploymentJobStatus,
 )
-from api.schemas.device import DeviceCreate, DeviceUpdate, ManualAddRequest, NetworkScanRequest
+from api.schemas.device import (
+    DeviceCreate,
+    DeviceUpdate,
+    ManualAddRequest,
+    NetworkScanRequest,
+)
+from repositories.management.device_repository import DeviceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -89,26 +94,14 @@ class DeviceService:
         Returns:
             List of devices
         """
-        stmt = select(Device).order_by(Device.hostname.asc())
-
-        if lifecycle_state:
-            stmt = stmt.where(Device.lifecycle_state == lifecycle_state)
-
-        if discovery_source:
-            stmt = stmt.where(Device.discovery_source == discovery_source)
-
-        if search:
-            search_pattern = f"%{search}%"
-            stmt = stmt.where(
-                (Device.hostname.ilike(search_pattern))
-                | (Device.ip_address.ilike(search_pattern))
-            )
-
-        stmt = stmt.offset(offset).limit(limit)
-        result = await db.execute(stmt)
-        devices = result.scalars().all()
-
-        return list(devices)
+        return await DeviceRepository.list_devices(
+            db,
+            lifecycle_state=lifecycle_state,
+            discovery_source=discovery_source,
+            search=search,
+            limit=limit,
+            offset=offset,
+        )
 
     @staticmethod
     @safe_database_query("count_devices", default_return=0)
@@ -118,18 +111,11 @@ class DeviceService:
         discovery_source: Optional[str] = None,
     ) -> int:
         """Count devices with optional filtering."""
-        from sqlalchemy import func
-
-        stmt = select(func.count(Device.id))
-
-        if lifecycle_state:
-            stmt = stmt.where(Device.lifecycle_state == lifecycle_state)
-
-        if discovery_source:
-            stmt = stmt.where(Device.discovery_source == discovery_source)
-
-        result = await db.execute(stmt)
-        return result.scalar() or 0
+        return await DeviceRepository.count_devices(
+            db,
+            lifecycle_state=lifecycle_state,
+            discovery_source=discovery_source,
+        )
 
     @staticmethod
     @safe_database_query("get_device")
@@ -145,13 +131,7 @@ class DeviceService:
         Returns:
             Device or None
         """
-        stmt = (
-            select(Device)
-            .where(Device.id == device_id)
-            .options(selectinload(Device.desktop_session))
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await DeviceRepository.find_by_id(db, device_id)
 
     @staticmethod
     @transactional_database_operation("create_device")
@@ -180,7 +160,9 @@ class DeviceService:
         await db.commit()
         await db.refresh(device)
 
-        logger.info(f"Device created: {device.hostname} (source: {device.discovery_source})")
+        logger.info(
+            f"Device created: {device.hostname} (source: {device.discovery_source})"
+        )
         return device
 
     @staticmethod
@@ -202,9 +184,7 @@ class DeviceService:
         Returns:
             Updated device or None
         """
-        stmt = select(Device).where(Device.id == device_id)
-        result = await db.execute(stmt)
-        device = result.scalar_one_or_none()
+        device = await DeviceRepository.find_by_id(db, device_id)
 
         if not device:
             return None
@@ -236,19 +216,12 @@ class DeviceService:
         Returns:
             Updated device or None
         """
-        stmt = select(Device).where(Device.id == device_id)
-        result = await db.execute(stmt)
-        device = result.scalar_one_or_none()
-
+        device = await DeviceRepository.find_by_id(db, device_id)
         if not device:
             return None
 
         old_state = device.lifecycle_state
-        device.lifecycle_state = new_state
-        device.updated_at = datetime.utcnow()
-
-        await db.commit()
-        await db.refresh(device)
+        device = await DeviceRepository.update_lifecycle_state(db, device_id, new_state)
 
         logger.info(f"Device {device.hostname} lifecycle: {old_state} -> {new_state}")
         return device
@@ -275,57 +248,15 @@ class DeviceService:
         Returns:
             DiscoveryResult with counts and device list
         """
-        # Get desktop sessions
-        stmt = select(DesktopSession)
-        if active_only:
-            stmt = stmt.where(DesktopSession.is_active)
-
-        result = await db.execute(stmt)
-        sessions = result.scalars().all()
-
-        devices = []
-        created_count = 0
-        updated_count = 0
-
-        for session in sessions:
-            if not session.computer_name:
-                continue
-
-            # Check if device already exists (by hostname)
-            existing_stmt = select(Device).where(
-                Device.hostname == session.computer_name
-            )
-            existing_result = await db.execute(existing_stmt)
-            existing_device = existing_result.scalar_one_or_none()
-
-            if existing_device:
-                # Update existing device with session info
-                existing_device.ip_address = session.ip_address
-                existing_device.desktop_session_id = session.id
-                existing_device.last_seen_at = session.last_heartbeat
-                existing_device.updated_at = datetime.utcnow()
-                devices.append(existing_device)
-                updated_count += 1
-            else:
-                # Create new device in discovered state
-                device = Device(
-                    hostname=session.computer_name,
-                    ip_address=session.ip_address,
-                    discovery_source=DeviceDiscoverySource.DESKTOP_SESSION.value,
-                    lifecycle_state=DeviceLifecycleState.DISCOVERED.value,
-                    desktop_session_id=session.id,
-                    last_seen_at=session.last_heartbeat,
-                    created_by=created_by,
-                )
-                db.add(device)
-                devices.append(device)
-                created_count += 1
-
-        await db.commit()
-
-        # Refresh all devices
-        for device in devices:
-            await db.refresh(device)
+        (
+            devices,
+            created_count,
+            updated_count,
+        ) = await DeviceRepository.sync_from_desktop_sessions(
+            db,
+            active_only=active_only,
+            created_by=created_by,
+        )
 
         logger.info(
             f"Synced {len(devices)} devices from desktop sessions "
@@ -370,9 +301,7 @@ class DeviceService:
         from core.config import settings
 
         # Get device
-        stmt = select(Device).where(Device.id == device_id)
-        result = await db.execute(stmt)
-        device = result.scalar_one_or_none()
+        device = await DeviceRepository.find_by_id(db, device_id)
 
         if not device:
             raise ValueError(f"Device not found: {device_id}")
@@ -431,9 +360,7 @@ class DeviceService:
         await db.refresh(job)
         await db.refresh(device)
 
-        logger.info(
-            f"Created installation job {job.id} for device {device.hostname}"
-        )
+        logger.info(f"Created installation job {job.id} for device {device.hostname}")
         return job
 
     @staticmethod
@@ -459,9 +386,7 @@ class DeviceService:
             Tuple of (device, is_new) where is_new indicates if device was created
         """
         # Check if device already exists (by hostname)
-        existing_stmt = select(Device).where(Device.hostname == request.hostname)
-        existing_result = await db.execute(existing_stmt)
-        existing_device = existing_result.scalar_one_or_none()
+        existing_device = await DeviceRepository.find_by_hostname(db, request.hostname)
 
         if existing_device:
             # Update existing device
@@ -474,7 +399,7 @@ class DeviceService:
             logger.info(f"Updated existing device: {existing_device.hostname}")
             return (existing_device, False)
 
-        # Create new device in discovered state
+        # Create new device in discovered state (repository doesn't have create, so keep inline)
         device = Device(
             hostname=request.hostname,
             ip_address=request.ip_address,
@@ -522,7 +447,7 @@ class DeviceService:
                         cmd,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
-                    ).returncode
+                    ).returncode,
                 ),
                 timeout=timeout + 0.5,  # Extra margin for process overhead
             )
@@ -630,7 +555,9 @@ class DeviceService:
                     f"Maximum allowed is 1024 addresses."
                 )
 
-            return [str(ipaddress.IPv4Address(ip)) for ip in range(int(start), int(end) + 1)]
+            return [
+                str(ipaddress.IPv4Address(ip)) for ip in range(int(start), int(end) + 1)
+            ]
 
         elif request.scan_type == "network":
             if not request.cidr:
@@ -714,14 +641,18 @@ class DeviceService:
             async with semaphore:
                 # First try ICMP ping (fast)
                 if await DeviceService._ping_host(ip_str, timeout=1.0):
-                    reachable_hosts.append((ip_str, False))  # Need port check in Phase 2
+                    reachable_hosts.append(
+                        (ip_str, False)
+                    )  # Need port check in Phase 2
                     return
 
                 # If ping fails, try TCP connect to port 445 (SMB)
                 # This catches hosts that block ICMP but have services running
                 if await DeviceService._check_deployment_ports(ip_str, timeout=0.5):
                     reachable_hosts.append((ip_str, True))  # Ports already known open
-                    logger.debug(f"Host {ip_str} discovered via TCP fallback (ICMP blocked)")
+                    logger.debug(
+                        f"Host {ip_str} discovered via TCP fallback (ICMP blocked)"
+                    )
 
         # Run all reachability checks concurrently
         await asyncio.gather(*[check_host_reachable(ip) for ip in hosts])
@@ -731,10 +662,15 @@ class DeviceService:
         logger.info("Phase 2: Checking deployment ports and resolving hostnames...")
         scanned_hosts: List[ScannedHost] = []
 
-        async def check_host_details(ip_str: str, ports_already_open: bool) -> ScannedHost:
+        async def check_host_details(
+            ip_str: str, ports_already_open: bool
+        ) -> ScannedHost:
             async with semaphore:
                 # Skip port check if already verified in Phase 1
-                can_deploy = ports_already_open or await DeviceService._check_deployment_ports(ip_str, timeout=0.5)
+                can_deploy = (
+                    ports_already_open
+                    or await DeviceService._check_deployment_ports(ip_str, timeout=0.5)
+                )
                 hostname = await DeviceService._resolve_hostname(ip_str, timeout=2.0)
                 if not hostname:
                     hostname = f"UNKNOWN-{ip_str.replace('.', '-')}"
@@ -764,11 +700,9 @@ class DeviceService:
 
         for host in scanned_hosts:
             # Check if device already exists (by hostname or IP)
-            existing_stmt = select(Device).where(
-                (Device.hostname == host.hostname) | (Device.ip_address == host.ip)
+            existing_device = await DeviceRepository.find_by_ip_or_hostname(
+                db, host.ip, host.hostname
             )
-            existing_result = await db.execute(existing_stmt)
-            existing_device = existing_result.scalar_one_or_none()
 
             if existing_device:
                 # Update existing device
@@ -832,9 +766,7 @@ class DeviceService:
             DiscoveryResult with updated devices and counts
         """
         # Get all devices with IP addresses
-        stmt = select(Device).where(Device.ip_address.isnot(None))
-        result = await db.execute(stmt)
-        all_devices = list(result.scalars().all())
+        all_devices = await DeviceRepository.find_all_with_ip(db)
 
         if not all_devices:
             return DiscoveryResult(
@@ -856,7 +788,9 @@ class DeviceService:
             async with semaphore:
                 if not device.ip_address:
                     return device, False
-                is_reachable = await DeviceService._ping_host(device.ip_address, timeout=1.0)
+                is_reachable = await DeviceService._ping_host(
+                    device.ip_address, timeout=1.0
+                )
                 return device, is_reachable
 
         # Ping all devices concurrently

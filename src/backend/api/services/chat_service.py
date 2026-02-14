@@ -5,7 +5,7 @@ Enhanced with centralized logging and error handling.
 REFACTORED:
 - Removed UserRole enum import
 - Replaced role-based checks with is_technician/is_super_admin
-- Migrated database operations to ChatMessageCRUD and RequestStatusCRUD
+- Migrated database operations to ChatMessageRepository and RequestStatusRepository
 """
 
 import logging
@@ -16,24 +16,32 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.decorators import (log_database_operation, safe_database_query,
-                             transactional_database_operation)
+from core.decorators import (
+    log_database_operation,
+    safe_database_query,
+    transactional_database_operation,
+)
 from core.sanitizer import sanitize_message_content
 from db import ChatMessage, ServiceRequest
-from crud.chat_crud import (ChatMessageCRUD,
-                                          RequestStatusCRUD)
-from crud.user_crud import UserCRUD
+from repositories.support.chat_repository import ChatMessageRepository
+from repositories.setting.request_status_repository import RequestStatusRepository
+from repositories.setting.user_repository import UserRepository
 from api.schemas.chat_message import ChatMessageCreate
-from api.schemas.chat_page import (ChatMessageCountRecord,
-                                            ChatPageResponse,
-                                            ChatRequestListItem,
-                                            ChatRequestStatus,
-                                            RequestStatusCount)
+from api.schemas.chat_page import (
+    ChatMessageCountRecord,
+    ChatPageResponse,
+    ChatRequestListItem,
+    ChatRequestStatus,
+    RequestStatusCount,
+)
+
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
 
 
-async def _get_bu_interval_seconds(db: AsyncSession, business_unit_id: Optional[int]) -> int:
+async def _get_bu_interval_seconds(
+    db: AsyncSession, business_unit_id: Optional[int]
+) -> int:
     """
     Get WhatsApp interval in seconds from business unit settings.
 
@@ -87,9 +95,9 @@ class ChatService:
             Created message with sequence_number
         """
         # Verify request exists
-        from crud.service_request_crud import \
-            ServiceRequestCRUD
-        request = await ServiceRequestCRUD.find_by_id(db, message_data.request_id)
+        from repositories.support.request_repository import ServiceRequestRepository
+
+        request = await ServiceRequestRepository.find_by_id(db, message_data.request_id)
 
         if not request:
             raise ValueError("Service request not found")
@@ -110,8 +118,9 @@ class ChatService:
 
         # Now safely get max sequence (other transactions wait for our lock)
         max_seq_result = await db.execute(
-            select(func.coalesce(func.max(ChatMessage.sequence_number), 0))
-            .where(ChatMessage.request_id == message_data.request_id)
+            select(func.coalesce(func.max(ChatMessage.sequence_number), 0)).where(
+                ChatMessage.request_id == message_data.request_id
+            )
         )
         max_seq = max_seq_result.scalar() or 0
         next_sequence = max_seq + 1
@@ -135,12 +144,14 @@ class ChatService:
         }
 
         # Create message using repository
-        message = await ChatMessageCRUD.create(db, obj_in=message_dict, commit=False)
+        message = await ChatMessageRepository.create(
+            db, obj_in=message_dict, commit=False
+        )
 
         # Update request first_response_at if this is first technician message
         if not request.first_response_at:
             # Check if sender is technician
-            user = await UserCRUD.find_by_id(db, sender_id)
+            user = await UserRepository.find_by_id(db, sender_id)
 
             if user and user.is_technician:
                 request.first_response_at = datetime.utcnow()
@@ -150,7 +161,7 @@ class ChatService:
 
         # NEW: Event-driven WhatsApp trigger for ALL requester messages
         # Check if sender is requester (not system, not technician)
-        user = await UserCRUD.find_by_id(db, sender_id)
+        user = await UserRepository.find_by_id(db, sender_id)
 
         if user and not user.is_technician and not user.is_super_admin:
             # Set first_requester_message_at if not already set (only on first message)
@@ -173,7 +184,9 @@ class ChatService:
                 else:
                     # Subsequent messages: use business unit interval
                     task_id = f"whatsapp_subsequent_{request.id}"
-                    countdown = await _get_bu_interval_seconds(db, request.business_unit_id)
+                    countdown = await _get_bu_interval_seconds(
+                        db, request.business_unit_id
+                    )
                     batch_type = "subsequent_debounced"
 
                 send_debounced_whatsapp_batch.apply_async(
@@ -189,14 +202,16 @@ class ChatService:
                 # Don't fail message creation if scheduling fails
                 logger.error(
                     f"Failed to schedule WhatsApp task for request {request.id}: {schedule_error}",
-                    exc_info=True
+                    exc_info=True,
                 )
 
         # Update chat_read_monitor for all participants
         from api.services.chat_read_state_service import ChatReadStateService
 
         # Get participants for this request
-        participant_ids = await ChatService._get_request_participants(db, message.request_id)
+        participant_ids = await ChatService._get_request_participants(
+            db, message.request_id
+        )
 
         # Increment unread count for all participants except sender
         await ChatReadStateService.increment_unread_for_users(
@@ -260,7 +275,7 @@ class ChatService:
                     "request_id": str(message.request_id),
                     "sender_id": str(message.sender_id) if message.sender_id else None,
                     "client_temp_id": message_data.client_temp_id,
-                }
+                },
             )
 
         return message
@@ -291,11 +306,8 @@ class ChatService:
             Tuple of (list of messages, total count)
         """
         # Use repository for data access
-        messages, total = await ChatMessageCRUD.find_by_request_id_paginated(
-            db,
-            request_id,
-            page=page,
-            per_page=per_page
+        messages, total = await ChatMessageRepository.find_by_request_id_paginated(
+            db, request_id, page=page, per_page=per_page
         )
 
         # Note: Per-user read state is added in the API layer
@@ -334,11 +346,12 @@ class ChatService:
         Returns:
             Tuple of (messages, total count, oldest_sequence for next cursor)
         """
-        messages, total, oldest_sequence = await ChatMessageCRUD.find_by_request_id_cursor_paginated(
-            db,
-            request_id,
-            limit=limit,
-            before_sequence=before_sequence
+        (
+            messages,
+            total,
+            oldest_sequence,
+        ) = await ChatMessageRepository.find_by_request_id_cursor_paginated(
+            db, request_id, limit=limit, before_sequence=before_sequence
         )
 
         return messages, total, oldest_sequence
@@ -363,14 +376,12 @@ class ChatService:
             Updated message or None
         """
         # Return the message using repository
-        return await ChatMessageCRUD.find_by_id(db, message_id)
+        return await ChatMessageRepository.find_by_id(db, message_id)
 
     @staticmethod
     @transactional_database_operation("mark_all_as_read")
     @log_database_operation("all messages mark as read", level="debug")
-    async def mark_all_as_read(
-        db: AsyncSession, request_id: UUID, user_id: int
-    ) -> int:
+    async def mark_all_as_read(db: AsyncSession, request_id: UUID, user_id: int) -> int:
         """
         Mark all messages in a request as read for a specific user.
 
@@ -385,7 +396,9 @@ class ChatService:
             Number of messages marked as read
         """
         # Get all message IDs in the request using repository
-        message_ids = await ChatMessageCRUD.get_message_ids_by_request(db, request_id)
+        message_ids = await ChatMessageRepository.get_message_ids_by_request(
+            db, request_id
+        )
 
         # Return count of messages
         count = len(message_ids)
@@ -395,9 +408,7 @@ class ChatService:
     @staticmethod
     @safe_database_query("get_unread_count", default_return=0)
     @log_database_operation("unread count retrieval", level="debug")
-    async def get_unread_count(
-        db: AsyncSession, request_id: UUID, user_id: int
-    ) -> int:
+    async def get_unread_count(db: AsyncSession, request_id: UUID, user_id: int) -> int:
         """
         Get count of unread messages for a user in a request.
 
@@ -413,16 +424,12 @@ class ChatService:
         """
         from api.services.chat_read_state_service import ChatReadStateService
 
-        return await ChatReadStateService.get_unread_count(
-            db, request_id, user_id
-        )
+        return await ChatReadStateService.get_unread_count(db, request_id, user_id)
 
     @staticmethod
     @transactional_database_operation("delete_message")
     @log_database_operation("message deletion", level="debug")
-    async def delete_message(
-        db: AsyncSession, message_id: int, user_id: int
-    ) -> bool:
+    async def delete_message(db: AsyncSession, message_id: int, user_id: int) -> bool:
         """
         Delete a message (only by sender or super admin).
 
@@ -435,13 +442,13 @@ class ChatService:
             True if deleted, False if not found or unauthorized
         """
         # Get message using repository
-        message = await ChatMessageCRUD.find_by_id(db, message_id)
+        message = await ChatMessageRepository.find_by_id(db, message_id)
 
         if not message:
             return False
 
         # Check authorization (sender or super admin)
-        user = await UserCRUD.find_by_id(db, user_id)
+        user = await UserRepository.find_by_id(db, user_id)
 
         if not user:
             return False
@@ -451,7 +458,7 @@ class ChatService:
             return False
 
         # Delete message using repository
-        await ChatMessageCRUD.delete(db, message_id, commit=True)
+        await ChatMessageRepository.delete(db, message_id, commit=True)
 
         return True
 
@@ -470,7 +477,7 @@ class ChatService:
             List of RequestStatusCount with all statuses and their counts
         """
         # Use repository for data access
-        status_dicts = await RequestStatusCRUD.get_status_counts_for_requester(
+        status_dicts = await RequestStatusRepository.get_status_counts_for_requester(
             db, user_id
         )
 
@@ -487,9 +494,7 @@ class ChatService:
             for row in status_dicts
         ]
 
-        logger.debug(
-            f"Request status counts for user {user_id}: {request_statuses}"
-        )
+        logger.debug(f"Request status counts for user {user_id}: {request_statuses}")
         return request_statuses
 
     @staticmethod
@@ -507,7 +512,10 @@ class ChatService:
             List with read and unread message counts
         """
         # Use repository for data access
-        read_count, unread_count = await ChatMessageCRUD.get_read_unread_counts_for_requester(
+        (
+            read_count,
+            unread_count,
+        ) = await ChatMessageRepository.get_read_unread_counts_for_requester(
             db, user_id
         )
 
@@ -542,10 +550,8 @@ class ChatService:
             List of ChatRequestListItem with request and message details
         """
         # Use repository to get requests with chat messages loaded
-        requests = await ChatMessageCRUD.get_requests_with_last_message(
-            db,
-            user_id,
-            status_filter=status_filter
+        requests = await ChatMessageRepository.get_requests_with_last_message(
+            db, user_id, status_filter=status_filter
         )
 
         # Build chat messages list
@@ -565,8 +571,7 @@ class ChatService:
                     last_msg_at = last_msg.created_at.isoformat() + "Z"
 
             # Count unread messages for this request using chat_read_monitor
-            from api.services.chat_read_state_service import \
-                ChatReadStateService
+            from api.services.chat_read_state_service import ChatReadStateService
 
             unread_for_request = await ChatReadStateService.get_unread_count(
                 db, request.id, user_id
@@ -601,19 +606,17 @@ class ChatService:
                     id=request.id,
                     title=request.title,
                     status_id=request.status_id,  # NEW: Include status_id
-                    status=(
-                        request.status.name if request.status else "unknown"
-                    ),
-                    status_color=(
-                        request.status.color if request.status else None
-                    ),
+                    status=(request.status.name if request.status else "unknown"),
+                    status_color=(request.status.color if request.status else None),
                     count_as_solved=(
                         request.status.count_as_solved if request.status else False
                     ),
                     created_at=request.created_at.isoformat() + "Z",
                     last_message=last_message_text,
                     last_message_at=last_msg_at,
-                    last_message_sequence=last_msg.sequence_number if last_msg else None,
+                    last_message_sequence=last_msg.sequence_number
+                    if last_msg
+                    else None,
                     unread_count=unread_for_request,
                 )
             )
@@ -631,7 +634,7 @@ class ChatService:
             chat_messages_count=[],
             chat_messages=[],
             statuses=[],
-        )
+        ),
     )
     @log_database_operation("chat page data retrieval", level="debug")
     async def get_chat_page_data(
@@ -658,18 +661,14 @@ class ChatService:
             ChatPageResponse with aggregated data
         """
         # Verify user exists using repository
-        user = await UserCRUD.find_by_id(db, user_id)
+        user = await UserRepository.find_by_id(db, user_id)
 
         if not user:
             raise ValueError("User not found")
 
         # Get all three data components
-        request_statuses = await ChatService._get_request_status_counts(
-            db, user_id
-        )
-        chat_messages_count = await ChatService._get_chat_message_counts(
-            db, user_id
-        )
+        request_statuses = await ChatService._get_request_status_counts(db, user_id)
+        chat_messages_count = await ChatService._get_chat_message_counts(db, user_id)
         chat_messages = await ChatService._get_chat_messages_list(
             db, user_id, status_filter, read_filter
         )
@@ -705,10 +704,8 @@ class ChatService:
             List of ChatRequestStatus objects with id, name, and color
         """
         # Use repository for data access
-        statuses = await RequestStatusCRUD.get_all_active_statuses(
-            db,
-            is_active=is_active,
-            readonly=readonly
+        statuses = await RequestStatusRepository.get_all_active_statuses(
+            db, is_active=is_active, readonly=readonly
         )
 
         # Business logic: Convert to ChatRequestStatus schema
@@ -718,13 +715,15 @@ class ChatService:
                 name=status.name,
                 name_en=status.name_en,
                 name_ar=status.name_ar,
-                color=status.color
+                color=status.color,
             )
             for status in statuses
         ]
 
     @staticmethod
-    async def _get_request_participants(db: AsyncSession, request_id: UUID) -> List[int]:
+    async def _get_request_participants(
+        db: AsyncSession, request_id: UUID
+    ) -> List[int]:
         """
         Get all user IDs who should receive notifications for a request.
 
@@ -735,10 +734,9 @@ class ChatService:
         Returns:
             List of user IDs (requester + assigned technicians)
         """
-        from crud.service_request_crud import \
-            ServiceRequestCRUD
+        from repositories.support.request_repository import ServiceRequestRepository
 
-        request = await ServiceRequestCRUD.find_by_id(db, request_id)
+        request = await ServiceRequestRepository.find_by_id(db, request_id)
         if not request:
             return []
 
@@ -758,7 +756,7 @@ class ChatService:
             chat_messages_count=[],
             chat_messages=[],
             statuses=[],
-        )
+        ),
     )
     @log_database_operation("ticket search", level="debug")
     async def search_tickets(
@@ -788,18 +786,14 @@ class ChatService:
             ChatPageResponse with filtered/searched tickets
         """
         # Verify user exists using repository
-        user = await UserCRUD.find_by_id(db, user_id)
+        user = await UserRepository.find_by_id(db, user_id)
 
         if not user:
             raise ValueError("User not found")
 
         # Get all three data components
-        request_statuses = await ChatService._get_request_status_counts(
-            db, user_id
-        )
-        chat_messages_count = await ChatService._get_chat_message_counts(
-            db, user_id
-        )
+        request_statuses = await ChatService._get_request_status_counts(db, user_id)
+        chat_messages_count = await ChatService._get_chat_message_counts(db, user_id)
 
         # Get chat messages with search filter
         chat_messages = await ChatService._search_chat_messages_list(
@@ -847,17 +841,19 @@ class ChatService:
         """
         # DEBUG: Log search parameters
         logger.debug(f"[SEARCH_SERVICE] Starting search for user_id={user_id}")
-        logger.debug(f"[SEARCH_SERVICE] Params: search_query={search_query!r}, status_filter={status_filter}, read_filter={read_filter!r}")
+        logger.debug(
+            f"[SEARCH_SERVICE] Params: search_query={search_query!r}, status_filter={status_filter}, read_filter={read_filter!r}"
+        )
 
         # Use repository to get requests with chat messages loaded
-        requests = await ChatMessageCRUD.get_requests_with_last_message(
-            db,
-            user_id,
-            status_filter=status_filter
+        requests = await ChatMessageRepository.get_requests_with_last_message(
+            db, user_id, status_filter=status_filter
         )
 
         # DEBUG: Log number of requests fetched from DB
-        logger.debug(f"[SEARCH_SERVICE] Fetched {len(requests)} requests from database for user")
+        logger.debug(
+            f"[SEARCH_SERVICE] Fetched {len(requests)} requests from database for user"
+        )
 
         # Build chat messages list with search filtering
         chat_messages = []
@@ -871,7 +867,9 @@ class ChatService:
                 title_lower = (request.title or "").lower()
                 if search_lower not in title_lower:
                     skipped_by_search += 1
-                    logger.debug(f"[SEARCH_SERVICE] Skipped request {request.id}: title={request.title!r} doesn't match query={search_query!r}")
+                    logger.debug(
+                        f"[SEARCH_SERVICE] Skipped request {request.id}: title={request.title!r} doesn't match query={search_query!r}"
+                    )
                     continue
 
             # Get last message
@@ -888,8 +886,7 @@ class ChatService:
                     last_msg_at = last_msg.created_at.isoformat() + "Z"
 
             # Count unread messages for this request using chat_read_monitor
-            from api.services.chat_read_state_service import \
-                ChatReadStateService
+            from api.services.chat_read_state_service import ChatReadStateService
 
             unread_for_request = await ChatReadStateService.get_unread_count(
                 db, request.id, user_id
@@ -898,11 +895,15 @@ class ChatService:
             # Apply read filter
             if read_filter == "read" and unread_for_request > 0:
                 skipped_by_read_filter += 1
-                logger.debug(f"[SEARCH_SERVICE] Skipped request {request.id}: has unread messages but filter='read'")
+                logger.debug(
+                    f"[SEARCH_SERVICE] Skipped request {request.id}: has unread messages but filter='read'"
+                )
                 continue
             if read_filter == "unread" and unread_for_request == 0:
                 skipped_by_read_filter += 1
-                logger.debug(f"[SEARCH_SERVICE] Skipped request {request.id}: no unread messages but filter='unread'")
+                logger.debug(
+                    f"[SEARCH_SERVICE] Skipped request {request.id}: no unread messages but filter='unread'"
+                )
                 continue
 
             # Format last message with sender name
@@ -928,16 +929,10 @@ class ChatService:
                     id=request.id,
                     title=request.title,
                     status_id=request.status_id,
-                    status=(
-                        request.status.name if request.status else "unknown"
-                    ),
-                    status_color=(
-                        request.status.color if request.status else None
-                    ),
+                    status=(request.status.name if request.status else "unknown"),
+                    status_color=(request.status.color if request.status else None),
                     count_as_solved=(
-                        request.status.count_as_solved
-                        if request.status
-                        else False
+                        request.status.count_as_solved if request.status else False
                     ),
                     created_at=request.created_at.isoformat() + "Z",
                     last_message=last_message_text,
@@ -949,15 +944,16 @@ class ChatService:
         # DEBUG: Log filtering summary
         logger.debug("[SEARCH_SERVICE] Filtering summary:")
         logger.debug(f"[SEARCH_SERVICE]   - Total from DB: {len(requests)}")
-        logger.debug(f"[SEARCH_SERVICE]   - Skipped by search query: {skipped_by_search}")
-        logger.debug(f"[SEARCH_SERVICE]   - Skipped by read filter: {skipped_by_read_filter}")
+        logger.debug(
+            f"[SEARCH_SERVICE]   - Skipped by search query: {skipped_by_search}"
+        )
+        logger.debug(
+            f"[SEARCH_SERVICE]   - Skipped by read filter: {skipped_by_read_filter}"
+        )
         logger.debug(f"[SEARCH_SERVICE]   - After filtering: {len(chat_messages)}")
 
         # Sort by request creation time (newest first)
-        chat_messages.sort(
-            key=lambda x: x.created_at,
-            reverse=True
-        )
+        chat_messages.sort(key=lambda x: x.created_at, reverse=True)
 
         # Apply pagination
         start_idx = (page - 1) * per_page
@@ -965,7 +961,47 @@ class ChatService:
         paginated_results = chat_messages[start_idx:end_idx]
 
         # DEBUG: Log pagination info
-        logger.debug(f"[SEARCH_SERVICE] Pagination: showing items {start_idx+1}-{min(end_idx, len(chat_messages))} of {len(chat_messages)}")
+        logger.debug(
+            f"[SEARCH_SERVICE] Pagination: showing items {start_idx + 1}-{min(end_idx, len(chat_messages))} of {len(chat_messages)}"
+        )
         logger.debug(f"[SEARCH_SERVICE] Returning {len(paginated_results)} results")
 
         return paginated_results
+
+    @staticmethod
+    @safe_database_query("get_total_message_count", default_return=0)
+    @log_database_operation("get total message count for request", level="debug")
+    async def get_total_message_count(
+        db: AsyncSession,
+        request_id: UUID,
+    ) -> int:
+        """
+        Get total message count for a request.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+
+        Returns:
+            Total number of messages in the request
+        """
+        return await ChatMessageRepository.get_total_count_by_request(db, request_id)
+
+    @staticmethod
+    @safe_database_query("get_last_message_timestamp", default_return=None)
+    @log_database_operation("get last message timestamp for request", level="debug")
+    async def get_last_message_timestamp(
+        db: AsyncSession,
+        request_id: UUID,
+    ) -> Optional[datetime]:
+        """
+        Get timestamp of last message in a request.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+
+        Returns:
+            Timestamp of most recent message or None if no messages
+        """
+        return await ChatMessageRepository.get_last_message_timestamp(db, request_id)

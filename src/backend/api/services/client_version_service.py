@@ -22,7 +22,6 @@ import os
 from typing import List, Optional, Tuple
 
 from fastapi import UploadFile
-from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -38,6 +37,7 @@ from core.semver import (
 from db import ClientVersion
 from api.schemas.version import ClientVersionCreate, ClientVersionUpdate
 from api.services.minio_service import MinIOStorageService
+from repositories.management.client_version_repository import ClientVersionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -69,25 +69,24 @@ class ClientVersionService:
         Returns:
             List of ClientVersion records, ordered by order_index descending
         """
-        stmt = select(ClientVersion)
-
+        filters = {}
         if active_only:
-            stmt = stmt.where(ClientVersion.is_active)
-
+            filters["is_active"] = True
         if platform:
-            stmt = stmt.where(ClientVersion.platform == platform)
+            filters["platform"] = platform
 
-        stmt = stmt.order_by(ClientVersion.order_index.desc())
-
-        result = await db.execute(stmt)
-        versions = result.scalars().all()
+        versions = await ClientVersionRepository.find_all(
+            db,
+            filters=filters if filters else None,
+            order_by=ClientVersion.order_index.desc(),
+        )
 
         logger.debug(
             f"Listed {len(versions)} versions "
             f"(platform={platform}, active_only={active_only})"
         )
 
-        return list(versions)
+        return versions
 
     @staticmethod
     @safe_database_query("get_client_version")
@@ -106,9 +105,7 @@ class ClientVersionService:
         Returns:
             ClientVersion or None if not found
         """
-        stmt = select(ClientVersion).where(ClientVersion.id == version_id)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await ClientVersionRepository.find_by_id(db, version_id)
 
     @staticmethod
     @safe_database_query("get_client_version_by_string")
@@ -128,13 +125,9 @@ class ClientVersionService:
         Returns:
             ClientVersion or None if not found
         """
-        stmt = (
-            select(ClientVersion)
-            .where(ClientVersion.version_string == version_string)
-            .where(ClientVersion.platform == platform)
+        return await ClientVersionRepository.find_by_version(
+            db, version_string, platform
         )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
 
     @staticmethod
     @transactional_database_operation("create_client_version")
@@ -214,22 +207,23 @@ class ClientVersionService:
             released_at = released_at.replace(tzinfo=None)
 
         # Create the version - always desktop, always latest
-        version = ClientVersion(
-            version_string=version_data.version_string,
-            platform=platform,
-            order_index=order_index,
-            is_latest=True,  # ALWAYS latest on create
-            is_enforced=version_data.is_enforced if version_data.is_enforced is not None else False,
-            is_active=True,
-            release_notes=version_data.release_notes,
-            released_at=released_at,
-            # Upgrade distribution metadata (Phase 7.1)
-            installer_url=version_data.installer_url,
-            silent_install_args=version_data.silent_install_args,
+        version = await ClientVersionRepository.create(
+            db,
+            obj_in={
+                "version_string": version_data.version_string,
+                "platform": platform,
+                "order_index": order_index,
+                "is_latest": True,  # ALWAYS latest on create
+                "is_enforced": version_data.is_enforced if version_data.is_enforced is not None else False,
+                "is_active": True,
+                "release_notes": version_data.release_notes,
+                "released_at": released_at,
+                # Upgrade distribution metadata (Phase 7.1)
+                "installer_url": version_data.installer_url,
+                "silent_install_args": version_data.silent_install_args,
+            },
+            commit=True,
         )
-        db.add(version)
-        await db.commit()
-        await db.refresh(version)
 
         logger.info(
             f"Created client version: {version.version_string} "
@@ -348,15 +342,15 @@ class ClientVersionService:
             return False
 
         if hard_delete:
-            await db.delete(version)
+            await ClientVersionRepository.delete(db, version_id, commit=True)
             logger.info(f"Hard deleted client version {version_id}")
         else:
             version.is_active = False
             version.is_latest = False  # Can't be latest if inactive
             version.is_enforced = False  # Can't be enforced if inactive
+            await db.commit()
             logger.info(f"Soft deleted (deactivated) client version {version_id}")
 
-        await db.commit()
         return True
 
     @staticmethod
@@ -375,14 +369,7 @@ class ClientVersionService:
         Returns:
             ClientVersion marked as latest, or None if none set
         """
-        stmt = (
-            select(ClientVersion)
-            .where(ClientVersion.platform == platform)
-            .where(ClientVersion.is_active)
-            .where(ClientVersion.is_latest)
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await ClientVersionRepository.find_latest(db, platform)
 
     @staticmethod
     async def _unset_latest_for_platform(
@@ -396,13 +383,7 @@ class ClientVersionService:
             db: Database session
             platform: Platform to unset latest for
         """
-        stmt = (
-            update(ClientVersion)
-            .where(ClientVersion.platform == platform)
-            .where(ClientVersion.is_latest)
-            .values(is_latest=False)
-        )
-        await db.execute(stmt)
+        await ClientVersionRepository.unset_latest_for_platform(db, platform)
         logger.debug(f"Unset is_latest for platform '{platform}'")
 
     # =========================================================================

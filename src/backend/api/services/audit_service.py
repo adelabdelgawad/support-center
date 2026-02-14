@@ -11,7 +11,6 @@ Provides comprehensive audit logging with:
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -19,7 +18,8 @@ from core.decorators import (
     log_database_operation,
     safe_database_query,
 )
-from db.models import Audit, User
+from db.models import Audit
+from repositories.auth.audit_repository import AuditRepository
 from api.schemas.audit import AuditCreate, AuditFilter, AuditRead
 
 logger = logging.getLogger(__name__)
@@ -45,11 +45,9 @@ class AuditService:
         Returns:
             Created audit log entry
         """
-        # Create audit log entry
-        audit = Audit(**audit_data.model_dump())
-        session.add(audit)
-        await session.commit()
-        await session.refresh(audit)
+        audit = await AuditRepository.create(
+            session, obj_in=audit_data.model_dump(), commit=True
+        )
 
         logger.info(
             f"Audit log created: {audit.action} on {audit.resource_type} "
@@ -80,7 +78,6 @@ class AuditService:
             )
         except Exception as e:
             logger.error(f"Background audit log failed: {e}")
-            # Never propagate - audit failures must not affect endpoints
 
     @staticmethod
     @log_database_operation("get_audit_logs")
@@ -99,60 +96,25 @@ class AuditService:
         Returns:
             Tuple of (audit logs, total count)
         """
-        # Build query
-        query = (
-            select(
-                Audit,
-                User.username,
-                User.full_name,
-            )
-            .outerjoin(User, Audit.user_id == User.id)
-            .order_by(desc(Audit.created_at))
+        from db.models import User
+
+        filters_dict = {
+            "user_id": filters.user_id,
+            "action": filters.action,
+            "resource_type": filters.resource_type,
+            "resource_id": filters.resource_id,
+            "correlation_id": filters.correlation_id,
+            "search": filters.search,
+            "start_date": filters.start_date,
+            "end_date": filters.end_date,
+        }
+
+        audit_records, total_count = await AuditRepository.find_paginated_with_filters(
+            session, filters=filters_dict, page=filters.page, per_page=filters.per_page
         )
 
-        # Apply filters
-        if filters.user_id:
-            query = query.where(Audit.user_id == filters.user_id)
-        if filters.action:
-            query = query.where(Audit.action == filters.action)
-        if filters.resource_type:
-            query = query.where(Audit.resource_type == filters.resource_type)
-        if filters.resource_id:
-            query = query.where(Audit.resource_id == filters.resource_id)
-        if filters.correlation_id:
-            query = query.where(Audit.correlation_id == filters.correlation_id)
-        if filters.search:
-            search_term = f"%{filters.search}%"
-            query = query.where(
-                or_(
-                    Audit.changes_summary.ilike(search_term),
-                    Audit.endpoint.ilike(search_term),
-                    Audit.resource_id.ilike(search_term),
-                    User.username.ilike(search_term),
-                    User.full_name.ilike(search_term),
-                )
-            )
-        if filters.start_date:
-            query = query.where(Audit.created_at >= filters.start_date)
-        if filters.end_date:
-            query = query.where(Audit.created_at <= filters.end_date)
-
-        # Get total count
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await session.execute(count_query)
-        total_count = total_result.scalar() or 0
-
-        # Apply pagination
-        offset = (filters.page - 1) * filters.per_page
-        query = query.limit(filters.per_page).offset(offset)
-
-        # Execute query
-        result = await session.execute(query)
-        rows = result.all()
-
-        # Build response
         audit_logs = []
-        for audit, username, full_name in rows:
+        for audit in audit_records:
             audit_read = AuditRead(
                 id=audit.id,
                 user_id=audit.user_id,
@@ -167,8 +129,8 @@ class AuditService:
                 user_agent=audit.user_agent,
                 changes_summary=audit.changes_summary,
                 created_at=audit.created_at,
-                username=username,
-                user_full_name=full_name,
+                username=audit.user.username if audit.user else None,
+                user_full_name=audit.user.full_name if audit.user else None,
             )
             audit_logs.append(audit_read)
 
@@ -192,15 +154,12 @@ class AuditService:
             return "No changes"
 
         if not old_values:
-            # Creation
             fields = list(new_values.keys())
             return f"Created with {len(fields)} fields: {', '.join(fields[:5])}"
 
         if not new_values:
-            # Deletion
             return "Resource deleted"
 
-        # Update - find changed fields
         changed_fields = []
         for key in set(old_values.keys()) | set(new_values.keys()):
             old_val = old_values.get(key)
@@ -211,7 +170,9 @@ class AuditService:
         if not changed_fields:
             return "No changes detected"
 
-        summary = f"Updated {len(changed_fields)} fields: {', '.join(changed_fields[:5])}"
+        summary = (
+            f"Updated {len(changed_fields)} fields: {', '.join(changed_fields[:5])}"
+        )
         return summary[:1000]
 
     @staticmethod
@@ -231,23 +192,10 @@ class AuditService:
         Returns:
             Audit log or None if not found
         """
-        query = (
-            select(
-                Audit,
-                User.username,
-                User.full_name,
-            )
-            .outerjoin(User, Audit.user_id == User.id)
-            .where(Audit.id == audit_id)
-        )
+        audit = await AuditRepository.find_by_id_with_user(session, audit_id)
 
-        result = await session.execute(query)
-        row = result.first()
-
-        if not row:
+        if not audit:
             return None
-
-        audit, username, full_name = row
 
         return AuditRead(
             id=audit.id,
@@ -263,8 +211,8 @@ class AuditService:
             user_agent=audit.user_agent,
             changes_summary=audit.changes_summary,
             created_at=audit.created_at,
-            username=username,
-            user_full_name=full_name,
+            username=audit.user.username if audit.user else None,
+            user_full_name=audit.user.full_name if audit.user else None,
         )
 
     @staticmethod
@@ -282,10 +230,7 @@ class AuditService:
         Returns:
             List of distinct action values
         """
-        result = await session.execute(
-            select(Audit.action).distinct().order_by(Audit.action.asc())
-        )
-        return [row[0] for row in result.all() if row[0] is not None]
+        return await AuditRepository.find_distinct_actions(session)
 
     @staticmethod
     @log_database_operation("get_distinct_resource_types")
@@ -302,10 +247,7 @@ class AuditService:
         Returns:
             List of distinct resource_type values
         """
-        result = await session.execute(
-            select(Audit.resource_type).distinct().order_by(Audit.resource_type.asc())
-        )
-        return [row[0] for row in result.all() if row[0] is not None]
+        return await AuditRepository.find_distinct_resource_types(session)
 
     @staticmethod
     @log_database_operation("get_distinct_users")
@@ -322,22 +264,4 @@ class AuditService:
         Returns:
             List of dicts with user_id, username, full_name
         """
-        result = await session.execute(
-            select(
-                Audit.user_id,
-                User.username,
-                User.full_name,
-            )
-            .join(User, Audit.user_id == User.id)
-            .distinct()
-            .order_by(User.full_name.asc())
-        )
-        return [
-            {
-                "user_id": str(row.user_id),
-                "username": row.username,
-                "full_name": row.full_name,
-            }
-            for row in result.all()
-            if row.user_id is not None
-        ]
+        return await AuditRepository.find_distinct_users(session)

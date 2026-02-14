@@ -8,6 +8,7 @@ Responsibilities:
 - Enforce stop-on-assignment
 - Handle errors gracefully
 """
+
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -60,12 +61,14 @@ class WhatsAppSender:
         """
         try:
             # STEP 1: Load request with relationships
-            from crud.service_request_crud import ServiceRequestCRUD
+            from repositories.support.request_repository import ServiceRequestRepository
 
-            request = await ServiceRequestCRUD.find_by_id(db, request_id)
+            request = await ServiceRequestRepository.find_by_id(db, request_id)
 
             if not request:
-                logger.warning(f"Request {request_id} not found, skipping WhatsApp send")
+                logger.warning(
+                    f"Request {request_id} not found, skipping WhatsApp send"
+                )
                 return False
 
             # STEP 2: CHECK ABSOLUTE STOP-ON-ASSIGNMENT
@@ -84,12 +87,16 @@ class WhatsAppSender:
             business_unit = request.business_unit  # Eager loaded
 
             if not business_unit:
-                logger.warning(f"Business unit {request.business_unit_id} not found, skipping")
+                logger.warning(
+                    f"Business unit {request.business_unit_id} not found, skipping"
+                )
                 return False
 
             # STEP 4: Check if WhatsApp group configured
             if not business_unit.whatsapp_group_name:
-                logger.debug(f"Business unit {business_unit.id} has no WhatsApp group, skipping")
+                logger.debug(
+                    f"Business unit {business_unit.id} has no WhatsApp group, skipping"
+                )
                 return False
 
             # STEP 5: Check if out-of-shift
@@ -102,15 +109,25 @@ class WhatsAppSender:
             )
 
             if not is_out_of_shift:
-                logger.debug(f"Request {request_id} is in-shift, skipping WhatsApp send")
+                logger.debug(
+                    f"Request {request_id} is in-shift, skipping WhatsApp send"
+                )
                 return False
 
             # STEP 6: Collect unsent requester messages
-            messages = await WhatsAppSender._get_unsent_requester_messages(db, request_id, request)
+            from repositories.support.whatsapp_batch_repository import (
+                WhatsAppBatchRepository,
+            )
+
+            messages = await WhatsAppBatchRepository.find_unsent_requester_messages(
+                db, request_id, request
+            )
 
             # Allow empty messages for "request_created" batch type
             if not messages and batch_type != "request_created":
-                logger.info(f"No unsent requester messages for request {request_id}, skipping")
+                logger.info(
+                    f"No unsent requester messages for request {request_id}, skipping"
+                )
                 return False
 
             if messages:
@@ -134,7 +151,7 @@ class WhatsAppSender:
                 first_msg_id = None
                 last_msg_id = None
 
-            existing_batch = await WhatsAppSender._check_batch_exists(
+            existing_batch = await WhatsAppBatchRepository.check_batch_exists(
                 db, request_id, first_msg_id, last_msg_id
             )
 
@@ -160,25 +177,24 @@ class WhatsAppSender:
             WhatsAppSender._log_batch_to_console(payload, batch_type)
 
             if not success:
-                logger.error(f"Failed to send WhatsApp to Zapier for request {request_id}")
+                logger.error(
+                    f"Failed to send WhatsApp to Zapier for request {request_id}"
+                )
                 return False
 
             # STEP 10: Persist WhatsAppBatch record (with unique constraint guard)
             try:
-                batch_record = WhatsAppBatch(
+                batch_record = await WhatsAppBatchRepository.create_batch(
+                    db=db,
                     request_id=request_id,
                     business_unit_id=business_unit.id,
                     first_message_id=first_msg_id,
                     last_message_id=last_msg_id,
                     message_count=len(messages),
                     batch_type=batch_type,
-                    sent_at=datetime.utcnow(),
-                    delivery_status="sent",
                     payload_snapshot=payload,
-                    error_message=None,
                 )
 
-                db.add(batch_record)
                 await db.commit()
 
             except IntegrityError as e:
@@ -202,67 +218,10 @@ class WhatsAppSender:
         except Exception as e:
             logger.error(
                 f"Failed to send WhatsApp batch for request {request_id}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             await db.rollback()
             return False
-
-    @staticmethod
-    async def _get_unsent_requester_messages(
-        db: AsyncSession,
-        request_id: UUID,
-        request: ServiceRequest,
-    ) -> List[ChatMessage]:
-        """
-        Get all unsent requester messages for a request.
-
-        Unsent = created after last WhatsApp send (or all if never sent).
-        Filters to requester messages only (excludes system messages and technician messages).
-
-        Returns messages sorted by created_at ASC.
-        """
-        # Get messages created after last send (or all if never sent)
-        stmt = (
-            select(ChatMessage)
-            .where(ChatMessage.request_id == request_id)
-            .where(ChatMessage.sender_id is not None)  # Exclude system messages
-            .order_by(ChatMessage.created_at.asc())
-        )
-
-        if request.whatsapp_last_sent_at:
-            # Handle both timezone-aware and timezone-naive datetimes
-            last_sent = request.whatsapp_last_sent_at
-            if last_sent.tzinfo is not None:
-                # Strip timezone if present (convert to naive UTC)
-                last_sent = last_sent.replace(tzinfo=None)
-            stmt = stmt.where(ChatMessage.created_at > last_sent)
-
-        result = await db.execute(stmt)
-        messages = result.scalars().all()
-
-        # Filter to requester messages only (exclude technicians)
-        requester_messages = []
-        for msg in messages:
-            if msg.sender and not msg.sender.is_technician:
-                requester_messages.append(msg)
-
-        return requester_messages
-
-    @staticmethod
-    async def _check_batch_exists(
-        db: AsyncSession,
-        request_id: UUID,
-        first_message_id: UUID,
-        last_message_id: UUID,
-    ) -> Optional[WhatsAppBatch]:
-        """Check if batch already sent for this message range."""
-        stmt = select(WhatsAppBatch).where(
-            WhatsAppBatch.request_id == request_id,
-            WhatsAppBatch.first_message_id == first_message_id,
-            WhatsAppBatch.last_message_id == last_message_id,
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
 
     @staticmethod
     def _build_batch_payload(
@@ -283,7 +242,11 @@ class WhatsAppSender:
             for msg in messages:
                 sender_name = "Unknown"
                 if msg.sender:
-                    sender_name = msg.sender.full_name if msg.sender.full_name else msg.sender.username
+                    sender_name = (
+                        msg.sender.full_name
+                        if msg.sender.full_name
+                        else msg.sender.username
+                    )
 
                 timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -292,11 +255,13 @@ class WhatsAppSender:
                 else:
                     content = msg.content
 
-                formatted_messages.append({
-                    "timestamp": timestamp,
-                    "sender": sender_name,
-                    "content": content[:500],  # Limit to 500 chars per message
-                })
+                formatted_messages.append(
+                    {
+                        "timestamp": timestamp,
+                        "sender": sender_name,
+                        "content": content[:500],  # Limit to 500 chars per message
+                    }
+                )
         else:
             # Empty messages for request_created batch type
             # Build detailed notification for agents to follow up
@@ -311,14 +276,18 @@ class WhatsAppSender:
             ]
             content = "\n".join(notification_lines)
 
-            formatted_messages.append({
-                "timestamp": request.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                "sender": "System",
-                "content": content
-            })
+            formatted_messages.append(
+                {
+                    "timestamp": request.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                    "sender": "System",
+                    "content": content,
+                }
+            )
 
         # Build IT-App URL
-        request_details_url = f"{settings.zapier.frontend_base_url}/support-center/requests/{request.id}"
+        request_details_url = (
+            f"{settings.zapier.frontend_base_url}/support-center/requests/{request.id}"
+        )
 
         payload = {
             "batch_type": batch_type,
@@ -346,10 +315,12 @@ class WhatsAppSender:
         logger.info(f"WhatsApp Group: {payload['whatsapp_group']}")
         logger.info(f"Request ID: {payload['ticket_id']}")
         logger.info(f"Request Title: {payload['ticket_title']}")
-        logger.info(f"Requester: {payload['requester_full_name']} ({payload['requester_username']})")
+        logger.info(
+            f"Requester: {payload['requester_full_name']} ({payload['requester_username']})"
+        )
         logger.info(f"Message Count: {payload['message_count']}")
         logger.info("-" * 80)
-        for i, msg in enumerate(payload['messages'], 1):
+        for i, msg in enumerate(payload["messages"], 1):
             logger.info(f"  [{i}] {msg['timestamp']} - {msg['sender']}")
             logger.info(f"      {msg['content'][:100]}...")
         logger.info("-" * 80)
@@ -378,14 +349,13 @@ class WhatsAppSender:
                 "Body": message_body,
                 "Send_Type": settings.zapier.send_type,
                 "Group_Name": business_unit.whatsapp_group_name or "",
-                "Group_ID": business_unit.whatsapp_group_id or ""
+                "Group_ID": business_unit.whatsapp_group_id or "",
             }
 
             # Send POST request to Zapier
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
-                    settings.zapier.base_url,
-                    json=zapier_payload
+                    settings.zapier.base_url, json=zapier_payload
                 )
                 response.raise_for_status()
 

@@ -1,5 +1,5 @@
 """
-Service Request CRUD for database operations.
+Service Request Repository for database operations.
 
 Handles all database queries related to service requests with section-based visibility filtering.
 """
@@ -20,11 +20,11 @@ from db import (
     Subcategory,
     User,
 )
-from crud.base_repository import BaseCRUD
+from repositories.base_repository import BaseRepository
 
 
-class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
-    """CRUD for ServiceRequest database operations with section-based visibility filtering."""
+class ServiceRequestRepository(BaseRepository[ServiceRequest]):
+    """Repository for ServiceRequest database operations with section-based visibility filtering."""
 
     model = ServiceRequest
 
@@ -1383,205 +1383,17 @@ class ServiceRequestCRUD(BaseCRUD[ServiceRequest]):
         all_count = all_result.scalar() or 0
 
         # Count parent tasks (no parent_task_id)
-        parents_stmt = base_stmt.where(ServiceRequest.parent_task_id.is_(None))
-        parents_result = await db.execute(parents_stmt)
-        parents_count = parents_result.scalar() or 0
+        parent_stmt = base_stmt.where(ServiceRequest.parent_task_id.is_(None))
+        parent_result = await db.execute(parent_stmt)
+        parent_count = parent_result.scalar() or 0
 
         # Count subtasks (has parent_task_id)
-        subtasks_stmt = base_stmt.where(ServiceRequest.parent_task_id.isnot(None))
-        subtasks_result = await db.execute(subtasks_stmt)
-        subtasks_count = subtasks_result.scalar() or 0
+        subtask_stmt = base_stmt.where(ServiceRequest.parent_task_id.isnot(None))
+        subtask_result = await db.execute(subtask_stmt)
+        subtask_count = subtask_result.scalar() or 0
 
         return {
             "all": all_count,
-            "parents": parents_count,
-            "subtasks": subtasks_count,
+            "parents": parent_count,
+            "subtasks": subtask_count,
         }
-
-    @classmethod
-    async def get_last_message_for_request(
-        cls, db: AsyncSession, request_id: UUID
-    ) -> Optional[ChatMessage]:
-        """Get the most recent chat message for a request."""
-        stmt = (
-            select(ChatMessage)
-            .where(ChatMessage.request_id == request_id)
-            .options(selectinload(ChatMessage.sender))
-            .order_by(ChatMessage.created_at.desc())
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    @classmethod
-    async def get_last_messages_for_requests(
-        cls, db: AsyncSession, request_ids: List[UUID]
-    ) -> Dict[UUID, Optional[ChatMessage]]:
-        """
-        Get the most recent chat message for multiple requests.
-        Returns dict mapping request_id -> ChatMessage.
-        """
-        if not request_ids:
-            return {}
-
-        # Subquery to get the latest message ID for each request
-        latest_msg_subquery = (
-            select(
-                ChatMessage.request_id,
-                func.max(ChatMessage.created_at).label("max_created_at"),
-            )
-            .where(ChatMessage.request_id.in_(request_ids))
-            .group_by(ChatMessage.request_id)
-            .subquery()
-        )
-
-        # Get the actual messages
-        stmt = (
-            select(ChatMessage)
-            .join(
-                latest_msg_subquery,
-                and_(
-                    ChatMessage.request_id == latest_msg_subquery.c.request_id,
-                    ChatMessage.created_at == latest_msg_subquery.c.max_created_at,
-                ),
-            )
-            .options(selectinload(ChatMessage.sender))
-        )
-
-        result = await db.execute(stmt)
-        messages = result.scalars().all()
-
-        # Build dict
-        message_dict: Dict[UUID, Optional[ChatMessage]] = {
-            req_id: None for req_id in request_ids
-        }
-        for msg in messages:
-            message_dict[msg.request_id] = msg
-
-        return message_dict
-
-    @classmethod
-    async def check_existing_assignment(
-        cls, db: AsyncSession, request_id: UUID, user_id: int
-    ) -> Optional[RequestAssignee]:
-        """
-        Check if a user is already assigned to a request.
-
-        Args:
-            db: Database session
-            request_id: Service request ID
-            user_id: User ID to check
-
-        Returns:
-            RequestAssignee record if found, None otherwise
-        """
-        stmt = (
-            select(RequestAssignee)
-            .where(
-                and_(
-                    RequestAssignee.request_id == request_id,
-                    RequestAssignee.assignee_id == user_id,
-                )
-            )
-            .options(selectinload(RequestAssignee.assignee))
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
-
-    @classmethod
-    async def create_assignment(
-        cls,
-        db: AsyncSession,
-        request_id: UUID,
-        user_id: int,
-        assigned_by: int,
-    ) -> RequestAssignee:
-        """
-        Create a new user-request assignment.
-
-        Args:
-            db: Database session
-            request_id: Service request ID
-            user_id: User ID to assign
-            assigned_by: User ID who made the assignment
-
-        Returns:
-            Created RequestAssignee record
-        """
-        assignment = RequestAssignee(
-            request_id=request_id,
-            assignee_id=user_id,
-            assigned_by=assigned_by,
-        )
-        db.add(assignment)
-        await db.flush()
-        await db.refresh(assignment)
-        return assignment
-
-    @classmethod
-    async def get_request_assignees(
-        cls, db: AsyncSession, request_id: UUID
-    ) -> List[RequestAssignee]:
-        """
-        Get all assignees for a specific request.
-
-        Args:
-            db: Database session
-            request_id: Service request ID
-
-        Returns:
-            List of RequestAssignee records with user and assigner loaded
-        """
-        # Build the base query
-        stmt = (
-            select(RequestAssignee)
-            .options(
-                selectinload(RequestAssignee.assignee),
-                selectinload(RequestAssignee.assigner),
-            )
-            .where(RequestAssignee.request_id == request_id)
-            .order_by(RequestAssignee.created_at.desc())
-        )
-
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
-
-    @classmethod
-    async def delete_assignment(
-        cls, db: AsyncSession, request_id: UUID, user_id: int
-    ) -> bool:
-        """
-        Delete a user-request assignment.
-
-        Args:
-            db: Database session
-            request_id: Service request ID
-            user_id: User ID to unassign
-
-        Returns:
-            True if assignment was deleted, False if not found
-        """
-        assignment = await cls.check_existing_assignment(db, request_id, user_id)
-        if assignment:
-            await db.delete(assignment)
-            await db.commit()
-            return True
-        return False
-
-    @classmethod
-    async def count_assignees(cls, db: AsyncSession, request_id: UUID) -> int:
-        """
-        Count the number of assignees for a request.
-
-        Args:
-            db: Database session
-            request_id: Service request ID
-
-        Returns:
-            Count of assignees for the request
-        """
-        stmt = select(func.count(RequestAssignee.id)).where(
-            RequestAssignee.request_id == request_id
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one()

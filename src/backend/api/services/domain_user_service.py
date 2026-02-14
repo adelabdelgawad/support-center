@@ -13,7 +13,7 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from crud import domain_user_crud
+from repositories.setting.domain_user_repository import domain_user_crud
 from api.schemas.domain_user import DomainUser as DomainUserSchema
 from api.schemas.domain_user import DomainUserRead, DomainUserSyncResponse
 from api.services.active_directory import get_domain_enabled_users

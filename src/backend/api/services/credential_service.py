@@ -4,12 +4,12 @@ Credential service for the Deployment Control Plane.
 Handles credential metadata management. Actual secrets are stored
 in an external vault - this service only manages metadata.
 """
+
 import logging
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -17,7 +17,8 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import Credential
+from db.models import Credential
+from repositories.management.credential_repository import CredentialRepository
 from api.schemas.credential import CredentialCreate, CredentialUpdate
 
 logger = logging.getLogger(__name__)
@@ -43,15 +44,7 @@ class CredentialService:
         Returns:
             List of credentials (metadata only, no secrets)
         """
-        stmt = select(Credential).order_by(Credential.name)
-
-        if enabled_only:
-            stmt = stmt.where(Credential.enabled)
-
-        result = await db.execute(stmt)
-        credentials = result.scalars().all()
-
-        return list(credentials)
+        return await CredentialRepository.find_all(db, enabled_only)
 
     @staticmethod
     @safe_database_query("get_credential")
@@ -70,9 +63,7 @@ class CredentialService:
         Returns:
             Credential or None
         """
-        stmt = select(Credential).where(Credential.id == credential_id)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await CredentialRepository.find_by_id(db, credential_id)
 
     @staticmethod
     @transactional_database_operation("create_credential")
@@ -93,15 +84,14 @@ class CredentialService:
         Returns:
             Created credential
         """
-        credential = Credential(
-            **data.model_dump(),
-            created_by=created_by,
+        credential_data = data.model_dump()
+        credential_data["created_by"] = created_by
+        credential = await CredentialRepository.create(
+            db, obj_in=credential_data, commit=True
         )
-        db.add(credential)
-        await db.commit()
-        await db.refresh(credential)
-
-        logger.info(f"Credential created: {credential.name} (type: {credential.credential_type})")
+        logger.info(
+            f"Credential created: {credential.name} (type: {credential.credential_type})"
+        )
         return credential
 
     @staticmethod
@@ -123,21 +113,14 @@ class CredentialService:
         Returns:
             Updated credential or None
         """
-        stmt = select(Credential).where(Credential.id == credential_id)
-        result = await db.execute(stmt)
-        credential = result.scalar_one_or_none()
-
-        if not credential:
-            return None
-
-        update_dict = data.model_dump(exclude_unset=True)
-        for field, value in update_dict.items():
-            setattr(credential, field, value)
-
-        await db.commit()
-        await db.refresh(credential)
-
-        logger.info(f"Credential updated: {credential.name}")
+        credential = await CredentialRepository.update(
+            db,
+            id_value=credential_id,
+            obj_in=data.model_dump(exclude_unset=True),
+            commit=True,
+        )
+        if credential:
+            logger.info(f"Credential updated: {credential.name}")
         return credential
 
     @staticmethod
@@ -157,18 +140,13 @@ class CredentialService:
         Returns:
             True if deleted, False if not found
         """
-        stmt = select(Credential).where(Credential.id == credential_id)
-        result = await db.execute(stmt)
-        credential = result.scalar_one_or_none()
-
-        if not credential:
-            return False
-
-        credential.enabled = False
-        await db.commit()
-
-        logger.info(f"Credential disabled: {credential.name}")
-        return True
+        credential = await CredentialRepository.update(
+            db, id_value=credential_id, obj_in={"enabled": False}, commit=True
+        )
+        if credential:
+            logger.info(f"Credential disabled: {credential.name}")
+            return True
+        return False
 
     @staticmethod
     @safe_database_query("get_vault_ref")
@@ -189,18 +167,7 @@ class CredentialService:
         Returns:
             Vault reference string or None
         """
-        stmt = select(Credential).where(Credential.id == credential_id)
-        result = await db.execute(stmt)
-        credential = result.scalar_one_or_none()
-
-        if not credential or not credential.enabled:
-            return None
-
-        # Update last_used_at timestamp
-        credential.last_used_at = datetime.utcnow()
-        await db.commit()
-
-        return credential.vault_ref
+        return await CredentialRepository.find_vault_ref(db, credential_id)
 
     @staticmethod
     @safe_database_query("count_credentials", default_return=0)
@@ -209,12 +176,4 @@ class CredentialService:
         enabled_only: bool = True,
     ) -> int:
         """Count credentials."""
-        from sqlalchemy import func
-
-        stmt = select(func.count(Credential.id))
-
-        if enabled_only:
-            stmt = stmt.where(Credential.enabled)
-
-        result = await db.execute(stmt)
-        return result.scalar() or 0
+        return await CredentialRepository.count(db, enabled_only)
