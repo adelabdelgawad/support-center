@@ -2,6 +2,7 @@
 import { auth } from "@/lib/auth/server-auth";
 import { validateAgentAccess } from "@/lib/actions/validate-agent-access.actions";
 import { getUsers, getActiveRolesForUserForms } from "@/lib/actions/users.actions";
+import { getSections } from "@/lib/actions/sections.actions";
 import { redirect } from "next/navigation";
 import UsersTable from "./_components/table/users-table";
 
@@ -49,16 +50,18 @@ export default async function UsersPage({
   };
 
   // Parallelize auth validation and data fetching
-  const [_, users, roles] = await Promise.all([
+  const [_, users, roles, sections] = await Promise.all([
     validateAgentAccess(),
     getUsers(limitNumber, skip, filters),
     getActiveRolesForUserForms(),
+    getSections(true, false, false),
   ]);
 
   return (
     <UsersTable
       initialData={users}
       roles={roles}
+      sections={sections}
     />
   );
 }

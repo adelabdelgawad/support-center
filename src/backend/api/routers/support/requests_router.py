@@ -289,10 +289,10 @@ async def get_technician_views(
     - business_unit_ids=-1: Show only unassigned requests (null business_unit_id)
     - No filter: Show all requests (respecting region permissions)
 
-    **Region Authorization:**
+    **Authorization:**
     - Super admins (is_super_admin=True): See ALL requests
     - Users with 'Admin' role: See ALL requests
-    - Other users: See only requests from their business_unit_region
+    - Other users: See requests based on their assigned permissions
 
     **Returns:**
         - data: List of requests with status, requester, priority, business unit, last message

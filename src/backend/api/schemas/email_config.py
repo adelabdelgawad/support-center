@@ -1,6 +1,7 @@
 """Email Configuration schemas."""
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import EmailStr, field_validator
 
@@ -112,7 +113,7 @@ class EmailConfigUpdate(HTTPSchemaModel):
 
 class EmailConfigRead(EmailConfigBase):
     """Schema for reading Email configuration (excludes password)."""
-    id: int
+    id: UUID
     is_active: bool
     has_password: bool  # Computed field indicating password exists
     created_at: datetime

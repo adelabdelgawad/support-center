@@ -5,23 +5,33 @@ Provides health status for database, Redis, and other critical components.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Any, Dict
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.repositories import BaseRepository
 from core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class HealthService:
-    """Health check service for monitoring system health."""
+    """
+    Health check service for monitoring system health.
 
-    def __init__(self, session: AsyncSession):
+    Transaction Control:
+        - All methods are read-only, no transaction control
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """
+        Initialize health service.
+
+        Args:
+            session: Async database session
+        """
         self.session = session
-        self.db_repo = BaseRepository[object](session)
 
     async def get_liveness_status(self) -> Dict[str, Any]:
         """
@@ -32,7 +42,7 @@ class HealthService:
         """
         return {
             "status": "healthy",
-            "timestamp": "2026-02-14T00:00:00Z",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "service": "support-center-backend"
         }
 
@@ -42,29 +52,28 @@ class HealthService:
 
         Returns:
             Dict containing readiness status of all dependencies
+
+        Raises:
+            Exception: If database connection fails
         """
-        try:
-            # Test database connection using repository pattern
-            db_ready = await self._check_database()
+        # Test database connection
+        db_ready = await self._check_database()
 
-            # Test Redis connection if configured
-            redis_ready = await self._check_redis()
+        # Test Redis connection if configured
+        redis_ready = await self._check_redis()
 
-            if not db_ready:
-                raise Exception("Database connection failed")
+        if not db_ready:
+            raise Exception("Database connection failed")
 
-            return {
-                "status": "ready" if db_ready and redis_ready else "degraded",
-                "timestamp": "2026-02-14T00:00:00Z",
-                "service": "support-center-backend",
-                "dependencies": {
-                    "database": "healthy" if db_ready else "unhealthy",
-                    "redis": "healthy" if redis_ready else "unhealthy"
-                }
+        return {
+            "status": "ready" if db_ready and redis_ready else "degraded",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "service": "support-center-backend",
+            "dependencies": {
+                "database": "healthy" if db_ready else "unhealthy",
+                "redis": "healthy" if redis_ready else "unhealthy"
             }
-
-        except Exception as e:
-            raise Exception(f"Readiness check failed: {str(e)}")
+        }
 
     async def get_detailed_status(self) -> Dict[str, Any]:
         """
@@ -86,7 +95,7 @@ class HealthService:
 
         return {
             "status": overall_status,
-            "timestamp": "2026-02-14T00:00:00Z",
+            "timestamp": datetime.utcnow().isoformat() + "Z",
             "service": "support-center-backend",
             "version": settings.api.app_version,
             "database": {
@@ -113,28 +122,37 @@ class HealthService:
         Returns:
             Dict containing database pool metrics
         """
-        from ...db.database import engine
+        from db.database import engine
         pool = engine.pool
 
         return {
             "pool_size": pool.size(),
             "checkedout": pool.checkedout(),
             "overflow": pool.overflow(),
-            "max_overflow": pool._max_overflow
+            "max_overflow": pool._max_overflow  # type: ignore
         }
 
     async def _check_database(self) -> bool:
-        """Check basic database connectivity."""
+        """
+        Check basic database connectivity.
+
+        Returns:
+            True if database is reachable
+        """
         try:
-            # Use a simple query to test database connection
             result = await self.session.execute(text("SELECT 1"))
             return bool(result.scalar())
         except Exception as e:
             logger.warning(f"Database health check failed: {e}")
             return False
 
-    async def _check_database_detailed(self) -> tuple[str, Dict[str, Any], Optional[str]]:
-        """Check database connectivity and detailed metrics."""
+    async def _check_database_detailed(self) -> tuple[str, Dict[str, Any], str | None]:
+        """
+        Check database connectivity and detailed metrics.
+
+        Returns:
+            Tuple of (status, metrics, version)
+        """
         try:
             # Test connection with version query
             result = await self.session.execute(text("SELECT version()"))
@@ -149,7 +167,12 @@ class HealthService:
             return f"unhealthy: {str(e)}", {}, None
 
     async def _check_redis(self) -> bool:
-        """Check Redis connectivity."""
+        """
+        Check Redis connectivity.
+
+        Returns:
+            True if Redis is reachable
+        """
         try:
             if settings.redis.url == "redis://localhost:6380/0":
                 # Default Redis config, assume it's available
@@ -168,7 +191,12 @@ class HealthService:
             return False
 
     async def _check_redis_detailed(self) -> str:
-        """Check Redis connectivity and return detailed status."""
+        """
+        Check Redis connectivity and return detailed status.
+
+        Returns:
+            Status string
+        """
         try:
             if settings.redis.url == "redis://localhost:6380/0":
                 return "not configured"

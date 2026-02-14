@@ -610,6 +610,151 @@ End a remote access session.
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-02-14 | 1.0 | Initial API reference documentation with Phase 1 updates |
+| 2026-02-14 | 1.1 | Added user sections API endpoints and frontend integration |
+
+---
+
+## User Sections API
+
+### GET /api/v1/setting/user-sections/{user_id}/sections
+
+Get all sections assigned to a user.
+
+**Purpose:** Retrieve user's section assignments for display in UI
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "sectionId": 5,
+    "sectionName": "Hardware Support",
+    "assignedAt": "2026-02-14T10:00:00Z"
+  }
+]
+```
+
+**Source:** `/src/backend/api/routers/setting/user_sections_router.py`
+**Used by:** IT Portal Users page (sections display)
+
+---
+
+### GET /api/v1/setting/user-sections/{user_id}/sections/ids
+
+Get all section IDs assigned to a user (simplified response).
+
+**Purpose:** Quick lookup of user's section IDs for UI state
+
+**Response:** `[1, 5, 10]`
+
+**Source:** `/src/backend/api/routers/setting/user_sections_router.py`
+**Used by:** IT Portal Users page (sections checkbox state)
+
+---
+
+### POST /api/v1/setting/user-sections/{user_id}/sections
+
+Set all sections for a user, replacing existing assignments.
+
+**Purpose:** Assign sections to a user (used by Assign Sections sheet)
+
+**Request Body:**
+```json
+{
+  "sectionIds": [1, 5, 10]
+}
+```
+
+**Response:** Array of created/updated `TechnicianSection` objects
+
+**Source:** `/src/backend/api/routers/setting/user_sections_router.py`
+**Used by:** IT Portal Users page (Assign Sections button)
+
+---
+
+### DELETE /api/v1/setting/user-sections/{user_id}/sections/{section_id}
+
+Remove a section assignment from a user.
+
+**Purpose:** Remove single section assignment (not currently used in UI, but available)
+
+**Response Codes:**
+- 204: Section assignment removed successfully
+- 404: Section assignment not found
+
+**Source:** `/src/backend/api/routers/setting/user_sections_router.py`
+
+---
+
+### Users List with Sections
+
+The main users list endpoint (`GET /api/v1/setting/users/with-roles`) now includes section information in each user object.
+
+**Response Addition:**
+```json
+{
+  "id": "uuid",
+  "username": "jdoe",
+  // ... other user fields ...
+  "sections": [
+    {
+      "id": 1,
+      "sectionId": 5,
+      "sectionName": "Hardware Support",
+      "assignedAt": "2026-02-14T10:00:00Z",
+      "isActive": true
+    }
+  ]
+}
+```
+
+**Purpose:** Display assigned sections in the users table without additional API calls
+
+**Source:** `/src/backend/api/schemas/user.py` (UserSectionInfo, UserWithRolesListItem)
+
+---
+
+## Frontend Integration
+
+### Components Added/Modified
+
+1. **Users Table Columns** (`users-table-columns.tsx`)
+   - Added `sections` column with purple badges
+   - Uses `Layers` icon for visual consistency
+   - Shows up to 3 sections with "..." for more
+
+2. **User Actions Menu** (`actions-menu.tsx`)
+   - Added "Assign Sections" button with purple `Layers` icon
+   - Opens `AssignSectionsSheet` on click
+
+3. **Assign Sections Sheet** (`assign-sections-sheet.tsx`)
+   - New component following `AssignBusinessUnitsSheet` pattern
+   - Fetches sections from `/api/sections`
+   - Uses purple color theme for consistency
+   - Calls `/api/users/[id]/sections` on save
+
+4. **API Route** (`/api/users/[id]/sections/route.ts`)
+   - Proxies PUT/GET requests to backend `/users/{id}/sections`
+   - Handles authentication via `makeAuthenticatedRequest`
+
+### TypeScript Types
+
+```typescript
+// User sections returned in users list
+interface UserSectionInfo {
+  id: number;
+  sectionId: number;
+  sectionName: string | null;
+  assignedAt: string | null;  // ISO datetime
+  isActive: boolean;
+}
+
+// Extended user response with sections
+interface UserWithRolesResponse {
+  // ... existing fields ...
+  sections: UserSectionInfo[];
+}
+```
 
 ---
 

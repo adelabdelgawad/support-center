@@ -11,7 +11,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from db import Role, User, UserRole
+from db import Role, User, UserRole, TechnicianSection
 from api.repositories.base_repository import BaseRepository
 
 
@@ -248,11 +248,14 @@ class UserRepository(BaseRepository[User]):
             Tuple of (list of users with roles loaded, counts dict)
         """
         # Build base query with eager loading
-        from db import TechnicianBusinessUnit
+        from db import TechnicianBusinessUnit, TechnicianSection
         stmt = select(User).options(
             selectinload(User.user_roles).selectinload(UserRole.role),
             selectinload(User.business_unit_assigns).selectinload(
                 TechnicianBusinessUnit.business_unit
+            ),
+            selectinload(User.section_assigns).selectinload(
+                TechnicianSection.section
             ),
         )
 
@@ -271,6 +274,12 @@ class UserRepository(BaseRepository[User]):
         )
         global_result = await db.execute(global_counts_stmt)
         global_row = global_result.first()
+        if global_row is None:
+            global_row = type('obj', (object,), {
+                'global_total': 0,
+                'technician_count': 0,
+                'user_count': 0
+            })
 
         # ============================================================
         # SCOPED STATUS COUNTS (filtered by User Type only)
@@ -466,7 +475,7 @@ class UserRepository(BaseRepository[User]):
         user.is_online = is_online
 
         if commit:
-            await db.commit()
+            await db.flush()
             await db.refresh(user)
 
         return user
@@ -498,7 +507,7 @@ class UserRepository(BaseRepository[User]):
         user.is_active = is_active
 
         if commit:
-            await db.commit()
+            await db.flush()
             await db.refresh(user)
 
         return user
@@ -531,7 +540,7 @@ class UserRepository(BaseRepository[User]):
             user.is_active = is_active
 
         if commit:
-            await db.commit()
+            await db.flush()
             for user in users:
                 await db.refresh(user)
 
@@ -559,6 +568,6 @@ class UserRepository(BaseRepository[User]):
         user.is_deleted = True
 
         if commit:
-            await db.commit()
+            await db.flush()
 
         return True

@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+interface UseAsyncDataOptions {
+  enabled?: boolean;
+}
+
 /**
  * A minimal async data fetching hook
  * Replaces SWR for pages that don't need polling, revalidation, or cache sharing
@@ -9,15 +13,19 @@ import { useState, useEffect, useCallback, useRef } from 'react';
  * @param fetchFn - Async function that returns data
  * @param deps - Dependency array for refetching
  * @param initialData - Optional initial data (from SSR)
+ * @param options - Optional configuration (enabled flag)
  * @returns { data, isLoading, error, refetch }
  */
 export function useAsyncData<T>(
   fetchFn: () => Promise<T>,
   deps: React.DependencyList = [],
-  initialData?: T
+  initialData?: T,
+  options?: UseAsyncDataOptions
 ) {
+  const { enabled = true } = options || {};
+
   const [data, setData] = useState<T | undefined>(initialData);
-  const [isLoading, setIsLoading] = useState(!initialData);
+  const [isLoading, setIsLoading] = useState(!initialData && enabled);
   const [error, setError] = useState<Error | null>(null);
 
   // Use a ref to track if component is mounted
@@ -81,6 +89,12 @@ export function useAsyncData<T>(
   // Fetch on mount and when dependencies change
   const depsKey = JSON.stringify(deps);
   useEffect(() => {
+    // Skip fetch if not enabled
+    if (!enabled) {
+      setIsLoading(false);
+      return;
+    }
+
     // Skip initial fetch if we have initialData and deps haven't changed
     if (initialData && depsEqual(deps, lastDepsRef.current)) {
       lastDepsRef.current = deps;
@@ -89,7 +103,7 @@ export function useAsyncData<T>(
     lastDepsRef.current = deps;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [depsKey]);
+  }, [depsKey, enabled]);
 
   // Cleanup on unmount
   useEffect(() => {

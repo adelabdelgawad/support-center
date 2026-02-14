@@ -33,7 +33,7 @@ export function ThemeSwitcher() {
         title="Switch theme"
         suppressHydrationWarning
       >
-        <Moon className="w-5 h-5" />
+        <span className="w-5 h-5" />
       </Button>
     );
   }

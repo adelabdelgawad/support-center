@@ -22,7 +22,7 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import User, UserRole, Page, PageRole
+from db import User, UserRole, Page, PageRole, TechnicianSection
 from api.repositories.setting.user_repository import UserRepository
 from api.repositories.setting.user_role_repository import UserRoleRepository
 from api.schemas.user import (
@@ -32,6 +32,7 @@ from api.schemas.user import (
     UserWithRolesListItem,
     UserRoleInfo,
     UserBusinessUnitInfo,
+    UserSectionInfo,
 )
 
 # Module-level logger using __name__
@@ -313,6 +314,19 @@ class UserService:
                 and bu_assign.is_active
             ]
 
+            # Get active sections for user
+            sections = [
+                UserSectionInfo(
+                    id=ts.id,
+                    sectionId=ts.section_id,
+                    sectionName=ts.section.name if ts.section else None,
+                    assignedAt=ts.assigned_at,
+                    isActive=ts.section.is_active if ts.section else True,
+                )
+                for ts in user.section_assigns
+                if ts.section
+            ]
+
             user_items.append(
                 UserWithRolesListItem(
                     id=user.id,
@@ -331,6 +345,7 @@ class UserService:
                     roles=roles,
                     role_ids=role_ids,
                     business_units=business_units,
+                    sections=sections,
                 )
             )
 
@@ -730,4 +745,81 @@ class UserService:
                 f"Page {page.id}: path={page.path}, title={page.title}, icon={page.icon}, parent_id={page.parent_id}, is_active={page.is_active}"
             )
 
-        return final_pages
+    # Section management methods (using technician_sections table)
+    @staticmethod
+    @log_database_operation("Section assignment")
+    async def add_user_section(
+        db: AsyncSession,
+        user_id: UUID,
+        section_id: int,
+        assigned_by: UUID,
+    ) -> TechnicianSection:
+        """Assign a section to a user via technician_sections table."""
+        from api.repositories.setting.user_section_repository import UserSectionRepository
+
+        assignment = await UserSectionRepository.assign_section(db, user_id, section_id, assigned_by)
+        await db.commit()
+
+        logger.info(f"Assigned section {section_id} to user {user_id}")
+        return assignment
+
+    @staticmethod
+    @log_database_operation("Section removal")
+    async def remove_user_section(
+        db: AsyncSession,
+        user_id: UUID,
+        section_id: int,
+    ) -> bool:
+        """Remove a section assignment from a user."""
+        from api.repositories.setting.user_section_repository import UserSectionRepository
+
+        removed = await UserSectionRepository.remove_section(db, user_id, section_id)
+        await db.commit()
+
+        if removed:
+            logger.info(f"Removed section {section_id} from user {user_id}")
+        else:
+            logger.warning(f"Section {section_id} assignment not found for user {user_id}")
+        return removed
+
+    @staticmethod
+    @log_database_operation("Section list")
+    async def get_user_sections(
+        db: AsyncSession,
+        user_id: UUID,
+    ) -> List[TechnicianSection]:
+        """Get all sections assigned to a user."""
+        from api.repositories.setting.user_section_repository import UserSectionRepository
+
+        sections = await UserSectionRepository.get_sections_for_user(db, user_id)
+        logger.debug(f"Found {len(sections)} sections for user {user_id}")
+        return sections
+
+    @staticmethod
+    @safe_database_query("get_user_section_ids", default_return=[])
+    @log_database_operation("Section IDs retrieval", level="debug")
+    async def get_user_section_ids(
+        db: AsyncSession,
+        user_id: UUID,
+    ) -> List[int]:
+        """Get all section IDs assigned to a user."""
+        from api.repositories.setting.user_section_repository import UserSectionRepository
+
+        return await UserSectionRepository.get_section_ids_for_user(db, user_id)
+
+    @staticmethod
+    @log_database_operation("Section bulk assignment")
+    async def set_user_sections(
+        db: AsyncSession,
+        user_id: UUID,
+        section_ids: List[int],
+        assigned_by: UUID,
+    ) -> List[TechnicianSection]:
+        """Set all sections for a user, replacing existing assignments."""
+        from api.repositories.setting.user_section_repository import UserSectionRepository
+
+        result = await UserSectionRepository.set_sections(db, user_id, section_ids, assigned_by)
+        await db.commit()
+
+        logger.info(f"Set sections for user {user_id}: {section_ids}")
+        return result

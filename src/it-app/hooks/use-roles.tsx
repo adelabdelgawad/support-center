@@ -19,6 +19,7 @@ interface UseRolesReturn {
 /**
  * Hook for fetching roles using useAsyncData
  * Fetches all active roles for use in selectors
+ * Only fetches when enabled is true (prevents unnecessary API calls)
  */
 export function useRoles(params: UseRolesParams = {}): UseRolesReturn {
   const { enabled = true } = params;
@@ -36,12 +37,13 @@ export function useRoles(params: UseRolesParams = {}): UseRolesReturn {
 
   const { data, error, isLoading, mutate } = useAsyncData<RoleResponse[]>(
     fetchRoles,
-    [enabled],
-    undefined
+    [],
+    undefined,
+    { enabled } // Pass enabled option to useAsyncData
   );
 
   return {
-    roles: enabled ? data : undefined,
+    roles: data,
     isLoading,
     error,
     mutate,

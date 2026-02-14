@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.dependencies import get_async_session
+from db.database import get_session
 from api.services.internal.health_service import HealthService
 
 router = APIRouter()
@@ -24,7 +24,7 @@ async def liveness_check():
 
 
 @router.get("/health/readiness")
-async def readiness_check(session: AsyncSession = Depends(get_async_session)):
+async def readiness_check(session: AsyncSession = Depends(get_session)):
     """
     Readiness health check endpoint.
 
@@ -43,7 +43,7 @@ async def readiness_check(session: AsyncSession = Depends(get_async_session)):
 
 
 @router.get("/health/detailed")
-async def detailed_health_check(session: AsyncSession = Depends(get_async_session)):
+async def detailed_health_check(session: AsyncSession = Depends(get_session)):
     """
     Detailed health check endpoint with component status.
 
@@ -57,7 +57,7 @@ async def detailed_health_check(session: AsyncSession = Depends(get_async_sessio
 
 
 @router.get("/metrics/database")
-async def get_database_metrics(session: AsyncSession = Depends(get_async_session)):
+async def get_database_metrics(session: AsyncSession = Depends(get_session)):
     """Get database connection pool metrics"""
     service = HealthService(session)
     return await service.get_database_metrics()

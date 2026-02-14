@@ -30,21 +30,13 @@ export function useSubTasks(
 ) {
   const { enabled = true, skip = 0, limit = 20 } = options;
 
-  // Memoize fetch params for tasks
-  const tasksFetchParams = useMemo(() => ({
-    enabled,
-    requestId,
-    skip,
-    limit,
-  }), [enabled, requestId, skip, limit]);
-
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
-    if (!enabled || !requestId) {
+    if (!requestId) {
       return { items: [], total: 0 };
     }
     return await getSubTasksByRequest(requestId, skip, limit);
-  }, [enabled, requestId, skip, limit]);
+  }, [requestId, skip, limit]);
 
   const {
     data: tasksData,
@@ -53,18 +45,14 @@ export function useSubTasks(
     refetch: refetchTasks,
   } = useAsyncData(
     fetchTasks,
-    [tasksFetchParams],
-    initialData ? { items: initialData.items as SubTask[], total: initialData.total } : undefined
+    [requestId, skip, limit],
+    initialData ? { items: initialData.items as SubTask[], total: initialData.total } : undefined,
+    { enabled } // Use the enabled option instead of conditional logic
   );
 
   // Fetch stats
-  const statsFetchParams = useMemo(() => ({
-    enabled,
-    requestId,
-  }), [enabled, requestId]);
-
   const fetchStats = useCallback(async () => {
-    if (!enabled || !requestId) {
+    if (!requestId) {
       return {
         total: 0,
         byStatus: {},
@@ -74,7 +62,7 @@ export function useSubTasks(
       } as SubTaskStats;
     }
     return await getSubTaskStats(requestId);
-  }, [enabled, requestId]);
+  }, [requestId]);
 
   const {
     data: stats,
@@ -83,8 +71,9 @@ export function useSubTasks(
     refetch: refetchStats,
   } = useAsyncData(
     fetchStats,
-    [statsFetchParams],
-    initialData?.stats as SubTaskStats | undefined
+    [requestId],
+    initialData?.stats as SubTaskStats | undefined,
+    { enabled } // Use the enabled option instead of conditional logic
   );
 
   // Combined refetch function to refresh both tasks and stats

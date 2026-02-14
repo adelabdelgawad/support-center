@@ -61,6 +61,7 @@ class UserCreate(UserBase):
     """Schema for creating a new user."""
 
     password_hash: Optional[str] = Field(None, max_length=255)
+    section_ids: List[int] = Field(default_factory=list, description="List of section IDs assigned to user")
 
 
 class UserUpdate(HTTPSchemaModel):
@@ -106,6 +107,7 @@ class UserUpdate(HTTPSchemaModel):
     sound_volume: Optional[float] = Field(
         default=None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
     )
+    section_ids: Optional[List[int]] = Field(default=None, description="List of section IDs assigned to user")
 
 
 class UserRead(UserBase):
@@ -222,7 +224,7 @@ class UserBlockedResponse(HTTPSchemaModel):
 class UserRoleInfo(HTTPSchemaModel):
     """Simple role information for user responses."""
 
-    id: int
+    id: UUID
     name: str
 
 
@@ -233,6 +235,17 @@ class UserBusinessUnitInfo(HTTPSchemaModel):
     id: int
     name: str
     is_active: bool
+
+
+# Section information schemas
+class UserSectionInfo(HTTPSchemaModel):
+    """Simple section information for user responses."""
+
+    id: int
+    sectionId: int
+    sectionName: Optional[str] = None
+    assignedAt: Optional[datetime] = None
+    isActive: bool = True
 
 
 class UserWithRoles(UserRead):
@@ -248,6 +261,7 @@ class UserWithRolesListItem(UserListItem):
     roles: List[UserRoleInfo] = []
     role_ids: List[UUID] = []
     business_units: List[UserBusinessUnitInfo] = []
+    sections: List[UserSectionInfo] = []
 
 
 class UserCreateWithRoles(UserCreate):
@@ -378,3 +392,10 @@ class UserPreferencesRead(HTTPSchemaModel):
     notifications_enabled: bool = True
     sound_enabled: bool = True
     sound_volume: float = 0.5
+
+
+# User sections assignment schemas
+class UserSectionsUpdateRequest(HTTPSchemaModel):
+    """Request for updating user section assignments."""
+
+    sectionIds: List[int] = Field(default_factory=list, description="List of section IDs to assign to user")

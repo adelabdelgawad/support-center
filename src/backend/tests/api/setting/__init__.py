@@ -1,0 +1,1 @@
+"""Setting router endpoint tests."""

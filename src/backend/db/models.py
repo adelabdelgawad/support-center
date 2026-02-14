@@ -1057,15 +1057,6 @@ class User(TableModel, table=True):
         description="Notification sound volume (0.0 to 1.0)",
     )
 
-    # Business Unit Region - for filtering service requests by region
-    business_unit_region_id: Optional[int] = Field(
-        default=None,
-        sa_column=Column(
-            Integer, ForeignKey("business_unit_regions.id"), nullable=True
-        ),
-        description="Business unit region for request filtering",
-    )
-
     created_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
@@ -1153,14 +1144,6 @@ class User(TableModel, table=True):
             "lazy": "selectin",
             "foreign_keys": "TechnicianSection.technician_id",
         },
-    )
-
-    # Business Unit Region relationship
-    business_unit_region: Optional["BusinessUnitRegion"] = Relationship(
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-            "foreign_keys": "User.business_unit_region_id",
-        }
     )
 
     # Manager relationships (self-referential)
@@ -2981,7 +2964,6 @@ class Section(TableModel, table=True):
             "overlaps": "assigned_section",
         }
     )
-
     __table_args__ = (
         Index("ix_sections_name", "name", unique=True),
         Index("ix_sections_is_active", "is_active"),
@@ -5556,4 +5538,74 @@ class Audit(TableModel, table=True):
         Index(
             "ix_audit_logs_user_action_resource", "user_id", "action", "resource_type"
         ),
+    )
+
+
+class UserSection(TableModel, table=True):
+    """User-Section junction table for many-to-many relationship."""
+
+    __tablename__ = "user_sections"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: UUID = Field(
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        description="User UUID",
+    )
+    section_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("sections.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        description="Section ID",
+    )
+    assigned_by: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PostgreSQL_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+        ),
+        description="User who assigned this section",
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, default=True, nullable=False),
+        description="Whether this section assignment is active",
+    )
+    created_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
+        description="Assignment timestamp",
+    )
+    updated_at: datetime = Field(
+        default_factory=cairo_now,
+        sa_column_kwargs={
+            "server_default": text("CURRENT_TIMESTAMP"),
+            "onupdate": text("CURRENT_TIMESTAMP"),
+        },
+        description="Last update timestamp",
+    )
+    is_deleted: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, default=False, nullable=False),
+        description="Soft delete flag",
+    )
+
+    # Relationships
+    section: Optional["Section"] = Relationship(
+        sa_relationship_kwargs={
+            "lazy": "selectin",
+            "foreign_keys": "UserSection.section_id",
+        },
+    )
+
+    __table_args__ = (
+        Index("ix_user_sections_user_id", "user_id"),
+        Index("ix_user_sections_section_id", "section_id"),
+        Index("ix_user_sections_unique", "user_id", "section_id", unique=True),
+        Index("ix_user_sections_is_active", "is_active"),
+        Index("ix_user_sections_is_deleted", "is_deleted"),
     )

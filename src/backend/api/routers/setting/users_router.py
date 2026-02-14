@@ -247,14 +247,14 @@ async def list_users_with_roles(
     return UserListResponse(
         users=user_items,
         # Filtered total (for pagination)
-        total=counts["total"] or 0,
+        total=counts.get("total", 0) or 0,
         # Scoped Status counts (within selected User Type)
-        active_count=counts["active_count"] or 0,
-        inactive_count=counts["inactive_count"] or 0,
+        active_count=counts.get("active_count", 0) or 0,
+        inactive_count=counts.get("inactive_count", 0) or 0,
         # Global User Type counts (always database totals)
-        global_total=counts["global_total"] or 0,
-        technician_count=counts["technician_count"] or 0,
-        user_count=counts["user_count"] or 0,
+        global_total=counts.get("global_total", 0) or 0,
+        technician_count=counts.get("technician_count", 0) or 0,
+        user_count=counts.get("user_count", 0) or 0,
         # Scoped Role counts (within selected User Type AND Status)
         role_counts=counts.get("role_counts", {}),
     )
@@ -275,9 +275,9 @@ async def get_user_counts(db: AsyncSession = Depends(get_session)):
     counts = await UserService.get_user_counts(db)
 
     return UserCountsResponse(
-        total=counts["total"] or 0,
-        active_count=counts["active_count"] or 0,
-        inactive_count=counts["inactive_count"] or 0,
+        total=counts.get("total", 0) or 0,
+        active_count=counts.get("active_count", 0) or 0,
+        inactive_count=counts.get("inactive_count", 0) or 0,
     )
 
 

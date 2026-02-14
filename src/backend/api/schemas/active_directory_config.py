@@ -1,6 +1,7 @@
 """Active Directory Configuration schemas."""
 from datetime import datetime
 from typing import List, Optional
+from uuid import UUID
 
 from pydantic import field_validator
 
@@ -129,7 +130,7 @@ class ActiveDirectoryConfigUpdate(HTTPSchemaModel):
 
 class ActiveDirectoryConfigRead(ActiveDirectoryConfigBase):
     """Schema for reading Active Directory configuration (excludes password)."""
-    id: int
+    id: UUID
     is_active: bool
     has_password: bool  # Computed field indicating password exists
     organizational_units: List[str] = []

@@ -32,7 +32,7 @@ class DesktopSessionCreate(DesktopSessionBase):
 
 class DesktopSessionRead(DesktopSessionBase):
     """Schema for reading desktop session data."""
-    id: int
+    id: UUID
     user_id: UUID
     is_active: bool
     created_at: datetime
@@ -44,7 +44,7 @@ class DesktopSessionRead(DesktopSessionBase):
 
 class DesktopSessionSummary(HTTPSchemaModel):
     """Summary schema for desktop session lists."""
-    id: int
+    id: UUID
     user_id: UUID
     ip_address: str
     is_active: bool
@@ -56,7 +56,7 @@ class DesktopSessionSummary(HTTPSchemaModel):
 
 class DesktopSessionUserInfo(HTTPSchemaModel):
     """Minimal user info for desktop session display."""
-    id: int
+    id: UUID
     username: str
     full_name: Optional[str] = None
 

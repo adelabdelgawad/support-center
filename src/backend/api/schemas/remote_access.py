@@ -30,7 +30,7 @@ class RemoteAccessSessionRead(HTTPSchemaModel):
 
     Includes durable state fields for session lifecycle tracking.
     """
-    id: int
+    id: UUID
     request_id: Optional[int] = None
     agent_id: UUID
     requester_id: UUID

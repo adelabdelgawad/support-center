@@ -261,6 +261,7 @@ export function RequestDetailMetadataProvider({
       refreshInterval: 60000, // 60 seconds
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
+      revalidateOnMount: false, // Prevent duplicate fetch on mount - we already have fresh data from SSR
       dedupingInterval: 10000,
       // Don't show loading states during background refresh
       keepPreviousData: true,

@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, useRef } from "react";
 import type { SettingUsersResponse, UserWithRolesResponse } from "@/types/users";
 import type { RoleResponse } from "@/types/roles";
+import type { Section } from "@/lib/api/sections";
 import { StatusPanel } from "../sidebar/status-panel";
 import UsersTableBody from "./users-table-body";
 import { UsersActionsProvider } from "../../context/users-actions-context";
@@ -22,6 +23,7 @@ import {
 interface UsersTableProps {
   initialData: SettingUsersResponse | null;
   roles: RoleResponse[];
+  sections: Section[];
 }
 
 /**
@@ -76,6 +78,7 @@ const fetcher = async (url: string): Promise<SettingUsersResponse> => {
 function UsersTable({
   initialData,
   roles,
+  sections,
 }: UsersTableProps) {
   const searchParams = useSearchParams();
 
@@ -490,6 +493,7 @@ function UsersTable({
                   isValidating={isValidating}
                   activeCount={scopedActiveCount}
                   inactiveCount={scopedInactiveCount}
+                  sections={sections}
                 />
               </div>
 

@@ -28,7 +28,8 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { createCategory } from "@/lib/api/categories";
-import { getSections, type Section } from "@/lib/api/sections";
+import type { Section } from "@/lib/api/sections";
+import { useCategoriesActions } from "../../context/categories-actions-context";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -82,10 +83,12 @@ export function AddCategorySheet({
   });
 
   const [isLoading, setIsLoading] = useState(false);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loadingSections, setLoadingSections] = useState(false);
+  const { sectionsMap } = useCategoriesActions();
 
-  // Fetch sections when sheet opens
+  // Convert sectionsMap to array for select
+  const sections = Array.from(sectionsMap.values());
+
+  // Reset form when sheet opens
   useEffect(() => {
     if (open) {
       form.reset({
@@ -95,12 +98,6 @@ export function AddCategorySheet({
         description: "",
         sectionId: "",
       });
-
-      setLoadingSections(true);
-      getSections(true, false, false)
-        .then(setSections)
-        .catch(() => setSections([]))
-        .finally(() => setLoadingSections(false));
     }
   }, [open, form]);
 
@@ -157,17 +154,10 @@ export function AddCategorySheet({
                   <Select
                     onValueChange={field.onChange}
                     value={field.value}
-                    disabled={loadingSections}
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue
-                          placeholder={
-                            loadingSections
-                              ? "Loading sections..."
-                              : "Select a section (optional)"
-                          }
-                        />
+                        <SelectValue placeholder="Select a section (optional)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

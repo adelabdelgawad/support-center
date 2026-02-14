@@ -123,9 +123,10 @@ export function useAuthUsers(
   };
 
   const { data: swrData, error, isLoading, isValidating, mutate } = useAsyncData<AuthUsersResponse>(
-    enabled ? fetchAuthUsers : async () => cachedData!,
-    [enabled, cacheKey],
-    cachedData ?? undefined
+    fetchAuthUsers,
+    [cacheKey],
+    cachedData ?? undefined,
+    { enabled } // Use the enabled option instead of conditional fetch function
   );
 
   // If we have cached data and SWR hasn't fetched yet, use it
@@ -207,9 +208,10 @@ export function useAuthUsersCount(search: string = "", enabled: boolean = true) 
   };
 
   const { data } = useAsyncData<number>(
-    enabled ? fetchCount : async () => 0,
-    [enabled, search],
-    undefined
+    fetchCount,
+    [search],
+    undefined,
+    { enabled } // Use the enabled option instead of conditional fetch function
   );
 
   return data || 0;

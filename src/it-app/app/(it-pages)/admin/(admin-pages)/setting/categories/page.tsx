@@ -1,7 +1,9 @@
 // app/(pages)/setting/categories/page.tsx
 import { validateAgentAccess } from "@/lib/actions/validate-agent-access.actions";
 import { getCategories } from "@/lib/actions/categories.actions";
+import { getSections } from "@/lib/actions/sections.actions";
 import CategoriesTable from "./_components/table/categories-table";
+import type { Section } from "@/lib/api/sections";
 
 export const metadata = {
   title: "Categories",
@@ -20,9 +22,10 @@ export default async function CategoriesPage({
   const { is_active, name } = params;
 
   // Parallelize auth validation and data fetching
-  let response;
+  let response: Awaited<ReturnType<typeof getCategories>>;
+  let sections: Section[] = [];
   try {
-    const [_, categoriesData] = await Promise.all([
+    const [_, categoriesData, sectionsData] = await Promise.all([
       validateAgentAccess(),
       getCategories({
         activeOnly: false,
@@ -32,10 +35,12 @@ export default async function CategoriesPage({
           name: name || undefined,
         },
       }),
+      getSections(false, false, false), // Fetch all sections for lookup
     ]);
     response = categoriesData;
+    sections = sectionsData;
   } catch (error) {
-    console.error("Failed to fetch categories:", error);
+    console.error("Failed to fetch categories or sections:", error);
     // Provide empty initial data on error
     response = {
       categories: [],
@@ -44,7 +49,8 @@ export default async function CategoriesPage({
       inactiveCount: 0,
       subcategoriesMap: {},
     };
+    sections = [];
   }
 
-  return <CategoriesTable initialData={response} />;
+  return <CategoriesTable initialData={response} initialSections={sections} />;
 }

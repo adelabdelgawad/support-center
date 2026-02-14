@@ -2,6 +2,7 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import type { CategoryResponse, SubcategoryResponse } from "@/types/categories";
+import type { Section } from "@/lib/api/sections";
 
 interface CategoriesActions {
   handleToggleStatus: (categoryId: number, newStatus: boolean) => void;
@@ -21,6 +22,9 @@ interface CategoriesActions {
   handleUpdateSubcategory: (subcategoryId: number, updatedData: SubcategoryResponse) => void;
   handleToggleSubcategoryStatus: (subcategoryId: number, categoryId: number, newStatus: boolean) => void;
   refreshSubcategories: (categoryId: number) => void;
+
+  // Sections lookup
+  sectionsMap: Map<number, Section>;
 }
 
 const CategoriesActionsContext = createContext<CategoriesActions | null>(null);

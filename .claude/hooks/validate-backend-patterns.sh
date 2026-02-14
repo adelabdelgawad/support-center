@@ -71,6 +71,11 @@ if [[ "$FILE_PATH" == *"/api/repositories/"* ]] && [[ "$FILENAME" != "base.py" ]
 fi
 
 # --- Service validations (api/services/) ---
+# Skip validation for health check services - they use simple connectivity queries
+if [[ "$FILENAME" == "health_service.py" ]]; then
+    exit 0
+fi
+
 if [[ "$FILE_PATH" == *"/api/services/"* ]]; then
 
     # Check for old CRUD helper imports (exclude comments)

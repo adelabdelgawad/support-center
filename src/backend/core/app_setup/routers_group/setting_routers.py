@@ -25,6 +25,7 @@ import logging
 from fastapi import APIRouter
 
 from api.routers.setting.active_directory_config_router import router as active_directory_config_router
+from api.routers.setting.client_versions_router import router as client_versions_router
 from api.routers.setting.business_unit_regions_router import router as business_unit_regions_router
 from api.routers.setting.business_unit_user_assigns_router import router as business_unit_user_assigns_router
 from api.routers.setting.business_units_router import router as business_units_router
@@ -41,6 +42,7 @@ from api.routers.setting.sections_router import router as sections_router
 from api.routers.setting.sla_configs_router import router as sla_configs_router
 from api.routers.setting.system_messages_router import router as system_messages_router
 from api.routers.setting.user_custom_views_router import router as user_custom_views_router
+from api.routers.setting.user_sections_router import router as user_sections_router
 from api.routers.setting.users_router import router as users_router
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,7 @@ def register_routes(router: APIRouter) -> None:
     try:
         logger.info("Starting setting router registration")
 
+        router.include_router(client_versions_router, prefix="/client-versions", tags=["client-versions"])
         router.include_router(active_directory_config_router, prefix="/active-directory-configs", tags=["active-directory"])
         router.include_router(email_config_router, prefix="/email-configs", tags=["email"])
         router.include_router(users_router, prefix="/users", tags=["users"])
@@ -71,6 +74,7 @@ def register_routes(router: APIRouter) -> None:
         router.include_router(business_unit_regions_router, prefix="/business-unit-regions", tags=["business-unit-regions"])
         router.include_router(business_units_router, prefix="/business-units", tags=["business-units"])
         router.include_router(business_unit_user_assigns_router, prefix="/business-unit-user-assigns", tags=["business-unit-user-assigns"])
+        router.include_router(user_sections_router, prefix="/user-sections", tags=["user-sections"])
         router.include_router(roles_router, prefix="/roles", tags=["roles"])
         router.include_router(pages_router, prefix="/pages", tags=["pages"])
         router.include_router(system_messages_router, prefix="/system-messages", tags=["System Messages"])

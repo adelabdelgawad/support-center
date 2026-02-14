@@ -1,5 +1,6 @@
 // Import RoleResponse from central roles types
 export type { RoleResponse } from './roles';
+import type { Section } from "./api/sections";
 
 /**
  * Role info embedded in user responses
@@ -18,6 +19,18 @@ export interface UserBusinessUnitInfo {
   id: number;
   name: string;
   isActive: boolean;
+}
+
+/**
+ * User section assignment info
+ * Maps to backend UserSectionInfo schema
+ */
+export interface UserSectionInfo {
+  id: number;
+  sectionId: number;
+  sectionName: string | null;
+  isActive: boolean;
+  assignedAt?: string; // ISO datetime
 }
 
 /**
@@ -41,6 +54,7 @@ export interface UserWithRolesResponse {
   roles: UserRoleInfo[];
   roleIds: string[]; // UUID[]
   businessUnits: UserBusinessUnitInfo[];
+  sections: UserSectionInfo[];
 }
 
 /**
@@ -94,7 +108,7 @@ export interface UserCreate {
  * User list item response from API.
  * Maps to backend UserListItem schema (camelCase via HTTPSchemaModel)
  *
- * Note: For actual domain users from Active Directory, use the DomainUser
+ * Note: For actual domain users from Active Directory, use DomainUser
  * interface from lib/api/domain-users.ts
  */
 export interface AuthUserResponse {

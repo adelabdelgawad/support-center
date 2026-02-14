@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { z } from "zod";
 import {
   FormControl,
@@ -20,7 +20,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { EntityFormSheet } from "@/components/settings";
 import { updateCategory } from "@/lib/api/categories";
-import { getSections, type Section } from "@/lib/api/sections";
 import { useCategoriesActions } from "../../context/categories-actions-context";
 import { Edit } from "lucide-react";
 import type { CategoryResponse, CategoryUpdateRequest } from "@/types/categories";
@@ -59,18 +58,10 @@ export function EditCategorySheet({
   category,
   onOpenChange,
 }: EditCategorySheetProps) {
-  const { handleUpdateCategory } = useCategoriesActions();
-  const [sections, setSections] = useState<Section[]>([]);
-  const [loadingSections, setLoadingSections] = useState(false);
+  const { handleUpdateCategory, sectionsMap } = useCategoriesActions();
 
-  // Fetch sections on mount
-  useEffect(() => {
-    setLoadingSections(true);
-    getSections(true, false, false)
-      .then(setSections)
-      .catch(() => setSections([]))
-      .finally(() => setLoadingSections(false));
-  }, []);
+  // Convert sectionsMap to array for select
+  const sections = Array.from(sectionsMap.values());
 
   const handleSubmit = async (data: CategoryFormData) => {
     const updateData: CategoryUpdateRequest = {};
@@ -132,17 +123,10 @@ export function EditCategorySheet({
                 <Select
                   onValueChange={field.onChange}
                   value={field.value}
-                  disabled={loadingSections}
                 >
                   <FormControl>
                     <SelectTrigger className="w-full">
-                      <SelectValue
-                        placeholder={
-                          loadingSections
-                            ? "Loading sections..."
-                            : "Select a section (optional)"
-                        }
-                      />
+                      <SelectValue placeholder="Select a section (optional)" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

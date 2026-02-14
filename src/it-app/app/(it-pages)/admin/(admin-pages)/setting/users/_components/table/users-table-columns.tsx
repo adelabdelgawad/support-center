@@ -3,7 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { StatusSwitch } from "@/components/ui/status-switch";
-import { Loader2, User as UserIcon } from "lucide-react";
+import { Layers, Loader2, User as UserIcon } from "lucide-react";
 import type { UserWithRolesResponse } from "@/types/users.d";
 import { toggleUserStatus, toggleUserTechnicianStatus } from "@/lib/api/users";
 import { toastSuccess, toastError } from "@/lib/toast";
@@ -331,6 +331,56 @@ export function createUsersTableColumns({
                 className="text-xs"
               >
                 {bu.name}
+              </Badge>
+            ))}
+            {hasMore && (
+              <span className="text-xs text-muted-foreground">...</span>
+            )}
+          </div>
+        );
+      },
+    },
+
+    {
+      id: "sections",
+      header: () => <div className="text-center">Sections</div>,
+      accessorFn: (row) => row.sections?.map(s => s.sectionName).join(", ") || "",
+      cell: ({ row }) => {
+        const isRowUpdating = Boolean(
+          row.original.id && updatingIds.has(typeof row.original.id === 'string' ? parseInt(row.original.id, 10) : row.original.id)
+        );
+        const sections = row.original.sections || [];
+        const displayLimit = 3;
+        const hasMore = sections.length > displayLimit;
+        const displaySections = hasMore ? sections.slice(0, displayLimit) : sections;
+
+        if (!sections || sections.length === 0) {
+          return (
+            <div
+              className={`flex justify-center ${
+                isRowUpdating ? "opacity-60 pointer-events-none" : ""
+              }`}
+            >
+              <Badge variant="secondary" className="text-xs">
+                No Sections
+              </Badge>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            className={`flex flex-wrap gap-1 justify-center items-center ${
+              isRowUpdating ? "opacity-60 pointer-events-none" : ""
+            }`}
+          >
+            {displaySections.map((s) => (
+              <Badge
+                key={s.id}
+                variant={s.isActive ? "default" : "secondary"}
+                className="text-xs"
+              >
+                {s.sectionName}
               </Badge>
             ))}
             {hasMore && (

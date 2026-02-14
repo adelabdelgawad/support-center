@@ -46,3 +46,14 @@ export const AssignBusinessUnitsSheet = dynamic(
     loading: () => <SheetSkeleton title="Assign Business Units" description="Loading..." />,
   }
 );
+
+/**
+ * Assign Sections Sheet - Lazy loaded
+ */
+export const AssignSectionsSheet = dynamic(
+  () => import('./assign-sections-sheet').then(mod => ({ default: mod.AssignSectionsSheet })),
+  {
+    ssr: false,
+    loading: () => <SheetSkeleton title="Assign Sections" description="Loading..." />,
+  }
+);

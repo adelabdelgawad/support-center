@@ -3,6 +3,7 @@
 import { DataTable, SettingsTableHeader } from "@/components/data-table";
 import { useMemo, useState, useCallback } from "react";
 import type { UserWithRolesResponse } from "@/types/users";
+import type { Section } from "@/lib/api/sections";
 import { createUsersTableColumns } from "./users-table-columns";
 import { AddUserButton } from "../actions/add-user-button";
 import { useUsersTableActions } from "./users-table-actions";
@@ -17,6 +18,7 @@ interface UsersTableBodyProps {
   isValidating?: boolean;
   activeCount: number;
   inactiveCount: number;
+  sections: Section[];
 }
 
 export default function UsersTableBody({
@@ -28,6 +30,7 @@ export default function UsersTableBody({
   isValidating,
   activeCount,
   inactiveCount,
+  sections,
 }: UsersTableBodyProps) {
   const [tableInstance, setTableInstance] = useState<import('@tanstack/react-table').Table<UserWithRolesResponse> | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<UserWithRolesResponse[]>([]);
@@ -116,6 +119,7 @@ export default function UsersTableBody({
                       updateUsers([updatedUser]);
                     }}
                     disabled={isRowUpdating}
+                    sections={sections}
                   />
                 </div>
               );
@@ -124,7 +128,7 @@ export default function UsersTableBody({
         }
         return column;
       }),
-    [updatingIds, updateUsers, refetch, markUpdating, clearUpdating]
+    [updatingIds, updateUsers, refetch, markUpdating, clearUpdating, sections]
   );
 
   // Memoize sorted data
