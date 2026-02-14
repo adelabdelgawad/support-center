@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * PUT /api/api/v1/users/[userId]
+ * PUT /api/backend/users/[userId]
  * Updates an existing user's roles and status
  */
 export async function PUT(

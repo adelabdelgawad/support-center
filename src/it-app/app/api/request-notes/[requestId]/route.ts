@@ -56,7 +56,7 @@ export async function GET(
     }).toString();
 
     // Call backend API with authentication
-    // Backend endpoint: /api/v1/request-notes/{request_id}/notes
+    // Backend endpoint: /backend/request-notes/{request_id}/notes
     const endpoint = `/request-notes/${requestId}/notes?${queryString}`;
     const response = await makeAuthenticatedRequest<unknown>('GET', endpoint);
 

@@ -53,7 +53,7 @@ class ChatMessageUpdate(HTTPSchemaModel):
 
 class MessageSenderInfo(HTTPSchemaModel):
     """Schema for message sender information."""
-    id: int  # User UUID
+    id: UUID
     username: str
     full_name: Optional[str] = None
     email: Optional[str] = None
@@ -61,8 +61,8 @@ class MessageSenderInfo(HTTPSchemaModel):
 
 class ChatMessageRead(ChatMessageBase):
     """Schema for reading chat message data with per-user read state."""
-    id: int  # Message UUID
-    request_id: int  # Service request UUID - will be serialized as string in JSON
+    id: UUID
+    request_id: int
     sender_id: Optional[UUID]
     sender: Optional[MessageSenderInfo] = Field(
         None, description="Sender user information for display"

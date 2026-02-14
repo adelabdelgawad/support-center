@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet } from "@/lib/fetch";
+import { internalGet } from "@/lib/fetch";
 import type {
   ActiveDirectoryConfig,
   ActiveDirectoryConfigListResponse,
@@ -12,8 +12,8 @@ import type {
 export async function getActiveDirectoryConfigs(): Promise<
   ActiveDirectoryConfigListResponse
 > {
-  return serverGet<ActiveDirectoryConfigListResponse>(
-    "/active-directory-configs"
+  return internalGet<ActiveDirectoryConfigListResponse>(
+    "/api/active-directory-configs"
   );
 }
 
@@ -22,8 +22,8 @@ export async function getActiveDirectoryConfigs(): Promise<
  */
 export async function getActiveConfig(): Promise<ActiveDirectoryConfig | null> {
   try {
-    return await serverGet<ActiveDirectoryConfig>(
-      "/active-directory-configs/active"
+    return await internalGet<ActiveDirectoryConfig>(
+      "/api/active-directory-configs/active"
     );
   } catch (error) {
     // Return null if no active config exists (404)

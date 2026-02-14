@@ -259,7 +259,7 @@ class RequesterInfo(HTTPSchemaModel):
 class TechnicianInfo(HTTPSchemaModel):
     """Technician/Creator information for subtask detail view."""
 
-    id: int
+    id: UUID
     username: str
     full_name: Optional[str] = None
     email: Optional[str] = None

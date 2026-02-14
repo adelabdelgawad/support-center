@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { serverGet } from '@/lib/fetch';
+import { internalGet } from '@/lib/fetch';
 import type {
   TechnicianViewsResponse,
   ViewType,
@@ -46,11 +46,8 @@ export async function getTechnicianViewsData(
       });
     }
 
-    // Call backend API directly from server using serverGet
-    // This automatically includes the session token from cookies
-    const data = await serverGet<TechnicianViewsResponse>(
-      `/requests/technician-views?${params.toString()}`,
-      { revalidate: 0 }
+    const data = await internalGet<TechnicianViewsResponse>(
+      `/api/requests/technician-views?${params.toString()}`
     );
 
     return data;
@@ -84,10 +81,8 @@ export async function getBusinessUnitCountsData(view?: string): Promise<Business
       ? `/requests/business-unit-counts?view=${encodeURIComponent(view)}`
       : '/requests/business-unit-counts';
 
-    // Call backend API directly from server using serverGet
-    const data = await serverGet<BusinessUnitCountsResponse>(
-      url,
-      { revalidate: 0 }
+    const data = await internalGet<BusinessUnitCountsResponse>(
+      '/api' + url
     );
 
     return data;

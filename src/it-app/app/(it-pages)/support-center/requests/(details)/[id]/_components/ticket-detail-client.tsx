@@ -263,8 +263,8 @@ export function TicketDetailClient() {
     }
   };
 
-  // Generate ticket number from UUID (use first 8 chars as hex)
-  const ticketNumber = parseInt(ticket.id.replace(/-/g, '').substring(0, 8), 16);
+  // Use ticket ID directly as ticket number (service requests use integer IDs)
+  const ticketNumber = ticket.id;
 
   // Calculate swipe visual feedback styles
   const swipeStyles = isHydrated && isMobile && swipeState.isSwiping ? {

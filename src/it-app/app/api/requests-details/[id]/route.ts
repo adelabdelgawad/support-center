@@ -3,7 +3,7 @@
  *
  * Proxies the backend endpoint that returns basic request/ticket details.
  *
- * Backend endpoint: GET /api/v1/requests/{id}
+ * Backend endpoint: GET /backend/requests/{id}
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -34,10 +34,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Validate UUID format
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
+    // Validate integer ID format
+    if (!/^\d+$/.test(id)) {
       return NextResponse.json(
         { error: "Invalid request ID format" },
         { status: 400 }

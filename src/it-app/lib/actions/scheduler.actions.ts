@@ -8,7 +8,7 @@
  * with optimistic updates and polling for server-side state changes.
  */
 
-import { serverGet, serverPost, serverPut, serverDelete } from "@/lib/fetch/server";
+import { internalGet, internalPost, internalPut, internalDelete } from "@/lib/fetch";
 
 // Types
 export interface TaskFunction {
@@ -126,7 +126,7 @@ export interface JobTriggerResponse {
  */
 export async function getSchedulerStatus(): Promise<SchedulerStatus> {
   try {
-    return await serverGet<SchedulerStatus>("/scheduler/status");
+    return await internalGet<SchedulerStatus>("/api/scheduler/status");
   } catch (error) {
     console.error("Failed to fetch scheduler status:", error);
     throw error;
@@ -138,8 +138,8 @@ export async function getSchedulerStatus(): Promise<SchedulerStatus> {
  */
 export async function getTaskFunctions(): Promise<TaskFunction[]> {
   try {
-    const response = await serverGet<{ taskFunctions: TaskFunction[] }>(
-      "/scheduler/task-functions"
+    const response = await internalGet<{ taskFunctions: TaskFunction[] }>(
+      "/api/scheduler/task-functions"
     );
     return response.taskFunctions || [];
   } catch (error) {
@@ -153,7 +153,7 @@ export async function getTaskFunctions(): Promise<TaskFunction[]> {
  */
 export async function getJobTypes(): Promise<JobType[]> {
   try {
-    return await serverGet<JobType[]>("/scheduler/job-types") || [];
+    return await internalGet<JobType[]>("/api/scheduler/job-types") || [];
   } catch (error) {
     console.error("Failed to fetch job types:", error);
     return [];
@@ -178,8 +178,8 @@ export async function getScheduledJobs(params: {
   if (params.taskFunctionId) searchParams.set("task_function_id", String(params.taskFunctionId));
 
   try {
-    return await serverGet<JobsListResponse>(
-      `/scheduler/jobs?${searchParams.toString()}`
+    return await internalGet<JobsListResponse>(
+      `/api/scheduler/jobs?${searchParams.toString()}`
     );
   } catch (error) {
     console.error("Failed to fetch scheduled jobs:", error);
@@ -192,7 +192,7 @@ export async function getScheduledJobs(params: {
  */
 export async function getScheduledJob(jobId: string): Promise<ScheduledJobDetail> {
   try {
-    return await serverGet<ScheduledJobDetail>(`/scheduler/jobs/${jobId}`);
+    return await internalGet<ScheduledJobDetail>(`/api/scheduler/jobs/${jobId}`);
   } catch (error) {
     console.error(`Failed to fetch job ${jobId}:`, error);
     throw error;
@@ -214,11 +214,11 @@ export async function getJobExecutions(params: {
   if (params.status) searchParams.set("status", params.status);
 
   const endpoint = params.jobId
-    ? `/scheduler/jobs/${params.jobId}/executions?${searchParams.toString()}`
-    : `/scheduler/executions?${searchParams.toString()}`;
+    ? `/api/scheduler/jobs/${params.jobId}/executions?${searchParams.toString()}`
+    : `/api/scheduler/executions?${searchParams.toString()}`;
 
   try {
-    return await serverGet<ExecutionsListResponse>(endpoint);
+    return await internalGet<ExecutionsListResponse>(endpoint);
   } catch (error) {
     console.error("Failed to fetch executions:", error);
     return { executions: [], total: 0 };
@@ -242,7 +242,7 @@ export async function createScheduledJob(data: {
   isEnabled?: boolean;
 }): Promise<ScheduledJob> {
   try {
-    const response = await serverPost<ScheduledJob>("/scheduler/jobs", data);
+    const response = await internalPost<ScheduledJob>("/api/scheduler/jobs", data);
     return response;
   } catch (error) {
     console.error("Failed to create scheduled job:", error);
@@ -270,7 +270,7 @@ export async function updateScheduledJob(
   }>
 ): Promise<ScheduledJob> {
   try {
-    const response = await serverPut<ScheduledJob>(`/scheduler/jobs/${jobId}`, data);
+    const response = await internalPut<ScheduledJob>(`/api/scheduler/jobs/${jobId}`, data);
     return response;
   } catch (error) {
     console.error(`Failed to update job ${jobId}:`, error);
@@ -283,7 +283,7 @@ export async function updateScheduledJob(
  */
 export async function deleteScheduledJob(jobId: string): Promise<void> {
   try {
-    await serverDelete(`/scheduler/jobs/${jobId}`);
+    await internalDelete(`/api/scheduler/jobs/${jobId}`);
   } catch (error) {
     console.error(`Failed to delete job ${jobId}:`, error);
     throw error;
@@ -298,8 +298,8 @@ export async function toggleJobStatus(
   isEnabled: boolean
 ): Promise<ScheduledJob> {
   try {
-    const response = await serverPut<ScheduledJob>(
-      `/scheduler/jobs/${jobId}/status`,
+    const response = await internalPut<ScheduledJob>(
+      `/api/scheduler/jobs/${jobId}/status`,
       { isEnabled }
     );
     return response;
@@ -319,12 +319,12 @@ export async function triggerJob(jobId: string): Promise<{
   message: string;
 }> {
   try {
-    const response = await serverPost<{
+    const response = await internalPost<{
       jobId: string;
       executionId: string;
       celeryTaskId: string | null;
       message: string;
-    }>(`/scheduler/jobs/${jobId}/trigger`);
+    }>(`/api/scheduler/jobs/${jobId}/trigger`);
     return response;
   } catch (error) {
     console.error(`Failed to trigger job ${jobId}:`, error);

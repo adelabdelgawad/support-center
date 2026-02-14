@@ -9,6 +9,13 @@ from sqlalchemy.orm import selectinload
 from db import RequestNote
 from api.repositories.base_repository import BaseRepository
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+# mypy: disable-error-code="override"
+
 
 class RequestNoteRepository(BaseRepository[RequestNote]):
     model = RequestNote

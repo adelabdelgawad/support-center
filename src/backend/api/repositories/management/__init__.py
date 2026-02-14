@@ -1,8 +1,8 @@
 """Management repositories module."""
 
 from api.repositories.management.desktop_session_repository import DesktopSessionRepository
-from api.repositories.management.device_repository import DeviceRepository
-from api.repositories.management.deployment_job_repository import DeploymentJobRepository
+# NOTE: DeviceRepository removed - Device model deleted with agent-deployment removal
+from api.repositories.management.remote_access_repository import RemoteAccessRepository
 from api.repositories.management.scheduler_repository import (
     TaskFunctionRepository,
     SchedulerJobTypeRepository,
@@ -13,8 +13,8 @@ from api.repositories.management.scheduler_repository import (
 
 __all__ = [
     "DesktopSessionRepository",
-    "DeviceRepository",
-    "DeploymentJobRepository",
+    "RemoteAccessRepository",
+    # "DeploymentJobRepository",  # Removed - DeploymentJob model deleted with agent-deployment removal
     "TaskFunctionRepository",
     "SchedulerJobTypeRepository",
     "ScheduledJobRepository",

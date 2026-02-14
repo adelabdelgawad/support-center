@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet } from '@/lib/fetch';
+import { internalGet } from '@/lib/fetch';
 import type { AuditLogsResponse, AuditFilterOptions } from '@/types/audit';
 
 export interface AuditLogsParams {
@@ -27,7 +27,7 @@ export async function getAuditLogs(params: AuditLogsParams): Promise<AuditLogsRe
     if (params.endDate) searchParams.set('end_date', params.endDate);
 
     const qs = searchParams.toString();
-    const response = await serverGet<AuditLogsResponse>(`/audit${qs ? `?${qs}` : ''}`, { revalidate: 0 });
+    const response = await internalGet<AuditLogsResponse>(`/api/audit${qs ? `?${qs}` : ''}`);
     return response;
   } catch (error) {
     console.error('Error fetching audit logs:', error);
@@ -37,7 +37,7 @@ export async function getAuditLogs(params: AuditLogsParams): Promise<AuditLogsRe
 
 export async function getAuditFilterOptions(): Promise<AuditFilterOptions> {
   try {
-    return await serverGet<AuditFilterOptions>('/audit/filter-options', { revalidate: 60 });
+    return await internalGet<AuditFilterOptions>('/api/audit/filter-options');
   } catch (error) {
     console.error('Error fetching audit filter options:', error);
     return { actions: [], resourceTypes: [], users: [] };

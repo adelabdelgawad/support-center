@@ -11,8 +11,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from api.v1 import api_router
 from api.routes import root_router, health_router
+from core.app_setup.routers import register_all_routers
 from core.config import settings
 from core.instrumentator import instrumentator
 from core.lifespan import lifespan
@@ -92,7 +92,7 @@ def create_app() -> FastAPI:
     # Include routers
     app.include_router(root_router)
     app.include_router(health_router)
-    app.include_router(api_router, prefix=settings.api.api_v1_prefix)
+    register_all_routers(app)
 
     # Instrumentation
     instrumentator.instrument(app)

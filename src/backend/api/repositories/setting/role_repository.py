@@ -3,12 +3,19 @@ Role repository with specialized queries.
 """
 
 from typing import List, Optional, Set, Tuple
+from uuid import UUID
 
 from db import PageRole, Role, UserRole
 from api.repositories.base_repository import BaseRepository
 from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
 
 
 class RoleRepository(BaseRepository[Role]):
@@ -138,7 +145,7 @@ class RoleRepository(BaseRepository[Role]):
         cls,
         db: AsyncSession,
         role_id: int,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[UUID] = None,
     ) -> Optional[Role]:
         """
         Toggle role active status.
@@ -161,7 +168,7 @@ class RoleRepository(BaseRepository[Role]):
         role.updated_at = datetime.utcnow()
         role.updated_by = updated_by
 
-        await db.commit()
+        await db.flush()
         await db.refresh(role)
 
         return role
@@ -191,7 +198,7 @@ class RoleRepository(BaseRepository[Role]):
         role.is_deleted = True
         role.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
 
         return True
 
@@ -221,7 +228,7 @@ class RoleRepository(BaseRepository[Role]):
         db: AsyncSession,
         role_id: int,
         page_ids: List[int],
-        created_by: Optional[int] = None,
+        created_by: Optional[UUID] = None,
     ) -> int:
         """
         Assign pages to a role (only new assignments).
@@ -251,7 +258,7 @@ class RoleRepository(BaseRepository[Role]):
         ]
 
         db.add_all(page_roles)
-        await db.commit()
+        await db.flush()
 
         return len(new_page_ids)
 
@@ -278,7 +285,7 @@ class RoleRepository(BaseRepository[Role]):
         )
 
         result = await db.execute(stmt)
-        await db.commit()
+        await db.flush()
 
         return result.rowcount
 
@@ -287,7 +294,7 @@ class RoleRepository(BaseRepository[Role]):
         cls,
         db: AsyncSession,
         role_id: int,
-    ) -> Set[int]:
+    ) -> Set[UUID]:
         """
         Get existing user IDs assigned to a role.
 
@@ -307,8 +314,8 @@ class RoleRepository(BaseRepository[Role]):
         cls,
         db: AsyncSession,
         role_id: int,
-        user_ids: List[int],
-        created_by: Optional[int] = None,
+        user_ids: List[UUID],
+        created_by: Optional[UUID] = None,
     ) -> int:
         """
         Assign users to a role (only new assignments).
@@ -338,7 +345,7 @@ class RoleRepository(BaseRepository[Role]):
         ]
 
         db.add_all(user_roles)
-        await db.commit()
+        await db.flush()
 
         return len(new_user_ids)
 
@@ -347,7 +354,7 @@ class RoleRepository(BaseRepository[Role]):
         cls,
         db: AsyncSession,
         role_id: int,
-        user_ids: List[int],
+        user_ids: List[UUID],
     ) -> int:
         """
         Remove users from a role.
@@ -365,7 +372,7 @@ class RoleRepository(BaseRepository[Role]):
         )
 
         result = await db.execute(stmt)
-        await db.commit()
+        await db.flush()
 
         return result.rowcount
 

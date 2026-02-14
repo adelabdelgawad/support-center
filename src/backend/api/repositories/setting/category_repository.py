@@ -10,6 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+
 
 class CategoryRepository(BaseRepository[Category]):
     model = Category

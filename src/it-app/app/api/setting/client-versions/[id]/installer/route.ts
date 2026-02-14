@@ -5,7 +5,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 
 // Backend API URL
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/backend";
 
 /**
  * POST /api/setting/client-versions/[id]/installer

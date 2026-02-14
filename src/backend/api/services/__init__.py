@@ -30,7 +30,7 @@ from .report_config_service import ReportConfigService
 from .outshift_reporting_service import OutshiftReportingService
 from .web_session_service import WebSessionService
 from .version_policy_service import VersionPolicyService, VersionStatus
-from .credential_service import CredentialService
+# NOTE: credential_service removed - deployment control plane deleted
 
 __all__ = [
     # Backward-compatible exports
@@ -54,5 +54,4 @@ __all__ = [
     "WebSessionService",
     "VersionPolicyService",
     "VersionStatus",
-    "CredentialService",
 ]

@@ -180,8 +180,6 @@ support-center/
 │   │   │   │   ├── management/         # Management routers
 │   │   │   │   │   ├── desktop_sessions_router.py  # Remote desktop session management
 │   │   │   │   │   ├── remote_access_router.py     # Remote access controls
-│   │   │   │   │   ├── devices_router.py          # Device management
-│   │   │   │   │   ├── deployment_jobs_router.py  # Agent deployment jobs
 │   │   │   │   │   ├── scheduler_router.py        # Scheduled jobs
 │   │   │   │   │   └── system_events_router.py    # System event logging
 │   │   │   │   ├── reporting/          # Reporting routers
@@ -209,14 +207,14 @@ support-center/
 │   │   │   │   ├── user.py, role.py, page.py, token.py, login.py
 │   │   │   │   ├── business_unit.py, organizational_unit.py, domain_user.py
 │   │   │   │   ├── service_request.py, chat_message.py, screenshot.py
-│   │   │   │   ├── desktop_session.py, remote_access.py, device.py
+│   │   │   │   ├── desktop_session.py, remote_access.py
 │   │   │   │   ├── priority.py, request_status.py, request_type.py
 │   │   │   │   ├── category.py, section.py, sla_config.py
 │   │   │   │   └── dashboard.py, reports.py, scheduler.py
 │   │   │   ├── services/               # ⭐ Business logic (organized by domain)
 │   │   │   │   ├── setting/            # Settings services (user_service.py, role_service.py, etc.)
 │   │   │   │   ├── support/            # Support services (request_service.py, chat_service.py, etc.)
-│   │   │   │   ├── management/          # Management services (device_service.py, desktop_session_service.py, etc.)
+│   │   │   │   ├── management/          # Management services (desktop_session_service.py, remote_access_service.py, etc.)
 │   │   │   │   ├── auth_service.py     # Authentication service
 │   │   │   │   ├── file_service.py     # File handling service
 │   │   │   │   ├── notification_service.py  # Notification service
@@ -230,7 +228,7 @@ support-center/
 │   │   │       ├── __init__.py          # Re-exports all repositories
 │   │   │       ├── base_repository.py   # Generic base repository class
 │   │   │       ├── auth/               # Auth repositories (user, token, refresh_token)
-│   │   │       ├── management/         # Management repositories (desktop_session, device, remote_access)
+│   │   │       ├── management/         # Management repositories (desktop_session, remote_access)
 │   │   │       ├── reporting/          # Reporting repositories (report_config)
 │   │   │       ├── setting/            # Setting repositories (user, role, page, business_unit, sla_config, etc.)
 │   │   │       ├── support/            # Support repositories (request, chat, screenshot, notification, etc.)
@@ -258,10 +256,8 @@ support-center/
 │   │   │   │   ├── requests/           # Support request management
 │   │   │   │   ├── chat/               # Real-time chat interface
 │   │   │   │   ├── management/         # Management module
-│   │   │   │   │   ├── devices/        # Device management
 │   │   │   │   │   ├── desktop-sessions/  # Remote desktop sessions
-│   │   │   │   │   ├── remote-access/  # Remote access controls
-│   │   │   │   │   └── deployment-jobs/   # Agent deployment management
+│   │   │   │   │   └── remote-access/  # Remote access controls
 │   │   │   │   ├── reporting/          # Reports and analytics
 │   │   │   │   └── settings/           # Settings pages
 │   │   │   │       ├── users/          # User management (context/, actions/, filters/, modal/, table/)
@@ -277,7 +273,7 @@ support-center/
 │   │   │   ├── api/                    # Frontend API routes (proxy to FastAPI backend)
 │   │   │   │   ├── auth/               # Authentication endpoints (login, logout, refresh)
 │   │   │   │   ├── support/            # Support request APIs
-│   │   │   │   ├── management/         # Management APIs (devices, sessions, remote-access)
+│   │   │   │   ├── management/         # Management APIs (sessions, remote-access)
 │   │   │   │   ├── reporting/          # Reporting APIs
 │   │   │   │   └── setting/            # Settings APIs (users, roles, business-units, etc.)
 │   │   │   ├── login/                  # Login page
@@ -288,7 +284,7 @@ support-center/
 │   │   │   │   └── *.actions.ts        # All actions (users, requests, settings, etc.)
 │   │   │   ├── auth/                   # Auth utilities (auth-context, csrf-manager, token-refresh)
 │   │   │   ├── types/                  # TypeScript types
-│   │   │   │   ├── api/                # API response types (requests, users, devices, etc.)
+│   │   │   │   ├── api/                # API response types (requests, users, etc.)
 │   │   │   │   ├── config/             # Config types (i18n, profile, email)
 │   │   │   │   ├── components/         # Component prop types (data-table)
 │   │   │   │   └── common/             # Common types
@@ -313,7 +309,6 @@ support-center/
 │   │   ├── Hubs/                       # SignalR hub implementations
 │   │   ├── Services/                   # Real-time services
 │   │   └── Program.cs                  # Service entrypoint
-│   └── agent-deployment/               # Agent deployment tools
 ├── docker/                             # Docker & deployment configs
 │   ├── backend/                        # Backend Dockerfile
 │   ├── frontend/                       # Frontend Dockerfile
@@ -399,8 +394,6 @@ schemas   logic      data access    ORM
 **Management endpoints** (`api/routers/management/`):
 - `desktop_sessions_router.py` → `DesktopSessionService` → DesktopSession repositories
 - `remote_access_router.py` → `RemoteAccessService` → RemoteAccess repositories
-- `devices_router.py` → `DeviceService` → Device repositories
-- `deployment_jobs_router.py` → `DeploymentJobService` → DeploymentJob repositories
 - `scheduler_router.py` → `SchedulerService` → Scheduler repositories
 - `system_events_router.py` → `SystemEventService` → SystemEvent repositories
 

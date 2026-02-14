@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * POST /api/api/v1/users/status
+ * POST /api/backend/users/status
  * Updates status for multiple users (bulk operation)
  */
 export async function POST(_request: NextRequest) {

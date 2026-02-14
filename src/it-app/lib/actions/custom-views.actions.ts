@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet } from '@/lib/fetch';
+import { internalGet } from '@/lib/fetch';
 import type { UserCustomView } from '@/types/custom-views';
 
 /**
@@ -11,9 +11,8 @@ import type { UserCustomView } from '@/types/custom-views';
  */
 export async function getMyCustomView(): Promise<UserCustomView | null> {
   try {
-    const view = await serverGet<UserCustomView>(
-      '/user-custom-views',
-      { revalidate: 30 }
+    const view = await internalGet<UserCustomView>(
+      '/api/user-custom-views'
     );
     return view;
   } catch (error) {

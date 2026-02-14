@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/users/[userId]/pages
+ * GET /api/backend/users/[userId]/pages
  * Fetches pages for a specific user
  */
 export async function GET(

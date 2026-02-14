@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost, serverPatch, serverDelete } from '@/lib/fetch/server';
+import { internalGet, internalPost, internalPatch, internalDelete } from '@/lib/fetch';
 import type {
   SystemMessageResponse,
   SystemMessageListResponse,
@@ -37,9 +37,8 @@ export async function getSystemMessages(params?: {
     });
   }
 
-  return serverGet<SystemMessageListResponse>(
-    `/system-messages?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<SystemMessageListResponse>(
+    `/api/setting/system-messages?${queryParams}`
   );
 }
 
@@ -49,8 +48,8 @@ export async function getSystemMessages(params?: {
 export async function createSystemMessage(
   data: SystemMessageCreate
 ): Promise<SystemMessageResponse> {
-  return serverPost<SystemMessageResponse>(
-    '/system-messages',
+  return internalPost<SystemMessageResponse>(
+    '/api/setting/system-messages',
     data
   );
 }
@@ -61,9 +60,8 @@ export async function createSystemMessage(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getSystemMessage(id: string): Promise<SystemMessageResponse> {
-  return serverGet<SystemMessageResponse>(
-    `/system-messages/${id}`,
-    { revalidate: 0 }
+  return internalGet<SystemMessageResponse>(
+    `/api/setting/system-messages/${id}`
   );
 }
 
@@ -74,8 +72,8 @@ export async function updateSystemMessage(
   id: string,
   data: SystemMessageUpdate
 ): Promise<SystemMessageResponse> {
-  return serverPatch<SystemMessageResponse>(
-    `/system-messages/${id}`,
+  return internalPatch<SystemMessageResponse>(
+    `/api/setting/system-messages/${id}`,
     data
   );
 }
@@ -84,8 +82,8 @@ export async function updateSystemMessage(
  * Toggles system message status (active/inactive)
  */
 export async function toggleSystemMessageStatus(id: string): Promise<SystemMessageResponse> {
-  return serverPatch<SystemMessageResponse>(
-    `/system-messages/${id}/toggle`
+  return internalPatch<SystemMessageResponse>(
+    `/api/setting/system-messages/${id}/toggle`
   );
 }
 
@@ -93,5 +91,5 @@ export async function toggleSystemMessageStatus(id: string): Promise<SystemMessa
  * Deletes a system message
  */
 export async function deleteSystemMessage(id: string): Promise<void> {
-  await serverDelete(`/system-messages/${id}`);
+  await internalDelete(`/api/setting/system-messages/${id}`);
 }

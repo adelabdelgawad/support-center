@@ -9,5 +9,5 @@ afterEach(() => {
 
 // Mock environment variables
 process.env.NEXT_PUBLIC_API_URL = 'http://localhost:8000'
-process.env.NEXT_PUBLIC_API_BASE_PATH = '/api/v1'
+process.env.NEXT_PUBLIC_API_BASE_PATH = '/backend'
 process.env.NEXT_PUBLIC_SIGNALR_URL = 'http://localhost:5000/hubs'

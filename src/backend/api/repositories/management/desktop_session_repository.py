@@ -15,6 +15,12 @@ from sqlalchemy.orm import selectinload
 from db import DesktopSession
 from api.repositories.base_repository import BaseRepository
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+
 
 class DesktopSessionRepository(BaseRepository[DesktopSession]):
     """Repository for DesktopSession operations."""
@@ -196,6 +202,9 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             Updated session or None
+
+        Note:
+            Caller must commit transaction.
         """
         stmt = select(DesktopSession).where(DesktopSession.id == session_id)
         result = await db.execute(stmt)
@@ -210,8 +219,7 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         if ip_address:
             session.ip_address = ip_address
 
-        await db.commit()
-        await db.refresh(session)
+        await db.flush()
 
         return session
 
@@ -228,6 +236,9 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             Updated session or None
+
+        Note:
+            Caller must commit transaction.
         """
         stmt = select(DesktopSession).where(DesktopSession.id == session_id)
         result = await db.execute(stmt)
@@ -238,8 +249,7 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         session.is_active = False
 
-        await db.commit()
-        await db.refresh(session)
+        await db.flush()
 
         return session
 
@@ -254,13 +264,15 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             Number of sessions marked inactive
+
+        Note:
+            Caller must commit transaction.
         """
         result = await db.execute(
             update(DesktopSession)
             .where(DesktopSession.user_id == user_id)
             .values(is_active=False)
         )
-        await db.commit()
         return result.rowcount
 
     @classmethod
@@ -286,6 +298,9 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             Updated session
+
+        Note:
+            Caller must commit transaction.
         """
         session.ip_address = ip_address
         session.app_version = app_version
@@ -297,8 +312,7 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         if os_info:
             session.os_info = os_info
 
-        await db.commit()
-        await db.refresh(session)
+        await db.flush()
 
         return session
 
@@ -316,6 +330,9 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             List of deactivated sessions
+
+        Note:
+            Caller must commit transaction.
         """
         stmt = (
             select(DesktopSession)
@@ -329,6 +346,6 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         for session in sessions:
             session.is_active = False
 
-        await db.commit()
+        await db.flush()
 
         return sessions

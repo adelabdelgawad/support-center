@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/roles
+ * GET /api/backend/roles
  * Fetches roles with pagination, filtering, and sorting
  */
 export async function GET(_request: NextRequest) {
@@ -30,7 +30,7 @@ export async function GET(_request: NextRequest) {
 }
 
 /**
- * POST /api/api/v1/roles
+ * POST /api/backend/roles
  * Creates a new role
  */
 export async function POST(_request: NextRequest) {

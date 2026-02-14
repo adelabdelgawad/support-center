@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet, serverPost, serverPut } from "@/lib/fetch";
+import { internalGet, internalPost, internalPut } from "@/lib/fetch";
 import type {
   CategoryResponse,
   CategoryCreateRequest,
@@ -17,9 +17,8 @@ import type {
 export async function getCategorySubcategories(
   categoryId: number
 ): Promise<SubcategoryResponse[]> {
-  return serverGet<SubcategoryResponse[]>(
-    `/categories/subcategories?category_id=${categoryId}&active_only=false`,
-    { revalidate: 0 }
+  return internalGet<SubcategoryResponse[]>(
+    `/api/setting/categories/subcategories?category_id=${categoryId}&active_only=false`
   );
 }
 
@@ -46,18 +45,16 @@ export async function getCategories(params?: {
   // Fetch categories with subcategories in a single request if needed
   const includeSubcategories = params?.includeSubcategories ?? false;
 
-  const categories = await serverGet<CategoryWithSubcategoriesResponse[]>(
-    `/categories/categories?active_only=${activeOnly}&include_subcategories=${includeSubcategories}`,
-    { revalidate: 0 }
+  const categories = await internalGet<CategoryWithSubcategoriesResponse[]>(
+    `/api/setting/categories?active_only=${activeOnly}&include_subcategories=${includeSubcategories}`
   );
 
   // Calculate counts - fix inverted ternary
   // When activeOnly=false, categories already has all categories (active_only=false in the fetch)
   // When activeOnly=true, we need to fetch again with active_only=false to get counts
   const allCategories = activeOnly
-    ? await serverGet<CategoryWithSubcategoriesResponse[]>(
-        `/categories/categories?active_only=false&include_subcategories=${includeSubcategories}`,
-        { revalidate: 0 }
+    ? await internalGet<CategoryWithSubcategoriesResponse[]>(
+        `/api/setting/categories?active_only=false&include_subcategories=${includeSubcategories}`
       )
     : categories;
 
@@ -107,7 +104,7 @@ export async function getCategories(params?: {
 export async function createCategory(
   categoryData: CategoryCreateRequest
 ): Promise<CategoryResponse> {
-  return serverPost<CategoryResponse>("/categories/categories", categoryData);
+  return internalPost<CategoryResponse>("/api/setting/categories", categoryData);
 }
 
 /**
@@ -117,7 +114,7 @@ export async function updateCategory(
   categoryId: number,
   categoryData: CategoryUpdateRequest
 ): Promise<CategoryResponse> {
-  return serverPut<CategoryResponse>(`/categories/categories/${categoryId}`, categoryData);
+  return internalPut<CategoryResponse>(`/api/setting/categories/${categoryId}`, categoryData);
 }
 
 /**
@@ -127,7 +124,7 @@ export async function toggleCategoryStatus(
   categoryId: number,
   newStatus: boolean
 ): Promise<CategoryResponse> {
-  return serverPut<CategoryResponse>(`/categories/categories/${categoryId}`, { is_active: newStatus });
+  return internalPut<CategoryResponse>(`/api/setting/categories/${categoryId}`, { is_active: newStatus });
 }
 
 /**
@@ -139,9 +136,8 @@ export async function getSubcategories(
   categoryId: number
 ): Promise<SubcategoriesResponse> {
   try {
-    const subcategories = await serverGet<SubcategoryResponse[]>(
-      `/categories/subcategories?category_id=${categoryId}`,
-      { revalidate: 0 }
+    const subcategories = await internalGet<SubcategoryResponse[]>(
+      `/api/setting/categories/subcategories?category_id=${categoryId}`
     );
 
     // Calculate counts

@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet, serverPost } from "@/lib/fetch";
+import { internalGet, internalPost } from "@/lib/fetch";
 import type {
   SessionWithUser,
   ActiveSession,
@@ -78,9 +78,8 @@ function enrichSessions(sessions: SessionWithUser[], snapshotTime: number): Acti
  */
 export async function getActiveSessionsWithUsers(): Promise<ActiveSession[]> {
   try {
-    const sessions = await serverGet<SessionWithUser[]>(
-      '/sessions/desktop/active-with-users',
-      { revalidate: 0 }
+    const sessions = await internalGet<SessionWithUser[]>(
+      '/api/sessions/active-with-users'
     );
 
     // Enrich sessions with derived fields using consistent server timestamp
@@ -101,9 +100,8 @@ export async function getActiveSessionsWithUsers(): Promise<ActiveSession[]> {
  */
 export async function getActiveSessionStats(): Promise<ActiveSessionStats> {
   try {
-    const stats = await serverGet<ActiveSessionStats>(
-      '/sessions/desktop/stats',
-      { revalidate: 0 }
+    const stats = await internalGet<ActiveSessionStats>(
+      '/api/sessions/stats'
     );
     return stats;
   } catch (error: unknown) {
@@ -205,8 +203,8 @@ export async function getActiveSessionsPageData(filters?: {
  */
 export async function sendSessionHeartbeat(sessionId: number): Promise<boolean> {
   try {
-    await serverPost(
-      `/sessions/${sessionId}/heartbeat`
+    await internalPost(
+      `/api/sessions/${sessionId}/heartbeat`
     );
     return true;
   } catch (error: unknown) {

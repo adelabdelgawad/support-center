@@ -44,10 +44,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Call backend /api/v1/auth/me endpoint
+    // Call backend /backend/auth/me endpoint
     const userData = await makeAuthenticatedRequest<UserResponse>(
       "GET",
-      "/auth/me"  // baseURL already includes /api/v1
+      "/auth/me"  // baseURL already includes /backend
     );
 
     // Return user data

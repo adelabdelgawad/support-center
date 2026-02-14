@@ -6,7 +6,7 @@
 
 "use server";
 
-import { serverGet } from "@/lib/fetch/server";
+import { internalGet } from "@/lib/fetch";
 import type { EmailConfig, EmailConfigListResponse } from "@/types/email-config";
 
 /**
@@ -17,8 +17,8 @@ export async function getEmailConfigs(
   limit: number = 100
 ): Promise<EmailConfigListResponse> {
   try {
-    const response = await serverGet<EmailConfigListResponse>(
-      `/email-configs?skip=${skip}&limit=${limit}`
+    const response = await internalGet<EmailConfigListResponse>(
+      `/api/email-configs?skip=${skip}&limit=${limit}`
     );
 
     return response;
@@ -33,8 +33,8 @@ export async function getEmailConfigs(
  */
 export async function getActiveEmailConfig(): Promise<EmailConfig | null> {
   try {
-    const response = await serverGet<EmailConfig>(
-      "/email-configs/active"
+    const response = await internalGet<EmailConfig>(
+      "/api/email-configs/active"
     );
 
     return response;

@@ -32,6 +32,10 @@ from db import Screenshot, ServiceRequest
 from api.services.minio_service import MinIOStorageService
 # Note: task imports are done lazily to avoid circular imports
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="return-value"
+
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
 

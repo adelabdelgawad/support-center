@@ -5,7 +5,7 @@
  * Uses serverFetch with SHORT_LIVED cache for dashboard stats
  */
 
-import { serverGet } from "@/lib/fetch";
+import { internalGet } from "@/lib/fetch";
 
 /**
  * Dashboard statistics response
@@ -45,9 +45,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   try {
     // Fetch technician views to get counts
     // Using perPage=5 to get a small sample of recent requests
-    const response = await serverGet<any>(
-      '/requests/technician-views?view=recently_updated&page=1&per_page=5',
-      { revalidate: 0 }
+    const response = await internalGet<any>(
+      '/api/requests/technician-views?view=recently_updated&page=1&per_page=5'
     );
 
     return {

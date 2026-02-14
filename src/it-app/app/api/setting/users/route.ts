@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/users
+ * GET /api/backend/users
  * Fetches users with pagination, filtering, and sorting
  */
 export async function GET(_request: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(_request: NextRequest) {
 }
 
 /**
- * POST /api/api/v1/users
+ * POST /api/backend/users
  * Creates a new user
  */
 export async function POST(_request: NextRequest) {

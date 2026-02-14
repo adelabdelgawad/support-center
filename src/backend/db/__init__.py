@@ -62,10 +62,6 @@ from .models import (
     WhatsAppBatch,
     # Client Version Management
     ClientVersion,
-    # Deployment Control Plane
-    Device,
-    DeploymentJob,
-    Credential,
     # Active Directory
     ActiveDirectoryConfig,
     # Authentication Models
@@ -81,11 +77,6 @@ from .enums import (
     SessionType,  # Replaces session_types table
     UploadStatus,  # Type-safe upload status
     TriggerTiming,  # Type-safe trigger timing
-    # Deployment Control Plane enums
-    DeviceLifecycleState,
-    DeviceDiscoverySource,
-    DeploymentJobStatus,
-    CredentialType,
 )
 
 __all__ = [
@@ -93,10 +84,6 @@ __all__ = [
     "SessionType",
     "UploadStatus",
     "TriggerTiming",
-    "DeviceLifecycleState",
-    "DeviceDiscoverySource",
-    "DeploymentJobStatus",
-    "CredentialType",
     # Lookup/Reference Tables
     "Role",
     "UserRole",
@@ -139,10 +126,6 @@ __all__ = [
     "WhatsAppBatch",
     # Client Version Management
     "ClientVersion",
-    # Deployment Control Plane
-    "Device",
-    "DeploymentJob",
-    "Credential",
     # Active Directory
     "ActiveDirectoryConfig",
     # Authentication Models

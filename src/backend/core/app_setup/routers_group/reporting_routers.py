@@ -6,7 +6,7 @@ This module exports all reporting-related routers:
 - report_configs_router: Report configuration endpoints (prefix in router)
 """
 import logging
-from fastapi import FastAPI
+from fastapi import APIRouter
 
 from api.routers.reporting.reports_router import router as reports_router
 from api.routers.reporting.report_configs_router import router as report_configs_router
@@ -16,19 +16,19 @@ logger = logging.getLogger(__name__)
 __all__ = ["register_routes"]
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(router: APIRouter) -> None:
     """
-    Register all reporting routers with the FastAPI application.
+    Register all reporting routers.
 
     Args:
-        app (FastAPI): FastAPI application instance
+        router (APIRouter): Parent router to register routes under
     """
     try:
         logger.info("Starting reporting router registration")
 
-        # Reports and report_configs have prefix and tags defined in their routers
-        app.include_router(reports_router)
-        app.include_router(report_configs_router)
+        # Reports and report_configs have prefix defined in router
+        router.include_router(reports_router)
+        router.include_router(report_configs_router)
 
         logger.info("Successfully registered 2 reporting routers")
     except Exception as e:

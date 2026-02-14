@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * PUT /api/api/v1/users/[userId]/status
+ * PUT /api/backend/users/[userId]/status
  * Toggles user active status
  */
 export async function PUT(

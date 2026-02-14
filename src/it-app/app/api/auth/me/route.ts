@@ -6,7 +6,7 @@
  *
  * This endpoint:
  * 1. Reads access token from cookies
- * 2. Calls backend /api/v1/auth/me endpoint
+ * 2. Calls backend /backend/auth/me endpoint
  * 3. Returns user data with roles
  */
 
@@ -46,11 +46,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Call backend /api/v1/auth/me endpoint with access token
+    // Call backend /backend/auth/me endpoint with access token
     // makeAuthenticatedRequest will use the access_token cookie automatically
     const userData = await makeAuthenticatedRequest<UserResponse>(
       "GET",
-      "/auth/me"  // baseURL already includes /api/v1
+      "/auth/me"  // baseURL already includes /backend
     );
 
     // Return user data

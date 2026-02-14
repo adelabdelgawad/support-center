@@ -14,7 +14,7 @@ class WhatsAppBatchRepository(BaseRepository[WhatsAppBatch]):
     async def check_batch_exists(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         first_message_id: Optional[UUID],
         last_message_id: Optional[UUID],
     ) -> Optional[WhatsAppBatch]:
@@ -42,7 +42,7 @@ class WhatsAppBatchRepository(BaseRepository[WhatsAppBatch]):
     async def find_unsent_requester_messages(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         request: ServiceRequest,
     ) -> List[ChatMessage]:
         """
@@ -88,7 +88,7 @@ class WhatsAppBatchRepository(BaseRepository[WhatsAppBatch]):
     async def create_batch(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         business_unit_id: int,
         first_message_id: Optional[UUID],
         last_message_id: Optional[UUID],

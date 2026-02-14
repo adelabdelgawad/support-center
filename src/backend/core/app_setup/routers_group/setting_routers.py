@@ -22,7 +22,7 @@ This module exports all setting/administration-related routers:
 - user_custom_views_router: User custom view endpoints (/user-custom-views)
 """
 import logging
-from fastapi import FastAPI
+from fastapi import APIRouter
 
 from api.routers.setting.active_directory_config_router import router as active_directory_config_router
 from api.routers.setting.business_unit_regions_router import router as business_unit_regions_router
@@ -48,35 +48,35 @@ logger = logging.getLogger(__name__)
 __all__ = ["register_routes"]
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(router: APIRouter) -> None:
     """
-    Register all setting/administration routers with the FastAPI application.
+    Register all setting/administration routers.
 
     Args:
-        app (FastAPI): FastAPI application instance
+        router (APIRouter): Parent router to register routes under
     """
     try:
         logger.info("Starting setting router registration")
 
-        app.include_router(active_directory_config_router, prefix="/active-directory-configs", tags=["active-directory"])
-        app.include_router(email_config_router, prefix="/email-configs", tags=["email"])
-        app.include_router(users_router, prefix="/users", tags=["users"])
-        app.include_router(domain_users_router, prefix="/domain-users", tags=["domain-users"])
-        app.include_router(organizational_units_router, prefix="/organizational-units", tags=["organizational-units"])
-        app.include_router(request_status_router, prefix="/request-statuses", tags=["request-statuses"])
-        app.include_router(priorities_router, prefix="/priorities", tags=["priorities"])
-        app.include_router(request_types_router, prefix="/request-types", tags=["request-types"])
-        app.include_router(categories_router, prefix="/categories", tags=["categories"])
-        app.include_router(sections_router, prefix="/sections", tags=["sections"])
-        app.include_router(business_unit_regions_router, prefix="/business-unit-regions", tags=["business-unit-regions"])
-        app.include_router(business_units_router, prefix="/business-units", tags=["business-units"])
-        app.include_router(business_unit_user_assigns_router, prefix="/business-unit-user-assigns", tags=["business-unit-user-assigns"])
-        app.include_router(roles_router, prefix="/roles", tags=["roles"])
-        app.include_router(pages_router, prefix="/pages", tags=["pages"])
-        app.include_router(system_messages_router, prefix="/system-messages", tags=["System Messages"])
-        app.include_router(user_custom_views_router, prefix="/user-custom-views", tags=["user-custom-views"])
-        # SLA configs, reports, and report_configs have prefix defined in router
-        app.include_router(sla_configs_router)
+        router.include_router(active_directory_config_router, prefix="/active-directory-configs", tags=["active-directory"])
+        router.include_router(email_config_router, prefix="/email-configs", tags=["email"])
+        router.include_router(users_router, prefix="/users", tags=["users"])
+        router.include_router(domain_users_router, prefix="/domain-users", tags=["domain-users"])
+        router.include_router(organizational_units_router, prefix="/organizational-units", tags=["organizational-units"])
+        router.include_router(request_status_router, prefix="/request-statuses", tags=["request-statuses"])
+        router.include_router(priorities_router, prefix="/priorities", tags=["priorities"])
+        router.include_router(request_types_router, prefix="/request-types", tags=["request-types"])
+        router.include_router(categories_router, prefix="/categories", tags=["categories"])
+        router.include_router(sections_router, prefix="/sections", tags=["sections"])
+        router.include_router(business_unit_regions_router, prefix="/business-unit-regions", tags=["business-unit-regions"])
+        router.include_router(business_units_router, prefix="/business-units", tags=["business-units"])
+        router.include_router(business_unit_user_assigns_router, prefix="/business-unit-user-assigns", tags=["business-unit-user-assigns"])
+        router.include_router(roles_router, prefix="/roles", tags=["roles"])
+        router.include_router(pages_router, prefix="/pages", tags=["pages"])
+        router.include_router(system_messages_router, prefix="/system-messages", tags=["System Messages"])
+        router.include_router(user_custom_views_router, prefix="/user-custom-views", tags=["user-custom-views"])
+        # SLA configs has prefix defined in router
+        router.include_router(sla_configs_router)
 
         logger.info("Successfully registered 17 setting routers")
     except Exception as e:

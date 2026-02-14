@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost, serverPut, serverDelete } from '@/lib/fetch';
+import { internalGet, internalPost, internalPut, internalDelete } from '@/lib/fetch';
 import type {
   BusinessUnitResponse,
   BusinessUnitListResponse,
@@ -45,9 +45,8 @@ export async function getBusinessUnits(params?: {
     });
   }
 
-  return serverGet<BusinessUnitListResponse>(
-    `/business-units?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<BusinessUnitListResponse>(
+    `/api/business-units?${queryParams}`
   );
 }
 
@@ -57,8 +56,8 @@ export async function getBusinessUnits(params?: {
 export async function createBusinessUnit(
   data: BusinessUnitCreate
 ): Promise<BusinessUnitResponse> {
-  return serverPost<BusinessUnitResponse>(
-    '/business-units',
+  return internalPost<BusinessUnitResponse>(
+    '/api/business-units',
     data
   );
 }
@@ -69,9 +68,8 @@ export async function createBusinessUnit(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getBusinessUnit(id: number): Promise<BusinessUnitResponse> {
-  return serverGet<BusinessUnitResponse>(
-    `/business-units/${id}`,
-    { revalidate: 0 }
+  return internalGet<BusinessUnitResponse>(
+    `/api/business-units/${id}`
   );
 }
 
@@ -82,8 +80,8 @@ export async function updateBusinessUnit(
   id: number,
   data: BusinessUnitUpdate
 ): Promise<BusinessUnitResponse> {
-  return serverPut<BusinessUnitResponse>(
-    `/business-units/${id}`,
+  return internalPut<BusinessUnitResponse>(
+    `/api/business-units/${id}`,
     data
   );
 }
@@ -92,8 +90,8 @@ export async function updateBusinessUnit(
  * Toggles business unit status (active/inactive)
  */
 export async function toggleBusinessUnitStatus(id: number): Promise<BusinessUnitResponse> {
-  return serverPut<BusinessUnitResponse>(
-    `/business-units/${id}/status`
+  return internalPut<BusinessUnitResponse>(
+    `/api/setting/business-units/${id}/status`
   );
 }
 
@@ -103,8 +101,8 @@ export async function toggleBusinessUnitStatus(id: number): Promise<BusinessUnit
 export async function bulkUpdateBusinessUnitsStatus(
   data: BulkBusinessUnitStatusUpdate
 ): Promise<BusinessUnitResponse[]> {
-  return serverPost<BusinessUnitResponse[]>(
-    '/business-units/bulk-status',
+  return internalPost<BusinessUnitResponse[]>(
+    '/api/setting/business-units/bulk-status',
     data
   );
 }
@@ -113,7 +111,7 @@ export async function bulkUpdateBusinessUnitsStatus(
  * Deletes a business unit
  */
 export async function deleteBusinessUnit(id: number): Promise<void> {
-  await serverDelete(`/business-units/${id}`);
+  await internalDelete(`/api/business-units/${id}`);
 }
 
 /**
@@ -122,9 +120,8 @@ export async function deleteBusinessUnit(id: number): Promise<void> {
  * Cache: NO_CACHE - counts for settings page header
  */
 export async function getBusinessUnitCounts(): Promise<BusinessUnitCountsResponse> {
-  return serverGet<BusinessUnitCountsResponse>(
-    '/business-units/counts',
-    { revalidate: 0 }
+  return internalGet<BusinessUnitCountsResponse>(
+    '/api/setting/business-units/counts'
   );
 }
 
@@ -134,9 +131,8 @@ export async function getBusinessUnitCounts(): Promise<BusinessUnitCountsRespons
  * Cache: NO_CACHE - dropdown options rarely change
  */
 export async function getActiveRegionsForForms(): Promise<BusinessUnitRegionResponse[]> {
-  const result = await serverGet<BusinessUnitRegionListResponse>(
-    '/business-unit-regions?is_active=true&limit=100',
-    { revalidate: 0 }
+  const result = await internalGet<BusinessUnitRegionListResponse>(
+    '/api/business-unit-regions?is_active=true&limit=100'
   );
   return result.regions;
 }

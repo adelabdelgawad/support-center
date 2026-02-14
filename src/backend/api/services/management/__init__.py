@@ -2,24 +2,19 @@
 
 This module contains services for managing IT operations including:
 - Desktop sessions and remote access
-- Device management
-- Deployment jobs and client versions
 - Scheduler and system events
 """
 
-from api.services.management.client_version_service import ClientVersionService
-from api.services.management.deployment_job_service import DeploymentJobService
+# NOTE: client_version_service, deployment_job_service removed - deployment control plane deleted
 from api.services.management.desktop_session_service import DesktopSessionService
-from api.services.management.device_service import DeviceService
 from api.services.management.remote_access_service import RemoteAccessService
 from api.services.management.scheduler_service import SchedulerService
 from api.services.management.system_event_service import SystemEventService
 
 __all__ = [
-    "ClientVersionService",
-    "DeploymentJobService",
+    # "ClientVersionService",  # Removed
+    # "DeploymentJobService",  # Removed
     "DesktopSessionService",
-    "DeviceService",
     "RemoteAccessService",
     "SchedulerService",
     "SystemEventService",

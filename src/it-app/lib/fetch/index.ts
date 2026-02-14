@@ -34,3 +34,12 @@ export {
 
 // API route helpers
 export { withAuth } from './api-route-helper';
+
+// Internal API route utilities (for server actions)
+export {
+  internalGet,
+  internalPost,
+  internalPut,
+  internalPatch,
+  internalDelete,
+} from './internal';

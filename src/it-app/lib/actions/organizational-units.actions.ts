@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet, serverPost, serverPatch, serverDelete } from "@/lib/fetch/server";
+import { internalGet, internalPost, internalPatch, internalDelete } from "@/lib/fetch";
 
 /**
  * Organizational Unit Types
@@ -50,9 +50,8 @@ export interface UpdateOURequest {
  * Cache: NO_CACHE (requires fresh data for sync status)
  */
 export async function getOrganizationalUnits(): Promise<OrganizationalUnitListResponse> {
-  return await serverGet<OrganizationalUnitListResponse>(
-    "/organizational-units",
-    { revalidate: 0 }
+  return await internalGet<OrganizationalUnitListResponse>(
+    "/api/organizational-units"
   );
 }
 
@@ -62,9 +61,8 @@ export async function getOrganizationalUnits(): Promise<OrganizationalUnitListRe
  * Cache: NO_CACHE (real-time AD query)
  */
 export async function discoverOUsFromAD(): Promise<DiscoverOUResponse[]> {
-  return await serverGet<DiscoverOUResponse[]>(
-    "/organizational-units/discover",
-    { revalidate: 0 }
+  return await internalGet<DiscoverOUResponse[]>(
+    "/api/organizational-units/discover"
   );
 }
 
@@ -74,7 +72,7 @@ export async function discoverOUsFromAD(): Promise<DiscoverOUResponse[]> {
 export async function createOrganizationalUnit(
   data: CreateOURequest
 ): Promise<OrganizationalUnit> {
-  return await serverPost<OrganizationalUnit>("/organizational-units", data);
+  return await internalPost<OrganizationalUnit>("/api/organizational-units", data);
 }
 
 /**
@@ -84,8 +82,8 @@ export async function updateOrganizationalUnit(
   ouId: number,
   data: UpdateOURequest
 ): Promise<OrganizationalUnit> {
-  return await serverPatch<OrganizationalUnit>(
-    `/organizational-units/${ouId}`,
+  return await internalPatch<OrganizationalUnit>(
+    `/api/organizational-units/${ouId}`,
     data
   );
 }
@@ -97,8 +95,8 @@ export async function toggleOUEnabled(
   ouId: number,
   isEnabled: boolean
 ): Promise<OrganizationalUnit> {
-  return await serverPost<OrganizationalUnit>(
-    `/organizational-units/${ouId}/toggle`,
+  return await internalPost<OrganizationalUnit>(
+    `/api/organizational-units/${ouId}/toggle`,
     { isEnabled }
   );
 }
@@ -107,7 +105,7 @@ export async function toggleOUEnabled(
  * Deletes an organizational unit
  */
 export async function deleteOrganizationalUnit(ouId: number): Promise<void> {
-  return await serverDelete(`/organizational-units/${ouId}`);
+  return await internalDelete(`/api/organizational-units/${ouId}`);
 }
 
 /**
@@ -126,5 +124,5 @@ export interface SyncOUsResponse {
 export async function syncOrganizationalUnits(
   data: SyncOUsRequest
 ): Promise<SyncOUsResponse> {
-  return await serverPost<SyncOUsResponse>("/organizational-units/sync", data);
+  return await internalPost<SyncOUsResponse>("/api/organizational-units/sync", data);
 }

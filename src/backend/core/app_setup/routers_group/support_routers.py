@@ -13,7 +13,7 @@ This module exports all support request-related routers:
 - search_router: Search endpoints (/search)
 """
 import logging
-from fastapi import FastAPI
+from fastapi import APIRouter
 
 from api.routers.support.chat_files_router import router as chat_files_router
 from api.routers.support.chat_router import router as chat_router
@@ -30,25 +30,25 @@ logger = logging.getLogger(__name__)
 __all__ = ["register_routes"]
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(router: APIRouter) -> None:
     """
-    Register all support routers with the FastAPI application.
+    Register all support routers.
 
     Args:
-        app (FastAPI): FastAPI application instance
+        router (APIRouter): Parent router to register routes under
     """
     try:
         logger.info("Starting support router registration")
 
-        app.include_router(request_details_metadata_router, prefix="/request-details-metadata", tags=["metadata"])
-        app.include_router(request_notes_router, prefix="/request-notes", tags=["request-notes"])
-        app.include_router(requests_router, prefix="/requests", tags=["requests"])
-        app.include_router(screenshots_router, prefix="/screenshots", tags=["screenshots"])
-        app.include_router(chat_router, prefix="/chat", tags=["chat"])
-        app.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
-        app.include_router(search_router, prefix="/search", tags=["search"])
-        app.include_router(files_router, prefix="/files", tags=["files"])
-        app.include_router(chat_files_router, prefix="/chat-files", tags=["chat-files"])
+        router.include_router(request_details_metadata_router, prefix="/request-details-metadata", tags=["metadata"])
+        router.include_router(request_notes_router, prefix="/request-notes", tags=["request-notes"])
+        router.include_router(requests_router, prefix="/requests", tags=["requests"])
+        router.include_router(screenshots_router, prefix="/screenshots", tags=["screenshots"])
+        router.include_router(chat_router, prefix="/chat", tags=["chat"])
+        router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
+        router.include_router(search_router, prefix="/search", tags=["search"])
+        router.include_router(files_router, prefix="/files", tags=["files"])
+        router.include_router(chat_files_router, prefix="/chat-files", tags=["chat-files"])
 
         logger.info("Successfully registered 9 support routers")
     except Exception as e:

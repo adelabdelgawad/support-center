@@ -25,8 +25,7 @@ interface PageProps {
 // Generate dynamic metadata from route params (no blocking fetch)
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  // Use first segment of UUID for readable display
-  const shortId = id.split('-')[0].toUpperCase();
+  const shortId = id;
 
   return {
     title: `Request #${shortId}`,
@@ -55,8 +54,8 @@ async function getCurrentUser() {
 export default async function Page({ params }: PageProps) {
   const { id } = await params;
 
-  // Validate UUID format (fast, no network)
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+  // Validate integer ID format (fast, no network)
+  if (!/^\d+$/.test(id)) {
     redirect('/support-center/requests');
   }
 

@@ -2,13 +2,13 @@
 
 /**
  * Server actions for request details page
- * These functions use serverGet/serverPost/etc with appropriate cache strategies
+ * These functions use internalGet/internalPost/etc to call Next.js API routes
  * Used by page.tsx for server-side data fetching
  */
 
 import { redirect } from 'next/navigation';
 import { getServerUserInfo } from '@/lib/api/server-fetch';
-import { serverGet, serverPost, serverPatch } from '@/lib/fetch';
+import { internalGet, internalPost, internalPatch } from '@/lib/fetch';
 import type { ServiceRequestDetail } from '@/types/ticket-detail';
 import type { Technician, Priority, RequestNote, RequestStatus } from '@/types/metadata';
 import type { ChatMessage } from '@/lib/signalr/types';
@@ -23,9 +23,8 @@ import type { Category } from '@/lib/hooks/use-categories';
  */
 export async function getRequestDetails(requestId: string): Promise<ServiceRequestDetail | null> {
   try {
-    const ticket = await serverGet<ServiceRequestDetail>(
-      `/requests/${requestId}`,
-      { revalidate: 0 }
+    const ticket = await internalGet<ServiceRequestDetail>(
+      `/api/requests/${requestId}`
     );
     return ticket;
   } catch (error) {
@@ -41,9 +40,8 @@ export async function getRequestDetails(requestId: string): Promise<ServiceReque
  */
 export async function getRequestNotes(requestId: string): Promise<RequestNote[]> {
   try {
-    const notes = await serverGet<RequestNote[]>(
-      `/request-notes/${requestId}/notes`,
-      { revalidate: 0 }
+    const notes = await internalGet<RequestNote[]>(
+      `/api/request-notes/${requestId}`
     );
     return notes;
   } catch (error) {
@@ -59,9 +57,8 @@ export async function getRequestNotes(requestId: string): Promise<RequestNote[]>
  */
 export async function getTechnicians(): Promise<Technician[]> {
   try {
-    const technicians = await serverGet<Technician[]>(
-      '/users?is_technician=true&is_active=true',
-      { revalidate: 0 }
+    const technicians = await internalGet<Technician[]>(
+      '/api/users?is_technician=true&is_active=true'
     );
     return technicians;
   } catch (error) {
@@ -78,9 +75,8 @@ export async function getTechnicians(): Promise<Technician[]> {
  */
 export async function getPriorities(): Promise<Priority[]> {
   try {
-    const priorities = await serverGet<Priority[]>(
-      '/priorities/',
-      { revalidate: 0 }
+    const priorities = await internalGet<Priority[]>(
+      '/api/priorities'
     );
     return priorities;
   } catch (error) {
@@ -97,15 +93,14 @@ export async function getPriorities(): Promise<Priority[]> {
  */
 export async function getStatuses(): Promise<RequestStatus[]> {
   try {
-    const response = await serverGet<{
+    const response = await internalGet<{
       statuses: RequestStatus[];
       total: number;
       activeCount: number;
       inactiveCount: number;
       readonlyCount: number;
     }>(
-      '/request-statuses?is_active=true',
-      { revalidate: 0 }
+      '/api/request-statuses?is_active=true'
     );
 
     return response.statuses;
@@ -123,9 +118,8 @@ export async function getStatuses(): Promise<RequestStatus[]> {
  */
 export async function getCategories(): Promise<Category[]> {
   try {
-    const categories = await serverGet<Category[]>(
-      '/categories/categories?active_only=true&include_subcategories=true',
-      { revalidate: 0 }
+    const categories = await internalGet<Category[]>(
+      '/api/categories?active_only=true&include_subcategories=true'
     );
 
     return categories || [];
@@ -146,9 +140,8 @@ export async function getRequestMessages(
   perPage: number = 100
 ): Promise<ChatMessage[]> {
   try {
-    const messages = await serverGet<ChatMessage[]>(
-      `/chat/messages/request/${requestId}?page=${page}&per_page=${perPage}`,
-      { revalidate: 0 }
+    const messages = await internalGet<ChatMessage[]>(
+      `/api/chat/messages/request/${requestId}?page=${page}&per_page=${perPage}`
     );
     return messages;
   } catch (error) {
@@ -207,9 +200,8 @@ function transformAssignee(item: BackendAssignee): Assignee {
  */
 export async function getRequestAssignees(requestId: string): Promise<Assignee[]> {
   try {
-    const response = await serverGet<AssigneesResponse>(
-      `/requests/${requestId}/assignees`,
-      { revalidate: 0 }
+    const response = await internalGet<AssigneesResponse>(
+      `/api/requests-details/${requestId}/assignees`
     );
     return (response.assignees || []).map(transformAssignee);
   } catch (error) {
@@ -245,9 +237,8 @@ interface FullDetailsResponse {
  */
 async function getFullRequestDetails(requestId: string): Promise<FullDetailsResponse | null> {
   try {
-    const response = await serverGet<FullDetailsResponse>(
-      `/requests/${requestId}/full-details`,
-      { revalidate: 0 }
+    const response = await internalGet<FullDetailsResponse>(
+      `/api/requests-details/${requestId}/full-details`
     );
     return response;
   } catch (error) {
@@ -262,8 +253,8 @@ async function getFullRequestDetails(requestId: string): Promise<FullDetailsResp
  */
 async function markChatAsReadServer(requestId: string): Promise<void> {
   try {
-    await serverPost<any>(
-      `/chat/${requestId}/mark-read`
+    await internalPost<any>(
+      `/api/chat/${requestId}/mark-read`
     );
   } catch {
     // Silent failure - client-side fallback will handle this case
@@ -278,13 +269,11 @@ async function markChatAsReadServer(requestId: string): Promise<void> {
 async function getRequestSubTasks(requestId: string): Promise<{ items: any[]; total: number; stats: any }> {
   try {
     const [subTasksResponse, statsResponse] = await Promise.all([
-      serverGet<any[]>(
-        `/requests/${requestId}/sub-tasks?skip=0&limit=20`,
-        { revalidate: 0 }
+      internalGet<any[]>(
+        `/api/requests/${requestId}/sub-tasks?skip=0&limit=20`
       ),
-      serverGet<any>(
-        `/requests/${requestId}/sub-tasks/stats`,
-        { revalidate: 0 }
+      internalGet<any>(
+        `/api/requests/${requestId}/sub-tasks/stats`
       ),
     ]);
 
@@ -399,8 +388,8 @@ export async function createNoteServerAction(
   note: string
 ): Promise<RequestNote | null> {
   try {
-    const newNote = await serverPost<RequestNote>(
-      `/request-notes/${requestId}/notes`,
+    const newNote = await internalPost<RequestNote>(
+      `/api/request-notes/${requestId}`,
       { note }
     );
     return newNote;
@@ -424,8 +413,8 @@ export async function updateTicketStatusServerAction(
       payload.resolution = resolution;
     }
 
-    const updatedTicket = await serverPatch<ServiceRequestDetail>(
-      `/requests/${requestId}`,
+    const updatedTicket = await internalPatch<ServiceRequestDetail>(
+      `/api/requests/${requestId}`,
       payload
     );
     return updatedTicket;
@@ -443,8 +432,8 @@ export async function updateTicketPriorityServerAction(
   priorityId: number
 ): Promise<ServiceRequestDetail | null> {
   try {
-    const updatedTicket = await serverPatch<ServiceRequestDetail>(
-      `/requests/${requestId}`,
+    const updatedTicket = await internalPatch<ServiceRequestDetail>(
+      `/api/requests/${requestId}`,
       { priority_id: priorityId }
     );
     return updatedTicket;
@@ -462,8 +451,8 @@ export async function assignTechnicianServerAction(
   technicianId: number
 ): Promise<boolean> {
   try {
-    await serverPost(
-      `/requests/${requestId}/assign`,
+    await internalPost(
+      `/api/requests-details/${requestId}/assign`,
       { technician_id: technicianId }
     );
     return true;

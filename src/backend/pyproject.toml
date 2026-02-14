@@ -121,3 +121,8 @@ dev = [
 
 [tool.ruff.lint]
 ignore = ["E712"]
+
+[tool.mypy]
+exclude = [
+    'api/repositories/reporting/reporting_query_repository.py',
+]

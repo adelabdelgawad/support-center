@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet } from '@/lib/fetch';
+import { internalGet } from '@/lib/fetch';
 import type { Technician, Priority } from '@/types/metadata';
 
 /**
@@ -11,9 +11,8 @@ import type { Technician, Priority } from '@/types/metadata';
  */
 export async function getTechniciansData(): Promise<Technician[]> {
   try {
-    const data = await serverGet<Technician[]>(
-      '/users?is_technician=true&is_active=true',
-      { revalidate: 0 }
+    const data = await internalGet<Technician[]>(
+      '/api/users?is_technician=true&is_active=true'
     );
     return data;
   } catch (error) {
@@ -30,9 +29,8 @@ export async function getTechniciansData(): Promise<Technician[]> {
  */
 export async function getPrioritiesData(): Promise<Priority[]> {
   try {
-    const data = await serverGet<Priority[]>(
-      '/priorities/',
-      { revalidate: 0 }
+    const data = await internalGet<Priority[]>(
+      '/api/cache/priorities'
     );
     return data;
   } catch (error) {

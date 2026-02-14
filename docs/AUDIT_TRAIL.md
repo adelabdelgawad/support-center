@@ -86,7 +86,7 @@ The following infrastructure exists but is completely unused (the `@audit_operat
 | `AuditRead` schema | `src/backend/api/schemas/audit.py` | Exists |
 | `AuditFilter` schema | `src/backend/api/schemas/audit.py` | Exists |
 | `@audit_operation` decorator | `src/backend/core/audit_decorator.py` | Exists, never used |
-| `GET /audit` endpoint | `src/backend/api/v1/endpoints/auth/audit.py` | Exists, registered, super_admin only |
+| `GET /audit` endpoint | `src/backend/api/routers/auth/audit_router.py` | Exists, registered, super_admin only |
 
 ### Audit Model Schema (audit_logs table)
 
@@ -100,7 +100,7 @@ audit_logs
 ├── old_values      JSON (nullable) -- Snapshot before change
 ├── new_values      JSON (nullable) -- Snapshot after change
 ├── ip_address      VARCHAR(45) (nullable) -- Client IP (IPv4/IPv6)
-├── endpoint        VARCHAR(255) (nullable) -- e.g., "PATCH /api/v1/requests/42"
+├── endpoint        VARCHAR(255) (nullable) -- e.g., "PATCH /backend/requests/42"
 ├── correlation_id  VARCHAR(36) (nullable) -- Request tracing UUID
 ├── user_agent      VARCHAR(500) (nullable) -- Browser/client user agent
 ├── changes_summary VARCHAR(1000) (nullable) -- Human-readable summary
@@ -132,7 +132,7 @@ audit_logs
 | 7 | Terminate all sessions | DELETE | `/auth/sessions` | Session | TERMINATE_ALL |
 
 **Service file:** `src/backend/api/services/auth_service.py`
-**Endpoint file:** `src/backend/api/v1/endpoints/auth/auth.py`
+**Endpoint file:** `src/backend/api/routers/auth/login_router.py`
 
 ### 4.2 Service Requests (13 actions)
 
@@ -153,7 +153,7 @@ audit_logs
 | 20 | Unassign technician | POST | `/requests/{id}/unassign` | ServiceRequest | UNASSIGN_TECHNICIAN |
 
 **Service file:** `src/backend/api/services/request_service.py`
-**Endpoint file:** `src/backend/api/v1/endpoints/support/requests.py`
+**Endpoint file:** `src/backend/api/routers/support/requests_router.py`
 
 ### 4.3 Chat & Communication (8 actions)
 
@@ -169,7 +169,7 @@ audit_logs
 | 28 | Delete screenshot | DELETE | `/screenshots/{id}` | Screenshot | DELETE |
 
 **Service file:** `src/backend/api/services/chat_service.py`
-**Endpoint file:** `src/backend/api/v1/endpoints/support/chat.py`
+**Endpoint file:** `src/backend/api/routers/support/chat_router.py`
 
 ### 4.4 Chat Files (2 actions)
 
@@ -178,7 +178,7 @@ audit_logs
 | 29 | Upload chat file | POST | `/chat-files/upload` | ChatFile | UPLOAD |
 | 30 | Delete chat file | DELETE | `/chat-files/{file_id}` | ChatFile | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/support/chat_files.py`
+**Endpoint file:** `src/backend/api/routers/support/chat_files_router.py`
 
 ### 4.5 Request Notes (1 action)
 
@@ -187,7 +187,7 @@ audit_logs
 | 31 | Create note | POST | `/request-notes` | RequestNote | CREATE |
 
 **Service file:** `src/backend/api/services/request_note_service.py`
-**Endpoint file:** `src/backend/api/v1/endpoints/support/request_notes.py`
+**Endpoint file:** `src/backend/api/routers/support/request_notes_router.py`
 
 ### 4.6 User Management (11 actions)
 
@@ -206,7 +206,7 @@ audit_logs
 | 42 | Update custom view | PUT | `/user-custom-views` | UserCustomView | UPDATE |
 
 **Service file:** `src/backend/api/services/user_service.py`
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/users.py`
+**Endpoint file:** `src/backend/api/routers/setting/users_router.py`
 
 ### 4.7 Roles & Permissions (6 actions)
 
@@ -219,7 +219,7 @@ audit_logs
 | 47 | Update role pages | PUT | `/roles/{id}/pages` | Role | UPDATE_PAGES |
 | 48 | Update role users | PUT | `/roles/{id}/users` | Role | UPDATE_USERS |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/roles.py`
+**Endpoint file:** `src/backend/api/routers/setting/roles_router.py`
 
 ### 4.8 Categories & Subcategories (8 actions)
 
@@ -234,7 +234,7 @@ audit_logs
 | 55 | Delete subcategory | DELETE | `/subcategories/{id}` | Subcategory | DELETE |
 | 56 | Update category sections | Various | `/categories/.../sections` | Category | UPDATE_SECTIONS |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/categories.py`
+**Endpoint file:** `src/backend/api/routers/setting/categories_router.py`
 
 ### 4.9 Request Statuses (5 actions)
 
@@ -246,7 +246,7 @@ audit_logs
 | 60 | Bulk update statuses | POST | `/request-statuses/bulk-status` | RequestStatus | BULK_UPDATE_STATUS |
 | 61 | Delete status | DELETE | `/request-statuses/{id}` | RequestStatus | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/request_status.py`
+**Endpoint file:** `src/backend/api/routers/setting/request_status_router.py`
 
 ### 4.10 Request Types (5 actions)
 
@@ -258,7 +258,7 @@ audit_logs
 | 65 | Bulk update types | POST | `/request-types/bulk-status` | RequestType | BULK_UPDATE_STATUS |
 | 66 | Delete type | DELETE | `/request-types/{id}` | RequestType | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/request_types.py`
+**Endpoint file:** `src/backend/api/routers/setting/request_types_router.py`
 
 ### 4.11 Priorities (3 actions)
 
@@ -268,7 +268,7 @@ audit_logs
 | 68 | Update priority | PUT | `/priorities/{id}` | Priority | UPDATE |
 | 69 | Delete priority | DELETE | `/priorities/{id}` | Priority | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/priorities.py`
+**Endpoint file:** `src/backend/api/routers/setting/priorities_router.py`
 
 ### 4.12 Business Units (6 actions)
 
@@ -281,7 +281,7 @@ audit_logs
 | 74 | Bulk update BU status | POST | `/business-units/bulk-status` | BusinessUnit | BULK_UPDATE_STATUS |
 | 75 | Delete business unit | DELETE | `/business-units/{id}` | BusinessUnit | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/business_units.py`
+**Endpoint file:** `src/backend/api/routers/setting/business_units_router.py`
 
 ### 4.13 Business Unit Regions (5 actions)
 
@@ -293,7 +293,7 @@ audit_logs
 | 79 | Bulk update region status | POST | `/business-unit-regions/bulk-status` | BusinessUnitRegion | BULK_UPDATE_STATUS |
 | 80 | Delete region | DELETE | `/business-unit-regions/{id}` | BusinessUnitRegion | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/business_unit_regions.py`
+**Endpoint file:** `src/backend/api/routers/setting/business_unit_regions_router.py`
 
 ### 4.14 Technician Assignments (7 actions)
 
@@ -306,7 +306,7 @@ audit_logs
 | 85 | Bulk assign users | POST | `/business-unit-user-assigns/bulk-assign` | TechnicianAssignment | BULK_ASSIGN |
 | 86 | Bulk remove users | POST | `/business-unit-user-assigns/bulk-remove` | TechnicianAssignment | BULK_REMOVE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/business_unit_user_assigns.py`
+**Endpoint file:** `src/backend/api/routers/setting/business_unit_user_assigns_router.py`
 
 ### 4.15 Email Configuration (4 actions)
 
@@ -317,7 +317,7 @@ audit_logs
 | 89 | Delete email config | DELETE | `/email-configs/{id}` | EmailConfig | DELETE |
 | 90 | Test email connection | POST | `/email-configs/{id}/test` | EmailConfig | TEST |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/email_config.py`
+**Endpoint file:** `src/backend/api/routers/setting/email_config_router.py`
 
 ### 4.16 Active Directory Configuration (4 actions)
 
@@ -328,7 +328,7 @@ audit_logs
 | 93 | Delete AD config | DELETE | `/ad-configs/{id}` | ADConfig | DELETE |
 | 94 | Test AD connection | POST | `/ad-configs/{id}/test` | ADConfig | TEST |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/active_directory_config.py`
+**Endpoint file:** `src/backend/api/routers/setting/active_directory_config_router.py`
 
 ### 4.17 SLA Configuration (3 actions)
 
@@ -338,7 +338,7 @@ audit_logs
 | 96 | Update SLA config | PATCH | `/sla-configs/{id}` | SLAConfig | UPDATE |
 | 97 | Delete SLA config | DELETE | `/sla-configs/{id}` | SLAConfig | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/sla_configs.py`
+**Endpoint file:** `src/backend/api/routers/setting/sla_configs_router.py`
 
 ### 4.18 Report Configuration (3 actions)
 
@@ -348,7 +348,7 @@ audit_logs
 | 99 | Update report config | PATCH | `/report-configs/{id}` | ReportConfig | UPDATE |
 | 100 | Delete report config | DELETE | `/report-configs/{id}` | ReportConfig | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/reporting/report_configs.py`
+**Endpoint file:** `src/backend/api/routers/reporting/report_configs_router.py`
 
 ### 4.19 Remote Access (5 actions)
 
@@ -360,7 +360,7 @@ audit_logs
 | 104 | Toggle control mode | POST | `/remote-access/{id}/control` | RemoteAccess | TOGGLE_CONTROL |
 | 105 | Resume remote session | POST | `/remote-access/{id}/resume` | RemoteAccess | RESUME |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/remote_access.py`
+**Endpoint file:** `src/backend/api/routers/management/remote_access_router.py`
 
 ### 4.20 Desktop Sessions (3 actions)
 
@@ -370,7 +370,7 @@ audit_logs
 | 107 | Push update | POST | `/desktop-sessions/{id}/push-update` | DesktopSession | PUSH_UPDATE |
 | 108 | Cleanup stale sessions | POST | `/desktop-sessions/cleanup` | DesktopSession | CLEANUP |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/desktop_sessions.py`
+**Endpoint file:** `src/backend/api/routers/management/desktop_sessions_router.py`
 
 ### 4.21 Scheduler (5 actions)
 
@@ -382,7 +382,7 @@ audit_logs
 | 112 | Toggle job status | PUT | `/scheduler/jobs/{id}/status` | ScheduledJob | UPDATE_STATUS |
 | 113 | Trigger job manually | POST | `/scheduler/jobs/{id}/trigger` | ScheduledJob | TRIGGER |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/scheduler.py`
+**Endpoint file:** `src/backend/api/routers/management/scheduler_router.py`
 
 ### 4.22 Devices (7 actions)
 
@@ -396,7 +396,7 @@ audit_logs
 | 119 | Refresh device status | POST | `/devices/refresh-status` | Device | REFRESH_STATUS |
 | 120 | Trigger install | POST | `/devices/{id}/install` | Device | INSTALL |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/devices.py`
+**Endpoint file:** `src/backend/api/routers/management/devices_router.py`
 
 ### 4.23 Deployment Jobs (2 actions)
 
@@ -405,7 +405,7 @@ audit_logs
 | 121 | Create deployment job | POST | `/deployment-jobs` | DeploymentJob | CREATE |
 | 122 | Report job result | POST | `/internal/deployment-jobs/{id}/result` | DeploymentJob | UPDATE_RESULT |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/deployment_jobs.py`
+**Endpoint file:** `src/backend/api/routers/management/deployment_jobs_router.py`
 
 ### 4.24 Client Versions (5 actions)
 
@@ -417,7 +417,7 @@ audit_logs
 | 126 | Delete version | DELETE | `/client-versions/{id}` | ClientVersion | DELETE |
 | 127 | Upload installer | POST | `/client-versions/{id}/installer` | ClientVersion | UPLOAD_INSTALLER |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/client_versions.py`
+**Endpoint file:** `src/backend/api/routers/management/client_versions_router.py`
 
 ### 4.25 System Events (4 actions)
 
@@ -428,7 +428,7 @@ audit_logs
 | 130 | Toggle system event | PATCH | `/system-events/{id}/toggle` | SystemEvent | TOGGLE |
 | 131 | Delete system event | DELETE | `/system-events/{id}` | SystemEvent | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/management/system_events.py`
+**Endpoint file:** `src/backend/api/routers/management/system_events_router.py`
 
 ### 4.26 System Messages (5 actions)
 
@@ -440,7 +440,7 @@ audit_logs
 | 135 | Bulk update status | POST | `/system-messages/bulk-status` | SystemMessage | BULK_UPDATE_STATUS |
 | 136 | Delete system message | DELETE | `/system-messages/{id}` | SystemMessage | DELETE |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/system_messages.py`
+**Endpoint file:** `src/backend/api/routers/setting/system_messages_router.py`
 
 ### 4.27 Organizational Units (5 actions)
 
@@ -452,7 +452,7 @@ audit_logs
 | 140 | Toggle OU enabled | POST | `/organizational-units/{id}/toggle` | OrganizationalUnit | TOGGLE |
 | 141 | Sync OUs from AD | POST | `/organizational-units/sync` | OrganizationalUnit | SYNC |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/organizational_units.py`
+**Endpoint file:** `src/backend/api/routers/setting/organizational_units_router.py`
 
 ### 4.28 Domain Users (1 action)
 
@@ -460,7 +460,7 @@ audit_logs
 |---|--------|------|----------|--------------|--------|
 | 142 | Sync domain users | POST | `/domain-users/sync` | DomainUser | SYNC |
 
-**Endpoint file:** `src/backend/api/v1/endpoints/setting/domain_users.py`
+**Endpoint file:** `src/backend/api/routers/setting/domain_users_router.py`
 
 ### Skipped Routes (High-Frequency / Low-Value)
 
@@ -509,12 +509,12 @@ AUDIT_SKIP_PREFIXES = [
 ]
 
 AUDIT_SKIP_ROUTES = [
-    ("POST", r"/api/v1/auth/refresh"),
-    ("POST", r"/api/v1/desktop-sessions/[^/]+/heartbeat"),
-    ("POST", r"/api/v1/remote-access/[^/]+/heartbeat"),
-    ("POST", r"/api/v1/chat/messages/[^/]+/read$"),
-    ("POST", r"/api/v1/chat/messages/request/[^/]+/read-all"),
-    ("POST", r"/api/v1/chat/[^/]+/mark-read"),
+    ("POST", r"/backend/auth/refresh"),
+    ("POST", r"/backend/desktop-sessions/[^/]+/heartbeat"),
+    ("POST", r"/backend/remote-access/[^/]+/heartbeat"),
+    ("POST", r"/backend/chat/messages/[^/]+/read$"),
+    ("POST", r"/backend/chat/messages/request/[^/]+/read-all"),
+    ("POST", r"/backend/chat/[^/]+/mark-read"),
 ]
 ```
 
@@ -749,7 +749,7 @@ class AuditFilterOptions(HTTPSchemaModel):
 
 ## 9. Backend API Endpoints
 
-**File:** `src/backend/api/v1/endpoints/auth/audit.py`
+**File:** `src/backend/api/routers/auth/audit_router.py`
 
 ### Existing: GET /audit (Enhanced)
 
@@ -920,14 +920,14 @@ For ~25 critical actions, supplement the middleware's basic entries with explici
 
 | Action | File | Existing Support |
 |--------|------|-----------------|
-| ServiceRequest UPDATE | `src/backend/api/v1/endpoints/support/requests.py:751-927` | Already builds `changed_fields`/`new_values` dicts |
+| ServiceRequest UPDATE | `src/backend/api/routers/support/requests_router.py:751-927` | Already builds `changed_fields`/`new_values` dicts |
 | ServiceRequest TECHNICIAN_UPDATE | Same file, lines 930-1121 | Already builds change tracking |
 | ServiceRequest ASSIGN/UNASSIGN | Same file | Has assignee info available |
 | ServiceRequest REASSIGN_SECTION | Same file, lines 1423-1511 | Has old/new section |
-| User UPDATE | `src/backend/api/v1/endpoints/setting/users.py` | Has user data |
+| User UPDATE | `src/backend/api/routers/setting/users_router.py` | Has user data |
 | User BLOCK | Same file | Has block state |
 | User UPDATE_ROLES | Same file | Has old/new roles |
-| Role UPDATE_PAGES | `src/backend/api/v1/endpoints/setting/roles.py` | Has page lists |
+| Role UPDATE_PAGES | `src/backend/api/routers/setting/roles_router.py` | Has page lists |
 | Role UPDATE_USERS | Same file | Has user lists |
 
 ### Pattern
@@ -959,7 +959,7 @@ await AuditService.create_audit_log_background(AuditCreate(
     resource_id=str(request_id),
     old_values=old_snapshot,
     new_values=new_snapshot,
-    endpoint=f"PATCH /api/v1/requests/{request_id}",
+    endpoint=f"PATCH /backend/requests/{request_id}",
     ip_address=get_client_ip(request),
     correlation_id=get_correlation_id(),
     changes_summary=AuditService.generate_changes_summary(old_snapshot, new_snapshot),
@@ -1014,8 +1014,8 @@ await AuditService.create_audit_log_background(AuditCreate(
 2. Make any mutation API call
 3. Query: `SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 10;`
 4. Verify: user_id, action, resource_type, resource_id, endpoint, ip_address, correlation_id
-5. `GET /api/v1/audit` with super admin token -> paginated response
-6. `GET /api/v1/audit/filter-options` -> actions and resource types lists
+5. `GET /backend/audit` with super admin token -> paginated response
+6. `GET /backend/audit/filter-options` -> actions and resource types lists
 
 ### Frontend
 1. Navigate to `/admin/management/audit-logs` as super admin
@@ -1036,7 +1036,7 @@ await AuditService.create_audit_log_background(AuditCreate(
 | DB exports | `src/backend/db/__init__.py` | Modify |
 | Audit service | `src/backend/api/services/audit_service.py` | Modify |
 | Audit schemas | `src/backend/api/schemas/audit.py` | Modify |
-| Audit endpoint | `src/backend/api/v1/endpoints/auth/audit.py` | Modify |
+| Audit endpoint | `src/backend/api/routers/auth/audit_router.py` | Modify |
 | Route config | `src/backend/core/audit_config.py` | New |
 | Audit middleware | `src/backend/core/middleware/audit.py` | New |
 | Middleware package | `src/backend/core/middleware/__init__.py` | Modify |

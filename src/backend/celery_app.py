@@ -162,6 +162,6 @@ def on_worker_process_init(**kwargs):
 from tasks import minio_file_tasks  # noqa: F401, E402
 from tasks import ad_sync_tasks  # noqa: F401, E402
 from tasks import whatsapp_tasks  # noqa: F401, E402
-from tasks import deployment_tasks  # noqa: F401, E402
+# NOTE: deployment_tasks removed - deployment control plane deleted
 from tasks import scheduler_tasks  # noqa: F401, E402
 from tasks import remote_access_tasks  # noqa: F401, E402

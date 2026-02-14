@@ -15,7 +15,7 @@ class APISettings(BaseSettings):
     app_name: str = "Service Catalog"
     app_version: str = "1.0.0"
     debug: bool = False
-    api_v1_prefix: str = "/api/v1"
+    api_v1_prefix: str = "/backend"
 
     model_config = SettingsConfigDict(
         env_prefix="API_",
@@ -550,65 +550,6 @@ class VersionPolicySettings(BaseSettings):
     )
 
 
-class DeploymentWorkerSettings(BaseSettings):
-    """
-    Deployment worker authentication settings.
-
-    The Rust deployment worker uses these settings to authenticate
-    when claiming jobs and reporting results.
-    """
-
-    api_token: str = Field(
-        default="",
-        description="API token for worker authentication. Set via DEPLOYMENT_WORKER_API_TOKEN env var."
-    )
-    enabled: bool = Field(
-        default=True,
-        description="Enable deployment worker endpoints."
-    )
-
-    model_config = SettingsConfigDict(
-        env_prefix="DEPLOYMENT_WORKER_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-
-class DeploymentSettings(BaseSettings):
-    """
-    Deployment configuration settings for NetSupport installer.
-
-    Controls where the installer is stored and how it's accessed by workers.
-    """
-
-    installer_smb_path: str = Field(
-        default="\\\\fileserver\\deploy$\\NetSupport\\netsupport-client.msi",
-        description="SMB path to NetSupport installer MSI for deployment workers."
-    )
-    installer_args: str = Field(
-        default="/qn /norestart",
-        description="Default MSI installer arguments."
-    )
-    enroll_token: str = Field(
-        default="",
-        description="Enrollment token for NetSupport client registration."
-    )
-    job_timeout_minutes: int = Field(
-        default=15,
-        ge=1,
-        le=60,
-        description="Maximum time for a deployment job to complete."
-    )
-
-    model_config = SettingsConfigDict(
-        env_prefix="DEPLOYMENT_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-
 class Settings(BaseSettings):
     """Main application settings."""
 
@@ -632,8 +573,6 @@ class Settings(BaseSettings):
     zapier: ZapierSettings = Field(default_factory=ZapierSettings)
     presence: PresenceSettings = Field(default_factory=PresenceSettings)
     version_policy: VersionPolicySettings = Field(default_factory=VersionPolicySettings)
-    deployment_worker: DeploymentWorkerSettings = Field(default_factory=DeploymentWorkerSettings)
-    deployment: DeploymentSettings = Field(default_factory=DeploymentSettings)
 
     model_config = SettingsConfigDict(
         env_file=".env",

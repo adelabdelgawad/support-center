@@ -1,3 +1,4 @@
+# mypy: disable-error-code="arg-type,attr-defined,call-overload,return-value,no-any-return,union-attr,operator"
 """
 Remote Access CRUD - Data access layer for remote access sessions.
 

@@ -71,7 +71,7 @@ export class AuthService {
       const deviceFingerprint = await generateDeviceFingerprint();
 
       // Call backend AD login endpoint
-      const response = await fetch(`${API_URL}/api/v1/auth/ad-login`, {
+      const response = await fetch(`${API_URL}/backend/auth/ad-login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

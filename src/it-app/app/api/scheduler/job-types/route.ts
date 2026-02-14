@@ -1,0 +1,39 @@
+/**
+ * Job Types API Route
+ * Proxy endpoint for fetching scheduler job types
+ *
+ * GET /api/scheduler/job-types - Get job types
+ */
+import { NextRequest, NextResponse } from 'next/server';
+import { ApiError } from '@/lib/fetch/errors';
+import { makeAuthenticatedRequest } from '@/lib/api/server-fetch';
+import { formatApiError, logError } from '@/lib/api/error-handler';
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+
+    // Build query string
+    const queryString = searchParams.toString();
+    const endpoint = `/scheduler/job-types${queryString ? `?${queryString}` : ''}`;
+
+    // Call backend API with authentication
+    const response = await makeAuthenticatedRequest('GET', endpoint);
+
+    return NextResponse.json(response);
+  } catch (error) {
+    logError(error, 'Get Job Types');
+
+    const formattedError = formatApiError(error);
+
+    return NextResponse.json(
+      {
+        error: 'Failed to retrieve job types',
+        message: formattedError.message,
+        details: formattedError.details,
+        status: formattedError.status,
+      },
+      { status: formattedError.status }
+    );
+  }
+}

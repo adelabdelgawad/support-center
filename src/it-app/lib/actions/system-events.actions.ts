@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost, serverPatch, serverDelete } from '@/lib/fetch/server';
+import { internalGet, internalPost, internalPatch, internalDelete } from '@/lib/fetch';
 import type {
   SystemEventResponse,
   SystemEventListResponse,
@@ -39,9 +39,8 @@ export async function getSystemEvents(params?: {
     });
   }
 
-  return serverGet<SystemEventListResponse>(
-    `/system-events?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<SystemEventListResponse>(
+    `/api/setting/system-events?${queryParams}`
   );
 }
 
@@ -51,8 +50,8 @@ export async function getSystemEvents(params?: {
 export async function createSystemEvent(
   data: SystemEventCreate
 ): Promise<SystemEventResponse> {
-  return serverPost<SystemEventResponse>(
-    '/system-events',
+  return internalPost<SystemEventResponse>(
+    '/api/setting/system-events',
     data
   );
 }
@@ -63,9 +62,8 @@ export async function createSystemEvent(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getSystemEvent(id: string): Promise<SystemEventResponse> {
-  return serverGet<SystemEventResponse>(
-    `/system-events/${id}`,
-    { revalidate: 0 }
+  return internalGet<SystemEventResponse>(
+    `/api/setting/system-events/${id}`
   );
 }
 
@@ -76,8 +74,8 @@ export async function updateSystemEvent(
   id: string,
   data: SystemEventUpdate
 ): Promise<SystemEventResponse> {
-  return serverPatch<SystemEventResponse>(
-    `/system-events/${id}`,
+  return internalPatch<SystemEventResponse>(
+    `/api/setting/system-events/${id}`,
     data
   );
 }
@@ -86,8 +84,8 @@ export async function updateSystemEvent(
  * Toggles system event status (active/inactive)
  */
 export async function toggleSystemEventStatus(id: string): Promise<SystemEventResponse> {
-  return serverPatch<SystemEventResponse>(
-    `/system-events/${id}/toggle`
+  return internalPatch<SystemEventResponse>(
+    `/api/setting/system-events/${id}/toggle`
   );
 }
 
@@ -95,7 +93,7 @@ export async function toggleSystemEventStatus(id: string): Promise<SystemEventRe
  * Deletes a system event
  */
 export async function deleteSystemEvent(id: string): Promise<void> {
-  await serverDelete(`/system-events/${id}`);
+  await internalDelete(`/api/setting/system-events/${id}`);
 }
 
 /**
@@ -104,8 +102,7 @@ export async function deleteSystemEvent(id: string): Promise<void> {
  * Cache: SHORT_LIVED (1 minute) - counts for settings page header
  */
 export async function getSystemEventCounts(): Promise<SystemEventCountsResponse> {
-  return serverGet<SystemEventCountsResponse>(
-    '/system-events/counts',
-    { revalidate: 0 }
+  return internalGet<SystemEventCountsResponse>(
+    '/api/setting/system-events/counts'
   );
 }

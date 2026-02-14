@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/users/counts
+ * GET /api/backend/users/counts
  * Fetches user count statistics
  */
 export async function GET() {

@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost } from '@/lib/fetch';
+import { internalGet, internalPost } from '@/lib/fetch';
 import type {
   ServiceRequestDetail
 } from '@/types/ticket-detail';
@@ -25,8 +25,8 @@ export async function createServiceRequest(
     headers['X-Real-IP'] = clientIp;
   }
 
-  const response = await serverPost<ServiceRequestDetail>(
-    '/requests',
+  const response = await internalPost<ServiceRequestDetail>(
+    '/api/requests',
     { title: data.title.trim() },
     Object.keys(headers).length > 0 ? { headers } : undefined
   );
@@ -45,9 +45,8 @@ export async function getServiceRequestById(id: string) {
     throw new Error('Request ID must be a valid UUID');
   }
 
-  const response = await serverGet<ServiceRequestDetail>(
-    `/requests/${id}`,
-    { revalidate: 0 }
+  const response = await internalGet<ServiceRequestDetail>(
+    `/api/requests/${id}`
   );
 
   return response;
@@ -71,12 +70,12 @@ export async function listServiceRequests(params?: ListServiceRequestsParams) {
   const queryString = new URLSearchParams(queryParams).toString();
   const endpoint = queryString ? `/requests?${queryString}` : '/requests';
 
-  const response = await serverGet<{
+  const response = await internalGet<{
     data: ServiceRequestSummary[];
     total: number;
     page: number;
     perPage: number;
-  }>(endpoint, { revalidate: 0 });
+  }>('/api' + endpoint);
 
   return response;
 }
@@ -99,9 +98,8 @@ export async function getTechnicianViews(params?: TechnicianViewsParams) {
 
   const endpoint = `/requests/technician-views?${queryParams.toString()}`;
 
-  const response = await serverGet<TechnicianViewsResponse>(
-    endpoint,
-    { revalidate: 0 }
+  const response = await internalGet<TechnicianViewsResponse>(
+    '/api' + endpoint
   );
 
   return response;

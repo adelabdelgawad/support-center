@@ -19,7 +19,6 @@ This module provides endpoints for managing service requests (tickets), includin
 
 import logging
 from typing import List, Optional
-from uuid import UUID
 
 from core.date_formatting import format_due_date_duration, format_requested_duration
 from db.database import get_session
@@ -668,7 +667,7 @@ async def get_ticket_type_counts(
 
 @router.get("/{request_id}", response_model=ServiceRequestDetailRead)
 async def get_request(
-    request_id: UUID,
+    request_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -702,7 +701,7 @@ async def get_request(
 
 @router.get("/{request_id}/full-details")
 async def get_request_full_details(
-    request_id: UUID,
+    request_id: int,
     messages_limit: int = Query(
         100, ge=1, le=500, description="Maximum messages to return"
     ),
@@ -759,7 +758,7 @@ async def get_request_full_details(
 
 @router.patch("/{request_id}", response_model=ServiceRequestRead)
 async def update_request(
-    request_id: UUID,
+    request_id: int,
     update_data: ServiceRequestUpdate,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -938,7 +937,7 @@ async def update_request(
 
 @router.patch("/{request_id}/technician-update", response_model=ServiceRequestRead)
 async def update_request_by_technician(
-    request_id: UUID,
+    request_id: int,
     update_data: ServiceRequestUpdateByTechnician,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(require_technician),
@@ -1132,7 +1131,7 @@ async def update_request_by_technician(
 
 @router.delete("/{request_id}", status_code=204)
 async def delete_request(
-    request_id: UUID,
+    request_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(require_supervisor),
 ):
@@ -1161,7 +1160,7 @@ async def delete_request(
 
 @router.post("/{request_id}/assign", response_model=ServiceRequestRead)
 async def assign_request(
-    request_id: UUID,
+    request_id: int,
     assign_data: AssignTechnicianRequest,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(_get_user_with_roles),
@@ -1274,7 +1273,7 @@ async def assign_request(
 
 @router.get("/{request_id}/assignees", response_model=RequestAssigneesResponse)
 async def get_request_assignees(
-    request_id: UUID,
+    request_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -1326,7 +1325,7 @@ async def get_request_assignees(
 
 @router.post("/{request_id}/unassign")
 async def unassign_request(
-    request_id: UUID,
+    request_id: int,
     assign_data: AssignTechnicianRequest,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(_get_user_with_roles),
@@ -1428,7 +1427,7 @@ async def unassign_request(
 
 @router.patch("/{request_id}/reassign-section", response_model=ServiceRequestRead)
 async def reassign_section(
-    request_id: UUID,
+    request_id: int,
     reassign_data: SectionReassignRequest,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(_get_user_with_roles),
@@ -1480,8 +1479,8 @@ async def reassign_section(
 
 @router.post("/{parent_id}/sub-tasks/reorder")
 async def reorder_sub_tasks(
-    parent_id: UUID,
-    task_ids: List[UUID],
+    parent_id: int,
+    task_ids: List[int],
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -1552,7 +1551,7 @@ async def get_my_tasks(
 
 @router.post("/{request_id}/screenshots/{screenshot_id}/link", status_code=201)
 async def link_screenshot_to_request(
-    request_id: UUID,
+    request_id: int,
     screenshot_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -1593,7 +1592,7 @@ async def link_screenshot_to_request(
 
 @router.delete("/{request_id}/screenshots/{screenshot_id}/link", status_code=204)
 async def unlink_screenshot_from_request(
-    request_id: UUID,
+    request_id: int,
     screenshot_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -1629,7 +1628,7 @@ async def unlink_screenshot_from_request(
 
 @router.get("/{request_id}/screenshots/all", response_model=List[dict])
 async def get_all_screenshots_for_request(
-    request_id: UUID, db: AsyncSession = Depends(get_session)
+    request_id: int, db: AsyncSession = Depends(get_session)
 ):
     """
     Get all screenshots for a request (owned + linked from parent).

@@ -582,11 +582,10 @@ async def get_chat_page_data(
 # ============================================================================
 
 
-@router.get("/all-tickets", response_model=ChatPageResponse)
+@router.get("/all-tickets")
 async def get_all_user_tickets(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    response: Response | None = None,
 ):
     """
     Get all tickets for the current user without any filtering.
@@ -615,12 +614,6 @@ async def get_all_user_tickets(
             status_filter=None,  # No status filter
             read_filter=None,  # No read filter
         )
-
-        # Add cache headers for browser/CDN caching
-        if response:
-            response.headers["Cache-Control"] = (
-                "private, max-age=30, stale-while-revalidate=60"
-            )
 
         return page_data
     except ValueError as e:

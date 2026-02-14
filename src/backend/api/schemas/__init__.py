@@ -80,14 +80,7 @@ from .remote_access import (
     RemoteAccessSessionList,
     RemoteAccessSessionRead,
 )
-from .client_version import (
-    ClientVersionBase,
-    ClientVersionCreate,
-    ClientVersionListItem,
-    ClientVersionRead,
-    ClientVersionUpdate,
-    VersionPolicyResult,
-)
+# NOTE: client_version schemas removed - deployment control plane deleted
 
 __all__ = [
     # User schemas
@@ -224,12 +217,4 @@ __all__ = [
     "TokenMetadata",
     "TokenIntrospectResponse",
     "TokenSettings",
-
-    # Client Version schemas
-    "ClientVersionBase",
-    "ClientVersionCreate",
-    "ClientVersionUpdate",
-    "ClientVersionRead",
-    "ClientVersionListItem",
-    "VersionPolicyResult",
 ]

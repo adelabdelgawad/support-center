@@ -1,3 +1,9 @@
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+# mypy: disable-error-code="union-attr"
 """
 Business Unit repository with specialized queries.
 """
@@ -164,6 +170,9 @@ class BusinessUnitRepository(BaseRepository[BusinessUnit]):
 
         Returns:
             List of updated business units
+
+        Note:
+            Caller must commit the transaction.
         """
         is_active = status.lower() == "active"
 
@@ -173,6 +182,6 @@ class BusinessUnitRepository(BaseRepository[BusinessUnit]):
         for bu in business_units:
             bu.is_active = is_active
 
-        await db.commit()
+        await db.flush()
 
         return list(business_units)

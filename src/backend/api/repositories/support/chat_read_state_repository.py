@@ -78,7 +78,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         ]
 
     @classmethod
-    async def find_viewing_users(cls, db: AsyncSession, request_id: UUID) -> List[int]:
+    async def find_viewing_users(cls, db: AsyncSession, request_id: int) -> List[int]:
         """
         Get list of user IDs currently viewing a chat.
 
@@ -99,7 +99,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         return [row[0] for row in result.all()]
 
     @classmethod
-    async def find_existing_user_ids(cls, db: AsyncSession, request_id: UUID) -> set:
+    async def find_existing_user_ids(cls, db: AsyncSession, request_id: int) -> set:
         """
         Get existing user IDs for a request.
 
@@ -164,7 +164,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
     async def mark_as_read(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         user_id: str,
         last_message_id: Optional[UUID] = None,
     ) -> Optional[ChatReadState]:
@@ -230,7 +230,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
     async def set_viewing_status(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         user_id: str,
         is_viewing: bool,
     ) -> Optional[ChatReadState]:
@@ -327,7 +327,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
     @classmethod
     async def get_latest_message_info(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> Optional[Tuple[UUID, datetime]]:
         """
         Get the ID and timestamp of the latest message in a request.
@@ -371,7 +371,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
     async def mark_messages_as_read(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         user_id: int,
     ) -> int:
         """
@@ -401,7 +401,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
     @classmethod
     async def get_unread_message_ids(
-        cls, db: AsyncSession, request_id: UUID, user_id: int
+        cls, db: AsyncSession, request_id: int, user_id: int
     ) -> List[str]:
         """
         Get IDs of unread messages (not sent by user) in a request.
@@ -426,7 +426,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
     @classmethod
     async def bulk_create_monitors(
-        cls, db: AsyncSession, request_id: UUID, user_ids: List[int]
+        cls, db: AsyncSession, request_id: int, user_ids: List[int]
     ) -> int:
         """
         Create multiple ChatReadState monitors in bulk.

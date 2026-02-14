@@ -1,7 +1,7 @@
 "use server";
 
 import { cache } from "react";
-import { serverGet, serverPost, serverPut } from "@/lib/fetch";
+import { internalGet, internalPost, internalPut } from "@/lib/fetch";
 import type {
   SettingUsersResponse,
   AuthUserResponse,
@@ -27,9 +27,8 @@ export async function getActiveRolesForUserForms(): Promise<RoleResponse[]> {
     params.append('per_page', '100'); // Backend max is 100
     params.append('is_active', 'true');
 
-    const response = await serverGet<{ roles: RoleResponse[] }>(
-      `/roles?${params.toString()}`,
-      { revalidate: 0 }
+    const response = await internalGet<{ roles: RoleResponse[] }>(
+      `/api/setting/roles?${params.toString()}`
     );
     return response.roles ?? [];
   } catch (error: unknown) {
@@ -41,7 +40,7 @@ export async function getActiveRolesForUserForms(): Promise<RoleResponse[]> {
 
 /**
  * Fetches users with their roles, pagination, filtering, and sorting
- * Uses the /api/v1/users/with-roles/ endpoint
+ * Uses the /backend/users/with-roles/ endpoint
  *
  * Cache: NO_CACHE (dynamic filters/sorting require fresh data)
  */
@@ -75,9 +74,8 @@ export async function getUsers(
     params.append('sort', JSON.stringify(sort));
   }
 
-  return serverGet<SettingUsersResponse>(
-    `/users/with-roles?${params.toString()}`,
-    { revalidate: 0 }
+  return internalGet<SettingUsersResponse>(
+    `/api/users/with-roles?${params.toString()}`
   );
 }
 
@@ -92,9 +90,8 @@ export async function getDomainUsers(
   const params = new URLSearchParams();
   params.append("update", shouldUpdate ? "true" : "false");
 
-  return serverGet<AuthUserResponse[]>(
-    `/users/domain-users?${params.toString()}`,
-    { revalidate: 0 }
+  return internalGet<AuthUserResponse[]>(
+    `/api/setting/users/domain-users/search?${params.toString()}`
   );
 }
 
@@ -102,8 +99,8 @@ export async function getDomainUsers(
  * Creates a new user with role assignments
  */
 export async function createUser(userData: UserCreate) {
-  return serverPost(
-    '/users',
+  return internalPost(
+    '/api/users',
     userData
   );
 }
@@ -114,8 +111,8 @@ export async function createUser(userData: UserCreate) {
 export async function updateUserRoles(
   userData: UserUpdateRolesRequest
 ): Promise<{ message: string; added: number; removed: number }> {
-  return serverPut<{ message: string; added: number; removed: number }>(
-    `/users/${userData.userId}/roles`,
+  return internalPut<{ message: string; added: number; removed: number }>(
+    `/api/users/${userData.userId}/roles`,
     userData
   );
 }
@@ -127,8 +124,8 @@ export async function toggleUserStatus(
   userId: string,
   newStatus: boolean
 ): Promise<UserWithRolesResponse> {
-  return serverPut<UserWithRolesResponse>(
-    `/users/${userId}/status`,
+  return internalPut<UserWithRolesResponse>(
+    `/api/users/${userId}/status`,
     { userId, isActive: newStatus }
   );
 }
@@ -148,9 +145,8 @@ export async function getUserPages(userId: string): Promise<Array<Page>> {
  * server render. React cache() ensures only ONE backend call is made per request.
  */
 export const getUserPagesCached = cache(async (userId: string): Promise<Array<Page>> => {
-  return serverGet<Page[]>(
-    `/users/${userId}/pages`,
-    { revalidate: 0 }
+  return internalGet<Page[]>(
+    `/api/users/${userId}/pages`
   );
 });
 
@@ -161,8 +157,8 @@ export async function updateUsersStatus(
   userIds: string[],
   isActive: boolean
 ): Promise<{ updatedUsers: UserWithRolesResponse[] }> {
-  return serverPost<{ updatedUsers: UserWithRolesResponse[] }>(
-    '/users/bulk-status',
+  return internalPost<{ updatedUsers: UserWithRolesResponse[] }>(
+    '/api/users/bulk-status',
     { userIds, isActive }
   );
 }
@@ -177,12 +173,11 @@ export async function getUserCounts(): Promise<{
   activeCount: number;
   inactiveCount: number;
 }> {
-  return serverGet<{
+  return internalGet<{
     total: number;
     activeCount: number;
     inactiveCount: number;
   }>(
-    '/users/counts',
-    { revalidate: 0 }
+    '/api/setting/users/counts'
   );
 }

@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet, serverPost, serverPut } from "@/lib/fetch";
+import { internalGet, internalPost, internalPut } from "@/lib/fetch";
 import type {
   SettingRolesResponse,
   RoleCreateRequest,
@@ -43,9 +43,8 @@ export async function getRoles(params?: {
     });
   }
 
-  return serverGet<SettingRolesResponse>(
-    `/roles?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<SettingRolesResponse>(
+    `/api/setting/roles?${queryParams}`
   );
 }
 
@@ -55,8 +54,8 @@ export async function getRoles(params?: {
 export async function createRole(
   roleData: RoleCreateRequest
 ): Promise<RoleResponse> {
-  return serverPost<RoleResponse>(
-    '/roles',
+  return internalPost<RoleResponse>(
+    '/api/setting/roles',
     roleData
   );
 }
@@ -68,8 +67,8 @@ export async function updateRole(
   roleId: string,
   roleData: RoleUpdateRequest
 ): Promise<RoleResponse> {
-  return serverPut<RoleResponse>(
-    `/roles/${roleId}`,
+  return internalPut<RoleResponse>(
+    `/api/setting/roles/${roleId}`,
     roleData
   );
 }
@@ -78,8 +77,8 @@ export async function updateRole(
  * Toggle role status (active/inactive)
  */
 export async function toggleRoleStatus(roleId: string, newStatus: boolean): Promise<RoleResponse> {
-  return serverPut<RoleResponse>(
-    `/roles/${roleId}/status?is_active=${newStatus}`
+  return internalPut<RoleResponse>(
+    `/api/setting/roles/${roleId}/status?is_active=${newStatus}`
   );
 }
 
@@ -98,12 +97,8 @@ export async function getRolePages(
     params.set("include_inactive", "true");
   }
 
-  return serverGet<RolePagesResponse>(
-    `/roles/${roleId}/pages?${params.toString()}`,
-    {
-      revalidate: 300,
-      tags: [`role-pages:${roleId}`],
-    }
+  return internalGet<RolePagesResponse>(
+    `/api/setting/roles/${roleId}/pages?${params.toString()}`
   );
 }
 
@@ -120,8 +115,8 @@ export async function updateRolePages(
     updatedPageIds,
   };
 
-  return serverPut<{ message: string; added: number; removed: number }>(
-    `/roles/${roleId}/pages`,
+  return internalPut<{ message: string; added: number; removed: number }>(
+    `/api/setting/roles/${roleId}/pages`,
     request
   );
 }
@@ -133,9 +128,8 @@ export async function updateRolePages(
  * Cache: NO_CACHE (user list, may change frequently)
  */
 export async function getAllUsers(): Promise<AuthUserResponse[]> {
-  return serverGet<AuthUserResponse[]>(
-    '/users?is_technician=true&per_page=100',
-    { revalidate: 0 }
+  return internalGet<AuthUserResponse[]>(
+    '/api/users?is_technician=true&per_page=100'
   );
 }
 
@@ -146,12 +140,8 @@ export async function getAllUsers(): Promise<AuthUserResponse[]> {
  * Invalidate via: revalidateTag(`role-users:${roleId}`, {})
  */
 export async function fetchRoleUsers(roleId: string): Promise<AuthUserResponse[]> {
-  return serverGet<AuthUserResponse[]>(
-    `/roles/${roleId}/users`,
-    {
-      revalidate: 300,
-      tags: [`role-users:${roleId}`],
-    }
+  return internalGet<AuthUserResponse[]>(
+    `/api/setting/roles/${roleId}/users`
   );
 }
 
@@ -168,8 +158,8 @@ export async function updateRoleUsers(
     updatedUserIds,
   };
 
-  return serverPut<{ message: string; added: number; removed: number }>(
-    `/roles/${roleId}/users`,
+  return internalPut<{ message: string; added: number; removed: number }>(
+    `/api/setting/roles/${roleId}/users`,
     request
   );
 }

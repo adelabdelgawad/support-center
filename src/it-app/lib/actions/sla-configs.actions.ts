@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet } from '@/lib/fetch';
+import { internalGet } from '@/lib/fetch';
 import type { SLAConfigResponse } from '@/types/sla-configs';
 
 /**
@@ -10,9 +10,7 @@ import type { SLAConfigResponse } from '@/types/sla-configs';
  */
 export async function getSLAConfigs(): Promise<SLAConfigResponse[]> {
   try {
-    return await serverGet<SLAConfigResponse[]>('/sla-configs/', {
-      revalidate: 0,
-    });
+    return await internalGet<SLAConfigResponse[]>('/api/sla-configs');
   } catch (error) {
     console.error('Error fetching SLA configs:', error);
     return [];

@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost, serverPut, serverDelete } from '@/lib/fetch/server';
+import { internalGet, internalPost, internalPut, internalDelete } from '@/lib/fetch';
 import type {
   RequestType,
   RequestTypeCreate,
@@ -40,9 +40,8 @@ export async function getRequestTypes(params?: {
     });
   }
 
-  return serverGet<RequestTypeListResponse>(
-    `/request-types?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<RequestTypeListResponse>(
+    `/api/setting/request-types?${queryParams}`
   );
 }
 
@@ -52,9 +51,8 @@ export async function getRequestTypes(params?: {
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getRequestType(id: string): Promise<RequestType> {
-  return serverGet<RequestType>(
-    `/request-types/${id}`,
-    { revalidate: 0 }
+  return internalGet<RequestType>(
+    `/api/setting/request-types/${id}`
   );
 }
 
@@ -64,8 +62,8 @@ export async function getRequestType(id: string): Promise<RequestType> {
 export async function createRequestType(
   data: RequestTypeCreate
 ): Promise<RequestType> {
-  return serverPost<RequestType>(
-    '/request-types',
+  return internalPost<RequestType>(
+    '/api/setting/request-types',
     data
   );
 }
@@ -77,8 +75,8 @@ export async function updateRequestType(
   id: string,
   data: RequestTypeUpdate
 ): Promise<RequestType> {
-  return serverPut<RequestType>(
-    `/request-types/${id}`,
+  return internalPut<RequestType>(
+    `/api/setting/request-types/${id}`,
     data
   );
 }
@@ -87,8 +85,8 @@ export async function updateRequestType(
  * Toggles request type status (active/inactive)
  */
 export async function toggleRequestTypeStatus(id: string): Promise<RequestType> {
-  return serverPut<RequestType>(
-    `/request-types/${id}/status`
+  return internalPut<RequestType>(
+    `/api/setting/request-types/${id}/status`
   );
 }
 
@@ -98,8 +96,8 @@ export async function toggleRequestTypeStatus(id: string): Promise<RequestType> 
 export async function bulkUpdateRequestTypesStatus(
   data: BulkRequestTypeUpdate
 ): Promise<RequestType[]> {
-  return serverPost<RequestType[]>(
-    '/request-types/bulk-status',
+  return internalPost<RequestType[]>(
+    '/api/setting/request-types/bulk-status',
     data
   );
 }
@@ -108,5 +106,5 @@ export async function bulkUpdateRequestTypesStatus(
  * Deletes a request type
  */
 export async function deleteRequestType(id: string): Promise<void> {
-  await serverDelete(`/request-types/${id}`);
+  await internalDelete(`/api/setting/request-types/${id}`);
 }

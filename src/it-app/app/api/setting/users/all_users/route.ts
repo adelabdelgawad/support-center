@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/users/all_users
+ * GET /api/backend/users/all_users
  * Fetches all users without pagination
  */
 export async function GET() {

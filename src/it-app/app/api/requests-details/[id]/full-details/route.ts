@@ -4,7 +4,7 @@
  * Proxies the combined backend endpoint that returns all ticket data in one call.
  * Reduces 6 separate API calls to 1, improving page load performance.
  *
- * Backend endpoint: GET /api/v1/requests/{id}/full-details
+ * Backend endpoint: GET /backend/requests/{id}/full-details
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -40,10 +40,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    // Validate UUID format
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
+    // Validate integer ID format
+    if (!/^\d+$/.test(id)) {
       return NextResponse.json(
         { error: "Invalid request ID format" },
         { status: 400 }

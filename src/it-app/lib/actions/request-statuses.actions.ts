@@ -1,6 +1,6 @@
 'use server';
 
-import { serverGet, serverPost, serverPut, serverDelete } from '@/lib/fetch';
+import { internalGet, internalPost, internalPut, internalDelete } from '@/lib/fetch';
 import type {
   RequestStatusResponse,
   RequestStatusListResponse,
@@ -42,9 +42,8 @@ export async function getRequestStatuses(params?: {
     });
   }
 
-  return serverGet<RequestStatusListResponse>(
-    `/request-statuses?${queryParams}`,
-    { revalidate: 0 }
+  return internalGet<RequestStatusListResponse>(
+    `/api/request-statuses?${queryParams}`
   );
 }
 
@@ -54,8 +53,8 @@ export async function getRequestStatuses(params?: {
 export async function createRequestStatus(
   data: RequestStatusCreate
 ): Promise<RequestStatusResponse> {
-  return serverPost<RequestStatusResponse>(
-    '/request-statuses',
+  return internalPost<RequestStatusResponse>(
+    '/api/request-statuses',
     data
   );
 }
@@ -66,9 +65,8 @@ export async function createRequestStatus(
  * Cache: NO_CACHE (admin settings, may be edited frequently)
  */
 export async function getRequestStatus(id: string): Promise<RequestStatusResponse> {
-  return serverGet<RequestStatusResponse>(
-    `/request-statuses/${id}`,
-    { revalidate: 0 }
+  return internalGet<RequestStatusResponse>(
+    `/api/request-statuses/${id}`
   );
 }
 
@@ -79,8 +77,8 @@ export async function updateRequestStatus(
   id: string,
   data: RequestStatusUpdate
 ): Promise<RequestStatusResponse> {
-  return serverPut<RequestStatusResponse>(
-    `/request-statuses/${id}`,
+  return internalPut<RequestStatusResponse>(
+    `/api/request-statuses/${id}`,
     data
   );
 }
@@ -89,8 +87,8 @@ export async function updateRequestStatus(
  * Toggles request status status (active/inactive)
  */
 export async function toggleRequestStatusStatus(id: string): Promise<RequestStatusResponse> {
-  return serverPut<RequestStatusResponse>(
-    `/request-statuses/${id}/status`
+  return internalPut<RequestStatusResponse>(
+    `/api/request-statuses/${id}/status`
   );
 }
 
@@ -100,8 +98,8 @@ export async function toggleRequestStatusStatus(id: string): Promise<RequestStat
 export async function bulkUpdateRequestStatusesStatus(
   data: BulkRequestStatusUpdate
 ): Promise<RequestStatusResponse[]> {
-  return serverPost<RequestStatusResponse[]>(
-    '/request-statuses/bulk-status',
+  return internalPost<RequestStatusResponse[]>(
+    '/api/request-statuses/bulk-status',
     data
   );
 }
@@ -110,7 +108,7 @@ export async function bulkUpdateRequestStatusesStatus(
  * Deletes a request status
  */
 export async function deleteRequestStatus(id: string): Promise<void> {
-  await serverDelete(`/request-statuses/${id}`);
+  await internalDelete(`/api/request-statuses/${id}`);
 }
 
 /**
@@ -119,8 +117,7 @@ export async function deleteRequestStatus(id: string): Promise<void> {
  * Cache: NO_CACHE - counts for settings page header
  */
 export async function getRequestStatusCounts(): Promise<RequestStatusCountsResponse> {
-  return serverGet<RequestStatusCountsResponse>(
-    '/request-statuses/counts',
-    { revalidate: 0 }
+  return internalGet<RequestStatusCountsResponse>(
+    '/api/request-statuses/counts'
   );
 }

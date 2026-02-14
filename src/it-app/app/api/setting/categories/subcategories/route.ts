@@ -22,9 +22,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const activeOnly = searchParams.get("active_only");
+    const qs = `category_id=${categoryId}${activeOnly !== null ? `&active_only=${activeOnly}` : ''}`;
+
     const response = await makeAuthenticatedRequest(
       "GET",
-      `/categories/subcategories?category_id=${categoryId}`
+      `/categories/subcategories?${qs}`
     );
 
     return NextResponse.json(response);

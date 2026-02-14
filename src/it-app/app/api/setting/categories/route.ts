@@ -14,10 +14,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const activeOnly = searchParams.get("active_only") ?? "false";
+    const includeSubcategories = searchParams.get("include_subcategories") ?? "false";
 
     const response = await makeAuthenticatedRequest(
       "GET",
-      `/categories/categories?active_only=${activeOnly}`
+      `/categories/categories?active_only=${activeOnly}&include_subcategories=${includeSubcategories}`
     );
 
     return NextResponse.json(response);

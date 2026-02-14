@@ -34,7 +34,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             User or None
         """
-        stmt = select(User).where(User.username == username)
+        stmt = select(User).where(User.username == username)  # type: ignore[arg-type]
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -52,7 +52,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             User or None
         """
-        stmt = select(User).where(User.email == email)
+        stmt = select(User).where(User.email == email)  # type: ignore[arg-type]
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -71,9 +71,9 @@ class UserRepository(BaseRepository[User]):
             User with roles or None
         """
         stmt = (
-            select(User)
-            .where(User.id == user_id)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
+            select(User)  # type: ignore[arg-type]
+            .where(User.id == user_id)  # type: ignore[arg-type]
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))  # type: ignore[arg-type]
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -95,12 +95,12 @@ class UserRepository(BaseRepository[User]):
         from db import TechnicianBusinessUnit
 
         stmt = (
-            select(User)
-            .where(User.id == user_id)
+            select(User)  # type: ignore[arg-type]
+            .where(User.id == user_id)  # type: ignore[arg-type]
             .options(
-                selectinload(User.user_roles).selectinload(UserRole.role),
-                selectinload(User.business_unit_assigns).selectinload(
-                    TechnicianBusinessUnit.business_unit
+                selectinload(User.user_roles).selectinload(UserRole.role),  # type: ignore[arg-type]
+                selectinload(User.business_unit_assigns).selectinload(  # type: ignore[arg-type]
+                    TechnicianBusinessUnit.business_unit  # type: ignore[arg-type]
                 ),
             )
         )
@@ -124,13 +124,13 @@ class UserRepository(BaseRepository[User]):
         from db import PageRole
 
         stmt = (
-            select(User)
-            .where(User.id == user_id)
+            select(User)  # type: ignore[arg-type]
+            .where(User.id == user_id)  # type: ignore[arg-type]
             .options(
-                selectinload(User.user_roles)
-                .selectinload(UserRole.role)
-                .selectinload(Role.page_permissions)
-                .selectinload(PageRole.page)
+                selectinload(User.user_roles)  # type: ignore[arg-type]
+                .selectinload(UserRole.role)  # type: ignore[arg-type]
+                .selectinload(Role.page_permissions)  # type: ignore[arg-type]
+                .selectinload(PageRole.page)  # type: ignore[arg-type]
             )
         )
         result = await db.execute(stmt)
@@ -167,34 +167,35 @@ class UserRepository(BaseRepository[User]):
         """
         # Build query
         stmt = select(User)
-        count_stmt = select(func.count(User.id))
+        count_stmt = select(func.count(User.id))  # type: ignore[arg-type]
 
         # Apply filters
         if is_technician is not None:
-            stmt = stmt.where(User.is_technician == is_technician)
-            count_stmt = count_stmt.where(User.is_technician == is_technician)
+            stmt = stmt.where(User.is_technician == is_technician)  # type: ignore[arg-type]
+            count_stmt = count_stmt.where(User.is_technician == is_technician)  # type: ignore[arg-type]
 
         if is_active is not None:
-            stmt = stmt.where(User.is_active == is_active)
-            count_stmt = count_stmt.where(User.is_active == is_active)
+            stmt = stmt.where(User.is_active == is_active)  # type: ignore[arg-type]
+            count_stmt = count_stmt.where(User.is_active == is_active)  # type: ignore[arg-type]
 
         if is_online is not None:
-            stmt = stmt.where(User.is_online == is_online)
-            count_stmt = count_stmt.where(User.is_online == is_online)
+            stmt = stmt.where(User.is_online == is_online)  # type: ignore[arg-type]
+            count_stmt = count_stmt.where(User.is_online == is_online)  # type: ignore[arg-type]
 
         if username:
-            username_filter = User.username.ilike(f"%{username}%")
+            username_filter = User.username.ilike(f"%{username}%")  # type: ignore[attr-defined]
             stmt = stmt.where(username_filter)
             count_stmt = count_stmt.where(username_filter)
 
         # Get total count
         count_result = await db.execute(count_stmt)
         total = count_result.scalar()
+        assert total is not None  # for mypy
 
         # Eager load roles if requested
         if eager_load_roles:
             stmt = stmt.options(
-                selectinload(User.user_roles).selectinload(UserRole.role)
+                selectinload(User.user_roles).selectinload(UserRole.role)  # type: ignore[arg-type]
             )
 
         # Apply pagination
@@ -249,10 +250,10 @@ class UserRepository(BaseRepository[User]):
         """
         # Build base query with eager loading
         from db import TechnicianBusinessUnit
-        stmt = select(User).options(
-            selectinload(User.user_roles).selectinload(UserRole.role),
-            selectinload(User.business_unit_assigns).selectinload(
-                TechnicianBusinessUnit.business_unit
+        stmt = select(User).options(  # type: ignore[arg-type]
+            selectinload(User.user_roles).selectinload(UserRole.role),  # type: ignore[arg-type]
+            selectinload(User.business_unit_assigns).selectinload(  # type: ignore[arg-type]
+                TechnicianBusinessUnit.business_unit  # type: ignore[arg-type]
             ),
         )
 
@@ -260,28 +261,33 @@ class UserRepository(BaseRepository[User]):
         # GLOBAL USER TYPE COUNTS (always reflect full database)
         # These never change regardless of filters
         # ============================================================
-        global_counts_stmt = select(
-            func.count(User.id).label("global_total"),
-            func.count(case((User.is_technician.is_(True), 1))).label(
+        global_counts_stmt = select(  # type: ignore[call-overload]
+            func.count(User.id).label("global_total"),  # type: ignore[arg-type]
+            func.count(case((User.is_technician.is_(True), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "technician_count"
             ),
-            func.count(case((User.is_technician.is_(False), 1))).label(
+            func.count(case((User.is_technician.is_(False), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "user_count"
             ),
         )
         global_result = await db.execute(global_counts_stmt)
         global_row = global_result.first()
+        assert global_row is not None  # for mypy
 
         # ============================================================
         # SCOPED STATUS COUNTS (filtered by User Type only)
         # These update when User Type filter changes
         # ============================================================
-        scoped_status_stmt = select(
-            func.count(User.id).label("total"),
-            func.count(case((User.is_active.is_(True), 1))).label(
+        scoped_status_stmt = select(  # type: ignore[call-overload]
+            func.count(User.id).label("total"),  # type: ignore[arg-type]
+            func.count(case((User.is_active.is_(True), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "active_count"
             ),
-            func.count(case((User.is_active.is_(False), 1))).label(
+            func.count(case((User.is_active.is_(False), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "inactive_count"
             ),
         )
@@ -289,44 +295,46 @@ class UserRepository(BaseRepository[User]):
         # Apply User Type filter to scoped status counts
         if is_technician is not None:
             scoped_status_stmt = scoped_status_stmt.where(
-                User.is_technician == is_technician
+                User.is_technician == is_technician  # type: ignore[arg-type]
             )
 
         scoped_status_result = await db.execute(scoped_status_stmt)
         scoped_status_row = scoped_status_result.first()
+        assert scoped_status_row is not None  # for mypy
 
         # ============================================================
         # FILTERED TOTAL (for pagination - all filters applied)
         # ============================================================
-        filtered_count_stmt = select(func.count(User.id).label("filtered_total"))
+        filtered_count_stmt = select(func.count(User.id).label("filtered_total"))  # type: ignore[arg-type]
 
         # Apply all filters
         if is_active is not None:
-            stmt = stmt.where(User.is_active == is_active)
-            filtered_count_stmt = filtered_count_stmt.where(User.is_active == is_active)
+            stmt = stmt.where(User.is_active == is_active)  # type: ignore[arg-type]
+            filtered_count_stmt = filtered_count_stmt.where(User.is_active == is_active)  # type: ignore[arg-type]
 
         if is_technician is not None:
-            stmt = stmt.where(User.is_technician == is_technician)
+            stmt = stmt.where(User.is_technician == is_technician)  # type: ignore[arg-type]
             filtered_count_stmt = filtered_count_stmt.where(
-                User.is_technician == is_technician
+                User.is_technician == is_technician  # type: ignore[arg-type]
             )
 
         if username:
-            username_filter = User.username.ilike(f"%{username}%")
+            username_filter = User.username.ilike(f"%{username}%")  # type: ignore[attr-defined]
             stmt = stmt.where(username_filter)
             filtered_count_stmt = filtered_count_stmt.where(username_filter)
 
         if role_id:
             # Join with UserRole to filter by role
-            stmt = stmt.join(UserRole, User.id == UserRole.user_id).where(
-                UserRole.role_id == role_id
+            stmt = stmt.join(UserRole, User.id == UserRole.user_id).where(  # type: ignore[arg-type]
+                UserRole.role_id == role_id  # type: ignore[arg-type]
             )
             filtered_count_stmt = filtered_count_stmt.join(
-                UserRole, User.id == UserRole.user_id
-            ).where(UserRole.role_id == role_id)
+                UserRole, User.id == UserRole.user_id  # type: ignore[arg-type]
+            ).where(UserRole.role_id == role_id)  # type: ignore[arg-type]
 
         filtered_result = await db.execute(filtered_count_stmt)
         filtered_total = filtered_result.scalar()
+        assert filtered_total is not None  # for mypy
 
         # ============================================================
         # SCOPED ROLE COUNTS (filtered by User Type AND Status)
@@ -334,34 +342,34 @@ class UserRepository(BaseRepository[User]):
         # Returns count of users per role within current filters
         # ============================================================
         role_counts_stmt = (
-            select(
-                Role.id.label("role_id"),
-                func.count(User.id).label("user_count")
+            select(  # type: ignore[call-overload]
+                Role.id.label("role_id"),  # type: ignore[attr-defined]
+                func.count(User.id).label("user_count")  # type: ignore[arg-type]
             )
             .select_from(User)
-            .join(UserRole, User.id == UserRole.user_id)
-            .join(Role, UserRole.role_id == Role.id)
-            .where(Role.is_active.is_(True))
-            .group_by(Role.id)
+            .join(UserRole, User.id == UserRole.user_id)  # type: ignore[arg-type]
+            .join(Role, UserRole.role_id == Role.id)  # type: ignore[arg-type]
+            .where(Role.is_active.is_(True))  # type: ignore[attr-defined]
+            .group_by(Role.id)  # type: ignore[arg-type]
         )
 
         # Apply User Type filter to role counts
         if is_technician is not None:
             role_counts_stmt = role_counts_stmt.where(
-                User.is_technician == is_technician
+                User.is_technician == is_technician  # type: ignore[arg-type]
             )
 
         # Apply Status filter to role counts
         if is_active is not None:
             role_counts_stmt = role_counts_stmt.where(
-                User.is_active == is_active
+                User.is_active == is_active  # type: ignore[arg-type]
             )
 
         role_counts_result = await db.execute(role_counts_stmt)
         role_counts_rows = role_counts_result.all()
 
         # Convert to dict: {role_id: count}
-        role_counts = {str(row.role_id): row.user_count for row in role_counts_rows}
+        role_counts = {str(row.role_id): row.user_count for row in role_counts_rows}  # type: ignore[attr-defined]
 
         # Build counts dictionary
         counts = {
@@ -398,10 +406,10 @@ class UserRepository(BaseRepository[User]):
         Returns:
             List of online technician users
         """
-        stmt = select(User).where(
-            User.is_technician.is_(True),
-            User.is_online.is_(True),
-            User.is_active.is_(True),
+        stmt = select(User).where(  # type: ignore[arg-type]
+            User.is_technician.is_(True),  # type: ignore[attr-defined]
+            User.is_online.is_(True),  # type: ignore[attr-defined]
+            User.is_active.is_(True),  # type: ignore[attr-defined]
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -417,17 +425,20 @@ class UserRepository(BaseRepository[User]):
         Returns:
             Dictionary with total, active_count, inactive_count
         """
-        stmt = select(
-            func.count(User.id).label("total"),
-            func.count(case((User.is_active.is_(True), 1))).label(
+        stmt = select(  # type: ignore[call-overload]
+            func.count(User.id).label("total"),  # type: ignore[arg-type]
+            func.count(case((User.is_active.is_(True), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "active_count"
             ),
-            func.count(case((User.is_active.is_(False), 1))).label(
+            func.count(case((User.is_active.is_(False), 1)))  # type: ignore[attr-defined]
+            .label(  # type: ignore[arg-type]
                 "inactive_count"
             ),
         )
         result = await db.execute(stmt)
         row = result.first()
+        assert row is not None  # for mypy
 
         return {
             "total": row.total,
@@ -523,7 +534,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             List of updated users
         """
-        stmt = select(User).where(User.id.in_(user_ids))
+        stmt = select(User).where(User.id.in_(user_ids))  # type: ignore[attr-defined]
         result = await db.execute(stmt)
         users = list(result.scalars().all())
 

@@ -63,7 +63,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
 
     @classmethod
     async def find_by_request(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> List[Screenshot]:
         """
         Get all screenshots for a request.
@@ -113,7 +113,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         return result.scalar_one_or_none()
 
     @classmethod
-    async def verify_request_exists(cls, db: AsyncSession, request_id: UUID) -> bool:
+    async def verify_request_exists(cls, db: AsyncSession, request_id: int) -> bool:
         """
         Verify request exists.
 
@@ -130,7 +130,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
 
     @classmethod
     async def get_request(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> Optional[ServiceRequest]:
         """
         Get service request by ID.
@@ -169,14 +169,14 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
             return None
 
         attachment.celery_task_id = task_id
-        await db.commit()
+        await db.flush()
         await db.refresh(attachment)
 
         return attachment
 
     @classmethod
     async def get_owned_screenshots(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> List[Screenshot]:
         """
         Get owned screenshots for a request.
@@ -194,7 +194,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
 
     @classmethod
     async def get_linked_screenshots(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> List[Screenshot]:
         """
         Get linked screenshots for a request (from parent).
@@ -221,7 +221,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
     async def create_screenshot(
         cls,
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         user_id: UUID,
         filename: str,
         file_size: int,
@@ -261,7 +261,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         )
 
         db.add(attachment)
-        await db.commit()
+        await db.flush()
         await db.refresh(attachment)
 
         return attachment

@@ -6,7 +6,7 @@ export { ApiError as ServerApiError } from '@/lib/fetch/errors';
 export { ApiError as ServerFetchError } from '@/lib/fetch/errors';
 
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/api/v1";
+const API_BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_PATH || "/backend";
 const DEFAULT_TIMEOUT = 30000;
 const MAX_RETRIES = 2;
 const RETRYABLE_STATUSES = [429, 503];

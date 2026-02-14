@@ -7,7 +7,7 @@ import { ApiError, extractErrorMessage } from './errors';
 import { getUnifiedAccessToken } from '@/lib/utils/auth-storage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE_PATH = '/api/v1';
+const API_BASE_PATH = '/backend';
 
 export async function tauriFetch<T>(
   url: string,

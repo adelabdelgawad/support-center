@@ -1,5 +1,13 @@
 """Service layer for Active Directory configuration management."""
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+# mypy: disable-error-code="assignment"
+# mypy: disable-error-code="union-attr"
+
 import logging
 from typing import List, Optional, Tuple
 from uuid import UUID

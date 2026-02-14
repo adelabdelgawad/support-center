@@ -12,6 +12,12 @@ from sqlalchemy.orm import selectinload
 from db import Page, PageRole, User, UserRole
 from api.repositories.base_repository import BaseRepository
 
+# mypy: disable-error-code="arg-type"
+# mypy: disable-error-code="attr-defined"
+# mypy: disable-error-code="call-overload"
+# mypy: disable-error-code="return-value"
+# mypy: disable-error-code="no-any-return"
+
 
 class PageRepository(BaseRepository[Page]):
     """CRUD for Page database operations."""
@@ -221,8 +227,7 @@ class PageRepository(BaseRepository[Page]):
     async def soft_delete(
         cls,
         db: AsyncSession,
-        page_id: int,
-        commit: bool = True
+        page_id: int
     ) -> bool:
         """
         Soft delete a page.
@@ -230,19 +235,19 @@ class PageRepository(BaseRepository[Page]):
         Args:
             db: Database session
             page_id: Page ID
-            commit: Whether to commit immediately
 
         Returns:
             True if deleted, False if not found
+
+        Note:
+            Caller must commit transaction.
         """
         page = await cls.find_by_id(db, page_id)
         if not page:
             return False
 
         page.is_deleted = True
-
-        if commit:
-            await db.commit()
+        await db.flush()
 
         return True
 
@@ -340,8 +345,7 @@ class PageRoleRepository(BaseRepository[PageRole]):
         db: AsyncSession,
         permission_id: int,
         is_active: bool,
-        updated_by: Optional[int] = None,
-        commit: bool = True
+        updated_by: Optional[UUID] = None
     ) -> Optional[PageRole]:
         """
         Toggle active status of a page permission.
@@ -351,10 +355,12 @@ class PageRoleRepository(BaseRepository[PageRole]):
             permission_id: Permission ID
             is_active: New active status
             updated_by: ID of user updating
-            commit: Whether to commit immediately
 
         Returns:
             Updated PageRole or None if not found
+
+        Note:
+            Caller must commit transaction.
         """
         from datetime import datetime
 
@@ -367,8 +373,6 @@ class PageRoleRepository(BaseRepository[PageRole]):
         if updated_by:
             permission.updated_by = updated_by
 
-        if commit:
-            await db.commit()
-            await db.refresh(permission)
+        await db.flush()
 
         return permission

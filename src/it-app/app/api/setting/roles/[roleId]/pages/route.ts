@@ -7,7 +7,7 @@ interface EnhancedError extends Error {
 }
 
 /**
- * GET /api/api/v1/roles/[roleId]/pages
+ * GET /api/backend/roles/[roleId]/pages
  * Fetches pages for a specific role
  */
 export async function GET(
@@ -33,7 +33,7 @@ export async function GET(
 }
 
 /**
- * PUT /api/api/v1/roles/[roleId]/pages
+ * PUT /api/backend/roles/[roleId]/pages
  * Updates pages for a specific role
  */
 export async function PUT(

@@ -55,7 +55,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
 
     @classmethod
     async def find_by_request(
-        cls, db: AsyncSession, request_id: UUID
+        cls, db: AsyncSession, request_id: int
     ) -> List[ChatFile]:
         """
         Get all chat files for a request.
@@ -79,7 +79,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
         return list(files)
 
     @classmethod
-    async def verify_request_exists(cls, db: AsyncSession, request_id: UUID) -> bool:
+    async def verify_request_exists(cls, db: AsyncSession, request_id: int) -> bool:
         """
         Verify request exists.
 
@@ -117,7 +117,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
             return None
 
         chat_file.celery_task_id = task_id
-        await db.commit()
+        await db.flush()
         await db.refresh(chat_file)
 
         return chat_file

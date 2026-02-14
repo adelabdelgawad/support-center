@@ -6,7 +6,7 @@ This module exports all authentication-related routers:
 - audit_router: Audit log endpoints (/audit)
 """
 import logging
-from fastapi import FastAPI
+from fastapi import APIRouter
 
 from api.routers.auth.auth_router import router as auth_router
 from api.routers.auth.audit_router import router as audit_router
@@ -16,18 +16,18 @@ logger = logging.getLogger(__name__)
 __all__ = ["register_routes"]
 
 
-def register_routes(app: FastAPI) -> None:
+def register_routes(router: APIRouter) -> None:
     """
-    Register all authentication routers with the FastAPI application.
+    Register all authentication routers.
 
     Args:
-        app (FastAPI): FastAPI application instance
+        router (APIRouter): Parent router to register routes under
     """
     try:
         logger.info("Starting authentication router registration")
 
-        app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-        app.include_router(audit_router, prefix="/audit", tags=["Audit"])
+        router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+        router.include_router(audit_router, prefix="/audit", tags=["Audit"])
 
         logger.info("Successfully registered 2 authentication routers")
     except Exception as e:

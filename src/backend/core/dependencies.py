@@ -484,50 +484,6 @@ async def require_super_admin(
 
 
 # =============================================================================
-# Deployment Worker Authentication
-# =============================================================================
-
-
-async def require_worker_token(request: Request) -> bool:
-    """Require valid deployment worker API token.
-
-    The worker token is sent in the X-Worker-Token header.
-    This dependency is used for internal worker APIs that should
-    only be accessible to the Rust deployment worker.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        True if token is valid
-
-    Raises:
-        AuthorizationError: If worker endpoints are disabled
-        AuthenticationError: If token is missing or invalid
-    """
-    # Check if worker endpoints are enabled
-    if not settings.deployment_worker.enabled:
-        raise AuthorizationError("Deployment worker endpoints are disabled")
-
-    # Get token from header
-    token = request.headers.get("X-Worker-Token")
-    if not token:
-        raise AuthenticationError("Worker token required (X-Worker-Token header)")
-
-    # Validate token
-    expected_token = settings.deployment_worker.api_token
-    if not expected_token:
-        raise AuthorizationError(
-            "Worker authentication not configured (DEPLOYMENT_WORKER_API_TOKEN not set)"
-        )
-
-    if not secrets.compare_digest(token, expected_token):
-        raise AuthenticationError("Invalid worker token")
-
-    return True
-
-
-# =============================================================================
 # Service Request Authorization
 # =============================================================================
 

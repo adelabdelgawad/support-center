@@ -1,6 +1,6 @@
 "use server";
 
-import { serverGet } from "@/lib/fetch";
+import { internalGet } from "@/lib/fetch";
 import type { ClientVersion, ClientVersionListResponse } from "@/types/client-versions";
 
 /**
@@ -16,9 +16,8 @@ export async function getClientVersions(options?: {
     if (options?.platform) params.set("platform", options.platform);
     params.set("active_only", (options?.activeOnly ?? false).toString());
 
-    const versions = await serverGet<ClientVersion[]>(
-      `/client-versions?${params.toString()}`,
-      { revalidate: 0 }
+    const versions = await internalGet<ClientVersion[]>(
+      `/api/setting/client-versions?${params.toString()}`
     );
 
     // Calculate counts

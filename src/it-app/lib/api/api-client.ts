@@ -33,7 +33,7 @@ export interface ApiClient {
  * Get the API client for the web application
  *
  * Note: Endpoints should be Next.js API routes (e.g., '/users', '/requests')
- * NOT direct backend paths (e.g., '/api/v1/users')
+ * NOT direct backend paths (e.g., '/backend/users')
  *
  * @returns ApiClient instance for web
  */

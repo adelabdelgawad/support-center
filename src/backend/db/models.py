@@ -2262,6 +2262,14 @@ class ChatMessage(TableModel, table=True):
         description="Monotonic sequence number within request for ordering and gap detection",
     )
 
+    # Client-generated temporary ID for optimistic UI updates
+    client_temp_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        sa_column=Column(String(100), nullable=True),
+        description="Client-generated temporary ID for optimistic message matching",
+    )
+
     created_at: datetime = Field(
         default_factory=cairo_now,
         sa_column_kwargs={"server_default": text("CURRENT_TIMESTAMP")},
