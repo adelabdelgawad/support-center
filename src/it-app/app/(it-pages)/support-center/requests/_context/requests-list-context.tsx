@@ -125,6 +125,7 @@ export function RequestsListProvider({
     () => getTechnicianViews(urlView, urlPage, urlPerPage, urlBusinessUnitIds),
     {
       fallbackData: initialData,
+      revalidateOnMount: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       refreshInterval: 60000,

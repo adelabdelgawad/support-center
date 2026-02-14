@@ -104,6 +104,7 @@ export function SchedulerContent({
     fetchJobs,
     {
       fallbackData: initialJobs,
+      revalidateOnMount: false,
       revalidateIfStale: false,
       revalidateOnFocus: false,
       revalidateOnReconnect: true,
