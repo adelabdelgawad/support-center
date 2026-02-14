@@ -29,6 +29,29 @@ class PresenceRedisService:
 
     def __init__(self):
         self._redis: Any = None
+        self._is_available: bool = False
+
+    @property
+    def is_available(self) -> bool:
+        """Check if Redis is available with health check."""
+        return self._is_available
+
+    async def _check_health(self) -> bool:
+        """Check Redis health and update availability status."""
+        try:
+            if self._redis is None:
+                # Try to initialize Redis if not done yet
+                await self._get_redis()
+
+            # Ping Redis to check connectivity
+            await self._redis.ping()
+            self._is_available = True
+            logger.debug("Redis health check passed")
+            return True
+        except Exception as e:
+            self._is_available = False
+            logger.warning(f"Redis health check failed: {e}")
+            return False
 
     async def _get_redis(self):
         """Lazy-initialize Redis client (follows event_publisher.py pattern)."""
@@ -40,6 +63,8 @@ class PresenceRedisService:
                 **settings.redis.redis_config,
                 decode_responses=True,
             )
+            # Perform initial health check
+            await self._check_health()
         return self._redis
 
     async def set_present(self, session_id: UUID, user_id: UUID) -> bool:
@@ -51,6 +76,10 @@ class PresenceRedisService:
 
         Returns True on success, False on failure (non-fatal).
         """
+        if not await self._check_health():
+            logger.warning("Redis unavailable, skipping presence SET")
+            return False
+
         try:
             r = await self._get_redis()
             ttl = settings.presence.ttl_seconds
