@@ -13,8 +13,6 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import and_, func, select, update
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -22,7 +20,8 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import ChatMessage, ChatReadState
+from db import ChatReadState
+from repositories.support.chat_read_state_repository import ChatReadStateRepository
 
 logger = logging.getLogger(__name__)
 
@@ -46,31 +45,10 @@ class ChatReadStateService:
         Returns:
             ChatReadState record (existing or newly created)
         """
-        # Try to get existing monitor
-        stmt = select(ChatReadState).where(
-            and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.user_id == user_id,
-            )
-        )
-        result = await db.execute(stmt)
-        monitor = result.scalar_one_or_none()
-
-        if monitor:
-            return monitor
-
-        # Create new monitor
-        monitor = ChatReadState(
-            request_id=request_id,
-            user_id=user_id,
-            unread_count=0,
-            is_viewing=False,
-        )
-        db.add(monitor)
-        await db.flush()  # Add to session but don't commit yet
+        monitor = await ChatReadStateRepository.get_or_create(db, request_id, user_id)
 
         logger.debug(
-            f"Created chat read monitor: request_id={request_id}, user_id={user_id}"
+            f"Got/created chat read monitor: request_id={request_id}, user_id={user_id}"
         )
         return monitor
 
@@ -107,26 +85,19 @@ class ChatReadStateService:
 
         # Get the latest message timestamp if not provided
         if not last_message_id:
-            stmt = (
-                select(ChatMessage.id, ChatMessage.created_at)
-                .where(ChatMessage.request_id == request_id)
-                .order_by(ChatMessage.created_at.desc())
-                .limit(1)
+            latest_info = await ChatReadStateRepository.get_latest_message_info(
+                db, request_id
             )
-            result = await db.execute(stmt)
-            latest = result.first()
-            if latest:
-                last_message_id = latest.id
-                last_read_at = latest.created_at
+            if latest_info:
+                last_message_id = latest_info[0]
+                last_read_at = latest_info[1]
             else:
                 last_read_at = datetime.utcnow()
         else:
             # Get timestamp of provided message
-            stmt = select(ChatMessage.created_at).where(
-                ChatMessage.id == last_message_id
+            timestamp = await ChatReadStateRepository.get_message_timestamp(
+                db, last_message_id
             )
-            result = await db.execute(stmt)
-            timestamp = result.scalar_one_or_none()
             last_read_at = timestamp or datetime.utcnow()
 
         # Update monitor
@@ -137,19 +108,9 @@ class ChatReadStateService:
 
         # CRITICAL FIX: Also mark all unread messages NOT from this user as read
         # This is needed because check_technician_unread_for_requests uses ChatMessage.is_read
-        mark_read_stmt = (
-            update(ChatMessage)
-            .where(
-                and_(
-                    ChatMessage.request_id == request_id,
-                    ChatMessage.sender_id != user_id,  # Messages NOT sent by current user
-                    not ChatMessage.is_read,
-                )
-            )
-            .values(is_read=True)
+        messages_marked = await ChatReadStateRepository.mark_messages_as_read(
+            db, request_id, user_id
         )
-        result = await db.execute(mark_read_stmt)
-        messages_marked = result.rowcount
 
         logger.debug(
             f"[READ_RECEIPTS] Marked {messages_marked} messages as read for user {user_id} in request {request_id}"
@@ -233,58 +194,13 @@ class ChatReadStateService:
         Returns:
             Updated ChatReadState record
         """
-        now = datetime.utcnow()
-
-        # OPTIMIZED PATH: For is_viewing=False (disconnect), use upsert (single query)
-        if not is_viewing:
-            stmt = insert(ChatReadState).values(
-                request_id=request_id,
-                user_id=user_id,
-                is_viewing=False,
-                unread_count=0,
-                updated_at=now,
-            ).on_conflict_do_update(
-                index_elements=['request_id', 'user_id'],
-                set_={
-                    'is_viewing': False,
-                    'updated_at': now,
-                }
-            ).returning(ChatReadState)
-
-            result = await db.execute(stmt)
-            monitor = result.scalar_one()
-
-            logger.debug(
-                f"Set viewing status (upsert): request_id={request_id}, "
-                f"user_id={user_id}, is_viewing=False"
-            )
-            return monitor
-
-        # STANDARD PATH: For is_viewing=True, need to get latest message
-        monitor = await ChatReadStateService.get_or_create_monitor(
-            db, request_id, user_id
+        monitor = await ChatReadStateRepository.set_viewing_status(
+            db, request_id, user_id, is_viewing
         )
-
-        monitor.is_viewing = True
-        monitor.updated_at = now
-        monitor.unread_count = 0
-
-        # Get latest message timestamp
-        stmt = (
-            select(ChatMessage.id, ChatMessage.created_at)
-            .where(ChatMessage.request_id == request_id)
-            .order_by(ChatMessage.created_at.desc())
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        latest = result.first()
-        if latest:
-            monitor.last_read_message_id = latest.id
-            monitor.last_read_at = latest.created_at
 
         logger.debug(
             f"Set viewing status: request_id={request_id}, "
-            f"user_id={user_id}, is_viewing=True"
+            f"user_id={user_id}, is_viewing={is_viewing}"
         )
         return monitor
 
@@ -307,15 +223,9 @@ class ChatReadStateService:
         Returns:
             List of unread message IDs as strings
         """
-        stmt = select(ChatMessage.id).where(
-            and_(
-                ChatMessage.request_id == request_id,
-                ChatMessage.sender_id != user_id,  # Messages NOT sent by current user
-                not ChatMessage.is_read,
-            )
+        return await ChatReadStateRepository.get_unread_message_ids(
+            db, request_id, user_id
         )
-        result = await db.execute(stmt)
-        return [str(row[0]) for row in result.all()]
 
     @staticmethod
     @safe_database_query("get_unread_count", default_return=0)
@@ -333,15 +243,9 @@ class ChatReadStateService:
         Returns:
             Number of unread messages
         """
-        stmt = select(ChatReadState.unread_count).where(
-            and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.user_id == user_id,
-            )
+        return await ChatReadStateRepository.get_unread_count(
+            db, request_id, user_id
         )
-        result = await db.execute(stmt)
-        count = result.scalar_one_or_none()
-        return count or 0
 
     @staticmethod
     @safe_database_query("get_total_unread_count", default_return=0)
@@ -356,12 +260,7 @@ class ChatReadStateService:
         Returns:
             Total number of unread messages across all chats
         """
-        stmt = select(func.sum(ChatReadState.unread_count)).where(
-            ChatReadState.user_id == user_id
-        )
-        result = await db.execute(stmt)
-        total = result.scalar_one_or_none()
-        return total or 0
+        return await ChatReadStateRepository.get_total_unread_count(db, user_id)
 
     @staticmethod
     @safe_database_query("get_all_monitors_for_user", default_return=[])
@@ -380,23 +279,7 @@ class ChatReadStateService:
         Returns:
             List of dicts with request_id and unread_count
         """
-        stmt = select(
-            ChatReadState.request_id,
-            ChatReadState.unread_count,
-            ChatReadState.last_read_at,
-        ).where(ChatReadState.user_id == user_id)
-
-        result = await db.execute(stmt)
-        rows = result.all()
-
-        return [
-            {
-                "request_id": str(row.request_id),
-                "unread_count": row.unread_count,
-                "last_read_at": row.last_read_at.isoformat() if row.last_read_at else None,
-            }
-            for row in rows
-        ]
+        return await ChatReadStateRepository.find_all_for_user(db, user_id)
 
     @staticmethod
     @safe_database_query("get_users_viewing_chat", default_return=[])
@@ -413,14 +296,7 @@ class ChatReadStateService:
         Returns:
             List of user IDs currently viewing the chat
         """
-        stmt = select(ChatReadState.user_id).where(
-            and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.is_viewing,
-            )
-        )
-        result = await db.execute(stmt)
-        return [row[0] for row in result.all()]
+        return await ChatReadStateRepository.find_viewing_users(db, request_id)
 
     @staticmethod
     @transactional_database_operation("ensure_monitors_for_participants")
@@ -443,29 +319,24 @@ class ChatReadStateService:
             Number of new monitors created
         """
         # Get existing monitors
-        stmt = select(ChatReadState.user_id).where(
-            ChatReadState.request_id == request_id
+        existing_user_ids = await ChatReadStateRepository.find_existing_user_ids(
+            db, request_id
         )
-        result = await db.execute(stmt)
-        existing_user_ids = {row[0] for row in result.all()}
+
+        # Filter out users who already have monitors
+        new_user_ids = [
+            user_id for user_id in participant_user_ids
+            if user_id not in existing_user_ids
+        ]
 
         # Create monitors for missing users
-        new_monitors = []
-        for user_id in participant_user_ids:
-            if user_id not in existing_user_ids:
-                new_monitors.append(
-                    ChatReadState(
-                        request_id=request_id,
-                        user_id=user_id,
-                        unread_count=0,
-                        is_viewing=False,
-                    )
-                )
-
-        if new_monitors:
-            db.add_all(new_monitors)
-            logger.debug(
-                f"Created {len(new_monitors)} monitors for request {request_id}"
+        if new_user_ids:
+            count = await ChatReadStateRepository.bulk_create_monitors(
+                db, request_id, new_user_ids
             )
+            logger.debug(
+                f"Created {count} monitors for request {request_id}"
+            )
+            return count
 
-        return len(new_monitors)
+        return 0

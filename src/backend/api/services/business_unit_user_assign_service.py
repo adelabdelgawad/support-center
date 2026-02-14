@@ -18,9 +18,7 @@ from api.schemas.business_unit_user_assign import (
     BusinessUnitUserAssignUpdate,
 )
 from repositories.setting.business_unit_user_assign_repository import BusinessUnitUserAssignRepository
-from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
@@ -74,16 +72,9 @@ class BusinessUnitUserAssignService:
         Returns:
             Assignment or None
         """
-        stmt = (
-            select(BusinessUnitUserAssign)
-            .where(BusinessUnitUserAssign.id == assignment_id)
-            .options(
-                selectinload(BusinessUnitUserAssign.user),
-                selectinload(BusinessUnitUserAssign.business_unit),
-            )
+        return await BusinessUnitUserAssignRepository.find_by_id_with_relationships(
+            db, assignment_id
         )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
 
     @staticmethod
     @safe_database_query("check_existing_assignment")
@@ -102,15 +93,9 @@ class BusinessUnitUserAssignService:
         Returns:
             Existing assignment or None
         """
-        stmt = select(BusinessUnitUserAssign).where(
-            and_(
-                BusinessUnitUserAssign.technician_id == user_id,
-                BusinessUnitUserAssign.business_unit_id == business_unit_id,
-                not BusinessUnitUserAssign.is_deleted,
-            )
+        return await BusinessUnitUserAssignRepository.check_existing_assignment(
+            db, user_id, business_unit_id
         )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
 
     @staticmethod
     @transactional_database_operation("create_business_unit_user_assign")
@@ -176,11 +161,7 @@ class BusinessUnitUserAssignService:
         Returns:
             Updated assignment or None
         """
-        stmt = select(BusinessUnitUserAssign).where(
-            BusinessUnitUserAssign.id == assignment_id
-        )
-        result = await db.execute(stmt)
-        assignment = result.scalar_one_or_none()
+        assignment = await BusinessUnitUserAssignRepository.find_by_id(db, assignment_id)
 
         if not assignment:
             return None
@@ -214,23 +195,9 @@ class BusinessUnitUserAssignService:
         Returns:
             Updated assignment or None
         """
-        stmt = select(BusinessUnitUserAssign).where(
-            BusinessUnitUserAssign.id == assignment_id
+        return await BusinessUnitUserAssignRepository.toggle_status(
+            db, assignment_id, updated_by
         )
-        result = await db.execute(stmt)
-        assignment = result.scalar_one_or_none()
-
-        if not assignment:
-            return None
-
-        assignment.is_active = not assignment.is_active
-        assignment.updated_at = datetime.utcnow()
-        assignment.updated_by = updated_by
-
-        await db.commit()
-        await db.refresh(assignment)
-
-        return assignment
 
     @staticmethod
     @transactional_database_operation("delete_business_unit_user_assign")
@@ -246,21 +213,7 @@ class BusinessUnitUserAssignService:
         Returns:
             True if deleted, False if not found
         """
-        stmt = select(BusinessUnitUserAssign).where(
-            BusinessUnitUserAssign.id == assignment_id
-        )
-        result = await db.execute(stmt)
-        assignment = result.scalar_one_or_none()
-
-        if not assignment:
-            return False
-
-        assignment.is_deleted = True
-        assignment.updated_at = datetime.utcnow()
-
-        await db.commit()
-
-        return True
+        return await BusinessUnitUserAssignRepository.soft_delete(db, assignment_id)
 
     @staticmethod
     @safe_database_query("get_user_business_units", default_return=[])
@@ -279,25 +232,9 @@ class BusinessUnitUserAssignService:
         Returns:
             List of business units
         """
-        stmt = (
-            select(BusinessUnit)
-            .join(
-                BusinessUnitUserAssign,
-                BusinessUnit.id == BusinessUnitUserAssign.business_unit_id,
-            )
-            .where(
-                and_(
-                    BusinessUnitUserAssign.technician_id == user_id,
-                    not BusinessUnitUserAssign.is_deleted,
-                )
-            )
+        return await BusinessUnitUserAssignRepository.find_business_units_by_user(
+            db, user_id, is_active
         )
-
-        if is_active:
-            stmt = stmt.where(BusinessUnitUserAssign.is_active)
-
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
 
     @staticmethod
     @safe_database_query("get_business_unit_users", default_return=[])
@@ -316,25 +253,9 @@ class BusinessUnitUserAssignService:
         Returns:
             List of users
         """
-        stmt = (
-            select(User)
-            .join(
-                BusinessUnitUserAssign,
-                User.id == BusinessUnitUserAssign.technician_id,
-            )
-            .where(
-                and_(
-                    BusinessUnitUserAssign.business_unit_id == business_unit_id,
-                    not BusinessUnitUserAssign.is_deleted,
-                )
-            )
+        return await BusinessUnitUserAssignRepository.find_users_by_business_unit(
+            db, business_unit_id, is_active
         )
-
-        if is_active:
-            stmt = stmt.where(BusinessUnitUserAssign.is_active)
-
-        result = await db.execute(stmt)
-        return list(result.scalars().all())
 
     @staticmethod
     @transactional_database_operation("bulk_assign_users_to_business_unit")
@@ -404,20 +325,6 @@ class BusinessUnitUserAssignService:
         Returns:
             Number of assignments deleted
         """
-        stmt = select(BusinessUnitUserAssign).where(
-            and_(
-                BusinessUnitUserAssign.technician_id.in_(user_ids),
-                BusinessUnitUserAssign.business_unit_id == business_unit_id,
-                not BusinessUnitUserAssign.is_deleted,
-            )
+        return await BusinessUnitUserAssignRepository.bulk_remove_users(
+            db, user_ids, business_unit_id
         )
-        result = await db.execute(stmt)
-        assignments = result.scalars().all()
-
-        for assignment in assignments:
-            assignment.is_deleted = True
-            assignment.updated_at = datetime.utcnow()
-
-        await db.commit()
-
-        return len(assignments)

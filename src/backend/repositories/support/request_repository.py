@@ -14,8 +14,11 @@ from sqlalchemy.orm import selectinload
 from db import (
     BusinessUnit,
     ChatMessage,
+    Priority,
     RequestAssignee,
+    RequestNote,
     RequestStatus,
+    RequestType,
     ServiceRequest,
     Subcategory,
     User,
@@ -1397,3 +1400,594 @@ class ServiceRequestRepository(BaseRepository[ServiceRequest]):
             "parents": parent_count,
             "subtasks": subtask_count,
         }
+
+    @classmethod
+    async def find_by_id_with_relations(
+        cls, db: AsyncSession, request_id: UUID, relations: List[str] = None
+    ) -> Optional[ServiceRequest]:
+        """
+        Find service request by ID with custom relationships loaded.
+
+        Args:
+            db: Database session
+            request_id: Request ID
+            relations: List of relationship names to load (e.g., ['status', 'requester'])
+
+        Returns:
+            ServiceRequest or None
+        """
+        stmt = select(ServiceRequest).where(
+            ServiceRequest.id == request_id, ServiceRequest.is_deleted.is_(False)
+        )
+
+        if relations:
+            relation_map = {
+                'requester': selectinload(ServiceRequest.requester),
+                'status': selectinload(ServiceRequest.status),
+                'priority': selectinload(ServiceRequest.priority),
+                'business_unit': selectinload(ServiceRequest.business_unit),
+                'subcategory': selectinload(ServiceRequest.subcategory),
+                'assignees': selectinload(ServiceRequest.assignees),
+                'notes': selectinload(ServiceRequest.notes),
+            }
+            for rel in relations:
+                if rel in relation_map:
+                    stmt = stmt.options(relation_map[rel])
+
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def find_all_by_ids(
+        cls, db: AsyncSession, request_ids: List[UUID]
+    ) -> List[ServiceRequest]:
+        """Find multiple service requests by IDs."""
+        stmt = select(ServiceRequest).where(ServiceRequest.id.in_(request_ids))
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def find_by_ip_network(
+        cls, db: AsyncSession, ip_address: str
+    ) -> Optional[BusinessUnit]:
+        """
+        Find business unit by IP address network match.
+
+        Args:
+            db: Database session
+            ip_address: IP address to match
+
+        Returns:
+            Matching BusinessUnit or None
+        """
+        import ipaddress
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if not ip_address:
+            return None
+
+        try:
+            ip_obj = ipaddress.ip_address(ip_address)
+        except ValueError:
+            logger.warning(f"Invalid IP address format: {ip_address}")
+            return None
+
+        # Get all business units with network defined
+        stmt = select(BusinessUnit).where(
+            BusinessUnit.network.isnot(None),
+            BusinessUnit.is_deleted.is_(False)
+        )
+        result = await db.execute(stmt)
+        business_units = result.scalars().all()
+
+        # Match IP to network
+        for bu in business_units:
+            try:
+                network = ipaddress.ip_network(bu.network, strict=False)
+                if ip_obj in network:
+                    return bu
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    f"Invalid network CIDR for business unit {bu.id}: {bu.network} - {e}"
+                )
+                continue
+
+        return None
+
+    @classmethod
+    async def count_assignees(
+        cls, db: AsyncSession, request_id: UUID
+    ) -> int:
+        """Count assignees for a request."""
+        stmt = select(func.count()).select_from(RequestAssignee).where(
+            RequestAssignee.request_id == request_id,
+            RequestAssignee.is_deleted == False,
+        )
+        result = await db.execute(stmt)
+        return result.scalar() or 0
+
+    @classmethod
+    async def find_user_by_id(
+        cls, db: AsyncSession, user_id: int
+    ) -> Optional[User]:
+        """Find user by ID."""
+        stmt = select(User).where(User.id == user_id, User.is_deleted.is_(False))
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def find_priority_by_id(
+        cls, db: AsyncSession, priority_id: int
+    ) -> Optional[Priority]:
+        """Find priority by ID."""
+        stmt = select(Priority).where(Priority.id == priority_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def find_request_type_by_id(
+        cls, db: AsyncSession, request_type_id: int
+    ) -> Optional[RequestType]:
+        """Find request type by ID."""
+        stmt = select(RequestType).where(RequestType.id == request_type_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def create_request(
+        cls, db: AsyncSession, service_request: ServiceRequest
+    ) -> ServiceRequest:
+        """
+        Create a new service request.
+
+        Args:
+            db: Database session
+            service_request: ServiceRequest object to create
+
+        Returns:
+            Created ServiceRequest with refreshed data
+        """
+        db.add(service_request)
+        await db.flush()
+        await db.refresh(service_request)
+        return service_request
+
+    @classmethod
+    async def create_request_note(
+        cls, db: AsyncSession, note: RequestNote
+    ) -> RequestNote:
+        """Create a request note."""
+        db.add(note)
+        await db.flush()
+        return note
+
+    @classmethod
+    async def find_requests_with_stats_filters(
+        cls,
+        db: AsyncSession,
+        user: User,
+        filters: Dict,
+    ) -> Tuple[int, List[Tuple], List[Tuple], List[Tuple]]:
+        """
+        Get service request statistics with filters.
+
+        Returns:
+            Tuple of (total_count, status_distribution, priority_distribution, avg_resolution_time)
+        """
+        from datetime import timedelta
+
+        # Build base query
+        base_query = select(ServiceRequest)
+
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            base_query = base_query.where(visibility_filter)
+
+        # Apply additional filters
+        conditions = [ServiceRequest.is_deleted.is_(False)]
+
+        if filters.get('status_id'):
+            conditions.append(ServiceRequest.status_id == filters['status_id'])
+        if filters.get('priority_id'):
+            conditions.append(ServiceRequest.priority_id == filters['priority_id'])
+        if filters.get('business_unit_id'):
+            conditions.append(ServiceRequest.business_unit_id == filters['business_unit_id'])
+        if filters.get('start_date'):
+            conditions.append(ServiceRequest.created_at >= filters['start_date'])
+        if filters.get('end_date'):
+            conditions.append(ServiceRequest.created_at <= filters['end_date'])
+
+        base_query = base_query.where(and_(*conditions))
+
+        # Total count
+        count_query = select(func.count()).select_from(base_query.subquery())
+        total_count_result = await db.execute(count_query)
+        total_count = total_count_result.scalar() or 0
+
+        # Status distribution
+        status_query = (
+            select(ServiceRequest.status_id, func.count(ServiceRequest.id))
+            .select_from(base_query.subquery())
+            .group_by(ServiceRequest.status_id)
+        )
+        status_result = await db.execute(status_query)
+        status_distribution = list(status_result.all())
+
+        # Priority distribution
+        priority_query = (
+            select(ServiceRequest.priority_id, func.count(ServiceRequest.id))
+            .select_from(base_query.subquery())
+            .group_by(ServiceRequest.priority_id)
+        )
+        priority_result = await db.execute(priority_query)
+        priority_distribution = list(priority_result.all())
+
+        # Average resolution time
+        resolution_time_query = (
+            select(
+                func.avg(
+                    func.extract(
+                        'epoch',
+                        ServiceRequest.resolved_at - ServiceRequest.created_at
+                    )
+                )
+            )
+            .select_from(base_query.subquery())
+            .where(ServiceRequest.resolved_at.isnot(None))
+        )
+        resolution_time_result = await db.execute(resolution_time_query)
+        avg_seconds = resolution_time_result.scalar()
+
+        avg_resolution_time = []
+        if avg_seconds:
+            avg_resolution_time = [(timedelta(seconds=int(avg_seconds)),)]
+
+        return total_count, status_distribution, priority_distribution, avg_resolution_time
+
+    @classmethod
+    async def find_requests_paginated(
+        cls,
+        db: AsyncSession,
+        user: User,
+        filters: Dict,
+        page: int = 1,
+        per_page: int = 20,
+        order_by: str = "created_at",
+        order_dir: str = "desc",
+    ) -> Tuple[List[ServiceRequest], int, int]:
+        """
+        Find requests with pagination and filters.
+
+        Returns:
+            Tuple of (requests, total_count, parent_count)
+        """
+        # Build base query with relationships
+        base_query = select(ServiceRequest).options(
+            selectinload(ServiceRequest.requester),
+            selectinload(ServiceRequest.status),
+            selectinload(ServiceRequest.priority),
+            selectinload(ServiceRequest.business_unit),
+            selectinload(ServiceRequest.subcategory).selectinload(Subcategory.category),
+        )
+
+        # Apply visibility filter
+        visibility_filter = cls._get_visibility_filter(user)
+        if visibility_filter is not None:
+            base_query = base_query.where(visibility_filter)
+
+        # Apply filters
+        conditions = [ServiceRequest.is_deleted.is_(False)]
+
+        if filters.get('status_id'):
+            conditions.append(ServiceRequest.status_id == filters['status_id'])
+        if filters.get('priority_id'):
+            conditions.append(ServiceRequest.priority_id == filters['priority_id'])
+        if filters.get('business_unit_id'):
+            conditions.append(ServiceRequest.business_unit_id == filters['business_unit_id'])
+        if filters.get('start_date'):
+            conditions.append(ServiceRequest.created_at >= filters['start_date'])
+        if filters.get('end_date'):
+            conditions.append(ServiceRequest.created_at <= filters['end_date'])
+        if filters.get('search'):
+            search_term = f"%{filters['search']}%"
+            conditions.append(
+                or_(
+                    ServiceRequest.title.ilike(search_term),
+                    ServiceRequest.description.ilike(search_term),
+                )
+            )
+
+        base_query = base_query.where(and_(*conditions))
+
+        # Get total count
+        count_query = select(func.count()).select_from(base_query.subquery())
+        count_result = await db.execute(count_query)
+        total_count = count_result.scalar() or 0
+
+        # Apply ordering
+        order_column = getattr(ServiceRequest, order_by, ServiceRequest.created_at)
+        if order_dir == "asc":
+            base_query = base_query.order_by(order_column.asc())
+        else:
+            base_query = base_query.order_by(order_column.desc())
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        query = base_query.offset(offset).limit(per_page)
+
+        result = await db.execute(query)
+        requests = list(result.scalars().all())
+
+        # Count parent tasks (not filtered)
+        parent_count = 0  # Placeholder - would need specific query
+
+        return requests, total_count, parent_count
+
+    @classmethod
+    async def find_sub_tasks(
+        cls,
+        db: AsyncSession,
+        parent_id: UUID,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> Tuple[List[ServiceRequest], int]:
+        """Find sub-tasks for a parent request."""
+        query = (
+            select(ServiceRequest)
+            .where(
+                ServiceRequest.parent_task_id == parent_id,
+                ServiceRequest.is_deleted.is_(False),
+            )
+            .options(
+                selectinload(ServiceRequest.requester),
+                selectinload(ServiceRequest.status),
+                selectinload(ServiceRequest.priority),
+                selectinload(ServiceRequest.assigned_to_technician),
+            )
+            .order_by(ServiceRequest.order_index.asc(), ServiceRequest.created_at.asc())
+        )
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        query = query.offset(offset).limit(per_page)
+
+        result = await db.execute(query)
+        sub_tasks = list(result.scalars().all())
+
+        return sub_tasks, total
+
+    @classmethod
+    async def get_sub_task_counts(
+        cls, db: AsyncSession, parent_id: UUID
+    ) -> Tuple[int, int]:
+        """
+        Get sub-task statistics.
+
+        Returns:
+            Tuple of (total_count, completed_count)
+        """
+        # Subquery for solved statuses
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
+
+        # Total count
+        total_query = select(func.count()).where(
+            ServiceRequest.parent_task_id == parent_id,
+            ServiceRequest.is_deleted.is_(False),
+        )
+        total_result = await db.execute(total_query)
+        total_count = total_result.scalar() or 0
+
+        # Completed count
+        completed_query = select(func.count()).where(
+            ServiceRequest.parent_task_id == parent_id,
+            ServiceRequest.is_deleted.is_(False),
+            ServiceRequest.status_id.in_(solved_subquery),
+        )
+        completed_result = await db.execute(completed_query)
+        completed_count = completed_result.scalar() or 0
+
+        return total_count, completed_count
+
+    @classmethod
+    async def find_technician_tasks(
+        cls,
+        db: AsyncSession,
+        technician_id: int,
+        page: int = 1,
+        per_page: int = 50,
+    ) -> Tuple[List[ServiceRequest], int]:
+        """Find tasks assigned to a specific technician."""
+        # Subquery for solved statuses
+        solved_subquery = select(RequestStatus.id).where(RequestStatus.count_as_solved)
+
+        query = (
+            select(ServiceRequest)
+            .where(
+                ServiceRequest.assigned_to_technician_id == technician_id,
+                ServiceRequest.is_deleted.is_(False),
+                ServiceRequest.status_id.notin_(solved_subquery),
+            )
+            .options(
+                selectinload(ServiceRequest.requester),
+                selectinload(ServiceRequest.status),
+                selectinload(ServiceRequest.priority),
+                selectinload(ServiceRequest.parent_task),
+            )
+            .order_by(ServiceRequest.created_at.desc())
+        )
+
+        # Get total count
+        count_stmt = select(func.count()).select_from(query.subquery())
+        count_result = await db.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Apply pagination
+        offset = (page - 1) * per_page
+        query = query.offset(offset).limit(per_page)
+
+        result = await db.execute(query)
+        tasks = list(result.scalars().all())
+
+        return tasks, total
+
+    @classmethod
+    async def update_sub_task_orders(
+        cls, db: AsyncSession, parent_id: UUID, task_ids: List[UUID]
+    ) -> None:
+        """Update order_index for sub-tasks."""
+        query = select(ServiceRequest).where(
+            ServiceRequest.parent_task_id == parent_id,
+            ServiceRequest.is_deleted.is_(False),
+        )
+        result = await db.execute(query)
+        tasks = list(result.scalars().all())
+
+        # Update order_index
+        for task in tasks:
+            if task.id in task_ids:
+                task.order_index = task_ids.index(task.id)
+                db.add(task)
+
+        await db.commit()
+
+    @classmethod
+    async def get_last_chat_messages(
+        cls, db: AsyncSession, request_ids: List[UUID]
+    ) -> Dict[UUID, Optional[ChatMessage]]:
+        """
+        Get the last chat message for each request.
+
+        Returns:
+            Dict mapping request_id to last ChatMessage
+        """
+        if not request_ids:
+            return {}
+
+        # Subquery to get max created_at per request
+        max_date_subquery = (
+            select(
+                ChatMessage.request_id,
+                func.max(ChatMessage.created_at).label("max_created_at"),
+            )
+            .where(ChatMessage.request_id.in_(request_ids))
+            .group_by(ChatMessage.request_id)
+            .subquery()
+        )
+
+        # Main query to get full message details
+        stmt = (
+            select(ChatMessage)
+            .join(
+                max_date_subquery,
+                and_(
+                    ChatMessage.request_id == max_date_subquery.c.request_id,
+                    ChatMessage.created_at == max_date_subquery.c.max_created_at,
+                ),
+            )
+            .options(selectinload(ChatMessage.sender))
+        )
+
+        result = await db.execute(stmt)
+        messages = list(result.scalars().all())
+
+        # Build dict
+        message_dict = {msg.request_id: msg for msg in messages}
+        return message_dict
+
+    @classmethod
+    async def find_requests_by_section(
+        cls,
+        db: AsyncSession,
+        section_id: int,
+    ) -> List[ServiceRequest]:
+        """Find all requests assigned to a section."""
+        stmt = (
+            select(ServiceRequest)
+            .where(
+                ServiceRequest.assigned_to_section_id == section_id,
+                ServiceRequest.is_deleted.is_(False),
+            )
+            .options(
+                selectinload(ServiceRequest.requester),
+                selectinload(ServiceRequest.status),
+                selectinload(ServiceRequest.priority),
+                selectinload(ServiceRequest.business_unit),
+                selectinload(ServiceRequest.assignees),
+            )
+        )
+
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    @classmethod
+    async def check_existing_assignment(
+        cls, db: AsyncSession, request_id: UUID, user_id: int
+    ) -> bool:
+        """Check if a user is already assigned to a request."""
+        stmt = select(RequestAssignee).where(
+            RequestAssignee.request_id == request_id,
+            RequestAssignee.assignee_id == user_id,
+            RequestAssignee.is_deleted == False,
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    @classmethod
+    async def create_assignment(
+        cls, db: AsyncSession, request_id: UUID, user_id: int, assigned_by: int
+    ) -> RequestAssignee:
+        """Create a new assignment."""
+        assignment = RequestAssignee(
+            request_id=request_id,
+            assignee_id=user_id,
+            assigned_by=assigned_by,
+            is_deleted=False,
+        )
+        db.add(assignment)
+        await db.flush()
+        return assignment
+
+    @classmethod
+    async def delete_assignment(
+        cls, db: AsyncSession, request_id: UUID, user_id: int
+    ) -> bool:
+        """Remove an assignment (soft delete)."""
+        stmt = select(RequestAssignee).where(
+            RequestAssignee.request_id == request_id,
+            RequestAssignee.assignee_id == user_id,
+            RequestAssignee.is_deleted == False,
+        )
+        result = await db.execute(stmt)
+        assignment = result.scalar_one_or_none()
+
+        if not assignment:
+            return False
+
+        assignment.is_deleted = True
+        db.add(assignment)
+        await db.flush()
+        return True
+
+    @classmethod
+    async def get_request_assignees(
+        cls, db: AsyncSession, request_id: UUID
+    ) -> List[RequestAssignee]:
+        """Get all active assignees for a request."""
+        stmt = (
+            select(RequestAssignee)
+            .where(
+                RequestAssignee.request_id == request_id,
+                RequestAssignee.is_deleted == False,
+            )
+            .options(selectinload(RequestAssignee.assignee))
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())

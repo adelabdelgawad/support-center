@@ -3,6 +3,7 @@ Service Request business logic with caching and performance optimizations.
 Enhanced with centralized logging and error handling.
 
 REFACTORED: Renamed all "agent" references to "technician" throughout.
+REFACTORED: Migrated all database operations to repository layer.
 """
 
 import logging
@@ -37,6 +38,7 @@ from api.schemas.service_request import (
     ServiceRequestUpdate,
     ServiceRequestUpdateByTechnician,
 )
+from repositories.support.request_repository import ServiceRequestRepository
 
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
@@ -60,39 +62,7 @@ class RequestService:
         Returns:
             Matching business unit or None
         """
-        if not ip_address:
-            return None
-
-        import ipaddress
-
-        try:
-            ip_obj = ipaddress.ip_address(ip_address)
-        except ValueError:
-            logger.warning(f"Invalid IP address format: {ip_address}")
-            return None
-
-        # Get all business units with network defined and not deleted
-        from db import BusinessUnit
-
-        stmt = select(BusinessUnit).where(
-            (BusinessUnit.network.isnot(None)) & (BusinessUnit.is_deleted.is_(False))
-        )
-        result = await db.execute(stmt)
-        business_units = result.scalars().all()
-
-        # Match IP to network
-        for bu in business_units:
-            try:
-                network = ipaddress.ip_network(bu.network, strict=False)
-                if ip_obj in network:
-                    return bu
-            except (ValueError, TypeError) as e:
-                logger.warning(
-                    f"Invalid network CIDR for business unit {bu.id}: {bu.network} - {e}"
-                )
-                continue
-
-        return None
+        return await ServiceRequestRepository.find_by_ip_network(db, ip_address)
 
     @staticmethod
     async def validate_technician_assignment_requirement(
@@ -110,15 +80,7 @@ class RequestService:
         if request.assigned_to_technician_id:
             return
 
-        result = await db.execute(
-            select(func.count())
-            .select_from(RequestAssignee)
-            .where(
-                RequestAssignee.request_id == request.id,
-                RequestAssignee.is_deleted == False,
-            )
-        )
-        assignee_count = result.scalar()
+        assignee_count = await ServiceRequestRepository.count_assignees(db, request.id)
 
         if not assignee_count:
             raise ValueError(
@@ -400,17 +362,9 @@ class RequestService:
         update_dict = update_data.dict(exclude_unset=True)
 
         # Retrieve the request with optimized loading
-        result = await db.execute(
-            select(ServiceRequest)
-            .options(
-                selectinload(ServiceRequest.subcategory),
-                selectinload(
-                    ServiceRequest.status
-                ),  # Load status for count_as_solved check
-            )
-            .where(ServiceRequest.id == request_id)
+        request = await ServiceRequestRepository.find_by_id_with_relations(
+            db, request_id, relations=['subcategory', 'status']
         )
-        request = result.scalar_one_or_none()
 
         if not request:
             raise NotFoundError(f"Service request with ID {request_id} not found")
@@ -480,12 +434,9 @@ class RequestService:
             raise ValueError("No fields to update")
 
         # Retrieve the request with status relationship for count_as_solved check
-        result = await db.execute(
-            select(ServiceRequest)
-            .options(selectinload(ServiceRequest.status))
-            .where(ServiceRequest.id == request_id)
+        request = await ServiceRequestRepository.find_by_id_with_relations(
+            db, request_id, relations=['status']
         )
-        request = result.scalar_one_or_none()
 
         if not request:
             raise ValueError(f"Service request with ID {request_id} not found")
@@ -561,10 +512,7 @@ class RequestService:
             )
 
         # Get all requests to update
-        result = await db.execute(
-            select(ServiceRequest).where(ServiceRequest.id.in_(request_ids))
-        )
-        requests = result.scalars().all()
+        requests = await ServiceRequestRepository.find_all_by_ids(db, request_ids)
 
         updated_requests = []
         for request in requests:
@@ -704,10 +652,9 @@ class RequestService:
         # Calculate due_date based on priority SLA
         due_date = None
         if request_data.priority_id:
-            priority = await db.execute(
-                select(Priority).where(Priority.id == request_data.priority_id)
+            priority_obj = await ServiceRequestRepository.find_priority_by_id(
+                db, request_data.priority_id
             )
-            priority_obj = priority.scalar_one_or_none()
             if priority_obj and priority_obj.resolution_time_hours:
                 due_date = datetime.utcnow() + timedelta(
                     hours=priority_obj.resolution_time_hours
@@ -727,9 +674,7 @@ class RequestService:
             updated_at=datetime.utcnow(),
         )
 
-        db.add(service_request)
-        await db.flush()
-        await db.refresh(service_request)
+        service_request = await ServiceRequestRepository.create_request(db, service_request)
 
         logger.info(
             f"Created new service request {service_request.id} with due_date={due_date}"
@@ -784,20 +729,16 @@ class RequestService:
 
         # Calculate due_date based on default Medium priority (ID 3) SLA
         due_date = None
-        priority = await db.execute(
-            select(Priority).where(Priority.id == 3)  # Default Medium priority
-        )
-        priority_obj = priority.scalar_one_or_none()
+        priority_obj = await ServiceRequestRepository.find_priority_by_id(db, 3)
         if priority_obj and priority_obj.resolution_time_hours:
             due_date = datetime.utcnow() + timedelta(
                 hours=priority_obj.resolution_time_hours
             )
 
         # Get request type to auto-populate assigned_to_section_id
-        request_type = await db.execute(
-            select(RequestType).where(RequestType.id == request_data.request_type_id)
+        request_type_obj = await ServiceRequestRepository.find_request_type_by_id(
+            db, request_data.request_type_id
         )
-        request_type_obj = request_type.scalar_one_or_none()
         assigned_to_section_id = (
             request_type_obj.section_id if request_type_obj else None
         )
@@ -823,9 +764,7 @@ class RequestService:
             updated_at=datetime.utcnow(),
         )
 
-        db.add(service_request)
-        await db.flush()
-        await db.refresh(service_request)
+        service_request = await ServiceRequestRepository.create_request(db, service_request)
 
         # Create initial chat message with the request title
         from db import ChatMessage
@@ -932,15 +871,9 @@ class RequestService:
         Returns:
             Service request if found, None otherwise
         """
-        result = await db.execute(
-            select(ServiceRequest)
-            .options(
-                selectinload(ServiceRequest.subcategory),
-                selectinload(ServiceRequest.notes).selectinload(RequestNote.creator),
-            )
-            .where(ServiceRequest.id == request_id)
+        return await ServiceRequestRepository.find_by_id_with_relations(
+            db, request_id, ['subcategory', 'notes']
         )
-        return result.scalar_one_or_none()
 
     @staticmethod
     @safe_database_query("get_service_request_detail", default_return=None)
@@ -965,19 +898,7 @@ class RequestService:
         )
         from api.schemas.category import CategoryReadMinimal
 
-        result = await db.execute(
-            select(ServiceRequest)
-            .options(
-                selectinload(ServiceRequest.requester),
-                selectinload(ServiceRequest.status),
-                selectinload(ServiceRequest.priority),
-                selectinload(ServiceRequest.subcategory).selectinload(
-                    Subcategory.category
-                ),
-            )
-            .where(ServiceRequest.id == request_id)
-        )
-        request = result.scalar_one_or_none()
+        request = await ServiceRequestRepository.find_by_id(db, request_id)
 
         if not request:
             return None
@@ -1012,12 +933,7 @@ class RequestService:
         # Sub-tasks are identified by having a parent_task_id
         if request.parent_task_id:
             # This request is a sub-task, fetch parent request info
-            parent_result = await db.execute(
-                select(ServiceRequest).where(
-                    ServiceRequest.id == request.parent_task_id
-                )
-            )
-            parent_request = parent_result.scalar_one_or_none()
+            parent_request = await ServiceRequestRepository.find_by_id(db, request.parent_task_id)
             if parent_request:
                 parent_request_id = parent_request.id
                 parent_request_title = parent_request.title
@@ -1025,15 +941,10 @@ class RequestService:
         # If this is a subtask, fetch the technician who created it
         created_by_technician_info = None
         if request.parent_task_id and request.created_by:
-            from db.models import User
+            from api.schemas.service_request import TechnicianInfo
 
-            technician_result = await db.execute(
-                select(User).where(User.id == request.created_by)
-            )
-            technician = technician_result.scalar_one_or_none()
+            technician = await ServiceRequestRepository.find_user_by_id(db, request.created_by)
             if technician:
-                from api.schemas.service_request import TechnicianInfo
-
                 created_by_technician_info = TechnicianInfo(
                     id=technician.id,
                     username=technician.username,
@@ -1513,17 +1424,8 @@ class RequestService:
         Returns:
             Updated service request
         """
-        from db import User, UserRole
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-
-        # Fetch assigner user with roles
-        result = await db.execute(
-            select(User)
-            .where(User.id == assigned_by)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
-        )
-        assigner_user = result.scalar_one_or_none()
+        # Fetch assigner user
+        assigner_user = await ServiceRequestRepository.find_user_by_id(db, assigned_by)
         if not assigner_user:
             raise NotFoundError(f"User with ID {assigned_by} not found")
 
@@ -1607,17 +1509,8 @@ class RequestService:
         Returns:
             True if unassigned successfully
         """
-        from db import User, UserRole
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-
-        # Fetch unassigner user with roles
-        result = await db.execute(
-            select(User)
-            .where(User.id == unassigner_id)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
-        )
-        unassigner_user = result.scalar_one_or_none()
+        # Fetch unassigner user
+        unassigner_user = await ServiceRequestRepository.find_user_by_id(db, unassigner_id)
         if not unassigner_user:
             raise NotFoundError(f"User with ID {unassigner_id} not found")
 
@@ -1651,11 +1544,6 @@ class RequestService:
             ValueError: If request already has assignees or user already assigned
             NotFoundError: If request or technician not found
         """
-        from db import User, UserRole
-        from repositories.support.request_repository import ServiceRequestRepository
-        from sqlalchemy import select
-        from sqlalchemy.orm import selectinload
-
         # Check assignee count FIRST - must be 0 for take to work
         assignee_count = await ServiceRequestRepository.count_assignees(db, request_id)
 
@@ -1664,13 +1552,8 @@ class RequestService:
                 "Cannot take request that already has assignees. Request is already assigned."
             )
 
-        # Get technician user with roles for permission check
-        result = await db.execute(
-            select(User)
-            .where(User.id == technician_id)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
-        )
-        technician_user = result.scalar_one_or_none()
+        # Get technician user for permission check
+        technician_user = await ServiceRequestRepository.find_user_by_id(db, technician_id)
 
         if not technician_user:
             raise NotFoundError(f"Technician with ID {technician_id} not found")
@@ -1698,8 +1581,6 @@ class RequestService:
         Raises:
             NotFoundError: If request not found
         """
-        from repositories.support.request_repository import ServiceRequestRepository
-
         # Check if request exists
         request = await RequestService.get_service_request_by_id(db, request_id)
         if not request:
@@ -1733,16 +1614,9 @@ class RequestService:
             ValueError: If parent doesn't exist, is closed, or is itself a sub-task
         """
         # Validate parent exists and load with status
-        from sqlmodel import select
-        from db.models import ServiceRequest
-        from sqlalchemy.orm import selectinload
-
-        result = await db.execute(
-            select(ServiceRequest)
-            .options(selectinload(ServiceRequest.status))
-            .where(ServiceRequest.id == parent_id)
+        parent = await ServiceRequestRepository.find_by_id_with_relations(
+            db, parent_id, ['status']
         )
-        parent = result.scalar_one_or_none()
 
         if not parent:
             raise NotFoundError(f"Parent request {parent_id} not found")

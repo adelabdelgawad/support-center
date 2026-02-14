@@ -11,15 +11,14 @@ from core.decorators import (
     transactional_database_operation,
     log_database_operation,
 )
-from db import Role, UserRole, PageRole, User, Page
+from db import Role, User, Page
 from api.schemas.role import (
     RoleCreate,
     RoleUpdate,
     RoleWithPagesAndUsers,
 )
-from sqlalchemy import func, select, case
+from repositories.setting.role_repository import RoleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 # Module-level logger using __name__
 logger = logging.getLogger(__name__)
@@ -45,11 +44,11 @@ class RoleService:
         Returns:
             Created role
         """
-        role = Role(**role_data.model_dump(), created_by=created_by)
-        db.add(role)
-        await db.commit()
-        await db.refresh(role)
-
+        role = await RoleRepository.create(
+            db,
+            obj_in={**role_data.model_dump(), "created_by": created_by},
+            commit=True
+        )
         return role
 
     @staticmethod
@@ -66,16 +65,7 @@ class RoleService:
         Returns:
             Role or None
         """
-        stmt = (
-            select(Role)
-            .where(Role.id == role_id)
-            .options(
-                selectinload(Role.page_permissions).selectinload(PageRole.page),
-                selectinload(Role.user_roles).selectinload(UserRole.user),
-            )
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await RoleRepository.find_by_id_with_relations(db, role_id)
 
     @staticmethod
     @safe_database_query("get_role_by_name")
@@ -91,9 +81,7 @@ class RoleService:
         Returns:
             Role or None
         """
-        stmt = select(Role).where(Role.name == name)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await RoleRepository.find_by_name(db, name)
 
     @staticmethod
     @safe_database_query("list_roles", default_return=([], 0, 0, 0))
@@ -120,51 +108,15 @@ class RoleService:
         Returns:
             Tuple of (list of roles with details, total, active_count, inactive_count)
         """
-        # Build query
-        stmt = select(Role).options(
-            selectinload(Role.page_permissions).selectinload(PageRole.page),
-            selectinload(Role.user_roles).selectinload(UserRole.user),
+        # Get roles with relationships from repository
+        roles, total, active_count, inactive_count = await RoleRepository.find_with_filters_paginated(
+            db,
+            name=name,
+            is_active=is_active,
+            page_id=page_id,
+            page=page,
+            per_page=per_page,
         )
-
-        # Build count query
-        count_stmt = select(
-            func.count(Role.id).label("total"),
-            func.count(case((Role.is_active.is_(True), 1))).label("active_count"),
-            func.count(case((Role.is_active.is_(False), 1))).label("inactive_count"),
-        )
-
-        # Apply filters
-        if name:
-            name_filter = Role.name.ilike(f"%{name}%")
-            stmt = stmt.where(name_filter)
-            count_stmt = count_stmt.where(name_filter)
-
-        if is_active is not None:
-            stmt = stmt.where(Role.is_active == is_active)
-            count_stmt = count_stmt.where(Role.is_active == is_active)
-
-        if page_id is not None:
-            stmt = stmt.join(PageRole).where(PageRole.page_id == page_id)
-            count_stmt = count_stmt.join(PageRole).where(PageRole.page_id == page_id)
-            stmt = stmt.distinct()
-
-        # Get counts
-        count_result = await db.execute(count_stmt)
-        counts = count_result.one()
-        total = counts.total or 0
-        active_count = counts.active_count or 0
-        inactive_count = counts.inactive_count or 0
-
-        # Apply pagination
-        stmt = (
-            stmt.order_by(Role.name)
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-        )
-
-        # Execute query
-        result = await db.execute(stmt)
-        roles = result.scalars().all()
 
         # Build response using already-loaded relationships (no N+1 queries)
         role_items = []
@@ -220,29 +172,22 @@ class RoleService:
         Returns:
             Updated role or None
         """
-        stmt = select(Role).where(Role.id == role_id)
-        result = await db.execute(stmt)
-        role = result.scalar_one_or_none()
-
-        if not role:
-            return None
-
         # Update fields (filter None to protect NOT NULL columns)
         update_dict = {
             k: v
             for k, v in update_data.model_dump(exclude_unset=True).items()
             if v is not None
         }
-        for field, value in update_dict.items():
-            setattr(role, field, value)
 
-        role.updated_at = datetime.utcnow()
-        role.updated_by = updated_by
+        update_dict["updated_at"] = datetime.utcnow()
+        update_dict["updated_by"] = updated_by
 
-        await db.commit()
-        await db.refresh(role)
-
-        return role
+        return await RoleRepository.update(
+            db,
+            id_value=role_id,
+            obj_in=update_dict,
+            commit=True
+        )
 
     @staticmethod
     @transactional_database_operation("toggle_role_status")
@@ -261,21 +206,7 @@ class RoleService:
         Returns:
             Updated role or None
         """
-        stmt = select(Role).where(Role.id == role_id)
-        result = await db.execute(stmt)
-        role = result.scalar_one_or_none()
-
-        if not role:
-            return None
-
-        role.is_active = not role.is_active
-        role.updated_at = datetime.utcnow()
-        role.updated_by = updated_by
-
-        await db.commit()
-        await db.refresh(role)
-
-        return role
+        return await RoleRepository.toggle_active_status(db, role_id, updated_by)
 
     @staticmethod
     @transactional_database_operation("delete_role")
@@ -291,19 +222,7 @@ class RoleService:
         Returns:
             True if deleted, False if not found
         """
-        stmt = select(Role).where(Role.id == role_id)
-        result = await db.execute(stmt)
-        role = result.scalar_one_or_none()
-
-        if not role:
-            return False
-
-        role.is_deleted = True
-        role.updated_at = datetime.utcnow()
-
-        await db.commit()
-
-        return True
+        return await RoleRepository.soft_delete(db, role_id)
 
     @staticmethod
     @safe_database_query("get_role_pages", default_return=[])
@@ -372,27 +291,7 @@ class RoleService:
         Returns:
             Number of new assignments created
         """
-        # Get existing assignments
-        existing_stmt = select(PageRole.page_id).where(PageRole.role_id == role_id)
-        existing_result = await db.execute(existing_stmt)
-        existing_page_ids = {row[0] for row in existing_result.fetchall()}
-
-        # Find new page IDs
-        new_page_ids = [pid for pid in page_ids if pid not in existing_page_ids]
-
-        if not new_page_ids:
-            return 0
-
-        # Create new assignments
-        page_roles = [
-            PageRole(role_id=role_id, page_id=page_id, created_by=created_by)
-            for page_id in new_page_ids
-        ]
-
-        db.add_all(page_roles)
-        await db.commit()
-
-        return len(new_page_ids)
+        return await RoleRepository.assign_pages(db, role_id, page_ids, created_by)
 
     @staticmethod
     @transactional_database_operation("remove_pages_from_role")
@@ -411,16 +310,7 @@ class RoleService:
         Returns:
             Number of assignments removed
         """
-        from sqlalchemy import delete
-
-        stmt = delete(PageRole).where(
-            PageRole.role_id == role_id, PageRole.page_id.in_(page_ids)
-        )
-
-        result = await db.execute(stmt)
-        await db.commit()
-
-        return result.rowcount
+        return await RoleRepository.remove_pages(db, role_id, page_ids)
 
     @staticmethod
     @transactional_database_operation("assign_users_to_role")
@@ -443,27 +333,7 @@ class RoleService:
         Returns:
             Number of new assignments created
         """
-        # Get existing assignments
-        existing_stmt = select(UserRole.user_id).where(UserRole.role_id == role_id)
-        existing_result = await db.execute(existing_stmt)
-        existing_user_ids = {row[0] for row in existing_result.fetchall()}
-
-        # Find new user IDs
-        new_user_ids = [uid for uid in user_ids if uid not in existing_user_ids]
-
-        if not new_user_ids:
-            return 0
-
-        # Create new assignments
-        user_roles = [
-            UserRole(role_id=role_id, user_id=user_id, created_by=created_by)
-            for user_id in new_user_ids
-        ]
-
-        db.add_all(user_roles)
-        await db.commit()
-
-        return len(new_user_ids)
+        return await RoleRepository.assign_users(db, role_id, user_ids, created_by)
 
     @staticmethod
     @transactional_database_operation("remove_users_from_role")
@@ -482,13 +352,4 @@ class RoleService:
         Returns:
             Number of assignments removed
         """
-        from sqlalchemy import delete
-
-        stmt = delete(UserRole).where(
-            UserRole.role_id == role_id, UserRole.user_id.in_(user_ids)
-        )
-
-        result = await db.execute(stmt)
-        await db.commit()
-
-        return result.rowcount
+        return await RoleRepository.remove_users(db, role_id, user_ids)

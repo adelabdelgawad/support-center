@@ -1161,10 +1161,7 @@ class AuthenticationService:
             HTTPException: If authentication fails
         """
         # 1. Fetch user from database by username (not hardcoded to "admin")
-        result = await db.execute(
-            select(User).where(User.username == login_data.username)
-        )
-        user = result.scalar_one_or_none()
+        user = await UserRepository.find_by_username(db, login_data.username)
 
         if not user:
             raise HTTPException(

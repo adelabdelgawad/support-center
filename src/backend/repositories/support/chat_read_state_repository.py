@@ -5,10 +5,10 @@ This repository handles all database operations for chat read state tracking.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, not_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -293,3 +293,164 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             monitor.last_read_at = latest.created_at
 
         return monitor
+
+    @classmethod
+    async def get_or_create(
+        cls, db: AsyncSession, request_id: UUID, user_id: int
+    ) -> ChatReadState:
+        """
+        Get or create a ChatReadState record for a user in a chat.
+
+        Args:
+            db: Database session
+            request_id: Service request (chat) ID
+            user_id: User ID
+
+        Returns:
+            ChatReadState record (existing or newly created)
+        """
+        monitor = await cls.find_by_request_and_user(db, request_id, user_id)
+
+        if monitor:
+            return monitor
+
+        monitor = ChatReadState(
+            request_id=request_id,
+            user_id=user_id,
+            unread_count=0,
+            is_viewing=False,
+        )
+        db.add(monitor)
+        await db.flush()
+
+        return monitor
+
+    @classmethod
+    async def get_latest_message_info(
+        cls, db: AsyncSession, request_id: UUID
+    ) -> Optional[Tuple[UUID, datetime]]:
+        """
+        Get the ID and timestamp of the latest message in a request.
+
+        Args:
+            db: Database session
+            request_id: Service request (chat) ID
+
+        Returns:
+            Tuple of (message_id, created_at) or None if no messages
+        """
+        stmt = (
+            select(ChatMessage.id, ChatMessage.created_at)
+            .where(ChatMessage.request_id == request_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(1)
+        )
+        result = await db.execute(stmt)
+        latest = result.first()
+        return (latest.id, latest.created_at) if latest else None
+
+    @classmethod
+    async def get_message_timestamp(
+        cls, db: AsyncSession, message_id: UUID
+    ) -> Optional[datetime]:
+        """
+        Get the timestamp of a specific message.
+
+        Args:
+            db: Database session
+            message_id: Message ID
+
+        Returns:
+            Message timestamp or None
+        """
+        stmt = select(ChatMessage.created_at).where(ChatMessage.id == message_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @classmethod
+    async def mark_messages_as_read(
+        cls,
+        db: AsyncSession,
+        request_id: UUID,
+        user_id: int,
+    ) -> int:
+        """
+        Mark all unread messages (not sent by user) as read in a request.
+
+        Args:
+            db: Database session
+            request_id: Service request (chat) ID
+            user_id: User ID
+
+        Returns:
+            Number of messages marked as read
+        """
+        mark_read_stmt = (
+            update(ChatMessage)
+            .where(
+                and_(
+                    ChatMessage.request_id == request_id,
+                    ChatMessage.sender_id != user_id,
+                    not_(ChatMessage.is_read),
+                )
+            )
+            .values(is_read=True)
+        )
+        result = await db.execute(mark_read_stmt)
+        return result.rowcount
+
+    @classmethod
+    async def get_unread_message_ids(
+        cls, db: AsyncSession, request_id: UUID, user_id: int
+    ) -> List[str]:
+        """
+        Get IDs of unread messages (not sent by user) in a request.
+
+        Args:
+            db: Database session
+            request_id: Service request (chat) ID
+            user_id: User ID
+
+        Returns:
+            List of unread message IDs as strings
+        """
+        stmt = select(ChatMessage.id).where(
+            and_(
+                ChatMessage.request_id == request_id,
+                ChatMessage.sender_id != user_id,
+                not_(ChatMessage.is_read),
+            )
+        )
+        result = await db.execute(stmt)
+        return [str(row[0]) for row in result.all()]
+
+    @classmethod
+    async def bulk_create_monitors(
+        cls, db: AsyncSession, request_id: UUID, user_ids: List[int]
+    ) -> int:
+        """
+        Create multiple ChatReadState monitors in bulk.
+
+        Args:
+            db: Database session
+            request_id: Service request (chat) ID
+            user_ids: List of user IDs to create monitors for
+
+        Returns:
+            Number of monitors created
+        """
+        if not user_ids:
+            return 0
+
+        new_monitors = [
+            ChatReadState(
+                request_id=request_id,
+                user_id=user_id,
+                unread_count=0,
+                is_viewing=False,
+            )
+            for user_id in user_ids
+        ]
+
+        db.add_all(new_monitors)
+        return len(new_monitors)

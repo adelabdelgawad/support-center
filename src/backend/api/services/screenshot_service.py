@@ -13,7 +13,6 @@ from uuid import UUID
 
 import magic
 from PIL import Image
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
@@ -22,8 +21,12 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import Screenshot, ServiceRequest
+from db import Screenshot
 from api.services.minio_service import MinIOStorageService
+from repositories.support.screenshot_repository import ScreenshotRepository
+from repositories.support.request_screenshot_link_repository import (
+    RequestScreenshotLinkRepository,
+)
 
 # Note: task imports are done lazily to avoid circular imports
 
@@ -114,10 +117,7 @@ class ScreenshotService:
         from tasks.minio_file_tasks import upload_file_to_minio
 
         # Verify request exists
-        stmt = select(ServiceRequest).where(ServiceRequest.id == request_id)
-        result = await db.execute(stmt)
-        request = result.scalar_one_or_none()
-
+        request = await ScreenshotRepository.get_request(db, request_id)
         if not request:
             raise ValueError("Service request not found")
 
@@ -181,27 +181,17 @@ class ScreenshotService:
             f"Screenshot saved to temporary storage: {temp_screenshot_path}"
         )
 
-        # Create attachment record with pending status
-        attachment = Screenshot(
+        # Create attachment record with pending status using repository
+        attachment = await ScreenshotRepository.create_screenshot(
+            db=db,
             request_id=request_id,
-            chat_message_id=None,  # Can be linked to chat message later
-            uploaded_by=user_id,
-            filename=unique_filename,  # Use unique filename to avoid duplicates
+            user_id=user_id,
+            filename=unique_filename,
             file_size=file_size,
             mime_type="image/jpeg",  # Always JPEG after compression
-            minio_object_key=None,  # Will be set by Celery task
             bucket_name=settings.minio.bucket_name,
-            file_hash=None,  # Will be calculated by Celery task
-            upload_status="pending",
-            is_corrupted=False,
-            temp_local_path=str(
-                temp_screenshot_path
-            ),  # Store temp path for cleanup/retrieval
+            temp_local_path=str(temp_screenshot_path),
         )
-
-        db.add(attachment)
-        await db.commit()
-        await db.refresh(attachment)
 
         logger.info(
             f"✅ Screenshot attachment created - ID: {attachment.id}, "
@@ -217,10 +207,10 @@ class ScreenshotService:
             filename=unique_filename,
         )
 
-        # Store task ID
-        attachment.celery_task_id = task.id
-        await db.commit()
-        await db.refresh(attachment)
+        # Store task ID using repository
+        attachment = await ScreenshotRepository.update_celery_task_id(
+            db, attachment.id, task.id
+        )
 
         logger.info(
             f"Dispatched MinIO upload task {task.id} for screenshot {attachment.id}"
@@ -244,15 +234,7 @@ class ScreenshotService:
         Returns:
             Screenshot or None
         """
-        stmt = select(Screenshot).where(
-            Screenshot.id == screenshot_id,
-            # Optional: verify it's a screenshot by checking MIME type
-            # Screenshot.mime_type.like("image/%")
-        )
-        result = await db.execute(stmt)
-        attachment = result.scalar_one_or_none()
-
-        return attachment
+        return await ScreenshotRepository.find_by_id(db, screenshot_id)
 
     @staticmethod
     @safe_database_query("get_request_screenshots", default_return=[])
@@ -270,20 +252,7 @@ class ScreenshotService:
         Returns:
             List of screenshot attachments
         """
-        stmt = (
-            select(Screenshot)
-            .where(
-                Screenshot.request_id == request_id,
-                Screenshot.mime_type.like("image/%"),
-                # Filter by screenshot path or metadata
-            )
-            .order_by(Screenshot.created_at.desc())
-        )
-
-        result = await db.execute(stmt)
-        screenshots = result.scalars().all()
-
-        return screenshots
+        return await ScreenshotRepository.find_by_request(db, request_id)
 
     @staticmethod
     @log_database_operation("screenshot download from MinIO", level="debug")
@@ -375,21 +344,8 @@ class ScreenshotService:
         Raises:
             ValueError: If validation fails
         """
-        from sqlmodel import select
-
-        from db.models import (
-            RequestScreenshotLink,
-            Screenshot,
-            ServiceRequest,
-        )
-
         # 1. Validate request exists
-        request_query = select(ServiceRequest).where(
-            ServiceRequest.id == request_id
-        )
-        request_result = await db.execute(request_query)
-        request = request_result.scalar_one_or_none()
-
+        request = await ScreenshotRepository.get_request(db, request_id)
         if not request:
             raise ValueError(f"Request {request_id} not found")
 
@@ -398,12 +354,7 @@ class ScreenshotService:
             raise ValueError("Can only link screenshots to sub-tasks")
 
         # 3. Validate screenshot exists and belongs to parent task
-        screenshot_query = select(Screenshot).where(
-            Screenshot.id == screenshot_id
-        )
-        screenshot_result = await db.execute(screenshot_query)
-        screenshot = screenshot_result.scalar_one_or_none()
-
+        screenshot = await ScreenshotRepository.find_by_id_simple(db, screenshot_id)
         if not screenshot:
             raise ValueError(f"Screenshot {screenshot_id} not found")
 
@@ -411,26 +362,16 @@ class ScreenshotService:
             raise ValueError("Screenshot must belong to parent task")
 
         # 4. Check if link already exists
-        existing_query = select(RequestScreenshotLink).where(
-            RequestScreenshotLink.request_id == request_id,
-            RequestScreenshotLink.screenshot_id == screenshot_id,
+        existing = await RequestScreenshotLinkRepository.find_existing_link(
+            db, request_id, screenshot_id
         )
-        existing_result = await db.execute(existing_query)
-        existing = existing_result.scalar_one_or_none()
-
         if existing:
             raise ValueError("Screenshot already linked to this request")
 
         # 5. Create link
-        link = RequestScreenshotLink(
-            request_id=request_id,
-            screenshot_id=screenshot_id,
-            linked_by=technician_id,
+        link = await RequestScreenshotLinkRepository.create_link(
+            db, request_id, screenshot_id, technician_id
         )
-        db.add(link)
-        await db.commit()
-        await db.refresh(link)
-
         return link
 
     @staticmethod
@@ -449,22 +390,9 @@ class ScreenshotService:
         Raises:
             ValueError: If link not found
         """
-        from sqlmodel import select
-
-        from db.models import RequestScreenshotLink
-
-        query = select(RequestScreenshotLink).where(
-            RequestScreenshotLink.request_id == request_id,
-            RequestScreenshotLink.screenshot_id == screenshot_id,
+        await RequestScreenshotLinkRepository.delete_link(
+            db, request_id, screenshot_id
         )
-        result = await db.execute(query)
-        link = result.scalar_one_or_none()
-
-        if not link:
-            raise ValueError("Screenshot link not found")
-
-        await db.delete(link)
-        await db.commit()
 
     @staticmethod
     @safe_database_query
@@ -481,28 +409,11 @@ class ScreenshotService:
         Returns:
             List of Screenshot instances
         """
-        from sqlmodel import select
-
-        from db.models import RequestScreenshotLink, Screenshot
-
         # Get owned screenshots
-        owned_query = select(Screenshot).where(
-            Screenshot.request_id == request_id
-        )
-        owned_result = await db.execute(owned_query)
-        owned = list(owned_result.scalars().all())
+        owned = await ScreenshotRepository.get_owned_screenshots(db, request_id)
 
         # Get linked screenshots
-        linked_query = (
-            select(Screenshot)
-            .join(
-                RequestScreenshotLink,
-                RequestScreenshotLink.screenshot_id == Screenshot.id,
-            )
-            .where(RequestScreenshotLink.request_id == request_id)
-        )
-        linked_result = await db.execute(linked_query)
-        linked = list(linked_result.scalars().all())
+        linked = await ScreenshotRepository.get_linked_screenshots(db, request_id)
 
         # Combine and deduplicate by ID
         all_screenshots = owned + linked
@@ -526,15 +437,4 @@ class ScreenshotService:
         Returns:
             Screenshot or None
         """
-        # Find screenshot by filename (use LIMIT 1 to handle duplicates)
-        # Order by created_at DESC to get the most recent one if duplicates exist
-        stmt = (
-            select(Screenshot)
-            .where(Screenshot.filename == filename)
-            .order_by(Screenshot.created_at.desc())
-            .limit(1)
-        )
-        result = await db.execute(stmt)
-        screenshot = result.scalar_one_or_none()
-
-        return screenshot
+        return await ScreenshotRepository.find_by_filename(db, filename)

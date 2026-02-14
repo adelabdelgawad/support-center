@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import func, select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -14,7 +13,7 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db.models import RequestStatus, ServiceRequest
+from db.models import RequestStatus
 from api.schemas.request_status import (
     RequestStatusCreate,
     RequestStatusDetail,
@@ -50,33 +49,18 @@ class RequestStatusService:
             Created request status
         """
         # Check if a status with this name already exists
-        existing_stmt = select(RequestStatus).where(
-            RequestStatus.name == status_data.name
-        )
-        existing_result = await db.execute(existing_stmt)
-        if existing_result.scalar_one_or_none():
+        existing = await RequestStatusRepository.find_by_name(db, status_data.name)
+        if existing:
             raise ValueError(
                 f"Request status with name '{status_data.name}' already exists"
             )
 
         # Create new status with auto-generated integer ID
-        status = RequestStatus(
-            name=status_data.name,
-            name_en=status_data.name_en,
-            name_ar=status_data.name_ar,
-            description=status_data.description,
-            color=status_data.color,
-            readonly=status_data.readonly,
-            is_active=status_data.is_active,
-            count_as_solved=status_data.count_as_solved,
-            visible_on_requester_page=status_data.visible_on_requester_page,
-            created_by=created_by,
-            updated_by=created_by,
-        )
+        status_dict = status_data.model_dump()
+        status_dict["created_by"] = created_by
+        status_dict["updated_by"] = created_by
 
-        db.add(status)
-        await db.commit()
-        await db.refresh(status)
+        status = await RequestStatusRepository.create(db, obj_in=status_dict)
 
         return status
 
@@ -96,9 +80,7 @@ class RequestStatusService:
         Returns:
             Request status or None
         """
-        stmt = select(RequestStatus).where(RequestStatus.id == status_id)
-        result = await db.execute(stmt)
-        return result.scalar_one_or_none()
+        return await RequestStatusRepository.find_by_id(db, status_id)
 
     @staticmethod
     @safe_database_query("get_request_status_by_name")
@@ -116,11 +98,7 @@ class RequestStatusService:
         Returns:
             Request status or None
         """
-        stmt = select(RequestStatus).where(RequestStatus.name == name)
-        result = await db.execute(stmt)
-        status = result.scalar_one_or_none()
-
-        return status
+        return await RequestStatusRepository.find_by_name(db, name)
 
     @staticmethod
     @safe_database_query("list_request_statuses", default_return=([], 0, 0, 0, 0))
@@ -147,52 +125,14 @@ class RequestStatusService:
         Returns:
             Tuple of (list of statuses, total, active_count, inactive_count, readonly_count)
         """
-        # Build main query
-        stmt = select(RequestStatus)
-
-        # Build total count query - ALWAYS get total counts from database (no filters)
-        total_count_stmt = select(
-            func.count(RequestStatus.id).label("total"),
-            func.sum(case((RequestStatus.is_active, 1), else_=0)).label("active_count"),
-            func.sum(case((not RequestStatus.is_active, 1), else_=0)).label(
-                "inactive_count"
-            ),
-            func.sum(case((RequestStatus.readonly, 1), else_=0)).label(
-                "readonly_count"
-            ),
+        return await RequestStatusRepository.list_with_filters_and_pagination(
+            db,
+            name=name,
+            is_active=is_active,
+            readonly=readonly,
+            page=page,
+            per_page=per_page,
         )
-
-        # Get total counts (unfiltered)
-        total_count_result = await db.execute(total_count_stmt)
-        total_counts = total_count_result.one()
-        total = total_counts.total or 0
-        active_count = total_counts.active_count or 0
-        inactive_count = total_counts.inactive_count or 0
-        readonly_count = total_counts.readonly_count or 0
-
-        # Apply filters to main query only
-        if name:
-            name_filter = RequestStatus.name.ilike(f"%{name}%")
-            stmt = stmt.where(name_filter)
-        if is_active is not None:
-            stmt = stmt.where(RequestStatus.is_active == is_active)
-        if readonly is not None:
-            stmt = stmt.where(RequestStatus.readonly == readonly)
-
-        # Apply pagination
-        stmt = (
-            stmt.order_by(RequestStatus.name)
-            .offset((page - 1) * per_page)
-            .limit(per_page)
-        )
-
-        # Execute query
-        result = await db.execute(stmt)
-        statuses = result.scalars().all()
-
-        result_tuple = (statuses, total, active_count, inactive_count, readonly_count)
-
-        return result_tuple
 
     @staticmethod
     @transactional_database_operation("update_request_status")
@@ -215,9 +155,7 @@ class RequestStatusService:
         Returns:
             Updated request status or None
         """
-        stmt = select(RequestStatus).where(RequestStatus.id == status_id)
-        result = await db.execute(stmt)
-        status = result.scalar_one_or_none()
+        status = await RequestStatusRepository.find_by_id(db, status_id)
 
         if not status:
             return None
@@ -243,15 +181,13 @@ class RequestStatusService:
             for k, v in update_data.model_dump(exclude_unset=True).items()
             if v is not None
         }
-        for field, value in update_dict.items():
-            setattr(status, field, value)
-
-        status.updated_at = datetime.utcnow()
+        update_dict["updated_at"] = datetime.utcnow()
         if updated_by:
-            status.updated_by = updated_by
+            update_dict["updated_by"] = updated_by
 
-        await db.commit()
-        await db.refresh(status)
+        status = await RequestStatusRepository.update(
+            db, id_value=status_id, obj_in=update_dict
+        )
 
         return status
 
@@ -274,20 +210,21 @@ class RequestStatusService:
         Returns:
             Updated status or None
         """
-        stmt = select(RequestStatus).where(RequestStatus.id == status_id)
-        result = await db.execute(stmt)
-        status = result.scalar_one_or_none()
+        status = await RequestStatusRepository.find_by_id(db, status_id)
 
         if not status:
             return None
 
-        status.is_active = not status.is_active
-        status.updated_at = datetime.utcnow()
+        update_dict = {
+            "is_active": not status.is_active,
+            "updated_at": datetime.utcnow(),
+        }
         if updated_by:
-            status.updated_by = updated_by
+            update_dict["updated_by"] = updated_by
 
-        await db.commit()
-        await db.refresh(status)
+        status = await RequestStatusRepository.update(
+            db, id_value=status_id, obj_in=update_dict
+        )
 
         return status
 
@@ -312,12 +249,11 @@ class RequestStatusService:
         Returns:
             List of updated statuses
         """
-        stmt = select(RequestStatus).where(RequestStatus.id.in_(status_ids))
-        result = await db.execute(stmt)
-        statuses = result.scalars().all()
+        statuses = await RequestStatusRepository.bulk_update_status(
+            db, status_ids, is_active
+        )
 
         for status in statuses:
-            status.is_active = is_active
             status.updated_at = datetime.utcnow()
             if updated_by:
                 status.updated_by = updated_by
@@ -341,9 +277,7 @@ class RequestStatusService:
         Returns:
             True if deleted, False if not found
         """
-        stmt = select(RequestStatus).where(RequestStatus.id == status_id)
-        result = await db.execute(stmt)
-        status = result.scalar_one_or_none()
+        status = await RequestStatusRepository.find_by_id(db, status_id)
 
         if not status:
             return False
@@ -353,21 +287,16 @@ class RequestStatusService:
             raise ValueError("Cannot delete readonly request status")
 
         # Check if status is in use
-        usage_stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.status_id == status_id
+        usage_count = await RequestStatusRepository.count_requests_by_status(
+            db, status_id
         )
-        usage_result = await db.execute(usage_stmt)
-        usage_count = usage_result.scalar()
 
         if usage_count > 0:
             raise ValueError(
                 f"Cannot delete status that is in use by {usage_count} requests"
             )
 
-        await db.delete(status)
-        await db.commit()
-
-        return True
+        return await RequestStatusRepository.delete(db, id_value=status_id)
 
     @staticmethod
     @safe_database_query("get_request_status_detail", default_return=None)
@@ -385,20 +314,14 @@ class RequestStatusService:
         Returns:
             Detailed request status or None
         """
-        # Get status with request count
-        status_stmt = select(RequestStatus).where(RequestStatus.id == status_id)
-        count_stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.status_id == status_id
-        )
-
-        status_result = await db.execute(status_stmt)
-        status = status_result.scalar_one_or_none()
+        status = await RequestStatusRepository.find_by_id(db, status_id)
 
         if not status:
             return None
 
-        count_result = await db.execute(count_stmt)
-        requests_count = count_result.scalar()
+        requests_count = await RequestStatusRepository.count_requests_by_status(
+            db, status_id
+        )
 
         # Create detail response
         detail = RequestStatusDetail.model_validate(status)
@@ -421,22 +344,13 @@ class RequestStatusService:
         Returns:
             Request status summary
         """
-        # Get all counts in a single query for performance
-        count_stmt = select(
-            func.count(RequestStatus.id).label("total"),
-            func.count(case((RequestStatus.readonly, 1))).label("readonly"),
-            func.count(case((RequestStatus.is_active, 1))).label("active"),
-            func.count(case((not RequestStatus.is_active, 1))).label("inactive"),
-        )
-
-        count_result = await db.execute(count_stmt)
-        counts = count_result.one()
+        counts = await RequestStatusRepository.get_summary_counts(db)
 
         summary = RequestStatusSummary(
-            total_statuses=counts.total,
-            readonly_statuses=counts.readonly,
-            active_statuses=counts.active,
-            inactive_statuses=counts.inactive,
+            total_statuses=counts["total"],
+            readonly_statuses=counts["readonly"],
+            active_statuses=counts["active"],
+            inactive_statuses=counts["inactive"],
         )
 
         return summary

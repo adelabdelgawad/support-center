@@ -220,49 +220,30 @@ async def update_system_event(
         )
 
     try:
-        # Get existing event
-        stmt = select(SystemEvent).where(SystemEvent.id == event_id)
-        result = await db.execute(stmt)
-        event = result.scalar_one_or_none()
-
-        if not event:
-            raise HTTPException(status_code=404, detail="System event not found")
-
         update_dict = {
             k: v
             for k, v in event_data.model_dump(exclude_unset=True).items()
             if v is not None
         }
 
-        # Verify new system_message if provided
-        if "system_message_id" in update_dict and update_dict["system_message_id"]:
-            stmt = select(SystemMessage).where(SystemMessage.id == update_dict["system_message_id"])
-            result = await db.execute(stmt)
-            if not result.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"SystemMessage {update_dict['system_message_id']} not found"
-                )
-
-        # Update fields
-        for field, value in update_dict.items():
-            setattr(event, field, value)
-
-        await db.commit()
-        await db.refresh(event)
-
-        # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        event = await SystemEventService.update_event(
+            db,
+            event_id=event_id,
+            event_key=update_dict.get("event_key"),
+            name=update_dict.get("name"),
+            description=update_dict.get("description"),
+            system_message_id=update_dict.get("system_message_id"),
+            is_active=update_dict.get("is_active"),
         )
-        result = await db.execute(stmt)
-        return result.scalar_one()
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+        return event
+    except ValueError as e:
+        if "not found" in str(e):
+            raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while updating system event: {str(e)}"
@@ -304,19 +285,13 @@ async def delete_system_event(
         )
 
     try:
-        stmt = select(SystemEvent).where(SystemEvent.id == event_id)
-        result = await db.execute(stmt)
-        event = result.scalar_one_or_none()
+        deleted = await SystemEventService.delete_event(db, event_id)
 
-        if not event:
+        if not deleted:
             raise HTTPException(status_code=404, detail="System event not found")
-
-        await db.delete(event)
-        await db.commit()
     except HTTPException:
         raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while deleting system event: {str(e)}"
@@ -355,29 +330,11 @@ async def toggle_system_event_status(
         )
 
     try:
-        stmt = select(SystemEvent).where(SystemEvent.id == event_id)
-        result = await db.execute(stmt)
-        event = result.scalar_one_or_none()
-
-        if not event:
-            raise HTTPException(status_code=404, detail="System event not found")
-
-        event.is_active = not event.is_active
-        await db.commit()
-        await db.refresh(event)
-
-        # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
-        )
-        result = await db.execute(stmt)
-        return result.scalar_one()
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        await db.rollback()
+        event = await SystemEventService.toggle_event_status(db, event_id)
+        return event
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database error while toggling system event: {str(e)}"
@@ -385,11 +342,6 @@ async def toggle_system_event_status(
 
 
 # Export for use by event_trigger_service
-async def get_event_by_key(db: AsyncSession, event_key: str) -> Optional[SystemEvent]:
+async def get_event_by_key(db: AsyncSession, event_key: str):
     """Get active system event by event_key."""
-    stmt = select(SystemEvent).where(
-        SystemEvent.event_key == event_key,
-        SystemEvent.is_active
-    ).options(selectinload(SystemEvent.system_message))
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+    return await SystemEventService.get_event_by_key(db, event_key)
