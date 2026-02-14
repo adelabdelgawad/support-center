@@ -8,7 +8,6 @@ These schemas provide aggregated data for the chat page display including:
 """
 
 from typing import List, Optional
-from uuid import UUID
 
 from pydantic import Field
 

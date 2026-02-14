@@ -12,15 +12,14 @@ Responsibilities:
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from db import ChatMessage, ServiceRequest, BusinessUnit, WhatsAppBatch
+from db import ChatMessage, ServiceRequest, BusinessUnit
 from api.services.shift_evaluator import ShiftEvaluator
 from core.config import settings
 
@@ -61,7 +60,7 @@ class WhatsAppSender:
         """
         try:
             # STEP 1: Load request with relationships
-            from repositories.support.request_repository import ServiceRequestRepository
+            from api.repositories.support.request_repository import ServiceRequestRepository
 
             request = await ServiceRequestRepository.find_by_id(db, request_id)
 
@@ -115,7 +114,7 @@ class WhatsAppSender:
                 return False
 
             # STEP 6: Collect unsent requester messages
-            from repositories.support.whatsapp_batch_repository import (
+            from api.repositories.support.whatsapp_batch_repository import (
                 WhatsAppBatchRepository,
             )
 

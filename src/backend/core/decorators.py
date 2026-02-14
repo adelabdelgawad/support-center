@@ -43,49 +43,50 @@ class DatabaseErrorHandler:
     @staticmethod
     def handle_database_error(
         exc: Exception,
-        operation: str,
+        operation: Optional[str],
         context: Optional[dict] = None
     ) -> tuple[bool, str]:
         """
         Handle database errors with detailed logging and classification.
-        
+
         Args:
             exc: The exception that occurred
             operation: Description of the database operation
             context: Additional context information
-            
+
         Returns:
             Tuple of (is_recoverable, error_message)
         """
+        operation_str = operation or "unknown_operation"
         context_str = f" | Context: {context}" if context else ""
         
         if isinstance(exc, IntegrityError):
-            error_msg = f"Database integrity error during {operation}: {str(exc)}{context_str}"
+            error_msg = f"Database integrity error during {operation_str}: {str(exc)}{context_str}"
             logger.warning(error_msg)
             return False, error_msg
-            
+
         elif isinstance(exc, (ConnectionError, DisconnectionError)):
-            error_msg = f"Database connection error during {operation}: {str(exc)}{context_str}"
+            error_msg = f"Database connection error during {operation_str}: {str(exc)}{context_str}"
             logger.error(error_msg)
             return True, error_msg  # Connection errors are often recoverable
-            
+
         elif isinstance(exc, TimeoutError):
-            error_msg = f"Database timeout during {operation}: {str(exc)}{context_str}"
+            error_msg = f"Database timeout during {operation_str}: {str(exc)}{context_str}"
             logger.warning(error_msg)
             return True, error_msg  # Timeouts might be recoverable
-            
+
         elif isinstance(exc, OperationalError):
-            error_msg = f"Database operational error during {operation}: {str(exc)}{context_str}"
+            error_msg = f"Database operational error during {operation_str}: {str(exc)}{context_str}"
             logger.error(error_msg)
             return True, error_msg  # Operational errors might be recoverable
-            
+
         elif isinstance(exc, StatementError):
-            error_msg = f"Database statement error during {operation}: {str(exc)}{context_str}"
+            error_msg = f"Database statement error during {operation_str}: {str(exc)}{context_str}"
             logger.warning(error_msg)
             return False, error_msg  # Statement errors are usually not recoverable
-            
+
         else:
-            error_msg = f"Unexpected database error during {operation}: {type(exc).__name__}: {str(exc)}{context_str}"
+            error_msg = f"Unexpected database error during {operation_str}: {type(exc).__name__}: {str(exc)}{context_str}"
             logger.error(f"{error_msg}\nTraceback: {traceback.format_exc()}")
             return False, error_msg
 

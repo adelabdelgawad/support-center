@@ -11,14 +11,22 @@ shared engine/session factory.
 """
 
 from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from core.config import settings
 import logging
+from typing import AsyncGenerator, Tuple
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def get_task_session_factory():
+def get_task_session_factory() -> Tuple[async_sessionmaker[AsyncSession], AsyncEngine]:
     """
     Create a fresh engine and session factory for a Celery task.
 
@@ -47,7 +55,7 @@ def get_task_session_factory():
 
 
 @asynccontextmanager
-async def get_celery_session():
+async def get_celery_session() -> AsyncGenerator[AsyncSession, None]:
     """
     Async context manager for database sessions in Celery tasks.
 

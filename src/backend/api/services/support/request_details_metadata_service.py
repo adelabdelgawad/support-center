@@ -1,0 +1,92 @@
+"""
+Request Details Metadata service for consolidated metadata fetching.
+Fetches all metadata needed for request details page in parallel.
+"""
+
+import logging
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.services.setting.priority_service import PriorityService
+from api.services.setting.request_status_service import RequestStatusService
+from api.services.setting.user_service import UserService
+from api.services.setting.category_service import CategoryService
+from api.repositories.setting.section_repository import SectionRepository
+from api.schemas.priority import PriorityListItem
+from api.schemas.request_status import RequestStatusListItem
+from api.schemas.category import CategoryWithSubcategories
+from api.schemas.section import SectionListItem
+from api.schemas.request_details_metadata import RequestDetailsMetadataResponse
+
+logger = logging.getLogger(__name__)
+
+
+class RequestDetailsMetadataService:
+    """Service for fetching consolidated request details metadata."""
+
+    def __init__(self, session: AsyncSession):
+        """
+        Initialize service with database session.
+
+        Args:
+            session: Database session
+        """
+        self.db = session
+
+    async def get_request_details_metadata(self) -> RequestDetailsMetadataResponse:
+        """
+        Fetch all metadata needed for request details page.
+
+        This consolidates the following API calls into one:
+        - GET /api/v1/priorities
+        - GET /api/v1/metadata/statuses
+        - GET /api/v1/technicians
+        - GET /api/v1/categories
+        - GET /api/v1/sections
+
+        Returns:
+            RequestDetailsMetadataResponse with all metadata
+        """
+        try:
+            # PriorityService is instance-based
+            priority_service = PriorityService(self.db)
+            priorities = await priority_service.list_priorities(active_only=True)
+
+            # These services use static methods with db as first param
+            statuses_list, *_ = await RequestStatusService.list_request_statuses(
+                self.db, is_active=True, page=1, per_page=1000
+            )
+
+            technicians_list, _ = await UserService.list_users(
+                self.db, is_technician=True, is_active=True, page=1, per_page=1000
+            )
+
+            categories = await CategoryService.list_categories(
+                self.db, active_only=True, include_subcategories=True
+            )
+
+            sections = await SectionRepository.find_all_active_sections(
+                self.db, only_active=True, only_shown=False
+            )
+
+            # Convert to list item schemas
+            priority_items = [PriorityListItem.model_validate(p) for p in priorities]
+            status_items = [
+                RequestStatusListItem.model_validate(s) for s in statuses_list
+            ]
+            technician_items = technicians_list  # Already UserListItem from service
+            category_items = [
+                CategoryWithSubcategories.model_validate(c) for c in categories
+            ]
+            section_items = [SectionListItem.model_validate(s) for s in sections]
+
+            return RequestDetailsMetadataResponse(
+                priorities=priority_items,
+                statuses=status_items,
+                technicians=technician_items,
+                categories=category_items,
+                sections=section_items,
+            )
+        except Exception as e:
+            logger.error(f"Failed to fetch request details metadata: {e}")
+            raise

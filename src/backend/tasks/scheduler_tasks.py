@@ -36,7 +36,7 @@ from db.models import (
     ScheduledJob,
     TaskFunction,
 )
-from api.services.scheduler_service import scheduler_service
+from api.services.management.scheduler_service import scheduler_service
 from sqlalchemy import select
 from tasks.base import BaseTask
 from tasks.database import get_celery_session

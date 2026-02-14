@@ -19,7 +19,7 @@ from core.decorators import (
 )
 from core.logging_config import SessionLogger
 from db import WebSession
-from repositories.web_session_repository import WebSessionRepository
+from api.repositories.web_session_repository import WebSessionRepository
 
 # Module-level logger
 logger = logging.getLogger(__name__)

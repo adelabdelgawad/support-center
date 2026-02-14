@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import ChatMessage, ServiceRequest, User, RequestStatus, Priority
 from api.schemas import ChatMessageCreate
-from api.services.chat_service import ChatService
+from api.services.support.chat_service import ChatService
 from tests.factories import (
     UserFactory, ServiceRequestFactory, ChatMessageFactory
 )
@@ -36,7 +36,7 @@ async def sample_statuses(db_session: AsyncSession):
     """Get or create standard request statuses."""
     # First try to get existing statuses
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -66,7 +66,7 @@ async def sample_priorities(db_session: AsyncSession):
     """Get or create standard priorities."""
     # First try to get existing priorities
     result = await db_session.execute(
-        select(Priority).where(Priority.is_active).order_by(Priority.response_time_minutes)
+        select(Priority).where(Priority.is_active == True).order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 

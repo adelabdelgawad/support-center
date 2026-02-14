@@ -25,7 +25,7 @@ from api.schemas import (
     ServiceRequestCreateByRequester,
     ServiceRequestUpdate,
 )
-from api.services.request_service import RequestService
+from api.services.support.request_service import RequestService
 from tests.factories import UserFactory, ServiceRequestFactory
 
 
@@ -39,7 +39,7 @@ async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
     """Get or create standard request statuses."""
     # First try to get existing statuses
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -105,7 +105,7 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
     # First try to get existing priorities
     result = await db_session.execute(
         select(Priority)
-        .where(Priority.is_active)
+        .where(Priority.is_active == True)
         .order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
@@ -510,7 +510,7 @@ class TestRequestUpdate:
     @pytest.mark.asyncio
     async def test_update_nonexistent_request(self, db_session, sample_statuses):
         """Test updating non-existent request raises NotFoundError."""
-        from api.services.request_service import NotFoundError
+        from api.services.support.request_service import NotFoundError
 
         fake_id = uuid4()
         update_data = ServiceRequestUpdate(status_id=sample_statuses[1].id)
@@ -811,7 +811,7 @@ class TestRequestDeletion:
     @pytest.mark.asyncio
     async def test_delete_nonexistent_request(self, db_session):
         """Test deleting non-existent request raises NotFoundError."""
-        from api.services.request_service import NotFoundError
+        from api.services.support.request_service import NotFoundError
 
         fake_id = uuid4()
 
@@ -833,7 +833,7 @@ class TestBusinessUnitCounts:
     @pytest.mark.asyncio
     async def test_get_business_unit_counts(self, db_session, technician_user):
         """Test getting request counts by business unit."""
-        from repositories.support.request_repository import ServiceRequestRepository
+        from api.repositories.support.request_repository import ServiceRequestRepository
 
         with patch.object(
             ServiceRequestRepository, "get_business_unit_counts"

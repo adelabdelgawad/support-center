@@ -117,7 +117,7 @@ class ChatMessageDetail(ChatMessageRead):
 class ChatMessageReadUpdate(HTTPSchemaModel):
     """Schema for marking messages as read."""
 
-    message_ids: List[UUID] = Field(..., min_items=1)
+    message_ids: List[UUID] = Field(..., min_length=1)
 
 
 class ChatMessageReaction(HTTPSchemaModel):

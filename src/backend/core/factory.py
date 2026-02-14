@@ -51,7 +51,7 @@ def create_app() -> FastAPI:
 
     # Add rate limiter
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
     # Audit middleware - must be before CorrelationIdMiddleware (LIFO order)
     # Intercepts all mutation requests and creates audit logs

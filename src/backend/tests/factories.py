@@ -9,7 +9,7 @@ Usage:
 import secrets
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, TypedDict
 from uuid import UUID, uuid4
 
 from db.models import (
@@ -203,13 +203,22 @@ class RoleFactory:
 class RequestStatusFactory:
     """Factory for creating RequestStatus instances."""
 
-    STATUSES = [
+    class StatusData(TypedDict):
+        name: str
+        name_en: str
+        name_ar: str
+        color: str
+        order: int
+        count_as_solved: bool
+
+    STATUSES: list[StatusData] = [
         {
             "name": "New",
             "name_en": "New",
             "name_ar": "جديد",
             "color": "#3B82F6",
             "order": 1,
+            "count_as_solved": False,
         },
         {
             "name": "Open",
@@ -217,6 +226,7 @@ class RequestStatusFactory:
             "name_ar": "مفتوح",
             "color": "#10B981",
             "order": 2,
+            "count_as_solved": False,
         },
         {
             "name": "In Progress",
@@ -224,6 +234,7 @@ class RequestStatusFactory:
             "name_ar": "قيد التنفيذ",
             "color": "#F59E0B",
             "order": 3,
+            "count_as_solved": False,
         },
         {
             "name": "On Hold",
@@ -231,6 +242,7 @@ class RequestStatusFactory:
             "name_ar": "معلق",
             "color": "#6B7280",
             "order": 4,
+            "count_as_solved": False,
         },
         {
             "name": "Pending",
@@ -238,6 +250,7 @@ class RequestStatusFactory:
             "name_ar": "معلق",
             "color": "#8B5CF6",
             "order": 5,
+            "count_as_solved": False,
         },
         {
             "name": "Resolved",
@@ -261,6 +274,7 @@ class RequestStatusFactory:
             "name_ar": "ملغي",
             "color": "#DC2626",
             "order": 8,
+            "count_as_solved": False,
         },
     ]
 
@@ -315,7 +329,15 @@ class RequestStatusFactory:
 class PriorityFactory:
     """Factory for creating Priority instances."""
 
-    PRIORITIES = [
+    class PriorityData(TypedDict):
+        name: str
+        name_en: str
+        name_ar: str
+        response_time_minutes: int
+        resolution_time_hours: int
+        order: int
+
+    PRIORITIES: list[PriorityData] = [
         {
             "name": "Critical",
             "name_en": "Critical",
@@ -530,8 +552,8 @@ class ServiceRequestFactory:
         title: Optional[str] = None,
         description: Optional[str] = None,
         requester_id: Optional[UUID] = None,
-        status_id: int = 1,
-        priority_id: int = 3,
+        status_id: int | None = 1,
+        priority_id: int | None = 3,
         category_id: Optional[int] = None,
         business_unit_id: Optional[int] = None,
         resolution: Optional[str] = None,
@@ -694,7 +716,13 @@ class WebSessionFactory:
 class PageFactory:
     """Factory for creating Page instances."""
 
-    PAGES = [
+    class PageData(TypedDict):
+        title: str
+        path: str
+        icon: str
+        order: int
+
+    PAGES: list[PageData] = [
         {"title": "Dashboard", "path": "/dashboard", "icon": "dashboard", "order": 1},
         {
             "title": "Support Center",
@@ -763,6 +791,10 @@ def create_complete_request(
     requester: User, status: RequestStatus, priority: Priority, **kwargs
 ) -> ServiceRequest:
     """Create a request with all required relationships."""
+    # Assert that IDs are not None for database-persisted objects
+    assert status.id is not None, "RequestStatus must have an ID"
+    assert priority.id is not None, "Priority must have an ID"
+
     return ServiceRequestFactory.create(
         requester_id=requester.id,
         status_id=status.id,

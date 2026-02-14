@@ -19,7 +19,7 @@ from core.decorators import (
     safe_database_query,
 )
 from db.models import Audit
-from repositories.auth.audit_repository import AuditRepository
+from api.repositories.auth.audit_repository import AuditRepository
 from api.schemas.audit import AuditCreate, AuditFilter, AuditRead
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,6 @@ class AuditService:
         Returns:
             Tuple of (audit logs, total count)
         """
-        from db.models import User
 
         filters_dict = {
             "user_id": filters.user_id,

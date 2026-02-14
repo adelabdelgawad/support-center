@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import AsyncSessionLocal
 from db.models import ScheduledJob, SchedulerInstance
-from api.services.scheduler_service import scheduler_service
+from api.services.management.scheduler_service import scheduler_service
 
 logger = logging.getLogger(__name__)
 

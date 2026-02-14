@@ -665,12 +665,12 @@ async def get_ldap_service(db=None):
     """
     if db is not None:
         try:
-            from repositories.setting.active_directory_config_repository import (
-                active_directory_config_crud as ad_crud,
+            from api.repositories.setting.active_directory_config_repository import (
+                ActiveDirectoryConfigRepository,
             )
 
             # Try to get active config from DB
-            config = await ad_crud.get_active_config(db)
+            config = await ActiveDirectoryConfigRepository.get_active_config(db)
             if config:
                 logger.info(f"Using AD config from database: {config.name}")
                 return LdapService(ad_config=config)

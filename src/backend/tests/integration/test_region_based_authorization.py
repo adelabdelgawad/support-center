@@ -23,7 +23,7 @@ from db.models import (
     RequestStatus,
     Priority,
 )
-from repositories.support.request_repository import ServiceRequestRepository
+from api.repositories.support.request_repository import ServiceRequestRepository
 from tests.factories import (
     UserFactory,
     ServiceRequestFactory,
@@ -123,7 +123,7 @@ async def saudi_business_unit(
 async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
     """Get or create standard request statuses."""
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -168,7 +168,7 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
     """Get or create standard priorities."""
     result = await db_session.execute(
         select(Priority)
-        .where(Priority.is_active)
+        .where(Priority.is_active == True)
         .order_by(Priority.response_time_minutes)
     )
     existing_priorities = result.scalars().all()

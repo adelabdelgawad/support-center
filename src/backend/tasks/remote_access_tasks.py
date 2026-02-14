@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta
 
 from celery_app import celery_app
-from repositories.management.remote_access_repository import RemoteAccessRepository
+from api.repositories.management.remote_access_repository import RemoteAccessRepository
 from tasks.database import get_celery_session
 
 logger = logging.getLogger(__name__)

@@ -29,7 +29,7 @@ from db import ClientVersion, DesktopSession
 from api.schemas.login import ADLoginRequest, SSOLoginRequest
 from api.schemas.version import ClientVersionCreate
 from api.services.auth_service import AuthenticationService
-from api.services.client_version_service import ClientVersionService
+from api.services.management.client_version_service import ClientVersionService
 from api.services.version_policy_service import VersionStatus
 
 

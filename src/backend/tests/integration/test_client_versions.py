@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import ClientVersion
 from api.schemas.version import ClientVersionCreate, ClientVersionUpdate
-from api.services.client_version_service import ClientVersionService
+from api.services.management.client_version_service import ClientVersionService
 
 
 class TestClientVersionCreate:

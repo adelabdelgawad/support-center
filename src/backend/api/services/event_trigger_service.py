@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import safe_database_query, log_database_operation
 from db import ChatMessage, ServiceRequest, User
-from api.services.system_message_service import SystemMessageService
+from api.services.setting.system_message_service import SystemMessageService
 
 # Import get_event_by_key from the endpoint module (exported for cross-module usage)
 # pylint: disable=import-outside-toplevel

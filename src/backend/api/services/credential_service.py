@@ -6,7 +6,6 @@ in an external vault - this service only manages metadata.
 """
 
 import logging
-from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
@@ -18,7 +17,7 @@ from core.decorators import (
     transactional_database_operation,
 )
 from db.models import Credential
-from repositories.management.credential_repository import CredentialRepository
+from api.repositories.management.credential_repository import CredentialRepository
 from api.schemas.credential import CredentialCreate, CredentialUpdate
 
 logger = logging.getLogger(__name__)

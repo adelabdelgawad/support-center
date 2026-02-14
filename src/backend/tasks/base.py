@@ -4,8 +4,8 @@ Base task class with common functionality.
 Provides error handling, logging, and retry logic for all tasks.
 """
 
-from celery import Task
-from celery.utils.log import get_task_logger
+from celery import Task  # type: ignore
+from celery.utils.log import get_task_logger  # type: ignore
 
 logger = get_task_logger(__name__)
 

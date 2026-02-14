@@ -29,7 +29,7 @@ from api.schemas.reports import (
     ReportDateRange,
     DateRangePreset,
 )
-from repositories.reporting.reporting_query_repository import ReportingQueryRepository
+from api.repositories.reporting.reporting_query_repository import ReportingQueryRepository
 
 logger = logging.getLogger(__name__)
 

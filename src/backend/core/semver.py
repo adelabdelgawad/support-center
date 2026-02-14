@@ -116,9 +116,9 @@ class SemanticVersion:
         has_prerelease = self.prerelease is not None
 
         # Parse prerelease parts for comparison
-        prerelease_parts: Tuple = ()
+        prerelease_parts: tuple = ()
         if self.prerelease:
-            parts = []
+            parts: list[tuple[int, int | str]] = []
             for part in self.prerelease.split("."):
                 # Numeric parts compare as integers
                 if part.isdigit():

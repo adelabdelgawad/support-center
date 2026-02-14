@@ -24,8 +24,8 @@ from core.security import (
 )
 from fastapi import HTTPException, status
 from api.services.version_policy_service import VersionPolicyService, VersionStatus
-from db import AuthToken, RefreshSession, User, DesktopSession, WebSession
-from api.services.desktop_session_service import DesktopSessionService
+from db import AuthToken, User, DesktopSession, WebSession
+from api.services.management.desktop_session_service import DesktopSessionService
 from api.services.web_session_service import WebSessionService
 import bcrypt  # Direct bcrypt usage (Finding #27: passlib → bcrypt migration)
 from api.schemas.login import (
@@ -40,15 +40,15 @@ from api.schemas.login import (
 )
 from api.schemas.domain_user import DomainUser
 from api.services.active_directory import LdapService
-from repositories.setting.active_directory_config_repository import (
-    get_active_config as get_ad_config,
+from api.repositories.setting.active_directory_config_repository import (
+    ActiveDirectoryConfigRepository,
 )
-from repositories.auth.auth_repository import (
+from api.repositories.auth.auth_repository import (
     AuthTokenRepository,
     RefreshSessionRepository,
 )
-from repositories.setting.user_repository import UserRepository
-from sqlalchemy import and_, delete, func, select, update
+from api.repositories.setting.user_repository import UserRepository
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ class AuthenticationService:
             # 2. If user not found in DB, fetch from AD
             if not user:
                 # Fetch active AD configuration
-                ad_config = await get_ad_config(db)
+                ad_config = await ActiveDirectoryConfigRepository.get_active_config(db)
                 if not ad_config:
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -318,7 +318,7 @@ class AuthenticationService:
                 if needs_ad_refresh:
                     try:
                         # Fetch active AD configuration
-                        ad_config = await get_ad_config(db)
+                        ad_config = await ActiveDirectoryConfigRepository.get_active_config(db)
                         if not ad_config:
                             raise HTTPException(
                                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -518,7 +518,7 @@ class AuthenticationService:
 
             # 1. Fetch active AD configuration and authenticate
             step_start = time.time()
-            ad_config = await get_ad_config(db)
+            ad_config = await ActiveDirectoryConfigRepository.get_active_config(db)
             if not ad_config:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -814,14 +814,14 @@ class AuthenticationService:
                 # Mark all desktop sessions as inactive
                 await db.execute(
                     update(DesktopSession)
-                    .where(DesktopSession.user_id == user_id)
+                    .where(DesktopSession.user_id == user_id)  # type: ignore[arg-type]
                     .values(is_active=False)
                 )
 
                 # Mark all web sessions as inactive
                 await db.execute(
                     update(WebSession)
-                    .where(WebSession.user_id == user_id)
+                    .where(WebSession.user_id == user_id)  # type: ignore[arg-type]
                     .values(is_active=False)
                 )
 
@@ -976,7 +976,7 @@ class AuthenticationService:
             user = await db.get(User, user_id)
 
             if not user:
-                return TokenValidationResponse(valid=False, reason="User not found")
+                return TokenValidationResponse(valid=False)
 
             # Try to get session - check desktop first, then web
             desktop_session = await db.get(DesktopSession, session_id)
@@ -986,9 +986,7 @@ class AuthenticationService:
             session = desktop_session or web_session
 
             if not session or not session.is_active:
-                return TokenValidationResponse(
-                    valid=False, reason="Session not found or inactive"
-                )
+                return TokenValidationResponse(valid=False)
 
             # Check if token exists in database
             token_hash = hash_token(token)
@@ -999,18 +997,14 @@ class AuthenticationService:
                 )
             # Refresh tokens no longer exist - only access tokens are used
             else:
-                return TokenValidationResponse(
-                    valid=False, reason="Refresh tokens are no longer supported"
-                )
+                return TokenValidationResponse(valid=False)
 
             if not token_record:
-                return TokenValidationResponse(
-                    valid=False, reason="Token not found or revoked"
-                )
+                return TokenValidationResponse(valid=False)
 
             # Check expiration
             if token_record.expires_at < datetime.utcnow():
-                return TokenValidationResponse(valid=False, reason="Token expired")
+                return TokenValidationResponse(valid=False)
 
             return TokenValidationResponse(
                 valid=True,
@@ -1020,10 +1014,8 @@ class AuthenticationService:
                 expires_at=token_record.expires_at,
             )
 
-        except Exception as e:
-            return TokenValidationResponse(
-                valid=False, reason=f"Validation error: {str(e)}"
-            )
+        except Exception:
+            return TokenValidationResponse(valid=False)
 
     async def get_active_sessions(
         self, user_id: int, db: AsyncSession
@@ -1039,23 +1031,17 @@ class AuthenticationService:
         """
         # Query desktop sessions
         desktop_result = await db.execute(
-            select(DesktopSession).where(
-                and_(
-                    DesktopSession.user_id == user_id,
-                    DesktopSession.is_active,
-                )
-            )
+            select(DesktopSession)
+            .where(DesktopSession.user_id == user_id)  # type: ignore[arg-type]
+            .where(DesktopSession.is_active == True)  # type: ignore[arg-type]
         )
         desktop_sessions = desktop_result.scalars().all()
 
         # Query web sessions
         web_result = await db.execute(
-            select(WebSession).where(
-                and_(
-                    WebSession.user_id == user_id,
-                    WebSession.is_active,
-                )
-            )
+            select(WebSession)
+            .where(WebSession.user_id == user_id)  # type: ignore[arg-type]
+            .where(WebSession.is_active == True)  # type: ignore[arg-type]
         )
         web_sessions = web_result.scalars().all()
 
@@ -1077,7 +1063,7 @@ class AuthenticationService:
             )
 
         # Add web sessions (type_id = 1)
-        for session in web_sessions:
+        for session in web_sessions:  # type: ignore[assignment]
             session_infos.append(
                 SessionInfo(
                     session_id=session.id,
@@ -1241,15 +1227,15 @@ class AuthenticationService:
             expires_in=2592000,  # 30 days in seconds
             session_id=session.id,
             redirect_to=redirect_to,
-            user={
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "full_name": user.full_name,
-                "is_active": user.is_active,
-                "is_technician": user.is_technician,
-                "is_super_admin": user.is_super_admin,
-            },
+            user=UserLoginInfo(
+                id=user.id,
+                username=user.username,
+                email=user.email,
+                full_name=user.full_name,
+                is_active=user.is_active,
+                is_technician=user.is_technician,
+                is_super_admin=user.is_super_admin,
+            ),
         )
 
     async def _enforce_version_policy(
@@ -1445,7 +1431,7 @@ class AuthenticationService:
         # Try updating desktop session first
         desktop_result = await db.execute(
             update(DesktopSession)
-            .where(DesktopSession.id == session_id)
+            .where(DesktopSession.id == session_id)  # type: ignore[arg-type]
             .values(
                 authenticated_at=authenticated_at,
                 last_auth_refresh=last_auth_refresh,
@@ -1454,10 +1440,10 @@ class AuthenticationService:
         )
 
         # If no desktop session updated, try web session
-        if desktop_result.rowcount == 0:
+        if desktop_result.rowcount == 0:  # type: ignore[attr-defined]
             await db.execute(
                 update(WebSession)
-                .where(WebSession.id == session_id)
+                .where(WebSession.id == session_id)  # type: ignore[arg-type]
                 .values(
                     authenticated_at=authenticated_at,
                     last_auth_refresh=last_auth_refresh,
@@ -1644,7 +1630,7 @@ class AuthenticationService:
         manager_id = None
         if domain_user.manager_username:
             manager_result = await db.execute(
-                select(User).where(User.username == domain_user.manager_username)
+                select(User).where(User.username == domain_user.manager_username)  # type: ignore[arg-type]
             )
             manager = manager_result.scalar_one_or_none()
             if manager:
@@ -1701,7 +1687,7 @@ class AuthenticationService:
         # Get manager user ID if manager_username exists
         if domain_user.manager_username:
             manager_result = await db.execute(
-                select(User).where(User.username == domain_user.manager_username)
+                select(User).where(User.username == domain_user.manager_username)  # type: ignore[arg-type]
             )
             manager = manager_result.scalar_one_or_none()
             if manager:

@@ -64,44 +64,47 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(HTTPSchemaModel):
-    """Schema for updating a user."""
+    """Schema for updating a user.
 
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    All fields are optional - only provide fields that need to be updated.
+    """
+
+    username: Optional[str] = Field(default=None, min_length=3, max_length=50)
     email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, max_length=100)
+    full_name: Optional[str] = Field(default=None, max_length=100)
     is_technician: Optional[bool] = None
     is_active: Optional[bool] = None
     is_super_admin: Optional[bool] = None
-    phone_number: Optional[str] = Field(None, max_length=20)
-    title: Optional[str] = Field(None, max_length=100, description="User's job title")
+    phone_number: Optional[str] = Field(default=None, max_length=20)
+    title: Optional[str] = Field(default=None, max_length=100, description="User's job title")
     office: Optional[str] = Field(
-        None, max_length=100, description="User's office location"
+        default=None, max_length=100, description="User's office location"
     )
-    manager_id: Optional[UUID] = Field(None, description="User's manager ID")
+    manager_id: Optional[UUID] = Field(default=None, description="User's manager ID")
     is_domain: Optional[bool] = None
     is_blocked: Optional[bool] = None
     block_message: Optional[str] = Field(
-        None,
+        default=None,
         max_length=500,
         description="Custom message explaining why user is blocked",
     )
     is_deleted: Optional[bool] = None
     language: Optional[str] = Field(
-        None, max_length=10, description="User's preferred language (en or ar)"
+        default=None, max_length=10, description="User's preferred language (en or ar)"
     )
     theme: Optional[str] = Field(
-        None,
+        default=None,
         max_length=10,
         description="User's preferred theme (light, dark, or system)",
     )
     notifications_enabled: Optional[bool] = Field(
-        None, description="Whether desktop notifications are enabled"
+        default=None, description="Whether desktop notifications are enabled"
     )
     sound_enabled: Optional[bool] = Field(
-        None, description="Whether notification sounds are enabled"
+        default=None, description="Whether notification sounds are enabled"
     )
     sound_volume: Optional[float] = Field(
-        None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
+        default=None, ge=0.0, le=1.0, description="Notification sound volume (0.0 to 1.0)"
     )
 
 

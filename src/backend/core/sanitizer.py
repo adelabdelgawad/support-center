@@ -29,7 +29,7 @@ ALLOWED_TAGS = {
 }
 
 # Allowed HTML attributes (empty for security - no attributes allowed)
-ALLOWED_ATTRIBUTES = {}
+ALLOWED_ATTRIBUTES: dict[str, set[str]] = {}
 
 
 def sanitize_html(content: str) -> str:

@@ -4,7 +4,6 @@ Organizational Unit schemas for Active Directory integration.
 This module contains schemas for managing organizational units from AD.
 """
 from typing import List, Optional
-from uuid import UUID
 
 from core.schema_base import HTTPSchemaModel
 from pydantic import Field

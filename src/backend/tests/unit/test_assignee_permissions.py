@@ -14,7 +14,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import User, Role, UserRole, ServiceRequest, RequestStatus
-from api.services.request_service import RequestService
+from api.services.support.request_service import RequestService
 
 
 @pytest_asyncio.fixture

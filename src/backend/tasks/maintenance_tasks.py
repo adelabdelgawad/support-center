@@ -20,9 +20,9 @@ from typing import Dict, Any
 
 from tasks.database import get_celery_session
 from api.services.auth_service import AuthenticationService
-from api.services.desktop_session_service import DesktopSessionService
-from api.services.deployment_job_service import DeploymentJobService
-from api.services.scheduler_service import SchedulerService
+from api.services.management.desktop_session_service import DesktopSessionService
+from api.services.management.deployment_job_service import DeploymentJobService
+from api.services.management.scheduler_service import SchedulerService
 
 logger = logging.getLogger(__name__)
 

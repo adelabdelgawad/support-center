@@ -341,7 +341,7 @@ class AssigneeInfo(HTTPSchemaModel):
 class RequestAssigneesResponse(HTTPSchemaModel):
     """Response schema for request assignees list."""
 
-    request_id: int
+    request_id: UUID  # UUID of the service request
     assignees: List[AssigneeInfo]
     total: int
 

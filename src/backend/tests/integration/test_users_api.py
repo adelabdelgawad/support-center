@@ -21,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import User, Role, UserRole, PageRole
-from api.services.user_service import UserService
+from api.services.setting.user_service import UserService
 from tests.factories import (
     UserFactory, RoleFactory, PageFactory
 )
@@ -619,7 +619,7 @@ class TestUserRoles:
         result = await db_session.execute(
             select(UserRole).where(
                 UserRole.user_id == admin_user.id,
-                UserRole.is_active
+                UserRole.is_active == True
             )
         )
         user_roles = result.scalars().all()

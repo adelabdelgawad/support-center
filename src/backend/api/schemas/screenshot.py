@@ -67,7 +67,7 @@ class ScreenshotListItem(HTTPSchemaModel):
 
 class ScreenshotUploadResponse(HTTPSchemaModel):
     """Schema for screenshot upload response."""
-    screenshot: ScreenshotRead
+    screenshot: Optional[ScreenshotRead] = None
     upload_status: str  # 'pending', 'completed', 'failed'
     message: str
     upload_url: Optional[str] = None

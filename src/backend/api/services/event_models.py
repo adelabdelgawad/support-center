@@ -97,14 +97,14 @@ class StreamEvent:
         """
         import json
 
-        payload_str = data.get(b"payload", b"{}")
+        payload_str: bytes | str = data.get("payload", b"{}")
         if isinstance(payload_str, bytes):
             payload_str = payload_str.decode("utf-8")
 
         payload = json.loads(payload_str) if payload_str else {}
 
         metadata = None
-        metadata_str = data.get(b"metadata")
+        metadata_str: bytes | str | None = data.get("metadata")
         if metadata_str:
             if isinstance(metadata_str, bytes):
                 metadata_str = metadata_str.decode("utf-8")
@@ -117,10 +117,10 @@ class StreamEvent:
                 )
 
         return cls(
-            event_id=data.get(b"event_id", b"").decode("utf-8"),
-            event_type=data.get(b"event_type", b"").decode("utf-8"),
-            timestamp=data.get(b"timestamp", b"").decode("utf-8"),
-            room_id=data.get(b"room_id", b"").decode("utf-8"),
+            event_id=data.get("event_id", b"").decode("utf-8"),
+            event_type=data.get("event_type", b"").decode("utf-8"),
+            timestamp=data.get("timestamp", b"").decode("utf-8"),
+            room_id=data.get("room_id", b"").decode("utf-8"),
             payload=payload,
             metadata=metadata,
         )
