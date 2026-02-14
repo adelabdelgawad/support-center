@@ -376,3 +376,35 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         await db.flush()
 
         return sessions
+
+    @classmethod
+    async def count_active(cls, db: AsyncSession) -> int:
+        """
+        Count all active desktop sessions.
+
+        Args:
+            db: Database session
+
+        Returns:
+            Count of active desktop sessions
+        """
+        from sqlalchemy import func
+
+        stmt = select(func.count()).where(DesktopSession.is_active == True)
+        result = await db.execute(stmt)
+        return result.scalar() or 0
+
+    @classmethod
+    async def get_active_session_ids(cls, db: AsyncSession) -> list[str]:
+        """
+        Get all active desktop session IDs from database.
+
+        Args:
+            db: Database session
+
+        Returns:
+            List of active session IDs as strings
+        """
+        stmt = select(DesktopSession.id).where(DesktopSession.is_active)
+        result = await db.execute(stmt)
+        return [str(row[0]) for row in result.all()]
