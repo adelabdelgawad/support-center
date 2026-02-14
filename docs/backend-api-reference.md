@@ -315,6 +315,50 @@ Push update notification to a desktop session to trigger client upgrade.
 **Source:** `/src/backend/api/routers/management/desktop_sessions_router.py`
 **Used by:** IT Portal Version Authority management
 
+#### GET /api/v1/management/desktop-sessions/analytics/user-activity-heatmap
+
+Get user activity heatmap data aggregated by hour and day of week.
+
+**Purpose:** Provides activity patterns for desktop sessions over time, suitable for visualization with a heatmap chart.
+
+**Query Parameters:**
+- `days_back` (optional, default: 30): Number of days to look back for activity data
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "hour": 9,
+      "dayOfWeek": 1,
+      "count": 15
+    },
+    {
+      "hour": 10,
+      "dayOfWeek": 1,
+      "count": 23
+    }
+  ],
+  "totalActivity": 1250,
+  "dateRange": {
+    "start": "2026-01-15T00:00:00Z",
+    "end": "2026-02-14T23:59:59Z"
+  },
+  "breakdown": {
+    "0": "150",
+    "1": "320",
+    "2": "280",
+    "3": "200",
+    "4": "100",
+    "5": "80",
+    "6": "120"
+  }
+}
+```
+
+**Source:** `/src/backend/api/routers/management/desktop_sessions_router.py`
+**Used by:** Analytics dashboard, activity monitoring
+
 ---
 
 ### Remote Access
@@ -566,4 +610,76 @@ End a remote access session.
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-02-14 | 1.0 | Initial API reference documentation with Phase 1 updates |
+
+---
+
+## Error Rate Monitoring
+
+The system includes comprehensive error tracking using Prometheus metrics. All endpoints in the desktop sessions module now increment error counters when exceptions occur.
+
+### Error Metrics
+
+#### Errors by Type (`errors_total`)
+
+A counter that tracks total errors categorized by type and endpoint.
+
+| Label | Description |
+|-------|-------------|
+| `error_type` | Type of error (database, redis, validation, service) |
+| `endpoint` | API endpoint where error occurred |
+
+**Usage:** Query for specific error types:
+```
+# Get total database errors
+sum(rate(errors_total{error_type="database"}[5m]))
+
+# Get errors by endpoint
+sum by (endpoint) (rate(errors_total{}[5m]))
+```
+
+#### Error Rate Per Second (`error_rate_per_second`)
+
+A histogram showing the rate of errors per second by type.
+
+| Label | Description |
+|-------|-------------|
+| `error_type` | Type of error |
+
+**Usage:** Monitor error rates:
+```
+# Calculate error rate per second
+sum by (error_type) (rate(error_rate_per_second{}[5m]))
+
+# Alert if error rate > 1 error per second
+sum by (error_type) (rate(error_rate_per_second{}[5m])) > 1
+```
+
+#### Error Tracking in Desktop Sessions
+
+All endpoints in `/api/v1/management/desktop-sessions/` now include:
+
+1. **Database Errors** - Track database connection/query failures
+2. **Redis Errors** - Track Redis connection/cache failures
+3. **Service Errors** - Track business logic failures
+4. **Validation Errors** - Track input validation failures
+
+### Error Tracking Implementation
+
+Each endpoint follows this pattern:
+
+```python
+try:
+    # Business logic
+    return result
+except Exception as e:
+    track_service_error("desktop_sessions/{endpoint}")
+    raise HTTPException(status_code=500, detail=str(e))
+```
+
+### Metrics Collection
+
+Metrics are automatically collected by the Prometheus client and exposed at:
+- Endpoint: `/metrics`
+- Format: Prometheus exposition format
+- Default port: 9090 (can be configured in core/config.py)
 

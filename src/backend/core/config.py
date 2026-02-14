@@ -457,6 +457,11 @@ class LoggingSettings(BaseSettings):
     """Logging configuration settings."""
 
     level: str = "INFO"
+    enable_console: bool = True
+    enable_file: bool = True
+    file_path: str = "logs/app.json"
+    max_file_size: int = 10 * 1024 * 1024  # 10MB
+    backup_count: int = 5
 
     model_config = SettingsConfigDict(
         env_prefix="LOG_",

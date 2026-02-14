@@ -66,6 +66,7 @@ async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 1440) -> Di
     Redis TTL-based presence (via SignalR + heartbeat) is the authoritative
     source for real-time online status. This cleanup only marks truly
     abandoned sessions as inactive after 24h for database hygiene.
+    Uses distributed lock to prevent concurrent executions.
 
     Wrapper for DesktopSessionService.cleanup_stale_sessions()
 
@@ -76,25 +77,53 @@ async def cleanup_stale_desktop_sessions_task(timeout_minutes: int = 1440) -> Di
         dict: Cleanup statistics with keys:
             - sessions_marked_inactive: Number of sessions marked as inactive
             - timestamp: UTC timestamp of cleanup operation
+            - lock_acquired: Whether the distributed lock was acquired
 
     Raises:
         Exception: If cleanup operation fails
     """
     from datetime import datetime
+    from core.utils.distributed_lock import get_distributed_lock
 
     logger.info(f"Starting cleanup of stale desktop sessions (timeout_minutes={timeout_minutes})")
 
-    async with get_celery_session() as db:
-        service = DesktopSessionService()
-        # cleanup_stale_sessions returns an int (count of sessions cleaned)
-        count = await service.cleanup_stale_sessions(db, timeout_minutes)
+    # Use distributed lock to prevent concurrent executions
+    lock = await get_distributed_lock("desktop_session_cleanup_lock", ttl=300)  # 5 min TTL
+    lock_acquired = False
 
-        logger.info(f"Desktop session cleanup completed: {count} sessions marked inactive")
+    try:
+        # Try to acquire the lock (non-blocking)
+        lock_acquired = await lock.acquire(blocking_timeout=10)  # Wait up to 10 seconds
 
-        return {
-            "sessions_marked_inactive": count,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        if not lock_acquired:
+            logger.warning("Could not acquire distributed lock for desktop session cleanup - skipping")
+            return {
+                "sessions_marked_inactive": 0,
+                "timestamp": datetime.utcnow().isoformat(),
+                "lock_acquired": False,
+                "message": "Cleanup skipped - another instance is already running"
+            }
+
+        async with get_celery_session() as db:
+            service = DesktopSessionService()
+            # cleanup_stale_sessions returns an int (count of sessions cleaned)
+            count = await service.cleanup_stale_sessions(db, timeout_minutes)
+
+            logger.info(f"Desktop session cleanup completed: {count} sessions marked inactive")
+
+            return {
+                "sessions_marked_inactive": count,
+                "timestamp": datetime.utcnow().isoformat(),
+                "lock_acquired": True,
+            }
+
+    except Exception as e:
+        logger.error(f"Error during desktop session cleanup: {str(e)}")
+        raise
+    finally:
+        # Release the lock if we acquired it
+        if lock_acquired:
+            await lock.release()
 
 
 async def cleanup_stale_deployment_jobs_task(timeout_minutes: int = 60) -> Dict[str, Any]:

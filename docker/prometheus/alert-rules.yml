@@ -1,0 +1,174 @@
+groups:
+  - name: security-alerts
+    interval: 30s
+    rules:
+      # Alert for high failed login rate (>10/minute)
+      - alert: HighFailedLoginRate
+        expr: rate(auth_failed_total[1m]) > 10
+        for: 2m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "High failed login rate detected"
+          description: "Failed login rate is {{ $value }} per minute, exceeding threshold of 10/minute. Potential brute force attack."
+          playbook: "Check source IP addresses, consider temporary IP blocking, review authentication logs"
+
+      # Alert for fingerprint mismatch spike (>5/minute)
+      - alert: FingerprintMismatchSpike
+        expr: rate(fingerprint_mismatch_total[1m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Unusual device fingerprint mismatches detected"
+          description: "Device fingerprint mismatches at {{ $value }} per minute. Possible account sharing or device spoofing attempt."
+          playbook: "Review affected accounts, verify user sessions, check for unusual login patterns"
+
+      # Alert for country changes (>3/hour)
+      - alert: ExcessiveCountryChanges
+        expr: rate(country_change_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "User account experiencing excessive country changes"
+          description: "Account {{ $labels.user_id }} has changed countries {{ $value }} times in the last hour."
+          playbook: "Verify user identity, contact user if suspicious, review account activity"
+
+  - name: system-health
+    interval: 30s
+    rules:
+      # Alert for Redis circuit breaker open
+      - alert: RedisCircuitBreakerOpen
+        expr: redis_circuit_breaker_open == 1
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Redis circuit breaker is open"
+          description: "Redis connection circuit breaker has been open for {{ $value }} seconds. Service may be degraded."
+          playbook: "Check Redis server status, connection pool configuration, network connectivity between services"
+
+      # Alert for database connection pool exhaustion (>90%)
+      - alert: DatabaseConnectionPoolExhausted
+        expr: (pg_stat_database_numbackends / pg_settings_max_connections) > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connections at {{ $value | printf "%.0f%%" }} of maximum capacity. Performance may degrade."
+          playbook: "Check application for connection leaks, increase max_connections if needed, optimize queries"
+
+  - name: application-errors
+    interval: 30s
+    rules:
+      # Alert for high error rate in authentication service
+      - alert: HighAuthErrorRate
+        expr: rate(auth_errors_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "High error rate in authentication service"
+          description: "Authentication service error rate is {{ $value }} per 5 minutes."
+          playbook: "Check auth service logs, verify JWT configuration, review recent service changes"
+
+      # Alert for slow API responses (>2 seconds average)
+      - alert: HighAPILatency
+        expr: http_request_duration_seconds_mean{job="backend"} > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High API response latency detected"
+          description: "Average API response time is {{ $value }} seconds for endpoint {{ $labels.method }} {{ $labels.route }}"
+          playbook: "Review slow queries, check database performance, consider caching, analyze slow endpoints"
+
+  - name: service-availability
+    interval: 30s
+    rules:
+      # Alert for backend service down
+      - alert: BackendServiceDown
+        expr: up{job="backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Backend service is down"
+          description: "Backend service has been down for more than 30 seconds."
+          playbook: "Check service logs, verify deployment status, check resource availability"
+
+      # Alert for frontend service down
+      - alert: FrontendServiceDown
+        expr: up{job="frontend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Frontend service is down"
+          description: "Frontend service has been down for more than 1 minute."
+          playbook: "Check CDN configuration, verify deployment status, check certificate validity"
+
+  - name: resource-usage
+    interval: 60s
+    rules:
+      # Alert for high CPU usage (>80% for 10 minutes)
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | printf "%.0f%%" }} on {{ $labels.instance }}"
+          playbook: "Identify high CPU processes, consider scaling, optimize application code"
+
+      # Alert for high memory usage (>85%)
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | printf "%.0f%%" }} on {{ $labels.instance }}"
+          playbook: "Check for memory leaks, review application memory usage, consider increasing resources"
+
+  - name: business-logic
+    interval: 5m
+    rules:
+      # Alert for high pending requests (>50)
+      - alert: HighPendingRequests
+        expr: sum(request_status{status="pending"}) > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High number of pending requests"
+          description: "There are {{ $value }} pending requests in the system. Service may be overwhelmed."
+          playbook: "Check support agent availability, review request processing queue, consider adding resources"
+
+      # Alert for overdue SLA violations
+      - alert: SLAViolation
+        expr: count(request_sla_violated) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "SLA violation detected"
+          description: "{{ $value }} requests have exceeded their SLA time limits."
+          playbook: "Immediately prioritize affected requests, notify stakeholders, review SLA configuration"

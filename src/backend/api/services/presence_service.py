@@ -22,12 +22,13 @@ from typing import Any
 from uuid import UUID
 
 from core.config import settings
+from api.services.redis_circuit import RedisCircuitBreakerMixin, redis_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
 
-class PresenceRedisService:
-    """Manages Redis TTL keys for desktop session presence."""
+class PresenceRedisService(RedisCircuitBreakerMixin):
+    """Manages Redis TTL keys for desktop session presence with circuit breaker protection."""
 
     def __init__(self):
         self._redis: Any = None
@@ -80,11 +81,11 @@ class PresenceRedisService:
 
         Returns True on success, False on failure (non-fatal).
         """
-        if not await self._check_health():
-            logger.warning("Redis unavailable, skipping presence SET")
-            return False
+        async def _redis_operation():
+            if not await self._check_health():
+                logger.warning("Redis unavailable, skipping presence SET")
+                return False
 
-        try:
             r = await self._get_redis()
             ttl = settings.presence.ttl_seconds
             sid = str(session_id)
@@ -106,6 +107,9 @@ class PresenceRedisService:
             logger.debug(f"Presence SET for session {sid} user {uid} (TTL={ttl}s)")
             return True
 
+        try:
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             logger.warning(f"Presence Redis SET failed (non-fatal): {e}")
             return False
@@ -117,11 +121,11 @@ class PresenceRedisService:
         Also removes from global sets for consistency.
         Returns True on success, False on failure (non-fatal).
         """
-        if not await self._check_health():
-            logger.warning("Redis unavailable, skipping presence DEL")
-            return False
+        async def _redis_operation():
+            if not await self._check_health():
+                logger.warning("Redis unavailable, skipping presence DEL")
+                return False
 
-        try:
             r = await self._get_redis()
             sid = str(session_id)
             uid = str(user_id)
@@ -137,19 +141,26 @@ class PresenceRedisService:
             logger.debug(f"Presence DEL for session {sid} user {uid}")
             return True
 
+        try:
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             logger.warning(f"Presence Redis DEL failed (non-fatal): {e}")
             return False
 
     async def is_session_present(self, session_id: UUID) -> bool:
         """Check if a specific session is present (has a live TTL key)."""
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning false for session presence check")
-            return False
-
         try:
-            r = await self._get_redis()
-            return await r.exists(f"presence:desktop:{str(session_id)}") > 0
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning false for session presence check")
+                    return False
+
+                r = await self._get_redis()
+                return await r.exists(f"presence:desktop:{str(session_id)}") > 0
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"Session presence check failed: {e}")
@@ -157,13 +168,17 @@ class PresenceRedisService:
 
     async def get_user_sessions(self, user_id: UUID) -> set[str]:
         """Get all present session IDs for a user."""
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning empty set for user sessions")
-            return set()
-
         try:
-            r = await self._get_redis()
-            return await r.smembers(f"presence:user:{str(user_id)}")
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning empty set for user sessions")
+                    return set()
+
+                r = await self._get_redis()
+                return await r.smembers(f"presence:user:{str(user_id)}")
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"Get user sessions failed: {e}")
@@ -171,13 +186,17 @@ class PresenceRedisService:
 
     async def is_user_present(self, user_id: UUID) -> bool:
         """Check if a user has any present session."""
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning false for user presence check")
-            return False
-
         try:
-            r = await self._get_redis()
-            return await r.scard(f"presence:user:{str(user_id)}") > 0
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning false for user presence check")
+                    return False
+
+                r = await self._get_redis()
+                return await r.scard(f"presence:user:{str(user_id)}") > 0
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"User presence check failed: {e}")
@@ -188,13 +207,17 @@ class PresenceRedisService:
 
         Uses SMEMBERS on presence:all_sessions set for O(1) operation.
         """
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning empty set for all sessions")
-            return set()
-
         try:
-            r = await self._get_redis()
-            return await r.smembers("presence:all_sessions")
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning empty set for all sessions")
+                    return set()
+
+                r = await self._get_redis()
+                return await r.smembers("presence:all_sessions")
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"Get all session IDs failed: {e}")
@@ -205,13 +228,17 @@ class PresenceRedisService:
 
         Uses SCARD on presence:all_sessions set for constant time counting.
         """
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning 0 for session count")
-            return 0
-
         try:
-            r = await self._get_redis()
-            return await r.scard("presence:all_sessions")
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning 0 for session count")
+                    return 0
+
+                r = await self._get_redis()
+                return await r.scard("presence:all_sessions")
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"Count sessions failed: {e}")
@@ -222,13 +249,17 @@ class PresenceRedisService:
 
         Uses SMEMBERS on presence:all_users set for O(1) operation.
         """
-        if not self._is_available:
-            logger.debug("Redis unavailable, returning empty set for present users")
-            return set()
-
         try:
-            r = await self._get_redis()
-            return await r.smembers("presence:all_users")
+            async def _redis_operation():
+                if not self._is_available:
+                    logger.debug("Redis unavailable, returning empty set for present users")
+                    return set()
+
+                r = await self._get_redis()
+                return await r.smembers("presence:all_users")
+
+            # Execute with circuit breaker protection
+            return await self._execute_with_circuit_breaker(_redis_operation)
         except Exception as e:
             self._is_available = False
             logger.warning(f"Get present user IDs failed: {e}")

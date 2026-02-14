@@ -497,3 +497,65 @@ class DesktopSessionService:
             DesktopSession or None
         """
         return await DesktopSessionRepository.find_by_id(db, session_id)
+
+    @safe_database_query("get_user_activity_heatmap")
+    async def get_user_activity_heatmap(
+        db: AsyncSession, days_back: int = 30
+    ) -> dict:
+        """
+        Get user activity heatmap data aggregated by hour and day of week.
+
+        Args:
+            db: Database session
+            days_back: Number of days to look back
+
+        Returns:
+            Heatmap data with activity counts
+        """
+        # Calculate date range
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days_back)
+
+        # Query activity data
+        stmt = select(DesktopSession).where(
+            DesktopSession.last_heartbeat >= start_date
+        ).order_by(DesktopSession.last_heartbeat)
+
+        result = await db.execute(stmt)
+        sessions = result.scalars().all()
+
+        # Initialize heatmap data (24 hours x 7 days)
+        heatmap_data = [[0 for _ in range(24)] for _ in range(7)]
+        daily_totals = [0] * 7
+        hour_counts = [0] * 24
+
+        # Aggregate data
+        for session in sessions:
+            if session.last_heartbeat:
+                weekday = session.last_heartbeat.weekday()
+                hour = session.last_heartbeat.hour
+
+                heatmap_data[weekday][hour] += 1
+                daily_totals[weekday] += 1
+                hour_counts[hour] += 1
+
+        # Calculate summary statistics
+        total_activity = len(sessions)
+        avg_daily_activity = total_activity / days_back if days_back > 0 else 0
+
+        return {
+            "heatmap_data": heatmap_data,
+            "daily_totals": daily_totals,
+            "hour_counts": hour_counts,
+            "summary": {
+                "total_activity": total_activity,
+                "days_analyzed": days_back,
+                "avg_daily_activity": round(avg_daily_activity, 2),
+                "peak_hour": hour_counts.index(max(hour_counts)) if hour_counts else 0,
+                "peak_day": daily_totals.index(max(daily_totals)) if daily_totals else 0
+            },
+            "date_range": {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat()
+            }
+        }

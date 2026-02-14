@@ -3,7 +3,7 @@ Desktop session schemas for Tauri requester app sessions.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from core.schema_base import HTTPSchemaModel
@@ -102,3 +102,46 @@ class ActiveSessionStats(HTTPSchemaModel):
     avg_session_duration: Optional[float] = Field(
         default=None, description="Average session duration in minutes"
     )
+
+
+# Heatmap schemas for activity analytics
+class HeatmapData(HTTPSchemaModel):
+    """Heatmap data for activity visualization."""
+
+    heatmap_data: List[List[int]] = Field(
+        ...,
+        description="2D array (7 days x 24 hours) with activity counts"
+    )
+    daily_totals: List[int] = Field(
+        ...,
+        description="Total activity count for each day of week (0-6)"
+    )
+    hour_counts: List[int] = Field(
+        ...,
+        description="Total activity count for each hour (0-23)"
+    )
+
+
+class HeatmapSummary(HTTPSchemaModel):
+    """Summary statistics for activity heatmap."""
+
+    total_activity: int = Field(..., description="Total number of activities")
+    days_analyzed: int = Field(..., description="Number of days analyzed")
+    avg_daily_activity: float = Field(..., description="Average daily activity")
+    peak_hour: int = Field(..., description="Hour with most activity (0-23)")
+    peak_day: int = Field(..., description="Day of week with most activity (0-6)")
+
+
+class DateRange(HTTPSchemaModel):
+    """Date range for the analysis."""
+
+    start: str = Field(..., description="Start date in ISO format")
+    end: str = Field(..., description="End date in ISO format")
+
+
+class UserActivityHeatmapResponse(HTTPSchemaModel):
+    """Response for user activity heatmap endpoint."""
+
+    heatmap_data: HeatmapData = Field(..., description="Activity heatmap data")
+    summary: HeatmapSummary = Field(..., description="Summary statistics")
+    date_range: DateRange = Field(..., description="Analysis date range")

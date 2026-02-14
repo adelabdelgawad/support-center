@@ -112,6 +112,8 @@ dependencies = [
     "wcwidth==0.2.14",
     "websockets==13.1",
     "wrapt==2.0.1",
+    "structlog>=25.5.0",
+    "pybreaker>=1.4.0",
 ]
 
 [dependency-groups]

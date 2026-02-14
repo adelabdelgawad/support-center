@@ -348,19 +348,45 @@ async def track_initial_load(endpoint: str = "/chat", client_type: str = "unknow
                 endpoint=endpoint
             ).observe(tracker.message_count)
 
-        # Record query count
-        if tracker.query_count > 0:
-            websocket_initial_load_query_count.labels(
-                endpoint=endpoint
-            ).observe(tracker.query_count)
 
+# ==============================================================================
+# General Metrics for API Services
+# ==============================================================================
 
-def track_message_sent(message_type: str, endpoint: str):
-    """Track a sent message."""
-    websocket_messages_sent.labels(
-        message_type=message_type,
-        endpoint=endpoint
-    ).inc()
+# Database error tracking
+database_error_count = Counter(
+    'database_errors_total',
+    'Total database errors encountered',
+    ['operation', 'table', 'error_type']
+)
+
+# Redis error tracking
+redis_error_count = Counter(
+    'redis_errors_total',
+    'Total Redis errors encountered',
+    ['operation', 'error_type']
+)
+
+# Validation error tracking
+validation_error_count = Counter(
+    'validation_errors_total',
+    'Total validation errors encountered',
+    ['field', 'rule']
+)
+
+# API request metrics
+api_request_count = Counter(
+    'api_requests_total',
+    'Total API requests',
+    ['endpoint', 'method', 'status']
+)
+
+api_request_duration = Histogram(
+    'api_request_duration_ms',
+    'API request duration in milliseconds',
+    ['endpoint', 'method'],
+    buckets=(5, 10, 25, 50, 100, 200, 500, 1000, 2000, float('inf'))
+)
 
 
 def track_message_received(message_type: str, endpoint: str):
@@ -787,6 +813,42 @@ def track_cache_operation(operation: str, hit: Optional[bool], duration_ms: floa
 
     cache_operations_total.labels(operation=operation, status=status).inc()
     cache_operation_duration_ms.labels(operation=operation).observe(duration_ms)
+
+
+# Legacy function aliases for compatibility
+def track_database_error(operation: str, table: str, error_type: str):
+    """Track database error (legacy alias)."""
+    database_error_count.labels(
+        operation=operation,
+        table=table,
+        error_type=error_type
+    ).inc()
+
+
+def track_redis_error(operation: str, error_type: str):
+    """Track Redis error (legacy alias)."""
+    redis_error_count.labels(
+        operation=operation,
+        error_type=error_type
+    ).inc()
+
+
+def track_validation_error(field: str, rule: str):
+    """Track validation error (legacy alias)."""
+    validation_error_count.labels(
+        field=field,
+        rule=rule
+    ).inc()
+
+
+def track_service_error(service_name: str, error_type: str):
+    """Track service error (legacy alias)."""
+    # Generic service error tracking
+    api_request_count.labels(
+        endpoint=f"service:{service_name}",
+        method="unknown",
+        status="error"
+    ).inc()
 
 
 # ==============================================================================

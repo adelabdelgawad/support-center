@@ -6,6 +6,7 @@ This module provides enhanced logging for uvicorn to track down
 """
 
 import logging
+import structlog
 
 # Uvicorn logging configuration
 LOGGING_CONFIG = {
@@ -62,6 +63,9 @@ def setup_uvicorn_error_logging():
     This function configures the uvicorn.error logger to capture and log
     detailed information about invalid HTTP requests to console.
     """
+    # Get structlog logger
+    log = structlog.get_logger()
+
     logger = logging.getLogger("uvicorn.error")
 
     # Configure httptools and h11 loggers (HTTP parsing libraries used by uvicorn)
@@ -70,4 +74,7 @@ def setup_uvicorn_error_logging():
         module_logger = logging.getLogger(module)
         module_logger.setLevel(logging.DEBUG)  # Capture all messages to console
 
-    logger.info("Enhanced uvicorn error logging configured - invalid requests will be logged to console")
+    log.info(
+        "Enhanced uvicorn error logging configured",
+        modules=["httptools", "h11"]
+    )
