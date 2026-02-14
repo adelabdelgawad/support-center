@@ -197,3 +197,50 @@ async def timeout_stale_job_executions_task(timeout_minutes: int = 5) -> Dict[st
             "executions_timed_out": result.get("executions_timed_out", 0),
             "timestamp": datetime.utcnow().isoformat(),
         }
+
+
+async def delete_old_desktop_sessions_task(retention_days: int = 90) -> Dict[str, Any]:
+    """
+    Permanently delete desktop sessions older than retention_days.
+
+    This is a hard delete operation (NOT soft delete). Sessions created
+    more than retention_days ago are permanently removed from the database.
+    Complements the soft delete done by cleanup_stale_desktop_sessions_task
+    (which marks inactive sessions) by providing actual data cleanup.
+
+    Args:
+        retention_days: Number of days to retain desktop sessions (default: 90)
+
+    Returns:
+        dict: Cleanup statistics with keys:
+            - sessions_deleted: Number of sessions permanently deleted
+            - cutoff_date: ISO timestamp of cutoff date used for deletion
+
+    Raises:
+        Exception: If deletion operation fails
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import delete
+
+    from db import DesktopSession
+
+    logger.info(f"Starting hard delete of desktop sessions older than {retention_days} days")
+
+    async with get_celery_session() as db:
+        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+
+        result = await db.execute(
+            delete(DesktopSession).where(DesktopSession.created_at < cutoff_date)
+        )
+        deleted_count = result.rowcount
+        await db.commit()
+
+        logger.info(
+            f"Desktop session hard delete completed: {deleted_count} sessions deleted "
+            f"(cutoff: {cutoff_date.isoformat()})"
+        )
+
+        return {
+            "sessions_deleted": deleted_count,
+            "cutoff_date": cutoff_date.isoformat(),
+        }

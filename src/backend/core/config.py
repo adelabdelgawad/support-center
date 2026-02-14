@@ -506,11 +506,91 @@ class ZapierSettings(BaseSettings):
 
 
 class PresenceSettings(BaseSettings):
-    """Redis TTL-based presence tracking configuration."""
+    """Redis TTL-based presence tracking configuration.
 
+    This configuration controls desktop session tracking via Redis keys with TTL-based expiration.
+
+    INTERVAL RELATIONSHIPS:
+    =======================
+
+    The three timing values MUST be coordinated to prevent false negatives (users incorrectly
+    marked as offline) while maintaining responsive presence detection.
+
+    1. heartbeat_interval_seconds (Desktop App Frequency):
+       - How often the Tauri desktop app sends heartbeat requests
+       - Trade-offs:
+         * Lower (e.g., 60-120s): More accurate presence, higher backend load
+         * Higher (e.g., 300-600s): Less backend load, slower offline detection
+       - Default: 300 seconds (5 minutes)
+       - Typical range: 60-600 seconds (1-10 minutes)
+
+    2. ttl_seconds (Redis Key Expiration):
+       - How long Redis keeps presence keys without refresh
+       - CRITICAL: MUST be >= 2x heartbeat_interval_seconds
+       - Recommended: 2.2x heartbeat interval (10% safety margin)
+       - Formula: ttl_seconds >= heartbeat_interval_seconds * 2.2
+       - Default: 660 seconds (11 minutes = 2.2 × 300)
+       - Purpose: Allows at least 1 missed heartbeat before marking offline
+       - If too low: Network latency causes false negatives
+       - If too high: Delayed offline detection after app closes
+
+    3. cleanup_timeout_minutes (Database Hygiene):
+       - How long before APScheduler marks sessions inactive in database
+       - Relationship: cleanup_timeout_minutes = 4 × heartbeat_interval_seconds
+       - Default: 20 minutes (4 × 5 minutes = 20 minutes)
+       - Purpose: Database cleanup job interval (NOT real-time presence)
+       - Redis is authoritative for presence, DB is for history/reports
+       - If too low: Premature cleanup of valid sessions
+       - If too high: Stale data in reports (but doesn't affect presence)
+
+    EXAMPLE CONFIGURATIONS:
+    =======================
+
+    Conservative (Low Backend Load - Default):
+        heartbeat_interval_seconds = 300 (5 min)
+        ttl_seconds = 660 (11 min = 2.2 × 300)
+        cleanup_timeout_minutes = 20 (20 min = 4 × 5 min)
+        Use case: Stable network, lower resource usage
+
+    Aggressive (Accurate Presence):
+        heartbeat_interval_seconds = 120 (2 min)
+        ttl_seconds = 264 (4.4 min = 2.2 × 120)
+        cleanup_timeout_minutes = 8 (8 min = 4 × 2 min)
+        Use case: Real-time requirements, higher backend capacity
+
+    Balanced:
+        heartbeat_interval_seconds = 180 (3 min)
+        ttl_seconds = 396 (6.6 min = 2.2 × 180)
+        cleanup_timeout_minutes = 12 (12 min = 4 × 3 min)
+        Use case: General production use
+
+    NEVER DO THIS (Invalid Configurations):
+    ================================
+        # ❌ TTL too low - causes false negatives
+        heartbeat_interval_seconds = 300
+        ttl_seconds = 400  # < 2x heartbeat (should be >= 600)
+
+        # ❌ TTL equal to heartbeat - no tolerance for delays
+        heartbeat_interval_seconds = 300
+        ttl_seconds = 300  # Network latency will cause false negatives
+
+        # ❌ Mismatched cleanup - premature DB cleanup
+        heartbeat_interval_seconds = 300
+        ttl_seconds = 660  # OK
+        cleanup_timeout_minutes = 5  # Too low! Should be ~20
+
+    VALIDATION:
+    ===========
+    The validator enforces: ttl_seconds >= 2 × heartbeat_interval_seconds
+    """
+
+    heartbeat_interval_seconds: int = Field(
+        default=300,
+        description="Desktop app heartbeat interval in seconds (default: 300 = 5 minutes). Range: 60-600.",
+    )
     ttl_seconds: int = Field(
         default=660,
-        description="TTL for presence keys in Redis. Should be ~2x the heartbeat interval (5min=300s, so 660s).",
+        description="TTL for presence keys in Redis. MUST be >= 2x heartbeat_interval_seconds. Recommended: 2.2x for safety margin. Default: 660 = 11 minutes.",
     )
 
     model_config = SettingsConfigDict(
@@ -519,6 +599,22 @@ class PresenceSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("ttl_seconds")
+    @classmethod
+    def validate_ttl_seconds(cls, v: int, info) -> int:
+        """Ensure TTL is at least 2x the heartbeat interval.
+
+        This validation prevents false negatives where users are incorrectly
+        marked as offline due to network latency or delayed heartbeats.
+        """
+        heartbeat_interval = info.data.get("heartbeat_interval_seconds", 300)
+        if v < 2 * heartbeat_interval:
+            raise ValueError(
+                f"ttl_seconds ({v}) must be at least 2x heartbeat_interval_seconds ({heartbeat_interval}). "
+                f"Recommended: 2.2x ({int(heartbeat_interval * 2.2)}s) for safety margin."
+            )
+        return v
 
 
 class VersionPolicySettings(BaseSettings):

@@ -193,7 +193,7 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         ip_address: Optional[str] = None,
     ) -> Optional[DesktopSession]:
         """
-        Update desktop session heartbeat.
+        Update desktop session heartbeat with optimistic locking.
 
         Args:
             db: Database session
@@ -205,6 +205,8 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Note:
             Caller must commit transaction.
+            Returns None on optimistic locking conflict.
+            Returns None if session has been inactive for > 60 minutes (expiration guard).
         """
         stmt = select(DesktopSession).where(DesktopSession.id == session_id)
         result = await db.execute(stmt)
@@ -213,13 +215,38 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         if not session:
             return None
 
+        # EXPIRATION GUARD: Prevent resurrection of long-dead sessions
+        # If session is inactive, check if it's been too long since last heartbeat
+        if not session.is_active:
+            inactive_duration = (datetime.utcnow() - session.last_heartbeat).total_seconds() / 60
+
+            if inactive_duration > 60:  # 1 hour threshold
+                import logging
+                logger = logging.getLogger("api.desktop_sessions")
+                logger.warning(
+                    f"Session {session_id} rejected: inactive for {inactive_duration:.1f} minutes "
+                    f"(> 60 min threshold). Resurrection prevented."
+                )
+                return None
+
+        # Store current version for optimistic locking
+        current_version = session.version
+
+        # Update fields
         session.last_heartbeat = datetime.utcnow()
         session.is_active = True
 
         if ip_address:
             session.ip_address = ip_address
 
-        await db.flush()
+        # Increment version for optimistic locking
+        session.version = current_version + 1
+
+        try:
+            await db.flush()
+        except Exception:
+            # Flush failed - likely version conflict or concurrent update
+            return None
 
         return session
 

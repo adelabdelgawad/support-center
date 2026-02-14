@@ -201,6 +201,22 @@ async def get_desktop_session_stats(
     }
 
 
+@router.get("/config", response_model=dict)
+async def get_desktop_session_config():
+    """
+    Get desktop session configuration. Used by Tauri app to sync heartbeat interval.
+
+    Returns:
+        Dictionary with heartbeat interval and Redis TTL configuration
+    """
+    from core.config import settings
+    return {
+        "heartbeatIntervalMs": settings.presence.heartbeat_interval_seconds * 1000,
+        "heartbeatIntervalSeconds": settings.presence.heartbeat_interval_seconds,
+        "redisTtlSeconds": settings.presence.ttl_seconds,
+    }
+
+
 @router.get("/presence/parity")
 async def check_presence_parity(
     db: AsyncSession = Depends(get_session),
@@ -292,6 +308,7 @@ async def update_desktop_heartbeat(
         HTTPException: 400 if session_id is not a valid UUID
         HTTPException: 403 if authenticated user doesn't own the session
         HTTPException: 404 if session not found
+        HTTPException: 410 if session has expired and cannot be reactivated
     """
     # First, get the session to verify ownership if authenticated
     session = await DesktopSessionService.get_session_by_id(db=db, session_id=session_id)
@@ -314,6 +331,16 @@ async def update_desktop_heartbeat(
     session = await DesktopSessionService.update_heartbeat(
         db=db, session_id=session_id, ip_address=ip_address
     )
+
+    # EXPIRATION GUARD: Check if repository rejected the heartbeat due to expiration
+    if session is None:
+        logger.warning(
+            f"Heartbeat rejected for session {session_id}: Session has expired and cannot be reactivated"
+        )
+        raise HTTPException(
+            status_code=410,
+            detail="Session has expired and cannot be reactivated. Please create a new session."
+        )
 
     logger.debug(f"Desktop heartbeat updated for session {session_id}")
     return session

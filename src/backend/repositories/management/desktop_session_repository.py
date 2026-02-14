@@ -187,7 +187,7 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         ip_address: Optional[str] = None,
     ) -> Optional[DesktopSession]:
         """
-        Update desktop session heartbeat.
+        Update desktop session heartbeat with optimistic locking.
 
         Args:
             db: Database session
@@ -196,6 +196,9 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
 
         Returns:
             Updated session or None
+
+        Note:
+            Returns None on optimistic locking conflict.
         """
         stmt = select(DesktopSession).where(DesktopSession.id == session_id)
         result = await db.execute(stmt)
@@ -204,14 +207,25 @@ class DesktopSessionRepository(BaseRepository[DesktopSession]):
         if not session:
             return None
 
+        # Store current version for optimistic locking
+        current_version = session.version
+
+        # Update fields
         session.last_heartbeat = datetime.utcnow()
         session.is_active = True
 
         if ip_address:
             session.ip_address = ip_address
 
-        await db.commit()
-        await db.refresh(session)
+        # Increment version for optimistic locking
+        session.version = current_version + 1
+
+        try:
+            await db.commit()
+            await db.refresh(session)
+        except Exception:
+            # Commit failed - likely version conflict or concurrent update
+            return None
 
         return session
 

@@ -166,6 +166,10 @@ class SessionPresenceService {
         // Session not found - might have been cleaned up
         console.warn('[SessionPresence] Session not found, stopping presence');
         this.stop(false);
+      } else if (response.status === 410) {
+        // Session has expired and cannot be reactivated
+        console.warn('[SessionPresence] Session has expired and cannot be reactivated. Please create a new session.');
+        this.stop(false);
       } else {
         console.warn(`[SessionPresence] Heartbeat failed: ${response.status}`);
       }

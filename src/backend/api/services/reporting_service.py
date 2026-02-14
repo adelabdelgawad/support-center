@@ -161,9 +161,19 @@ class ReportingService:
             db, comp_start_dt, comp_end_dt, business_unit_ids
         )
 
+        # Get open status IDs (statuses where count_as_solved = False)
+        open_status_ids = await ReportingQueryRepository.get_aging_buckets_by_status_ids(
+            db, []
+        )
+
+        # Build extra conditions for business unit filter
+        extra_conditions = []
+        if business_unit_ids:
+            extra_conditions.append(ServiceRequest.business_unit_id.in_(business_unit_ids))
+
         # Get current open tickets using repository
         open_tickets = await ReportingQueryRepository.get_open_tickets_count(
-            db, business_unit_ids
+            db, open_status_ids, extra_conditions
         )
 
         # Get SLA compliance using repository

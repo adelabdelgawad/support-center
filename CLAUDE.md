@@ -1324,6 +1324,93 @@ uv run pytest             # Tests pass
 - [ ] Linting passes
 - [ ] Build succeeds
 
+## Desktop Session Tracking (CRITICAL)
+
+**Desktop session tracking uses Redis TTL-based presence detection with timing relationships that MUST be coordinated.**
+
+### Configuration Relationships
+
+The three timing values MUST be coordinated to prevent false negatives (users incorrectly marked as offline) while maintaining responsive presence detection:
+
+1. **heartbeat_interval_seconds** (Desktop App Frequency)
+   - How often Tauri desktop app sends heartbeat requests
+   - Trade-offs: Lower (60-120s) = more accurate but higher load; Higher (300-600s) = less load but slower detection
+   - Default: 300 seconds (5 minutes)
+   - Range: 60-600 seconds (1-10 minutes)
+
+2. **ttl_seconds** (Redis Key Expiration)
+   - How long Redis keeps presence keys without refresh
+   - CRITICAL: MUST be >= 2x heartbeat_interval_seconds
+   - Recommended: 2.2x heartbeat interval (10% safety margin)
+   - Formula: ttl_seconds >= heartbeat_interval_seconds * 2.2
+   - Default: 660 seconds (11 minutes = 2.2 x 300)
+   - Purpose: Allows at least 1 missed heartbeat before marking offline
+   - If too low: Network latency causes false negatives
+   - If too high: Delayed offline detection after app closes
+
+3. **cleanup_timeout_minutes** (Database Hygiene)
+   - How long before APScheduler marks sessions inactive in database
+   - Relationship: cleanup_timeout_minutes = 4 x heartbeat_interval_seconds
+   - Default: 20 minutes (4 x 5 minutes)
+   - Purpose: Database cleanup job interval (NOT real-time presence)
+   - Redis is authoritative for presence, DB is for history/reports
+   - If too low: Premature cleanup of valid sessions
+   - If too high: Stale data in reports (but doesn't affect presence)
+
+### Configuration Presets
+
+**Conservative (Low Backend Load - Default):**
+- heartbeat_interval_seconds = 300 (5 min)
+- ttl_seconds = 660 (11 min = 2.2 x 300)
+- cleanup_timeout_minutes = 20 (20 min = 4 x 5 min)
+- Use case: Stable network, lower resource usage
+
+**Aggressive (Accurate Presence):**
+- heartbeat_interval_seconds = 120 (2 min)
+- ttl_seconds = 264 (4.4 min = 2.2 x 120)
+- cleanup_timeout_minutes = 8 (8 min = 4 x 2 min)
+- Use case: Real-time requirements, higher backend capacity
+
+**Balanced:**
+- heartbeat_interval_seconds = 180 (3 min)
+- ttl_seconds = 396 (6.6 min = 2.2 x 180)
+- cleanup_timeout_minutes = 12 (12 min = 4 x 3 min)
+- Use case: General production use
+
+### Invalid Configurations
+
+**NEVER configure these (will cause false negatives or other issues):**
+```python
+# ❌ TTL too low - causes false negatives
+heartbeat_interval_seconds = 300
+ttl_seconds = 400  # < 2x heartbeat (should be >= 600)
+
+# ❌ TTL equal to heartbeat - no tolerance for delays
+heartbeat_interval_seconds = 300
+ttl_seconds = 300  # Network latency will cause false negatives
+
+# ❌ Mismatched cleanup - premature DB cleanup
+heartbeat_interval_seconds = 300
+ttl_seconds = 660  # OK
+cleanup_timeout_minutes = 5  # Too low! Should be ~20
+```
+
+### Configuration Validation
+
+The `PresenceSettings` class in `/src/backend/core/config.py` validates that `ttl_seconds >= 2x heartbeat_interval_seconds` at startup. If validation fails, the application will not start with an error message:
+
+```
+ValueError: ttl_seconds (400) must be at least 2x heartbeat_interval_seconds (300).
+Recommended: 2.2x (660s) for safety margin.
+```
+
+### Documentation
+
+For detailed configuration examples, formulas, and troubleshooting, see:
+- **Configuration Guide:** `/docs/desktop-session-tracking.md`
+- **Configuration Class:** `/src/backend/core/config.py` (PresenceSettings)
+- **Related:** `/docs/desktop-session-improvements-plan.md` (improvement roadmap)
+
 ## Active Technologies
 - **Backend**: Python 3.13+ (async) + FastAPI, SQLModel, SQLAlchemy (async), Pydantic
 - **Database**: PostgreSQL (async sessions via SQLModel/SQLAlchemy)

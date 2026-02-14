@@ -423,7 +423,7 @@ class DesktopSessionService:
     @transactional_database_operation("cleanup_stale_desktop_sessions")
     @log_database_operation("stale desktop session cleanup", level="info")
     async def cleanup_stale_sessions(
-        db: AsyncSession, timeout_minutes: int = 1440
+        db: AsyncSession, timeout_minutes: int = 20
     ) -> int:
         """
         Clean up stale desktop sessions (no heartbeat for > timeout_minutes).
@@ -433,7 +433,7 @@ class DesktopSessionService:
 
         Args:
             db: Database session
-            timeout_minutes: Minutes before considering session stale (default: 1440 = 24h)
+            timeout_minutes: Minutes before considering session stale (default: 20)
 
         Returns:
             Number of sessions cleaned up

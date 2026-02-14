@@ -1481,6 +1481,13 @@ class DesktopSession(TableModel, table=True):
         description="Last heartbeat timestamp for tracking activity",
     )
 
+    # Optimistic locking
+    version: int = Field(
+        default=1,
+        sa_column=Column(Integer, nullable=False, server_default="1"),
+        description="Optimistic locking version (incremented on each update)",
+    )
+
     # Relationships
     user: "User" = Relationship(
         back_populates="desktop_sessions",
