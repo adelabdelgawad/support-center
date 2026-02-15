@@ -57,6 +57,7 @@ from api.schemas.technician_views import (
     StatusInfo,
     SubcategoryInfo,
     TechnicianRequestListItem,
+    TechnicianViewsConsolidatedResponse,
     TechnicianViewsResponse,
     TicketTypeCounts,
 )
@@ -590,6 +591,237 @@ async def get_technician_views_counts_only(
     return response
 
 
+@router.get("/technician-views-consolidated", response_model=TechnicianViewsConsolidatedResponse)
+async def get_technician_views_consolidated(
+    view: str = Query(
+        "unassigned",
+        description="View type: unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved, all_your_requests, urgent_high_priority, pending_requester_response, pending_subtask, new_today, in_progress, all_tickets, all_solved",
+    ),
+    business_unit_ids: list[int] | None = Query(
+        None,
+        description="Optional list of business unit IDs to filter by. Use -1 for unassigned (null business_unit_id).",
+    ),
+    assigned_to_me: bool = Query(
+        False,
+        description="When true, additionally filter results to only show requests assigned to the current technician.",
+    ),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page (max 100)"),
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(require_technician),
+):
+    """
+    Get technician views data + business unit counts in a single response.
+
+    **Performance optimization** - reduces frontend HTTP requests from 3 to 1.
+    Combines:
+    - Technician views (tickets, counts, filter_counts)
+    - Business unit counts (filtered by current view)
+
+    **Query Parameters:**
+    - view: View type (same as /technician-views)
+    - business_unit_ids: Optional list of business unit IDs to filter by
+    - assigned_to_me: When true, only show requests assigned to current technician
+    - page: Page number (1-indexed, default: 1)
+    - per_page: Items per page (default: 20, max: 100)
+
+    **Returns:**
+        - data: List of requests with full details
+        - counts: Counts for all view types
+        - filter_counts: All/Parents/Subtasks counts for current view
+        - total: Total count for current view
+        - page/per_page: Pagination info
+        - business_units: Business units with ticket counts (filtered by view)
+        - business_units_total: Total count across all business units
+        - unassigned_count: Count of unassigned requests
+
+    **Permission:** Technicians only (require_technician)
+
+    **Use Case:**
+        Primary endpoint for requests list page - single HTTP request for all data.
+    """
+    # Validate view type
+    valid_views = [
+        "unassigned",
+        "all_unsolved",
+        "my_unsolved",
+        "recently_updated",
+        "recently_solved",
+        "all_your_requests",
+        "urgent_high_priority",
+        "pending_requester_response",
+        "pending_subtask",
+        "new_today",
+        "in_progress",
+        "all_tickets",
+        "all_solved",
+    ]
+    if view not in valid_views:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid view type. Must be one of: {', '.join(valid_views)}",
+        )
+
+    # Get requests for the specified view
+    requests, total = await RequestService.get_technician_view_requests(
+        db=db,
+        user=current_user,
+        view_type=view,
+        business_unit_ids=business_unit_ids,
+        assigned_to_me=assigned_to_me,
+        page=page,
+        per_page=per_page,
+    )
+
+    # Execute sequentially
+    request_ids = [req.id for req in requests]
+
+    counts_dict = await RequestService.get_technician_view_counts(
+        db, current_user, business_unit_ids
+    )
+    last_messages_dict = await RequestService.get_last_messages_for_requests(
+        db, request_ids
+    )
+    requester_unread_dict = await RequestService.check_requester_unread_for_requests(
+        db, request_ids
+    )
+    technician_unread_dict = await RequestService.check_technician_unread_for_requests(
+        db, request_ids
+    )
+    filter_counts_dict = await RequestService.get_view_filter_counts(
+        db, current_user, view, business_unit_ids
+    )
+
+    # Get business unit counts (filtered by current view)
+    bu_counts_list, unassigned_count = await RequestService.get_business_unit_counts(
+        db=db, user=current_user, view=view
+    )
+
+    # Build response items
+    items = []
+    for req in requests:
+        last_msg = last_messages_dict.get(req.id)
+        last_message_info = None
+        if last_msg:
+            last_message_info = LastMessageInfo(
+                content=last_msg.content,
+                sender_name=last_msg.sender.full_name if last_msg.sender else None,
+                created_at=last_msg.created_at,
+                sequence_number=last_msg.sequence_number,
+            )
+
+        business_unit_info = None
+        if req.business_unit:
+            business_unit_info = BusinessUnitInfo(
+                id=req.business_unit.id,
+                name=req.business_unit.name,
+            )
+
+        category_info = None
+        if req.subcategory and req.subcategory.category:
+            category_info = CategoryInfo(
+                id=req.subcategory.category.id,
+                name=req.subcategory.category.name,
+                name_en=req.subcategory.category.name_en,
+                name_ar=req.subcategory.category.name_ar,
+            )
+
+        subcategory_info = None
+        if req.subcategory:
+            subcategory_info = SubcategoryInfo(
+                id=req.subcategory.id,
+                name=req.subcategory.name,
+                name_en=req.subcategory.name_en,
+                name_ar=req.subcategory.name_ar,
+            )
+
+        item = TechnicianRequestListItem(
+            id=req.id,
+            status=StatusInfo(
+                id=req.status.id,
+                name=req.status.name,
+                color=req.status.color,
+                count_as_solved=req.status.count_as_solved,
+            ),
+            subject=req.title,
+            requester=RequesterInfo(
+                id=req.requester.id,
+                full_name=req.requester.full_name,
+            ),
+            requested=req.created_at,
+            requested_duration=format_requested_duration(req.created_at),
+            due_date=req.due_date,
+            due_date_duration=format_due_date_duration(req.due_date)[0],
+            is_due_date_overdue=format_due_date_duration(req.due_date)[1],
+            priority=PriorityInfo(
+                id=req.priority.id,
+                name=req.priority.name,
+                response_time_minutes=req.priority.response_time_minutes,
+                resolution_time_hours=req.priority.resolution_time_hours,
+            ),
+            business_unit=business_unit_info,
+            last_message=last_message_info,
+            category=category_info,
+            subcategory=subcategory_info,
+            requester_has_unread=requester_unread_dict.get(req.id, False),
+            technician_has_unread=technician_unread_dict.get(req.id, False),
+            parent_task_id=req.parent_task_id,
+            is_blocked=req.is_blocked,
+            assigned_to_section_id=req.assigned_to_section_id,
+            assigned_to_technician_id=req.assigned_to_technician_id,
+            completed_at=req.completed_at,
+            estimated_hours=req.estimated_hours,
+        )
+        items.append(item)
+
+    # Build counts response
+    from api.schemas.technician_views import ViewCounts
+
+    counts = ViewCounts(
+        unassigned=counts_dict.get("unassigned", 0),
+        all_unsolved=counts_dict.get("all_unsolved", 0),
+        my_unsolved=counts_dict.get("my_unsolved", 0),
+        recently_updated=counts_dict.get("recently_updated", 0),
+        recently_solved=counts_dict.get("recently_solved", 0),
+        all_your_requests=counts_dict.get("all_your_requests", 0),
+        urgent_high_priority=counts_dict.get("urgent_high_priority", 0),
+        pending_requester_response=counts_dict.get("pending_requester_response", 0),
+        pending_subtask=counts_dict.get("pending_subtask", 0),
+        new_today=counts_dict.get("new_today", 0),
+        in_progress=counts_dict.get("in_progress", 0),
+        all_tickets=counts_dict.get("all_tickets", 0),
+        all_solved=counts_dict.get("all_solved", 0),
+    )
+
+    filter_counts = TicketTypeCounts(
+        all=filter_counts_dict.get("all", 0),
+        parents=filter_counts_dict.get("parents", 0),
+        subtasks=filter_counts_dict.get("subtasks", 0),
+    )
+
+    # Build business units response
+    business_units = [
+        BusinessUnitCount(id=bu["id"], name=bu["name"], count=bu["count"])
+        for bu in bu_counts_list
+    ]
+    business_units_total = sum(bu.count for bu in business_units)
+
+    # Build consolidated response object
+    response_data = TechnicianViewsConsolidatedResponse(
+        data=items,
+        counts=counts,
+        filter_counts=filter_counts,
+        total=total,
+        page=page,
+        per_page=per_page,
+        business_units=business_units,
+        business_units_total=business_units_total,
+        unassigned_count=unassigned_count,
+    )
+
+    return response_data
+
+
 @router.get("/business-unit-counts", response_model=BusinessUnitCountsResponse)
 async def get_business_unit_counts(
     view: Optional[str] = Query(
@@ -801,11 +1033,14 @@ async def update_request(
     old_status_id_snapshot = old_request.status_id
 
     # Update request
-    request = await RequestService.update_service_request(
-        db=db,
-        request_id=request_id,
-        update_data=update_data,
-    )
+    try:
+        request = await RequestService.update_service_request(
+            db=db,
+            request_id=request_id,
+            update_data=update_data,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -983,12 +1218,15 @@ async def update_request_by_technician(
     old_status_id_snapshot = old_request.status_id
 
     # Update request
-    request = await RequestService.update_service_request_by_technician(
-        db=db,
-        request_id=request_id,
-        update_data=update_data,
-        technician_id=current_user.id,
-    )
+    try:
+        request = await RequestService.update_service_request_by_technician(
+            db=db,
+            request_id=request_id,
+            update_data=update_data,
+            technician_id=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     if not request:
         raise HTTPException(status_code=404, detail="Request not found")

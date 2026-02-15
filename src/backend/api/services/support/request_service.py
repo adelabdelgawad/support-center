@@ -1142,6 +1142,7 @@ class RequestService:
         view_type: str,
         *,
         business_unit_ids: list[int] | None = None,
+        assigned_to_me: bool = False,
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[list[ServiceRequest], int]:
@@ -1153,6 +1154,7 @@ class RequestService:
             user: Current user (for section-based visibility filtering)
             view_type: View type (unassigned, all_unsolved, my_unsolved, recently_updated, recently_solved)
             business_unit_ids: Optional list of business unit IDs to filter. -1 = unassigned (null BU).
+            assigned_to_me: When true, additionally filter to only requests assigned to current user
             page: Page number
             per_page: Items per page
 
@@ -1160,6 +1162,10 @@ class RequestService:
             Tuple of (requests list, total count)
         """
         from api.repositories.support.request_repository import ServiceRequestRepository
+
+        # When assigned_to_me is set, override view to show only current user's requests
+        if assigned_to_me:
+            view_type = "all_your_requests"
 
         # Existing views
         if view_type == "unassigned":

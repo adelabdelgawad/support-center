@@ -151,3 +151,19 @@ class TicketTypeCounts(HTTPSchemaModel):
     all: int
     parents: int  # Tasks without parent_task_id
     subtasks: int  # Tasks with parent_task_id
+
+
+class TechnicianViewsConsolidatedResponse(HTTPSchemaModel):
+    """Consolidated response for technician views endpoint (single HTTP request)."""
+
+    data: list[TechnicianRequestListItem]
+    counts: ViewCounts
+    filter_counts: TicketTypeCounts
+    total: int
+    page: int
+    per_page: int
+
+    # Consolidated business unit data (from /business-unit-counts)
+    business_units: list[BusinessUnitCount]
+    business_units_total: int
+    unassigned_count: int

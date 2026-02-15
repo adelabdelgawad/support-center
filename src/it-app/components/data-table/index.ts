@@ -24,6 +24,18 @@ export type { SettingsTableHeaderProps } from "./controls/settings-table-header"
 // Filter Components
 // ============================================================================
 export { StatusFilter } from "./filters/status-filter";
+export {
+  Faceted,
+  FacetedTrigger,
+  FacetedBadgeList,
+  FacetedContent,
+  FacetedInput,
+  FacetedList,
+  FacetedEmpty,
+  FacetedGroup,
+  FacetedItem,
+  FacetedSeparator,
+} from "./filters/faceted-filter";
 
 // ============================================================================
 // Action Components

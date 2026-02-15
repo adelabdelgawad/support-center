@@ -614,6 +614,92 @@ End a remote access session.
 
 ---
 
+## Technician Views / Requests
+
+### GET /api/v1/support/requests/technician-views-consolidated
+
+Get technician views (tickets) with counts, business units, and filtering options in a single consolidated API call.
+
+**Purpose:** Used by IT Portal Requests page (tickets table) - Provides all necessary data in one request for efficient rendering and filtering.
+
+**Query Parameters:**
+- `view`: `ViewType` - View type filter (default: "unassigned")
+  - Options: "unassigned", "all_unsolved", "my_unsolved", "recently_updated", "recently_solved", "all_your_requests", "urgent_high_priority", "pending_requester_response", "pending_subtask", "new_today", "in_progress", "all_tickets", "all_solved"
+- `page`: `number` - Page number (default: 1, 1-indexed)
+- `per_page`: `number` - Items per page (default: 20)
+- `skip`: `number` - Calculated from `(page - 1) * per_page`
+- `business_unit_ids`: `number[]` - Optional array of business unit IDs to filter by
+- `technician_user_id`: `string | null` - Optional technician user ID filter (NEW)
+
+**Response:** `TechnicianViewsConsolidatedResponse`
+
+```json
+{
+  "data": [TicketListItem],
+  "counts": {
+    "unassigned": number,
+    "all_unsolved": number,
+    "my_unsolved": number,
+    "recently_updated": number,
+    "recently_solved": number,
+    "all_your_requests": number,
+    "urgent_high_priority": number,
+    "pending_requester_response": number,
+    "pending_subtask": number,
+    "new_today": number,
+    "in_progress": number,
+    "all_tickets": number,
+    "all_solved": number
+  },
+  "filter_counts": {
+    "all": number,
+    "parents": number,
+    "subtasks": number
+  },
+  "total": number,
+  "page": number,
+  "per_page": number,
+  "business_units": [
+    {
+      "id": number,
+      "name": string,
+      "count": number
+    }
+  ],
+  "business_units_total": number,
+  "unassigned_count": number
+}
+```
+
+**Source File:** `/src/backend/api/routers/support/requests_router.py`
+**Used By:** IT Portal `/src/it-app/app/(it-pages)/support-center/requests/page.tsx`
+
+**Response Shape:** Flat structure matching `TechnicianViewsConsolidatedResponse` schema
+
+**Key Features:**
+- Single consolidated endpoint replaces multiple API calls
+- Supports view-based filtering (unassigned, all_unsolved, etc.)
+- Supports business unit filtering
+- Supports pagination with configurable per_page
+- Supports technician user filtering (for showing only tickets assigned to specific technician)
+- Returns complete counts for all view types and ticket types
+- Returns business units with ticket counts for sidebar display
+
+**Notes:**
+- This endpoint consolidates what was previously 3 separate endpoints:
+  - `/api/v1/support/requests/technician-views` (tickets + counts)
+  - `/api/v1/setting/business-units` (business units with counts)
+  - `/api/v1/support/requests/business-unit-counts` (filter counts per unit)
+- Improves performance by reducing round-trips from 3 to 1
+
+**Related Components:**
+- Server Action: `getTicketsConsolidated()` in `lib/actions/requests.actions.ts`
+- Types: `TechnicianViewsConsolidatedResponse`, `ViewType`, `BusinessUnitCount` in `lib/types/api/requests.ts`
+- Frontend Page: `app/(it-pages)/support-center/requests/page.tsx` (SSR)
+- Table Components: `app/(it-pages)/support-center/requests/_components/table/`
+
+---
+
 ## User Sections API
 
 ### GET /api/v1/setting/user-sections/{user_id}/sections
