@@ -12,6 +12,8 @@ from typing import List
 from uuid import uuid4
 
 from sqlalchemy import select, delete
+from sqlalchemy.engine import CursorResult
+from sqlmodel import col
 
 from celery_app import celery_app
 from db.models import DomainUser, OrganizationalUnit
@@ -64,9 +66,9 @@ def sync_domain_users_task(self) -> dict:
             async with get_celery_session() as session:
                 # Step 1: Get enabled OUs from database
                 ou_result = await session.execute(
-                    select(OrganizationalUnit.ou_dn).where(
-                        OrganizationalUnit.is_enabled,
-                        OrganizationalUnit.ou_dn.isnot(None),
+                    select(col(OrganizationalUnit.ou_dn)).where(
+                        col(OrganizationalUnit.is_enabled) == True,  # noqa: E712
+                        col(OrganizationalUnit.ou_dn).isnot(None),
                     )
                 )
                 enabled_ou_dns = [row[0] for row in ou_result.fetchall()]
@@ -105,8 +107,8 @@ def sync_domain_users_task(self) -> dict:
                 logger.info(f"Fetched {len(ad_users)} users from Active Directory")
 
                 # Step 3: Delete all existing domain users
-                delete_result = await session.execute(delete(DomainUser))
-                deleted_count = delete_result.rowcount
+                delete_result: CursorResult = await session.execute(delete(DomainUser))  # type: ignore[assignment]
+                deleted_count = delete_result.rowcount or 0
                 logger.info(f"Deleted {deleted_count} existing domain users")
 
                 # Step 4: Bulk insert fetched users

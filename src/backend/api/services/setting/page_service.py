@@ -178,7 +178,8 @@ class PageService:
         Returns:
             True if deleted, False if not found
         """
-        success = await PageRepository.soft_delete(db, page_id, commit=True)
+        success = await PageRepository.soft_delete(db, page_id)
+        await db.commit()
 
         if success:
             logger.info(f"Soft deleted page ID: {page_id}")
@@ -249,10 +250,13 @@ class PageService:
 
         # Load relationships
         permission_with_details = await PageRoleRepository.find_by_id_with_details(
-            db, permission.id
+            db, permission.id if permission.id is not None else 0
         )
 
         logger.info(f"Created page permission ID: {permission.id}")
+
+        if permission_with_details is None:
+            raise ValueError(f"Failed to load created page permission {permission.id}")
 
         return permission_with_details
 
@@ -277,9 +281,12 @@ class PageService:
         Returns:
             Updated PageRole or None if not found
         """
+        from typing import cast as type_cast
+        from uuid import UUID as UUIDType
         permission = await PageRoleRepository.toggle_active_status(
-            db, permission_id, is_active=is_active, updated_by=updated_by, commit=True
+            db, permission_id, is_active=is_active, updated_by=type_cast(UUIDType, updated_by)
         )
+        await db.commit()
 
         if permission:
             status = "activated" if is_active else "deactivated"

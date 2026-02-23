@@ -162,8 +162,8 @@ async def create_system_event(
         event = await SystemEventService.create_event(
             db,
             event_key=event_data.event_key,
-            name=event_data.name,
-            description=event_data.description,
+            name=event_data.event_name_en,
+            description=event_data.description_en,
             system_message_id=event_data.system_message_id,
             is_active=event_data.is_active if event_data.is_active is not None else True,
         )

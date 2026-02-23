@@ -446,7 +446,7 @@ class TestBulkTerminateSessions:
         auth_headers: dict[str, str],
     ):
         """Test bulk terminate with empty session list."""
-        payload = {"sessionIds": []}
+        payload: dict[str, list[object]] = {"sessionIds": []}
 
         response = await async_client.post(
             "/management/desktop-sessions/bulk-terminate",

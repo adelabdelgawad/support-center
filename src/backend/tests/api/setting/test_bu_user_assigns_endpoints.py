@@ -15,7 +15,7 @@ class TestBUUserAssignsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-unit-user-assigns/ with empty database."""
-        response = await client.get("/api/setting/business-unit-user-assigns/")
+        response = await client.get("/backend/business-unit-user-assigns/")
         assert response.status_code == 200
 
         data = response.json()
@@ -56,7 +56,7 @@ class TestBUUserAssignsEndpoints:
         db_session.add_all([assign1, assign2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-user-assigns/")
+        response = await client.get("/backend/business-unit-user-assigns/")
         assert response.status_code == 200
 
         data = response.json()
@@ -99,7 +99,7 @@ class TestBUUserAssignsEndpoints:
             db_session.add(assign)
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-user-assigns/?limit=2&skip=0")
+        response = await client.get("/backend/business-unit-user-assigns/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitUserAssigns"]) == 2
@@ -129,7 +129,7 @@ class TestBUUserAssignsEndpoints:
         db_session.add_all([assign1, assign2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-user-assigns/?is_active=true")
+        response = await client.get("/backend/business-unit-user-assigns/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitUserAssigns"]) == 1
@@ -161,7 +161,7 @@ class TestBUUserAssignsEndpoints:
         db_session.add_all([assign1, assign2])
         await db_session.commit()
 
-        response = await client.get(f"/api/setting/business-unit-user-assigns/?business_unit_id={bu1.id}")
+        response = await client.get(f"/backend/business-unit-user-assigns/?business_unit_id={bu1.id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitUserAssigns"]) == 1
@@ -191,7 +191,7 @@ class TestBUUserAssignsEndpoints:
         await db_session.commit()
         await db_session.refresh(assign)
 
-        response = await client.get(f"/api/setting/business-unit-user-assigns/{assign.id}")
+        response = await client.get(f"/backend/business-unit-user-assigns/{assign.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -204,7 +204,7 @@ class TestBUUserAssignsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-unit-user-assigns/{assign_id} with non-existent ID."""
-        response = await client.get("/api/setting/business-unit-user-assigns/99999")
+        response = await client.get("/backend/business-unit-user-assigns/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -232,7 +232,7 @@ class TestBUUserAssignsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/business-unit-user-assigns/", json=assign_data)
+        response = await client.post("/backend/business-unit-user-assigns/", json=assign_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -248,7 +248,7 @@ class TestBUUserAssignsEndpoints:
         """Test POST /api/setting/business-unit-user-assigns/ with invalid data."""
         assign_data = {"businessUnitId": 1}
 
-        response = await client.post("/api/setting/business-unit-user-assigns/", json=assign_data)
+        response = await client.post("/backend/business-unit-user-assigns/", json=assign_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -278,7 +278,7 @@ class TestBUUserAssignsEndpoints:
         update_data = {"isActive": False}
 
         response = await client.put(
-            f"/api/setting/business-unit-user-assigns/{assign.id}", json=update_data
+            f"/backend/business-unit-user-assigns/{assign.id}", json=update_data
         )
         assert response.status_code == 200
 
@@ -292,7 +292,7 @@ class TestBUUserAssignsEndpoints:
         """Test PUT /api/setting/business-unit-user-assigns/{assign_id} with non-existent ID."""
         update_data = {"isActive": False}
 
-        response = await client.put("/api/setting/business-unit-user-assigns/99999", json=update_data)
+        response = await client.put("/backend/business-unit-user-assigns/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -319,7 +319,7 @@ class TestBUUserAssignsEndpoints:
         await db_session.commit()
         await db_session.refresh(assign)
 
-        response = await client.delete(f"/api/setting/business-unit-user-assigns/{assign.id}")
+        response = await client.delete(f"/backend/business-unit-user-assigns/{assign.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -330,5 +330,5 @@ class TestBUUserAssignsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/business-unit-user-assigns/{assign_id} with non-existent ID."""
-        response = await client.delete("/api/setting/business-unit-user-assigns/99999")
+        response = await client.delete("/backend/business-unit-user-assigns/99999")
         assert response.status_code == 404

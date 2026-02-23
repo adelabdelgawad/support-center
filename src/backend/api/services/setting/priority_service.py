@@ -77,7 +77,7 @@ class PriorityService:
             priority = await PriorityRepository.create(
                 self.db, obj_in=priority_data.model_dump(), commit=True
             )
-            logger.info(f"Created priority: {priority.name_en}")
+            logger.info(f"Created priority: {priority.name}")
             return priority
         except Exception:
             await self.db.rollback()

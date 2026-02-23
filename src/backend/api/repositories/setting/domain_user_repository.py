@@ -21,7 +21,7 @@ class DomainUserRepository(BaseRepository[DomainUser]):
         cls, db: AsyncSession, username: str
     ) -> Optional[DomainUser]:
         """Find domain user by username."""
-        stmt = select(DomainUser).where(DomainUser.username == username)
+        stmt = select(DomainUser).where(DomainUser.__table__.c.username == username)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -39,34 +39,28 @@ class DomainUserRepository(BaseRepository[DomainUser]):
 
         Searches across username, email, and display_name fields.
         """
-        # Build base query
         stmt = select(DomainUser)
-        count_stmt = select(func.count(DomainUser.id))
+        count_stmt = select(func.count())
 
-        # Apply search filter
         if search_term:
             search_filter = or_(
-                DomainUser.username.ilike(f"%{search_term}%"),
-                DomainUser.email.ilike(f"%{search_term}%"),
-                DomainUser.display_name.ilike(f"%{search_term}%"),
+                DomainUser.__table__.c.username.ilike(f"%{search_term}%"),
+                DomainUser.__table__.c.email.ilike(f"%{search_term}%"),
+                DomainUser.__table__.c.display_name.ilike(f"%{search_term}%"),
             )
             stmt = stmt.where(search_filter)
             count_stmt = count_stmt.where(search_filter)
 
-        # Get total count
         count_result = await db.execute(count_stmt)
-        total = count_result.scalar()
+        total = count_result.scalar() or 0
 
-        # Apply ordering (alphabetical by display_name, then username)
         stmt = stmt.order_by(
-            DomainUser.display_name.asc().nulls_last(), DomainUser.username.asc()
+            DomainUser.__table__.c.display_name.asc(), DomainUser.__table__.c.username.asc()
         )
 
-        # Apply pagination
         offset = (page - 1) * per_page
         stmt = stmt.offset(offset).limit(per_page)
 
-        # Execute query
         result = await db.execute(stmt)
         items = list(result.scalars().all())
 
@@ -80,11 +74,9 @@ class DomainUserRepository(BaseRepository[DomainUser]):
         Returns:
             Number of deleted records
         """
-        # Get count before delete
-        count_result = await db.execute(select(func.count(DomainUser.id)))
-        count = count_result.scalar()
+        count_result = await db.execute(select(func.count()).select_from(DomainUser))
+        count = count_result.scalar() or 0
 
-        # Execute delete
         await db.execute(delete(DomainUser))
 
         return count
@@ -99,16 +91,15 @@ class DomainUserRepository(BaseRepository[DomainUser]):
         Args:
             db: Database session
             domain_users: List of domain user dicts
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             Number of created records
         """
-        # Create DomainUser instances
         users = [DomainUser(**user_data) for user_data in domain_users]
         db.add_all(users)
 
         if commit:
-            await db.commit()
+            await db.flush()
 
         return len(users)

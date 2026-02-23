@@ -38,6 +38,7 @@ from db.models import (
 )
 from api.services.management.scheduler_service import scheduler_service
 from sqlalchemy import select
+from sqlmodel import col
 from tasks.base import BaseTask
 from tasks.database import get_celery_session
 
@@ -106,7 +107,7 @@ async def _async_execute(job_id: str, execution_id: str, triggered_by: str = "sc
             result = await db.execute(
                 select(ScheduledJob)
                 .join(TaskFunction)
-                .where(ScheduledJob.id == UUID(job_id))
+                .where(col(ScheduledJob.id) == UUID(job_id))
             )
             job = result.scalar_one_or_none()
 

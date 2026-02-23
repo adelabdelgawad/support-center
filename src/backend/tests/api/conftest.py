@@ -427,7 +427,6 @@ async def seed_page(db_session: AsyncSession) -> Page:
     """Create a test page."""
     page = PageFactory.create(
         title="Test Page",
-        description="Test page description",
         path="/test-page",
         icon="test-icon",
         order=1,

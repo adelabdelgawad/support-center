@@ -405,7 +405,7 @@ class TestBulkDeleteSystemEvents:
         auth_headers: dict[str, str],
     ):
         """Test bulk delete with empty event list."""
-        payload = {"eventIds": []}
+        payload: dict[str, list[object]] = {"eventIds": []}
 
         response = await async_client.post(
             "/management/system-events/bulk-delete",

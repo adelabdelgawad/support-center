@@ -27,17 +27,17 @@ class ClientVersionRepository(BaseRepository[ClientVersion]):
     async def find_versions(
         self, platform: str = "desktop", active_only: bool = False
     ) -> List[ClientVersion]:
-        stmt = select(ClientVersion).where(ClientVersion.platform == platform)
+        stmt = select(ClientVersion).where(ClientVersion.__table__.c.platform == platform)
         if active_only:
-            stmt = stmt.where(ClientVersion.is_active == True)
-        stmt = stmt.order_by(ClientVersion.order_index.desc())
+            stmt = stmt.where(ClientVersion.__table__.c.is_active.is_(True))
+        stmt = stmt.order_by(ClientVersion.__table__.c.order_index.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_max_order_index(self, platform: str) -> int:
         result = await self.session.scalar(
-            select(func.coalesce(func.max(ClientVersion.order_index), 0)).where(
-                ClientVersion.platform == platform
+            select(func.coalesce(func.max(ClientVersion.__table__.c.order_index), 0)).where(
+                ClientVersion.__table__.c.platform == platform
             )
         )
         return result or 0
@@ -45,7 +45,7 @@ class ClientVersionRepository(BaseRepository[ClientVersion]):
     async def unset_latest_for_platform(self, platform: str) -> None:
         await self.session.execute(
             update(ClientVersion)
-            .where(ClientVersion.platform == platform)
-            .where(ClientVersion.is_latest == True)
+            .where(ClientVersion.__table__.c.platform == platform)
+            .where(ClientVersion.__table__.c.is_latest.is_(True))
             .values(is_latest=False)
         )

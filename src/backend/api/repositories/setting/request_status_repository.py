@@ -5,7 +5,6 @@ Handles all database queries related to request statuses.
 """
 
 from typing import List, Optional, Tuple
-from uuid import UUID
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +19,7 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
 
     @classmethod
     async def get_status_counts_for_requester(
-        cls, db: AsyncSession, user_id: UUID
+        cls, db: AsyncSession, user_id: object
     ) -> List[dict]:
         """
         Get request status counts with bilingual names and colors for a requester.
@@ -33,33 +32,34 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
 
         Returns:
             List of dicts with id, name, name_en, name_ar, color, and count
-            (filtered by visible_on_requester_page = True)
         """
-        # Use filter in the JOIN condition to preserve outer join behavior
         join_condition = and_(
-            ServiceRequest.status_id == RequestStatus.id,
-            ServiceRequest.requester_id == user_id,
+            ServiceRequest.__table__.c.status_id == RequestStatus.__table__.c.id,
+            ServiceRequest.__table__.c.requester_id == user_id,
         )
 
         status_query = (
             select(
-                RequestStatus.id,
-                RequestStatus.name,
-                RequestStatus.name_en,
-                RequestStatus.name_ar,
-                RequestStatus.color,
-                func.count(ServiceRequest.id).label("count"),
+                RequestStatus.__table__.c.id,
+                RequestStatus.__table__.c.name,
+                RequestStatus.__table__.c.name_en,
+                RequestStatus.__table__.c.name_ar,
+                RequestStatus.__table__.c.color,
+                func.count(ServiceRequest.__table__.c.id).label("count"),
             )
             .outerjoin(ServiceRequest, join_condition)
-            .where(RequestStatus.is_active, RequestStatus.visible_on_requester_page)
-            .group_by(
-                RequestStatus.id,
-                RequestStatus.name,
-                RequestStatus.name_en,
-                RequestStatus.name_ar,
-                RequestStatus.color,
+            .where(
+                RequestStatus.__table__.c.is_active.is_(True),
+                RequestStatus.__table__.c.visible_on_requester_page.is_(True),
             )
-            .order_by(RequestStatus.id)
+            .group_by(
+                RequestStatus.__table__.c.id,
+                RequestStatus.__table__.c.name,
+                RequestStatus.__table__.c.name_en,
+                RequestStatus.__table__.c.name_ar,
+                RequestStatus.__table__.c.color,
+            )
+            .order_by(RequestStatus.__table__.c.id)
         )
 
         status_result = await db.execute(status_query)
@@ -96,23 +96,19 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         Returns:
             List of RequestStatus objects that are visible on the requester page
         """
-        # Build query with proper filtering
-        # Filter by active and visible_on_requester_page for requester views
         stmt = select(RequestStatus).where(
-            RequestStatus.is_active, RequestStatus.visible_on_requester_page
+            RequestStatus.__table__.c.is_active.is_(True),
+            RequestStatus.__table__.c.visible_on_requester_page.is_(True),
         )
 
-        # Apply optional filters
         if is_active is not None:
-            stmt = stmt.where(RequestStatus.is_active == is_active)
+            stmt = stmt.where(RequestStatus.__table__.c.is_active == is_active)
 
         if readonly is not None:
-            stmt = stmt.where(RequestStatus.readonly == readonly)
+            stmt = stmt.where(RequestStatus.__table__.c.readonly == readonly)
 
-        # Apply ordering
-        stmt = stmt.order_by(RequestStatus.id)
+        stmt = stmt.order_by(RequestStatus.__table__.c.id)
 
-        # Execute query
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -130,7 +126,7 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         Returns:
             RequestStatus or None if not found
         """
-        stmt = select(RequestStatus).where(RequestStatus.name == name)
+        stmt = select(RequestStatus).where(RequestStatus.__table__.c.name == name)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -159,22 +155,19 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         Returns:
             Tuple of (list of statuses, total, active_count, inactive_count, readonly_count)
         """
-        # Build main query
         stmt = select(RequestStatus)
 
-        # Build total count query - ALWAYS get total counts from database (no filters)
         total_count_stmt = select(
-            func.count(RequestStatus.id).label("total"),
-            func.sum(case((RequestStatus.is_active, 1), else_=0)).label("active_count"),
-            func.sum(case((not RequestStatus.is_active, 1), else_=0)).label(
+            func.count().label("total"),
+            func.sum(case((RequestStatus.__table__.c.is_active.is_(True), 1), else_=0)).label("active_count"),
+            func.sum(case((RequestStatus.__table__.c.is_active.is_(False), 1), else_=0)).label(
                 "inactive_count"
             ),
-            func.sum(case((RequestStatus.readonly, 1), else_=0)).label(
+            func.sum(case((RequestStatus.__table__.c.readonly.is_(True), 1), else_=0)).label(
                 "readonly_count"
             ),
         )
 
-        # Get total counts (unfiltered)
         total_count_result = await db.execute(total_count_stmt)
         total_counts = total_count_result.one()
         total = total_counts.total or 0
@@ -182,23 +175,20 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         inactive_count = total_counts.inactive_count or 0
         readonly_count = total_counts.readonly_count or 0
 
-        # Apply filters to main query only
         if name:
-            name_filter = RequestStatus.name.ilike(f"%{name}%")
+            name_filter = RequestStatus.__table__.c.name.ilike(f"%{name}%")
             stmt = stmt.where(name_filter)
         if is_active is not None:
-            stmt = stmt.where(RequestStatus.is_active == is_active)
+            stmt = stmt.where(RequestStatus.__table__.c.is_active == is_active)
         if readonly is not None:
-            stmt = stmt.where(RequestStatus.readonly == readonly)
+            stmt = stmt.where(RequestStatus.__table__.c.readonly == readonly)
 
-        # Apply pagination
         stmt = (
-            stmt.order_by(RequestStatus.name)
+            stmt.order_by(RequestStatus.__table__.c.name)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
 
-        # Execute query
         result = await db.execute(stmt)
         statuses = list(result.scalars().all())
 
@@ -218,11 +208,11 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         Returns:
             Count of requests using this status
         """
-        stmt = select(func.count(ServiceRequest.id)).where(
-            ServiceRequest.status_id == status_id
+        stmt = select(func.count()).where(
+            ServiceRequest.__table__.c.status_id == status_id
         )
         result = await db.execute(stmt)
-        return result.scalar()
+        return result.scalar() or 0
 
     @classmethod
     async def get_summary_counts(cls, db: AsyncSession) -> dict:
@@ -236,10 +226,10 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
             Dict with total, readonly, active, inactive counts
         """
         count_stmt = select(
-            func.count(RequestStatus.id).label("total"),
-            func.count(case((RequestStatus.readonly, 1))).label("readonly"),
-            func.count(case((RequestStatus.is_active, 1))).label("active"),
-            func.count(case((not RequestStatus.is_active, 1))).label("inactive"),
+            func.count().label("total"),
+            func.count(case((RequestStatus.__table__.c.readonly.is_(True), 1))).label("readonly"),
+            func.count(case((RequestStatus.__table__.c.is_active.is_(True), 1))).label("active"),
+            func.count(case((RequestStatus.__table__.c.is_active.is_(False), 1))).label("inactive"),
         )
 
         count_result = await db.execute(count_stmt)
@@ -270,7 +260,7 @@ class RequestStatusRepository(BaseRepository[RequestStatus]):
         Returns:
             List of updated statuses
         """
-        stmt = select(RequestStatus).where(RequestStatus.id.in_(status_ids))
+        stmt = select(RequestStatus).where(RequestStatus.__table__.c.id.in_(status_ids))
         result = await db.execute(stmt)
         statuses = list(result.scalars().all())
 

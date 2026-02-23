@@ -15,7 +15,7 @@ class TestSystemMessagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/system-messages/ with empty database."""
-        response = await client.get("/api/setting/system-messages/")
+        response = await client.get("/backend/system-messages/")
         assert response.status_code == 200
 
         data = response.json()
@@ -44,7 +44,7 @@ class TestSystemMessagesEndpoints:
         db_session.add_all([msg1, msg2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/system-messages/")
+        response = await client.get("/backend/system-messages/")
         assert response.status_code == 200
 
         data = response.json()
@@ -70,7 +70,7 @@ class TestSystemMessagesEndpoints:
             db_session.add(msg)
         await db_session.commit()
 
-        response = await client.get("/api/setting/system-messages/?limit=2&skip=0")
+        response = await client.get("/backend/system-messages/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["systemMessages"]) == 2
@@ -86,7 +86,7 @@ class TestSystemMessagesEndpoints:
         db_session.add_all([msg1, msg2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/system-messages/?is_active=true")
+        response = await client.get("/backend/system-messages/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["systemMessages"]) == 1
@@ -102,7 +102,7 @@ class TestSystemMessagesEndpoints:
         db_session.add_all([msg1, msg2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/system-messages/?message_type=error")
+        response = await client.get("/backend/system-messages/?message_type=error")
         assert response.status_code == 200
         data = response.json()
         assert len(data["systemMessages"]) == 1
@@ -118,7 +118,7 @@ class TestSystemMessagesEndpoints:
         db_session.add_all([msg1, msg2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/system-messages/?search=maintenance")
+        response = await client.get("/backend/system-messages/?search=maintenance")
         assert response.status_code == 200
         data = response.json()
         assert len(data["systemMessages"]) == 1
@@ -139,7 +139,7 @@ class TestSystemMessagesEndpoints:
         await db_session.commit()
         await db_session.refresh(msg)
 
-        response = await client.get(f"/api/setting/system-messages/{msg.id}")
+        response = await client.get(f"/backend/system-messages/{msg.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -152,7 +152,7 @@ class TestSystemMessagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/system-messages/{message_id} with non-existent ID."""
-        response = await client.get("/api/setting/system-messages/99999")
+        response = await client.get("/backend/system-messages/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -167,7 +167,7 @@ class TestSystemMessagesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/system-messages/", json=msg_data)
+        response = await client.post("/backend/system-messages/", json=msg_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -184,7 +184,7 @@ class TestSystemMessagesEndpoints:
         """Test POST /api/setting/system-messages/ with invalid data."""
         msg_data = {"title": "Missing message field"}
 
-        response = await client.post("/api/setting/system-messages/", json=msg_data)
+        response = await client.post("/backend/system-messages/", json=msg_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -204,7 +204,7 @@ class TestSystemMessagesEndpoints:
             "isActive": False,
         }
 
-        response = await client.put(f"/api/setting/system-messages/{msg.id}", json=update_data)
+        response = await client.put(f"/backend/system-messages/{msg.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -220,7 +220,7 @@ class TestSystemMessagesEndpoints:
         """Test PUT /api/setting/system-messages/{message_id} with non-existent ID."""
         update_data = {"title": "Updated"}
 
-        response = await client.put("/api/setting/system-messages/99999", json=update_data)
+        response = await client.put("/backend/system-messages/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -233,7 +233,7 @@ class TestSystemMessagesEndpoints:
         await db_session.commit()
         await db_session.refresh(msg)
 
-        response = await client.delete(f"/api/setting/system-messages/{msg.id}")
+        response = await client.delete(f"/backend/system-messages/{msg.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -244,5 +244,5 @@ class TestSystemMessagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/system-messages/{message_id} with non-existent ID."""
-        response = await client.delete("/api/setting/system-messages/99999")
+        response = await client.delete("/backend/system-messages/99999")
         assert response.status_code == 404

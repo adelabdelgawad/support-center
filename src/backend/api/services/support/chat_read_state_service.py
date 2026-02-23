@@ -10,7 +10,7 @@ This service provides methods for:
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,10 +86,10 @@ class ChatReadStateService:
         # Get the latest message timestamp if not provided
         if not last_message_id:
             latest_info = await ChatReadStateRepository.get_latest_message_info(
-                db, request_id
+                db, cast(Any, request_id)
             )
             if latest_info:
-                last_message_id = latest_info[0]
+                last_message_id = cast(Any, latest_info[0])
                 last_read_at = latest_info[1]
             else:
                 last_read_at = datetime.utcnow()
@@ -109,7 +109,7 @@ class ChatReadStateService:
         # CRITICAL FIX: Also mark all unread messages NOT from this user as read
         # This is needed because check_technician_unread_for_requests uses ChatMessage.is_read
         messages_marked = await ChatReadStateRepository.mark_messages_as_read(
-            db, request_id, user_id
+            db, cast(Any, request_id), user_id
         )
 
         logger.debug(
@@ -177,7 +177,7 @@ class ChatReadStateService:
         request_id: UUID,
         user_id: str,
         is_viewing: bool,
-    ) -> ChatReadState:
+    ) -> Optional[ChatReadState]:
         """
         Update whether a user is currently viewing a chat.
 
@@ -195,7 +195,7 @@ class ChatReadStateService:
             Updated ChatReadState record
         """
         monitor = await ChatReadStateRepository.set_viewing_status(
-            db, request_id, user_id, is_viewing
+            db, cast(Any, request_id), user_id, is_viewing
         )
 
         logger.debug(
@@ -224,7 +224,7 @@ class ChatReadStateService:
             List of unread message IDs as strings
         """
         return await ChatReadStateRepository.get_unread_message_ids(
-            db, request_id, user_id
+            db, cast(Any, request_id), user_id
         )
 
     @staticmethod
@@ -296,7 +296,7 @@ class ChatReadStateService:
         Returns:
             List of user IDs currently viewing the chat
         """
-        return await ChatReadStateRepository.find_viewing_users(db, request_id)
+        return cast(List[Any], await ChatReadStateRepository.find_viewing_users(db, cast(Any, request_id)))
 
     @staticmethod
     @transactional_database_operation("ensure_monitors_for_participants")
@@ -320,7 +320,7 @@ class ChatReadStateService:
         """
         # Get existing monitors
         existing_user_ids = await ChatReadStateRepository.find_existing_user_ids(
-            db, request_id
+            db, cast(Any, request_id)
         )
 
         # Filter out users who already have monitors
@@ -332,7 +332,7 @@ class ChatReadStateService:
         # Create monitors for missing users
         if new_user_ids:
             count = await ChatReadStateRepository.bulk_create_monitors(
-                db, request_id, new_user_ids
+                db, cast(Any, request_id), new_user_ids
             )
             logger.debug(
                 f"Created {count} monitors for request {request_id}"

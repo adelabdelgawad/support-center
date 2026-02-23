@@ -32,7 +32,7 @@ def generate_uuid() -> str:
 def issue_access_token(
     user_id: str,
     username: str,
-    scopes: list[str] = None,
+    scopes: Optional[list[str]] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> Tuple[str, str]:
     """
@@ -101,9 +101,9 @@ def verify_access_token(token: str) -> Optional[dict]:
 def create_refresh_cookie_value(
     user_id: str,
     username: str,
-    scopes: List[str] = None,
-    roles: List[str] = None,
-    locale: str = None,
+    scopes: Optional[List[str]] = None,
+    roles: Optional[List[str]] = None,
+    locale: Optional[str] = None,
     expires_delta: Optional[timedelta] = None,
 ) -> Tuple[str, str, datetime]:
     """

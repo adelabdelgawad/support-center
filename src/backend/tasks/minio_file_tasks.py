@@ -15,6 +15,7 @@ from uuid import UUID
 from PIL import Image
 from io import BytesIO
 from sqlalchemy import create_engine, select, update
+from sqlmodel import col
 from sqlalchemy.orm import sessionmaker
 
 from celery_app import celery_app
@@ -88,7 +89,7 @@ def upload_file_to_minio(
 
         # Get MIME type from database (sync version)
         with get_sync_session() as session:
-            stmt = select(model_class).where(model_class.id == attachment_id)
+            stmt = select(model_class).where(col(model_class.id) == attachment_id)
             attachment = session.execute(stmt).scalar_one_or_none()
 
             if not attachment:
@@ -120,9 +121,9 @@ def upload_file_to_minio(
 
         # Update attachment record (sync version)
         with get_sync_session() as session:
-            stmt = (
+            update_stmt = (
                 update(model_class)
-                .where(model_class.id == attachment_id)
+                .where(col(model_class.id) == attachment_id)
                 .values(
                     minio_object_key=object_key,
                     file_hash=file_hash,
@@ -130,7 +131,7 @@ def upload_file_to_minio(
                     is_corrupted=False,
                 )
             )
-            session.execute(stmt)
+            session.execute(update_stmt)
             session.commit()
             logger.info(f"{model_name} {attachment_id} marked as completed in database")
 
@@ -158,12 +159,12 @@ def upload_file_to_minio(
 
         try:
             with get_sync_session() as session:
-                stmt = (
+                fail_stmt = (
                     update(model_class)
-                    .where(model_class.id == attachment_id)
+                    .where(col(model_class.id) == attachment_id)
                     .values(upload_status="failed", is_corrupted=True)
                 )
-                session.execute(stmt)
+                session.execute(fail_stmt)
                 session.commit()
                 logger.info(f"{model_name} {attachment_id} marked as failed in database")
         except Exception as db_error:
@@ -232,12 +233,12 @@ def upload_thumbnail_to_minio(
 
             # Update attachment record
             async with get_celery_session() as session:
-                stmt = (
+                thumb_stmt = (
                     update(Screenshot)
-                    .where(Screenshot.id == attachment_id)
+                    .where(col(Screenshot.id) == attachment_id)
                     .values(minio_thumbnail_key=thumbnail_key)
                 )
-                await session.execute(stmt)
+                await session.execute(thumb_stmt)
                 # Commit is handled by context manager
                 logger.info(f"Screenshot {attachment_id} thumbnail key updated in database")
 
@@ -341,12 +342,12 @@ def generate_thumbnail(
 
             # Update attachment record
             async with get_celery_session() as session:
-                stmt = (
+                thumb_stmt2 = (
                     update(Screenshot)
-                    .where(Screenshot.id == attachment_id)
+                    .where(col(Screenshot.id) == attachment_id)
                     .values(minio_thumbnail_key=thumbnail_key)
                 )
-                await session.execute(stmt)
+                await session.execute(thumb_stmt2)
                 # Commit is handled by context manager
 
             return {
@@ -462,21 +463,22 @@ def retry_pending_uploads(max_age_minutes: int = 30) -> dict:
         async with get_celery_session() as session:
             cutoff_time = datetime.now() - timedelta(minutes=max_age_minutes)
 
-            stmt = select(Screenshot).where(
-                Screenshot.upload_status == "pending", Screenshot.created_at < cutoff_time
+            select_stmt = select(Screenshot).where(
+                col(Screenshot.upload_status) == "pending",
+                col(Screenshot.created_at) < cutoff_time,
             )
-            result = await session.execute(stmt)
+            result = await session.execute(select_stmt)
             stuck_attachments = result.scalars().all()
 
             failed_count = 0
 
             for attachment in stuck_attachments:
-                stmt = (
+                fail_stmt2 = (
                     update(Screenshot)
-                    .where(Screenshot.id == attachment.id)
+                    .where(col(Screenshot.id) == attachment.id)
                     .values(upload_status="failed", is_corrupted=True)
                 )
-                await session.execute(stmt)
+                await session.execute(fail_stmt2)
                 failed_count += 1
 
             await session.commit()

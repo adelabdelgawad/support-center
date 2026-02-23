@@ -15,7 +15,7 @@ class TestCategoriesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/categories/ with empty database."""
-        response = await client.get("/api/setting/categories/")
+        response = await client.get("/backend/categories/")
         assert response.status_code == 200
 
         data = response.json()
@@ -39,7 +39,7 @@ class TestCategoriesEndpoints:
         db_session.add_all([cat1, cat2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/categories/")
+        response = await client.get("/backend/categories/")
         assert response.status_code == 200
 
         data = response.json()
@@ -65,7 +65,7 @@ class TestCategoriesEndpoints:
             db_session.add(cat)
         await db_session.commit()
 
-        response = await client.get("/api/setting/categories/?limit=2&skip=0")
+        response = await client.get("/backend/categories/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["categories"]) == 2
@@ -86,7 +86,7 @@ class TestCategoriesEndpoints:
         db_session.add_all([cat1, cat2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/categories/?is_active=true")
+        response = await client.get("/backend/categories/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["categories"]) == 1
@@ -109,7 +109,7 @@ class TestCategoriesEndpoints:
         db_session.add_all([cat1, cat2])
         await db_session.commit()
 
-        response = await client.get(f"/api/setting/categories/?section_id={section1.id}")
+        response = await client.get(f"/backend/categories/?section_id={section1.id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data["categories"]) == 1
@@ -130,7 +130,7 @@ class TestCategoriesEndpoints:
         db_session.add_all([cat1, cat2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/categories/?search=hardware")
+        response = await client.get("/backend/categories/?search=hardware")
         assert response.status_code == 200
         data = response.json()
         assert len(data["categories"]) == 1
@@ -151,7 +151,7 @@ class TestCategoriesEndpoints:
         await db_session.commit()
         await db_session.refresh(cat)
 
-        response = await client.get(f"/api/setting/categories/{cat.id}")
+        response = await client.get(f"/backend/categories/{cat.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -164,7 +164,7 @@ class TestCategoriesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/categories/{category_id} with non-existent ID."""
-        response = await client.get("/api/setting/categories/99999")
+        response = await client.get("/backend/categories/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -184,7 +184,7 @@ class TestCategoriesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/categories/", json=cat_data)
+        response = await client.post("/backend/categories/", json=cat_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -200,7 +200,7 @@ class TestCategoriesEndpoints:
         """Test POST /api/setting/categories/ with invalid data."""
         cat_data = {"name": "Missing section_id"}
 
-        response = await client.post("/api/setting/categories/", json=cat_data)
+        response = await client.post("/backend/categories/", json=cat_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -220,7 +220,7 @@ class TestCategoriesEndpoints:
 
         update_data = {"name": "Updated Name", "isActive": False}
 
-        response = await client.put(f"/api/setting/categories/{cat.id}", json=update_data)
+        response = await client.put(f"/backend/categories/{cat.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -234,7 +234,7 @@ class TestCategoriesEndpoints:
         """Test PUT /api/setting/categories/{category_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/categories/99999", json=update_data)
+        response = await client.put("/backend/categories/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -252,7 +252,7 @@ class TestCategoriesEndpoints:
         await db_session.commit()
         await db_session.refresh(cat)
 
-        response = await client.delete(f"/api/setting/categories/{cat.id}")
+        response = await client.delete(f"/backend/categories/{cat.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -263,5 +263,5 @@ class TestCategoriesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/categories/{category_id} with non-existent ID."""
-        response = await client.delete("/api/setting/categories/99999")
+        response = await client.delete("/backend/categories/99999")
         assert response.status_code == 404

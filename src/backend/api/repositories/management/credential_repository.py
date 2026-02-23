@@ -12,7 +12,7 @@ class CredentialRepository(BaseRepository[Credential]):
     model = Credential
 
     @classmethod
-    async def find_all(
+    async def find_credentials(
         cls,
         db: AsyncSession,
         enabled_only: bool = True,
@@ -27,10 +27,10 @@ class CredentialRepository(BaseRepository[Credential]):
         Returns:
             List of credentials (metadata only, no secrets)
         """
-        stmt = select(Credential).order_by(Credential.name)
+        stmt = select(Credential).order_by(Credential.__table__.c.name)
 
         if enabled_only:
-            stmt = stmt.where(Credential.enabled)
+            stmt = stmt.where(Credential.__table__.c.enabled.is_(True))
 
         result = await db.execute(stmt)
         credentials = result.scalars().all()
@@ -58,7 +58,7 @@ class CredentialRepository(BaseRepository[Credential]):
         Returns:
             Vault reference string or None
         """
-        stmt = select(Credential).where(Credential.id == credential_id)
+        stmt = select(Credential).where(Credential.__table__.c.id == credential_id)
         result = await db.execute(stmt)
         credential = result.scalar_one_or_none()
 
@@ -72,7 +72,7 @@ class CredentialRepository(BaseRepository[Credential]):
         return credential.vault_ref
 
     @classmethod
-    async def count(
+    async def count_credentials(
         cls,
         db: AsyncSession,
         enabled_only: bool = True,
@@ -87,10 +87,10 @@ class CredentialRepository(BaseRepository[Credential]):
         Returns:
             Number of credentials
         """
-        stmt = select(func.count(Credential.id))
+        stmt = select(func.count())
 
         if enabled_only:
-            stmt = stmt.where(Credential.enabled)
+            stmt = stmt.where(Credential.__table__.c.enabled.is_(True))
 
         result = await db.execute(stmt)
         return result.scalar() or 0

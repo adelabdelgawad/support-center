@@ -15,7 +15,7 @@ class TestEmailConfigEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/email-config/ with empty database."""
-        response = await client.get("/api/setting/email-config/")
+        response = await client.get("/backend/email-config/")
         assert response.status_code == 200
 
         data = response.json()
@@ -39,7 +39,7 @@ class TestEmailConfigEndpoints:
         db_session.add(config)
         await db_session.commit()
 
-        response = await client.get("/api/setting/email-config/")
+        response = await client.get("/backend/email-config/")
         assert response.status_code == 200
 
         data = response.json()
@@ -66,7 +66,7 @@ class TestEmailConfigEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/email-config/", json=config_data)
+        response = await client.post("/backend/email-config/", json=config_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -83,7 +83,7 @@ class TestEmailConfigEndpoints:
         """Test POST /api/setting/email-config/ with invalid data."""
         config_data = {"smtpHost": "smtp.example.com"}
 
-        response = await client.post("/api/setting/email-config/", json=config_data)
+        response = await client.post("/backend/email-config/", json=config_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -111,7 +111,7 @@ class TestEmailConfigEndpoints:
         }
 
         response = await client.put(
-            f"/api/setting/email-config/{config.id}", json=update_data
+            f"/backend/email-config/{config.id}", json=update_data
         )
         assert response.status_code == 200
 
@@ -127,7 +127,7 @@ class TestEmailConfigEndpoints:
         """Test PUT /api/setting/email-config/{config_id} with non-existent ID."""
         update_data = {"smtpHost": "smtp.example.com"}
 
-        response = await client.put("/api/setting/email-config/99999", json=update_data)
+        response = await client.put("/backend/email-config/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -148,7 +148,7 @@ class TestEmailConfigEndpoints:
         await db_session.commit()
         await db_session.refresh(config)
 
-        response = await client.delete(f"/api/setting/email-config/{config.id}")
+        response = await client.delete(f"/backend/email-config/{config.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -159,7 +159,7 @@ class TestEmailConfigEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/email-config/{config_id} with non-existent ID."""
-        response = await client.delete("/api/setting/email-config/99999")
+        response = await client.delete("/backend/email-config/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -183,6 +183,6 @@ class TestEmailConfigEndpoints:
         test_data = {"testEmail": "test@example.com"}
 
         # This might fail because SMTP is not available, but we test the endpoint
-        response = await client.post("/api/setting/email-config/test", json=test_data)
+        response = await client.post("/backend/email-config/test", json=test_data)
         # Accept either success or error (since SMTP won't be available in tests)
         assert response.status_code in [200, 400, 500]

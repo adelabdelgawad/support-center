@@ -11,7 +11,6 @@ This service:
 
 import logging
 from typing import Dict, Optional
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,13 +19,7 @@ from core.decorators import safe_database_query, log_database_operation
 from db import ChatMessage, ServiceRequest, User
 from api.services.setting.system_message_service import SystemMessageService
 
-# Import get_event_by_key from the endpoint module (exported for cross-module usage)
-# pylint: disable=import-outside-toplevel
-def _import_get_event_by_key():
-    from api.v1.endpoints.system_events import get_event_by_key
-    return get_event_by_key
-
-_get_event_by_key = _import_get_event_by_key()
+# get_event_by_key is imported lazily inside trigger_event to avoid circular imports
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +51,7 @@ class EventTriggerService:
     async def trigger_event(
         db: AsyncSession,
         event_key: str,
-        request_id: UUID,
+        request_id: int,
         context: Dict[str, str],
         *,
         suppress_websocket: bool = False
@@ -91,7 +84,9 @@ class EventTriggerService:
         """
         try:
             # 1. Lookup event configuration
-            event = await _get_event_by_key(db, event_key)
+            from api.services.management.system_event_service import SystemEventService as _SystemEventService
+            _get_event_by_key_fn = _SystemEventService.get_event_by_key
+            event = await _get_event_by_key_fn(db, event_key)
 
             if not event or not event.is_active:
                 logger.debug(f"Event '{event_key}' not found or inactive, skipping")
@@ -105,8 +100,9 @@ class EventTriggerService:
 
             # 2. Get bilingual messages from system message service
             try:
-                msg_en, msg_ar = await SystemMessageService.get_bilingual_message(
-                    db, event.system_message.message_type, context
+                sms = SystemMessageService(session=db)
+                msg_en, msg_ar = await sms.get_bilingual_message(
+                    event.system_message.message_type, context
                 )
             except Exception as e:
                 logger.error(
@@ -120,7 +116,7 @@ class EventTriggerService:
             # 4. Get next sequence number
             max_seq_result = await db.execute(
                 select(func.max(ChatMessage.sequence_number)).where(
-                    ChatMessage.request_id == request_id
+                    ChatMessage.__table__.c.request_id == request_id
                 )
             )
             max_seq = max_seq_result.scalar() or 0
@@ -223,7 +219,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_status_changed(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         old_status_en: str,
         old_status_ar: str,
         new_status_en: str,
@@ -247,7 +243,7 @@ class EventTriggerService:
 
     @staticmethod
     async def trigger_ticket_assigned(
-        db: AsyncSession, request_id: UUID, technician: User
+        db: AsyncSession, request_id: int, technician: User
     ):
         """Convenience method: Trigger 'ticket_assigned' event."""
         try:
@@ -265,7 +261,7 @@ class EventTriggerService:
 
     @staticmethod
     async def trigger_technician_joined(
-        db: AsyncSession, request_id: UUID, technician: User
+        db: AsyncSession, request_id: int, technician: User
     ):
         """Convenience method: Trigger 'technician_joined' event."""
         try:
@@ -280,7 +276,7 @@ class EventTriggerService:
 
     @staticmethod
     async def trigger_ticket_resolved(
-        db: AsyncSession, request_id: UUID, resolver: User
+        db: AsyncSession, request_id: int, resolver: User
     ):
         """Convenience method: Trigger 'ticket_resolved' event."""
         try:
@@ -294,7 +290,7 @@ class EventTriggerService:
             logger.warning(f"Failed to trigger ticket_resolved event: {e}")
 
     @staticmethod
-    async def trigger_ticket_closed(db: AsyncSession, request_id: UUID, closer: User):
+    async def trigger_ticket_closed(db: AsyncSession, request_id: int, closer: User):
         """Convenience method: Trigger 'ticket_closed' event."""
         try:
             await EventTriggerService.trigger_event(
@@ -308,7 +304,7 @@ class EventTriggerService:
 
     @staticmethod
     async def trigger_ticket_reopened(
-        db: AsyncSession, request_id: UUID, reopener: User
+        db: AsyncSession, request_id: int, reopener: User
     ):
         """Convenience method: Trigger 'ticket_reopened' event."""
         try:
@@ -324,7 +320,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_escalation(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         escalation_level: str,
         escalator: User,
     ):
@@ -345,7 +341,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_request_solved(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         solver: User
     ):
         """Convenience method: Trigger 'request_solved' event."""
@@ -364,7 +360,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_sub_task_created(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         sub_task_title: str,
         created_by: User
     ):
@@ -385,7 +381,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_sub_task_assigned(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         sub_task_title: str,
         assignee: Optional[User]
     ):
@@ -409,7 +405,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_sub_task_status_changed(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         sub_task_title: str,
         old_status_en: str,
         old_status_ar: str,
@@ -434,7 +430,7 @@ class EventTriggerService:
     @staticmethod
     async def trigger_sub_task_completed(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         sub_task_title: str,
         completed_by: User
     ):

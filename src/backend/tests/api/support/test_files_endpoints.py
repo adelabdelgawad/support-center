@@ -1,7 +1,10 @@
 """Tests for file attachments endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from unittest.mock import AsyncMock
@@ -22,7 +25,7 @@ class TestFilesEndpoints:
     ):
         """Test GET /support/files/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -64,7 +67,7 @@ class TestFilesEndpoints:
     ):
         """Test POST /support/files/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -116,7 +119,7 @@ class TestFilesEndpoints:
     ):
         """Test POST /support/files/requests/{request_id}/bulk for multiple files."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -167,7 +170,7 @@ class TestFilesEndpoints:
     ):
         """Test GET /support/files/{file_id}."""
         # Create test request and file
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -220,7 +223,7 @@ class TestFilesEndpoints:
     ):
         """Test GET /support/files/{file_id}/download."""
         # Create test request and file
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -274,7 +277,7 @@ class TestFilesEndpoints:
     ):
         """Test DELETE /support/files/{file_id}."""
         # Create test request and file
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -328,7 +331,7 @@ class TestFilesEndpoints:
     ):
         """Test DELETE /support/files/bulk."""
         # Create test request and files
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -379,7 +382,8 @@ class TestFilesEndpoints:
 
         payload = {"fileIds": [file1.id, file2.id]}
 
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/support/files/bulk",
             headers={"Authorization": f"Bearer {test_user_token}"},
             json=payload,
@@ -394,7 +398,7 @@ class TestFilesEndpoints:
     ):
         """Test GET /support/files/{file_id}/metadata."""
         # Create test request and file
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)

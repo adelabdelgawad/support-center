@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, case, delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from db.models import (
     ScheduledJob,
@@ -49,7 +51,7 @@ class TaskFunctionRepository(BaseRepository[TaskFunction]):
         query = select(TaskFunction)
 
         if is_active is not None:
-            query = query.where(TaskFunction.is_active == is_active)
+            query = query.where(TaskFunction.__table__.c.is_active == is_active)
 
         count_result = await db.execute(
             select(func.count()).select_from(query.subquery())
@@ -57,7 +59,7 @@ class TaskFunctionRepository(BaseRepository[TaskFunction]):
         total = count_result.scalar() or 0
 
         query = (
-            query.order_by(TaskFunction.name)
+            query.order_by(TaskFunction.__table__.c.name)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -67,8 +69,8 @@ class TaskFunctionRepository(BaseRepository[TaskFunction]):
         return list(task_functions), total
 
     @classmethod
-    async def find_by_id(
-        cls, db: AsyncSession, function_id: int
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, function_id: Any, *, eager_load: Optional[List] = None
     ) -> Optional[TaskFunction]:
         """
         Find task function by ID.
@@ -76,11 +78,12 @@ class TaskFunctionRepository(BaseRepository[TaskFunction]):
         Args:
             db: Database session
             function_id: Task function ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             TaskFunction or None
         """
-        stmt = select(TaskFunction).where(TaskFunction.id == function_id)
+        stmt = select(TaskFunction).where(TaskFunction.__table__.c.id == function_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -103,16 +106,16 @@ class SchedulerJobTypeRepository(BaseRepository[SchedulerJobType]):
         """
         result = await db.execute(
             select(SchedulerJobType)
-            .where(SchedulerJobType.is_active)
-            .order_by(SchedulerJobType.id)
+            .where(SchedulerJobType.__table__.c.is_active.is_(True))
+            .order_by(SchedulerJobType.__table__.c.id)
         )
         job_types = result.scalars().all()
 
         return list(job_types)
 
     @classmethod
-    async def find_by_id(
-        cls, db: AsyncSession, job_type_id: int
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, job_type_id: Any, *, eager_load: Optional[List] = None
     ) -> Optional[SchedulerJobType]:
         """
         Find job type by ID.
@@ -120,12 +123,13 @@ class SchedulerJobTypeRepository(BaseRepository[SchedulerJobType]):
         Args:
             db: Database session
             job_type_id: Job type ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             SchedulerJobType or None
         """
         result = await db.execute(
-            select(SchedulerJobType).where(SchedulerJobType.id == job_type_id)
+            select(SchedulerJobType).where(SchedulerJobType.__table__.c.id == job_type_id)
         )
         return result.scalar_one_or_none()
 
@@ -159,20 +163,20 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
         Returns:
             Tuple of (jobs list, total, enabled_count, disabled_count, running_count)
         """
-        filters = []
+        filters: List[ColumnElement[bool]] = []
         if name:
-            filters.append(ScheduledJob.name.ilike(f"%{name}%"))
+            filters.append(ScheduledJob.__table__.c.name.ilike(f"%{name}%"))
         if is_enabled is not None:
-            filters.append(ScheduledJob.is_enabled == is_enabled)
+            filters.append(ScheduledJob.__table__.c.is_enabled == is_enabled)
         if task_function_id is not None:
-            filters.append(ScheduledJob.task_function_id == task_function_id)
+            filters.append(ScheduledJob.__table__.c.task_function_id == task_function_id)
 
         counts_query = select(
             func.count().label("total"),
-            func.sum(case((ScheduledJob.is_enabled, 1), else_=0)).label(
+            func.sum(case((ScheduledJob.__table__.c.is_enabled.is_(True), 1), else_=0)).label(
                 "enabled_count"
             ),
-            func.sum(case((ScheduledJob.last_status == "running", 1), else_=0)).label(
+            func.sum(case((ScheduledJob.__table__.c.last_status == "running", 1), else_=0)).label(
                 "running_count"
             ),
         )
@@ -192,7 +196,7 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
             jobs_query = jobs_query.where(and_(*filters))
 
         jobs_query = (
-            jobs_query.order_by(ScheduledJob.created_at.desc())
+            jobs_query.order_by(ScheduledJob.__table__.c.created_at.desc())
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -203,18 +207,21 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
         return list(jobs), total, enabled_count, disabled_count, running_count
 
     @classmethod
-    async def find_by_id(cls, db: AsyncSession, job_id: UUID) -> Optional[ScheduledJob]:
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, job_id: Any, *, eager_load: Optional[List] = None
+    ) -> Optional[ScheduledJob]:
         """
         Get a scheduled job by ID.
 
         Args:
             db: Database session
             job_id: Job ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             ScheduledJob or None
         """
-        result = await db.execute(select(ScheduledJob).where(ScheduledJob.id == job_id))
+        result = await db.execute(select(ScheduledJob).where(ScheduledJob.__table__.c.id == job_id))
         return result.scalar_one_or_none()
 
     @classmethod
@@ -243,7 +250,7 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
             Count of enabled jobs
         """
         enabled_result = await db.execute(
-            select(func.count()).where(ScheduledJob.is_enabled)
+            select(func.count()).where(ScheduledJob.__table__.c.is_enabled.is_(True))
         )
         return enabled_result.scalar() or 0
 
@@ -259,7 +266,7 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
             Count of running jobs
         """
         running_result = await db.execute(
-            select(func.count()).where(ScheduledJob.last_status == "running")
+            select(func.count()).where(ScheduledJob.__table__.c.last_status == "running")
         )
         return running_result.scalar() or 0
 
@@ -278,11 +285,11 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
             select(ScheduledJob)
             .where(
                 and_(
-                    ScheduledJob.is_enabled,
-                    ScheduledJob.next_run_time.isnot(None),
+                    ScheduledJob.__table__.c.is_enabled.is_(True),
+                    ScheduledJob.__table__.c.next_run_time.isnot(None),
                 )
             )
-            .order_by(ScheduledJob.next_run_time.asc())
+            .order_by(ScheduledJob.__table__.c.next_run_time.asc())
             .limit(1)
         )
         return next_result.scalar_one_or_none()
@@ -307,7 +314,7 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
         Returns:
             Updated scheduled job or None
         """
-        result = await db.execute(select(ScheduledJob).where(ScheduledJob.id == job_id))
+        result = await db.execute(select(ScheduledJob).where(ScheduledJob.__table__.c.id == job_id))
         job = result.scalar_one_or_none()
 
         if not job:
@@ -317,7 +324,7 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
         job.updated_by = updated_by
         job.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
         await db.refresh(job)
 
         return job
@@ -336,10 +343,10 @@ class ScheduledJobRepository(BaseRepository[ScheduledJob]):
         """
         await db.execute(
             update(ScheduledJob)
-            .where(ScheduledJob.id == job_id)
+            .where(ScheduledJob.__table__.c.id == job_id)
             .values(last_status=last_status)
         )
-        await db.commit()
+        await db.flush()
 
 
 class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
@@ -364,8 +371,8 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         """
         result = await db.execute(
             select(ScheduledJobExecution)
-            .where(ScheduledJobExecution.job_id == job_id)
-            .order_by(ScheduledJobExecution.started_at.desc())
+            .where(ScheduledJobExecution.__table__.c.job_id == job_id)
+            .order_by(ScheduledJobExecution.__table__.c.started_at.desc())
             .limit(limit)
         )
         return list(result.scalars().all())
@@ -395,16 +402,16 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         query = select(ScheduledJobExecution)
 
         if job_id:
-            query = query.where(ScheduledJobExecution.job_id == job_id)
+            query = query.where(ScheduledJobExecution.__table__.c.job_id == job_id)
         if status:
-            query = query.where(ScheduledJobExecution.status == status)
+            query = query.where(ScheduledJobExecution.__table__.c.status == status)
 
         count_result = await db.execute(
             select(func.count()).select_from(query.subquery())
         )
         total = count_result.scalar() or 0
 
-        query = query.order_by(ScheduledJobExecution.started_at.desc())
+        query = query.order_by(ScheduledJobExecution.__table__.c.started_at.desc())
         query = query.offset((page - 1) * per_page).limit(per_page)
 
         result = await db.execute(query)
@@ -413,8 +420,8 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         return list(executions), total
 
     @classmethod
-    async def find_by_id(
-        cls, db: AsyncSession, execution_id: UUID
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, execution_id: Any, *, eager_load: Optional[List] = None
     ) -> Optional[ScheduledJobExecution]:
         """
         Find execution by ID.
@@ -422,13 +429,14 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         Args:
             db: Database session
             execution_id: Execution ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             ScheduledJobExecution or None
         """
         result = await db.execute(
             select(ScheduledJobExecution).where(
-                ScheduledJobExecution.id == execution_id
+                ScheduledJobExecution.__table__.c.id == execution_id
             )
         )
         return result.scalar_one_or_none()
@@ -450,7 +458,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         """
         result_exec = await db.execute(
             select(ScheduledJobExecution).where(
-                ScheduledJobExecution.id == execution_id
+                ScheduledJobExecution.__table__.c.id == execution_id
             )
         )
         execution = result_exec.scalar_one_or_none()
@@ -460,7 +468,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
 
         await db.execute(
             update(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
+            .where(ScheduledJobExecution.__table__.c.id == execution_id)
             .values(
                 status="running",
                 celery_task_id=celery_task_id,
@@ -469,7 +477,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
 
         await db.execute(
             update(ScheduledJob)
-            .where(ScheduledJob.id == execution.job_id)
+            .where(ScheduledJob.__table__.c.id == execution.job_id)
             .values(last_status="running")
         )
 
@@ -503,7 +511,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         """
         result_exec = await db.execute(
             select(ScheduledJobExecution).where(
-                ScheduledJobExecution.id == execution_id
+                ScheduledJobExecution.__table__.c.id == execution_id
             )
         )
         execution = result_exec.scalar_one_or_none()
@@ -518,7 +526,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
 
         await db.execute(
             update(ScheduledJobExecution)
-            .where(ScheduledJobExecution.id == execution_id)
+            .where(ScheduledJobExecution.__table__.c.id == execution_id)
             .values(
                 status=status,
                 completed_at=completed_at,
@@ -531,7 +539,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
 
         await db.execute(
             update(ScheduledJob)
-            .where(ScheduledJob.id == execution.job_id)
+            .where(ScheduledJob.__table__.c.id == execution.job_id)
             .values(
                 last_run_time=completed_at,
                 last_status=status,
@@ -558,14 +566,14 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         """
         cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
 
-        result = await db.execute(
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(ScheduledJobExecution).where(
-                ScheduledJobExecution.completed_at < cutoff_date
+                ScheduledJobExecution.__table__.c.completed_at < cutoff_date
             )
         )
 
-        await db.commit()
-        count = result.rowcount
+        await db.flush()
+        count = cursor_result.rowcount
 
         return {
             "executions_deleted": count,
@@ -590,10 +598,10 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
         timeout_threshold = datetime.utcnow() - timedelta(minutes=timeout_minutes)
 
         count_result = await db.execute(
-            select(func.count(ScheduledJobExecution.id)).where(
+            select(func.count()).where(
                 and_(
-                    ScheduledJobExecution.started_at < timeout_threshold,
-                    ScheduledJobExecution.status.in_(["pending", "running"]),
+                    ScheduledJobExecution.__table__.c.started_at < timeout_threshold,
+                    ScheduledJobExecution.__table__.c.status.in_(["pending", "running"]),
                 )
             )
         )
@@ -603,8 +611,8 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
             update(ScheduledJobExecution)
             .where(
                 and_(
-                    ScheduledJobExecution.started_at < timeout_threshold,
-                    ScheduledJobExecution.status.in_(["pending", "running"]),
+                    ScheduledJobExecution.__table__.c.started_at < timeout_threshold,
+                    ScheduledJobExecution.__table__.c.status.in_(["pending", "running"]),
                 )
             )
             .values(
@@ -613,7 +621,7 @@ class ScheduledJobExecutionRepository(BaseRepository[ScheduledJobExecution]):
             )
         )
 
-        await db.commit()
+        await db.flush()
 
         return {
             "executions_timed_out": count,
@@ -639,7 +647,7 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
             SchedulerInstance or None
         """
         result = await db.execute(
-            select(SchedulerInstance).where(SchedulerInstance.is_leader)
+            select(SchedulerInstance).where(SchedulerInstance.__table__.c.is_leader.is_(True))
         )
         return result.scalar_one_or_none()
 
@@ -673,8 +681,8 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
         result = await db.execute(
             select(SchedulerInstance).where(
                 and_(
-                    SchedulerInstance.is_leader,
-                    SchedulerInstance.last_heartbeat
+                    SchedulerInstance.__table__.c.is_leader.is_(True),
+                    SchedulerInstance.__table__.c.last_heartbeat
                     > datetime.utcnow() - timedelta(minutes=timeout_minutes),
                 )
             )
@@ -693,7 +701,7 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
             List of scheduler instances
         """
         instances_result = await db.execute(
-            select(SchedulerInstance).order_by(SchedulerInstance.started_at.desc())
+            select(SchedulerInstance).order_by(SchedulerInstance.__table__.c.started_at.desc())
         )
         instances = instances_result.scalars().all()
 
@@ -722,7 +730,7 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
         )
 
         db.add(instance)
-        await db.commit()
+        await db.flush()
         await db.refresh(instance)
 
         return instance
@@ -742,8 +750,8 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
         result = await db.execute(
             select(SchedulerInstance).where(
                 and_(
-                    SchedulerInstance.is_leader,
-                    SchedulerInstance.last_heartbeat
+                    SchedulerInstance.__table__.c.is_leader.is_(True),
+                    SchedulerInstance.__table__.c.last_heartbeat
                     > datetime.utcnow() - timedelta(minutes=2),
                 )
             )
@@ -755,7 +763,7 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
 
         await db.execute(
             update(SchedulerInstance)
-            .where(SchedulerInstance.id == instance_id)
+            .where(SchedulerInstance.__table__.c.id == instance_id)
             .values(
                 is_leader=True,
                 leader_since=datetime.utcnow(),
@@ -767,14 +775,14 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
             update(SchedulerInstance)
             .where(
                 and_(
-                    SchedulerInstance.id != instance_id,
-                    SchedulerInstance.is_leader,
+                    SchedulerInstance.__table__.c.id != instance_id,
+                    SchedulerInstance.__table__.c.is_leader.is_(True),
                 )
             )
             .values(is_leader=False, leader_since=None)
         )
 
-        await db.commit()
+        await db.flush()
 
         return True
 
@@ -789,10 +797,10 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
         """
         await db.execute(
             update(SchedulerInstance)
-            .where(SchedulerInstance.id == instance_id)
+            .where(SchedulerInstance.__table__.c.id == instance_id)
             .values(last_heartbeat=datetime.utcnow())
         )
-        await db.commit()
+        await db.flush()
 
     @classmethod
     async def cleanup_stale_instances(
@@ -814,18 +822,18 @@ class SchedulerInstanceRepository(BaseRepository[SchedulerInstance]):
             update(SchedulerInstance)
             .where(
                 and_(
-                    SchedulerInstance.last_heartbeat < timeout,
-                    SchedulerInstance.is_leader,
+                    SchedulerInstance.__table__.c.last_heartbeat < timeout,
+                    SchedulerInstance.__table__.c.is_leader.is_(True),
                 )
             )
             .values(is_leader=False, leader_since=None)
         )
 
-        result = await db.execute(
-            delete(SchedulerInstance).where(SchedulerInstance.last_heartbeat < timeout)
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
+            delete(SchedulerInstance).where(SchedulerInstance.__table__.c.last_heartbeat < timeout)
         )
 
-        await db.commit()
-        count = result.rowcount
+        await db.flush()
+        count = cursor_result.rowcount
 
         return count

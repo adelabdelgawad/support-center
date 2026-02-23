@@ -29,12 +29,12 @@ class PriorityRepository(BaseRepository[Priority]):
         Returns:
             List of priorities
         """
-        stmt = select(Priority).order_by(Priority.id)
+        stmt = select(Priority).order_by(Priority.__table__.c.id)
 
         if active_only:
-            stmt = stmt.where(Priority.is_active)
+            stmt = stmt.where(Priority.__table__.c.is_active.is_(True))
 
         result = await db.execute(stmt)
         priorities = result.scalars().all()
 
-        return priorities
+        return list(priorities)

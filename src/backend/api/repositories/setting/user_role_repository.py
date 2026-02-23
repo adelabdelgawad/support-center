@@ -6,6 +6,7 @@ Handles all database queries related to user-role relationships.
 from typing import List
 from uuid import UUID
 from sqlalchemy import select, delete
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import UserRole
@@ -33,7 +34,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
         Returns:
             List of UserRole instances
         """
-        stmt = select(UserRole).where(UserRole.user_id == user_id)
+        stmt = select(UserRole).where(UserRole.__table__.c.user_id == user_id)
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -53,7 +54,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
         Returns:
             List of UserRole instances
         """
-        stmt = select(UserRole).where(UserRole.role_id == role_id)
+        stmt = select(UserRole).where(UserRole.__table__.c.role_id == role_id)
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -76,8 +77,8 @@ class UserRoleRepository(BaseRepository[UserRole]):
             True if assignment exists
         """
         stmt = select(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == role_id
+            UserRole.__table__.c.user_id == user_id,
+            UserRole.__table__.c.role_id == role_id,
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none() is not None
@@ -97,7 +98,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
             db: Database session
             user_id: User UUID string
             role_id: Role ID
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             Created UserRole instance
@@ -106,7 +107,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
         db.add(user_role)
 
         if commit:
-            await db.commit()
+            await db.flush()
             await db.refresh(user_role)
 
         return user_role
@@ -126,7 +127,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
             db: Database session
             user_id: User UUID string
             role_ids: List of role IDs
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             List of created UserRole instances
@@ -135,7 +136,7 @@ class UserRoleRepository(BaseRepository[UserRole]):
         db.add_all(user_roles)
 
         if commit:
-            await db.commit()
+            await db.flush()
             for user_role in user_roles:
                 await db.refresh(user_role)
 
@@ -154,18 +155,19 @@ class UserRoleRepository(BaseRepository[UserRole]):
         Args:
             db: Database session
             user_id: User UUID string
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             Number of deleted assignments
         """
-        stmt = delete(UserRole).where(UserRole.user_id == user_id)
-        result = await db.execute(stmt)
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
+            delete(UserRole).where(UserRole.__table__.c.user_id == user_id)
+        )
 
         if commit:
-            await db.commit()
+            await db.flush()
 
-        return result.rowcount
+        return cursor_result.rowcount
 
     @classmethod
     async def delete_by_user_and_role(
@@ -182,21 +184,22 @@ class UserRoleRepository(BaseRepository[UserRole]):
             db: Database session
             user_id: User UUID string
             role_id: Role ID
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             True if deleted, False if not found
         """
-        stmt = delete(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == role_id
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
+            delete(UserRole).where(
+                UserRole.__table__.c.user_id == user_id,
+                UserRole.__table__.c.role_id == role_id,
+            )
         )
-        result = await db.execute(stmt)
 
         if commit:
-            await db.commit()
+            await db.flush()
 
-        return result.rowcount > 0
+        return cursor_result.rowcount > 0
 
     @classmethod
     async def replace_user_roles(
@@ -214,21 +217,19 @@ class UserRoleRepository(BaseRepository[UserRole]):
             db: Database session
             user_id: User UUID string
             new_role_ids: List of new role IDs
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             List of new UserRole instances
         """
-        # Delete existing roles
         await cls.delete_by_user_id(db, user_id, commit=False)
 
-        # Create new roles
         user_roles = await cls.create_multiple_user_roles(
             db, user_id, new_role_ids, commit=False
         )
 
         if commit:
-            await db.commit()
+            await db.flush()
             for user_role in user_roles:
                 await db.refresh(user_role)
 

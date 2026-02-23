@@ -240,7 +240,7 @@ async def test_sso_login_creates_user(unauth_client: AsyncClient, db_session: As
 async def test_admin_login_success(unauth_client: AsyncClient, db_session: AsyncSession):
     """Test successful admin login with local credentials."""
     # Create admin user with hashed password
-    from core.utils.encryption import hash_password
+    from api.services.auth_service import hash_password
     
     hashed_password = hash_password("admin-password")
     admin = UserFactory.create_admin(
@@ -266,7 +266,7 @@ async def test_admin_login_success(unauth_client: AsyncClient, db_session: Async
 @pytest.mark.asyncio
 async def test_admin_login_invalid_password(unauth_client: AsyncClient, db_session: AsyncSession):
     """Test admin login with wrong password."""
-    from core.utils.encryption import hash_password
+    from api.services.auth_service import hash_password
     
     hashed_password = hash_password("correct-password")
     admin = UserFactory.create_admin(
@@ -291,7 +291,7 @@ async def test_admin_login_invalid_password(unauth_client: AsyncClient, db_sessi
 @pytest.mark.asyncio
 async def test_admin_login_non_admin_user(unauth_client: AsyncClient, db_session: AsyncSession):
     """Test that non-admin user cannot use admin login."""
-    from core.utils.encryption import hash_password
+    from api.services.auth_service import hash_password
     
     hashed_password = hash_password("password")
     regular_user = UserFactory.create(

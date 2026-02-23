@@ -15,7 +15,7 @@ class TestPagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/pages/ with empty database."""
-        response = await client.get("/api/setting/pages/")
+        response = await client.get("/backend/pages/")
         assert response.status_code == 200
 
         data = response.json()
@@ -36,7 +36,7 @@ class TestPagesEndpoints:
         db_session.add_all([page1, page2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/pages/")
+        response = await client.get("/backend/pages/")
         assert response.status_code == 200
 
         data = response.json()
@@ -59,7 +59,7 @@ class TestPagesEndpoints:
             db_session.add(page)
         await db_session.commit()
 
-        response = await client.get("/api/setting/pages/?limit=2&skip=0")
+        response = await client.get("/backend/pages/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["pages"]) == 2
@@ -75,7 +75,7 @@ class TestPagesEndpoints:
         db_session.add_all([page1, page2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/pages/?is_active=true")
+        response = await client.get("/backend/pages/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["pages"]) == 1
@@ -91,7 +91,7 @@ class TestPagesEndpoints:
         db_session.add_all([page1, page2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/pages/?search=dashboard")
+        response = await client.get("/backend/pages/?search=dashboard")
         assert response.status_code == 200
         data = response.json()
         assert len(data["pages"]) == 1
@@ -107,7 +107,7 @@ class TestPagesEndpoints:
         await db_session.commit()
         await db_session.refresh(page)
 
-        response = await client.get(f"/api/setting/pages/{page.id}")
+        response = await client.get(f"/backend/pages/{page.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -121,7 +121,7 @@ class TestPagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/pages/{page_id} with non-existent ID."""
-        response = await client.get("/api/setting/pages/99999")
+        response = await client.get("/backend/pages/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -136,7 +136,7 @@ class TestPagesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/pages/", json=page_data)
+        response = await client.post("/backend/pages/", json=page_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -152,7 +152,7 @@ class TestPagesEndpoints:
         """Test POST /api/setting/pages/ with invalid data."""
         page_data = {"title": "Missing path"}
 
-        response = await client.post("/api/setting/pages/", json=page_data)
+        response = await client.post("/backend/pages/", json=page_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -167,7 +167,7 @@ class TestPagesEndpoints:
 
         update_data = {"title": "Updated Title", "path": "/updated", "isActive": False}
 
-        response = await client.put(f"/api/setting/pages/{page.id}", json=update_data)
+        response = await client.put(f"/backend/pages/{page.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -182,7 +182,7 @@ class TestPagesEndpoints:
         """Test PUT /api/setting/pages/{page_id} with non-existent ID."""
         update_data = {"title": "Updated"}
 
-        response = await client.put("/api/setting/pages/99999", json=update_data)
+        response = await client.put("/backend/pages/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -195,7 +195,7 @@ class TestPagesEndpoints:
         await db_session.commit()
         await db_session.refresh(page)
 
-        response = await client.delete(f"/api/setting/pages/{page.id}")
+        response = await client.delete(f"/backend/pages/{page.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -206,7 +206,7 @@ class TestPagesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/pages/{page_id} with non-existent ID."""
-        response = await client.delete("/api/setting/pages/99999")
+        response = await client.delete("/backend/pages/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -223,7 +223,7 @@ class TestPagesEndpoints:
 
         bulk_data = {"ids": [page1.id, page2.id], "isActive": False}
 
-        response = await client.put("/api/setting/pages/status", json=bulk_data)
+        response = await client.put("/backend/pages/status", json=bulk_data)
         assert response.status_code == 200
 
         data = response.json()

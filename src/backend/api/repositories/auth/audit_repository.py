@@ -1,7 +1,8 @@
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
+from typing import cast
 
 from db.models import Audit, User
 from api.repositories.base_repository import BaseRepository
@@ -41,36 +42,36 @@ class AuditRepository(BaseRepository[Audit]):
         # Build query
         query = (
             select(Audit)
-            .outerjoin(User, Audit.user_id == User.id)
-            .order_by(Audit.created_at.desc())
+            .outerjoin(User, Audit.__table__.c.user_id == User.__table__.c.id)
+            .order_by(Audit.__table__.c.created_at.desc())
         )
 
         # Apply filters
         if filters.get("user_id"):
-            query = query.where(Audit.user_id == filters["user_id"])
+            query = query.where(Audit.__table__.c.user_id == filters["user_id"])
         if filters.get("action"):
-            query = query.where(Audit.action == filters["action"])
+            query = query.where(Audit.__table__.c.action == filters["action"])
         if filters.get("resource_type"):
-            query = query.where(Audit.resource_type == filters["resource_type"])
+            query = query.where(Audit.__table__.c.resource_type == filters["resource_type"])
         if filters.get("resource_id"):
-            query = query.where(Audit.resource_id == filters["resource_id"])
+            query = query.where(Audit.__table__.c.resource_id == filters["resource_id"])
         if filters.get("correlation_id"):
-            query = query.where(Audit.correlation_id == filters["correlation_id"])
+            query = query.where(Audit.__table__.c.correlation_id == filters["correlation_id"])
         if filters.get("search"):
             search_term = f"%{filters['search']}%"
             query = query.where(
                 or_(
-                    Audit.changes_summary.ilike(search_term),
-                    Audit.endpoint.ilike(search_term),
-                    Audit.resource_id.ilike(search_term),
-                    User.username.ilike(search_term),
-                    User.full_name.ilike(search_term),
+                    Audit.__table__.c.changes_summary.ilike(search_term),
+                    Audit.__table__.c.endpoint.ilike(search_term),
+                    Audit.__table__.c.resource_id.ilike(search_term),
+                    User.__table__.c.username.ilike(search_term),
+                    User.__table__.c.full_name.ilike(search_term),
                 )
             )
         if filters.get("start_date"):
-            query = query.where(Audit.created_at >= filters["start_date"])
+            query = query.where(Audit.__table__.c.created_at >= filters["start_date"])
         if filters.get("end_date"):
-            query = query.where(Audit.created_at <= filters["end_date"])
+            query = query.where(Audit.__table__.c.created_at <= filters["end_date"])
 
         # Get total count
         count_query = select(func.count()).select_from(query.subquery())
@@ -102,7 +103,7 @@ class AuditRepository(BaseRepository[Audit]):
             List of distinct action values
         """
         result = await db.execute(
-            select(Audit.action).distinct().order_by(Audit.action.asc())
+            select(Audit.__table__.c.action).distinct().order_by(Audit.__table__.c.action.asc())
         )
         return [row[0] for row in result.all() if row[0] is not None]
 
@@ -121,7 +122,7 @@ class AuditRepository(BaseRepository[Audit]):
             List of distinct resource_type values
         """
         result = await db.execute(
-            select(Audit.resource_type).distinct().order_by(Audit.resource_type.asc())
+            select(Audit.__table__.c.resource_type).distinct().order_by(Audit.__table__.c.resource_type.asc())
         )
         return [row[0] for row in result.all() if row[0] is not None]
 
@@ -141,13 +142,13 @@ class AuditRepository(BaseRepository[Audit]):
         """
         result = await db.execute(
             select(
-                Audit.user_id,
-                User.username,
-                User.full_name,
+                Audit.__table__.c.user_id,
+                User.__table__.c.username,
+                User.__table__.c.full_name,
             )
-            .join(User, Audit.user_id == User.id)
+            .join(User, Audit.__table__.c.user_id == User.__table__.c.id)
             .distinct()
-            .order_by(User.full_name.asc())
+            .order_by(User.__table__.c.full_name.asc())
         )
         return [
             {
@@ -177,9 +178,9 @@ class AuditRepository(BaseRepository[Audit]):
         """
         query = (
             select(Audit)
-            .outerjoin(User, Audit.user_id == User.id)
-            .where(Audit.id == audit_id)
-            .options(selectinload(Audit.user))
+            .outerjoin(User, Audit.__table__.c.user_id == User.__table__.c.id)
+            .where(Audit.__table__.c.id == audit_id)
+            .options(selectinload(cast(QueryableAttribute, Audit.user)))
         )
 
         result = await db.execute(query)

@@ -4,12 +4,12 @@ User CRUD for database operations.
 Handles all database queries related to users.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 from uuid import UUID
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from db import Role, User, UserRole, TechnicianSection
 from api.repositories.base_repository import BaseRepository
@@ -34,7 +34,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             User or None
         """
-        stmt = select(User).where(User.username == username)
+        stmt = select(User).where(User.__table__.c.username == username)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -52,7 +52,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             User or None
         """
-        stmt = select(User).where(User.email == email)
+        stmt = select(User).where(User.__table__.c.email == email)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -72,8 +72,8 @@ class UserRepository(BaseRepository[User]):
         """
         stmt = (
             select(User)
-            .where(User.id == user_id)
-            .options(selectinload(User.user_roles).selectinload(UserRole.role))
+            .where(User.__table__.c.id == user_id)
+            .options(selectinload(cast(QueryableAttribute, User.user_roles)).selectinload(cast(QueryableAttribute, UserRole.role)))
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -96,11 +96,11 @@ class UserRepository(BaseRepository[User]):
 
         stmt = (
             select(User)
-            .where(User.id == user_id)
+            .where(User.__table__.c.id == user_id)
             .options(
-                selectinload(User.user_roles).selectinload(UserRole.role),
-                selectinload(User.business_unit_assigns).selectinload(
-                    TechnicianBusinessUnit.business_unit
+                selectinload(cast(QueryableAttribute, User.user_roles)).selectinload(cast(QueryableAttribute, UserRole.role)),
+                selectinload(cast(QueryableAttribute, User.business_unit_assigns)).selectinload(
+                    cast(QueryableAttribute, TechnicianBusinessUnit.business_unit)
                 ),
             )
         )
@@ -125,12 +125,12 @@ class UserRepository(BaseRepository[User]):
 
         stmt = (
             select(User)
-            .where(User.id == user_id)
+            .where(User.__table__.c.id == user_id)
             .options(
-                selectinload(User.user_roles)
-                .selectinload(UserRole.role)
-                .selectinload(Role.page_permissions)
-                .selectinload(PageRole.page)
+                selectinload(cast(QueryableAttribute, User.user_roles))
+                .selectinload(cast(QueryableAttribute, UserRole.role))
+                .selectinload(cast(QueryableAttribute, Role.page_permissions))
+                .selectinload(cast(QueryableAttribute, PageRole.page))
             )
         )
         result = await db.execute(stmt)
@@ -167,39 +167,39 @@ class UserRepository(BaseRepository[User]):
         """
         # Build query
         stmt = select(User)
-        count_stmt = select(func.count(User.id))
+        count_stmt = select(func.count())
 
         # Apply filters
         if is_technician is not None:
-            stmt = stmt.where(User.is_technician == is_technician)
-            count_stmt = count_stmt.where(User.is_technician == is_technician)
+            stmt = stmt.where(User.__table__.c.is_technician == is_technician)
+            count_stmt = count_stmt.where(User.__table__.c.is_technician == is_technician)
 
         if is_active is not None:
-            stmt = stmt.where(User.is_active == is_active)
-            count_stmt = count_stmt.where(User.is_active == is_active)
+            stmt = stmt.where(User.__table__.c.is_active == is_active)
+            count_stmt = count_stmt.where(User.__table__.c.is_active == is_active)
 
         if is_online is not None:
-            stmt = stmt.where(User.is_online == is_online)
-            count_stmt = count_stmt.where(User.is_online == is_online)
+            stmt = stmt.where(User.__table__.c.is_online == is_online)
+            count_stmt = count_stmt.where(User.__table__.c.is_online == is_online)
 
         if username:
-            username_filter = User.username.ilike(f"%{username}%")
+            username_filter = User.__table__.c.username.ilike(f"%{username}%")
             stmt = stmt.where(username_filter)
             count_stmt = count_stmt.where(username_filter)
 
         # Get total count
         count_result = await db.execute(count_stmt)
-        total = count_result.scalar()
+        total = count_result.scalar() or 0
 
         # Eager load roles if requested
         if eager_load_roles:
             stmt = stmt.options(
-                selectinload(User.user_roles).selectinload(UserRole.role)
+                selectinload(cast(QueryableAttribute, User.user_roles)).selectinload(cast(QueryableAttribute, UserRole.role))
             )
 
         # Apply pagination
         stmt = (
-            stmt.order_by(User.username)
+            stmt.order_by(User.__table__.c.username)
             .offset((page - 1) * per_page)
             .limit(per_page)
         )
@@ -250,12 +250,12 @@ class UserRepository(BaseRepository[User]):
         # Build base query with eager loading
         from db import TechnicianBusinessUnit, TechnicianSection
         stmt = select(User).options(
-            selectinload(User.user_roles).selectinload(UserRole.role),
-            selectinload(User.business_unit_assigns).selectinload(
-                TechnicianBusinessUnit.business_unit
+            selectinload(cast(QueryableAttribute, User.user_roles)).selectinload(cast(QueryableAttribute, UserRole.role)),
+            selectinload(cast(QueryableAttribute, User.business_unit_assigns)).selectinload(
+                cast(QueryableAttribute, TechnicianBusinessUnit.business_unit)
             ),
-            selectinload(User.section_assigns).selectinload(
-                TechnicianSection.section
+            selectinload(cast(QueryableAttribute, User.section_assigns)).selectinload(
+                cast(QueryableAttribute, TechnicianSection.section)
             ),
         )
 
@@ -264,33 +264,30 @@ class UserRepository(BaseRepository[User]):
         # These never change regardless of filters
         # ============================================================
         global_counts_stmt = select(
-            func.count(User.id).label("global_total"),
-            func.count(case((User.is_technician.is_(True), 1))).label(
+            func.count().label("global_total"),
+            func.count(case((User.__table__.c.is_technician.is_(True), 1))).label(
                 "technician_count"
             ),
-            func.count(case((User.is_technician.is_(False), 1))).label(
+            func.count(case((User.__table__.c.is_technician.is_(False), 1))).label(
                 "user_count"
             ),
         )
         global_result = await db.execute(global_counts_stmt)
         global_row = global_result.first()
-        if global_row is None:
-            global_row = type('obj', (object,), {
-                'global_total': 0,
-                'technician_count': 0,
-                'user_count': 0
-            })
+        global_total = global_row.global_total if global_row else 0
+        global_technician_count = global_row.technician_count if global_row else 0
+        global_user_count = global_row.user_count if global_row else 0
 
         # ============================================================
         # SCOPED STATUS COUNTS (filtered by User Type only)
         # These update when User Type filter changes
         # ============================================================
         scoped_status_stmt = select(
-            func.count(User.id).label("total"),
-            func.count(case((User.is_active.is_(True), 1))).label(
+            func.count().label("total"),
+            func.count(case((User.__table__.c.is_active.is_(True), 1))).label(
                 "active_count"
             ),
-            func.count(case((User.is_active.is_(False), 1))).label(
+            func.count(case((User.__table__.c.is_active.is_(False), 1))).label(
                 "inactive_count"
             ),
         )
@@ -298,44 +295,47 @@ class UserRepository(BaseRepository[User]):
         # Apply User Type filter to scoped status counts
         if is_technician is not None:
             scoped_status_stmt = scoped_status_stmt.where(
-                User.is_technician == is_technician
+                User.__table__.c.is_technician == is_technician
             )
 
         scoped_status_result = await db.execute(scoped_status_stmt)
         scoped_status_row = scoped_status_result.first()
+        scoped_total = scoped_status_row.total if scoped_status_row else 0
+        scoped_active_count = scoped_status_row.active_count if scoped_status_row else 0
+        scoped_inactive_count = scoped_status_row.inactive_count if scoped_status_row else 0
 
         # ============================================================
         # FILTERED TOTAL (for pagination - all filters applied)
         # ============================================================
-        filtered_count_stmt = select(func.count(User.id).label("filtered_total"))
+        filtered_count_stmt = select(func.count().label("filtered_total"))
 
         # Apply all filters
         if is_active is not None:
-            stmt = stmt.where(User.is_active == is_active)
-            filtered_count_stmt = filtered_count_stmt.where(User.is_active == is_active)
+            stmt = stmt.where(User.__table__.c.is_active == is_active)
+            filtered_count_stmt = filtered_count_stmt.where(User.__table__.c.is_active == is_active)
 
         if is_technician is not None:
-            stmt = stmt.where(User.is_technician == is_technician)
+            stmt = stmt.where(User.__table__.c.is_technician == is_technician)
             filtered_count_stmt = filtered_count_stmt.where(
-                User.is_technician == is_technician
+                User.__table__.c.is_technician == is_technician
             )
 
         if username:
-            username_filter = User.username.ilike(f"%{username}%")
+            username_filter = User.__table__.c.username.ilike(f"%{username}%")
             stmt = stmt.where(username_filter)
             filtered_count_stmt = filtered_count_stmt.where(username_filter)
 
         if role_id:
             # Join with UserRole to filter by role
-            stmt = stmt.join(UserRole, User.id == UserRole.user_id).where(
-                UserRole.role_id == role_id
+            stmt = stmt.join(UserRole, User.__table__.c.id == UserRole.__table__.c.user_id).where(
+                UserRole.__table__.c.role_id == role_id
             )
             filtered_count_stmt = filtered_count_stmt.join(
-                UserRole, User.id == UserRole.user_id
-            ).where(UserRole.role_id == role_id)
+                UserRole, User.__table__.c.id == UserRole.__table__.c.user_id
+            ).where(UserRole.__table__.c.role_id == role_id)
 
         filtered_result = await db.execute(filtered_count_stmt)
-        filtered_total = filtered_result.scalar()
+        filtered_total = filtered_result.scalar() or 0
 
         # ============================================================
         # SCOPED ROLE COUNTS (filtered by User Type AND Status)
@@ -344,26 +344,26 @@ class UserRepository(BaseRepository[User]):
         # ============================================================
         role_counts_stmt = (
             select(
-                Role.id.label("role_id"),
-                func.count(User.id).label("user_count")
+                Role.__table__.c.id.label("role_id"),
+                func.count().label("user_count")
             )
             .select_from(User)
-            .join(UserRole, User.id == UserRole.user_id)
-            .join(Role, UserRole.role_id == Role.id)
-            .where(Role.is_active.is_(True))
-            .group_by(Role.id)
+            .join(UserRole, User.__table__.c.id == UserRole.__table__.c.user_id)
+            .join(Role, UserRole.__table__.c.role_id == Role.__table__.c.id)
+            .where(Role.__table__.c.is_active.is_(True))
+            .group_by(Role.__table__.c.id)
         )
 
         # Apply User Type filter to role counts
         if is_technician is not None:
             role_counts_stmt = role_counts_stmt.where(
-                User.is_technician == is_technician
+                User.__table__.c.is_technician == is_technician
             )
 
         # Apply Status filter to role counts
         if is_active is not None:
             role_counts_stmt = role_counts_stmt.where(
-                User.is_active == is_active
+                User.__table__.c.is_active == is_active
             )
 
         role_counts_result = await db.execute(role_counts_stmt)
@@ -377,18 +377,18 @@ class UserRepository(BaseRepository[User]):
             # Filtered total (for pagination)
             "total": filtered_total,
             # Global User Type counts (always database totals)
-            "global_total": global_row.global_total,
-            "technician_count": global_row.technician_count,
-            "user_count": global_row.user_count,
+            "global_total": global_total,
+            "technician_count": global_technician_count,
+            "user_count": global_user_count,
             # Scoped Status counts (within selected User Type)
-            "active_count": scoped_status_row.active_count,
-            "inactive_count": scoped_status_row.inactive_count,
+            "active_count": scoped_active_count,
+            "inactive_count": scoped_inactive_count,
             # Scoped Role counts (within selected User Type AND Status)
             "role_counts": role_counts,
         }
 
         # Apply pagination and ordering
-        stmt = stmt.order_by(User.username).offset(skip).limit(limit)
+        stmt = stmt.order_by(User.__table__.c.username).offset(skip).limit(limit)
 
         # Execute query
         result = await db.execute(stmt)
@@ -408,9 +408,9 @@ class UserRepository(BaseRepository[User]):
             List of online technician users
         """
         stmt = select(User).where(
-            User.is_technician.is_(True),
-            User.is_online.is_(True),
-            User.is_active.is_(True),
+            User.__table__.c.is_technician.is_(True),
+            User.__table__.c.is_online.is_(True),
+            User.__table__.c.is_active.is_(True),
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -427,11 +427,11 @@ class UserRepository(BaseRepository[User]):
             Dictionary with total, active_count, inactive_count
         """
         stmt = select(
-            func.count(User.id).label("total"),
-            func.count(case((User.is_active.is_(True), 1))).label(
+            func.count().label("total"),
+            func.count(case((User.__table__.c.is_active.is_(True), 1))).label(
                 "active_count"
             ),
-            func.count(case((User.is_active.is_(False), 1))).label(
+            func.count(case((User.__table__.c.is_active.is_(False), 1))).label(
                 "inactive_count"
             ),
         )
@@ -439,9 +439,9 @@ class UserRepository(BaseRepository[User]):
         row = result.first()
 
         return {
-            "total": row.total,
-            "active_count": row.active_count,
-            "inactive_count": row.inactive_count,
+            "total": row.total if row else 0,
+            "active_count": row.active_count if row else 0,
+            "inactive_count": row.inactive_count if row else 0,
         }
 
     @classmethod
@@ -532,7 +532,7 @@ class UserRepository(BaseRepository[User]):
         Returns:
             List of updated users
         """
-        stmt = select(User).where(User.id.in_(user_ids))
+        stmt = select(User).where(User.__table__.c.id.in_(user_ids))
         result = await db.execute(stmt)
         users = list(result.scalars().all())
 

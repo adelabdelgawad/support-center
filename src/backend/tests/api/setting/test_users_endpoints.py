@@ -464,7 +464,7 @@ async def test_delete_user_success(client: AsyncClient, db_session: AsyncSession
     from sqlalchemy import select
     from db.models import User
 
-    result = await db_session.execute(select(User).where(User.id == user_id))
+    result = await db_session.execute(select(User).where(User.__table__.c.id == user_id))
     deleted_user = result.scalar_one_or_none()
 
     # May be None (hard delete) or have is_deleted=True (soft delete)

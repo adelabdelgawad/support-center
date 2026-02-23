@@ -12,7 +12,7 @@ Uses ldap3 library with async support via asyncio.to_thread()
 import asyncio
 import logging
 import re
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 
 from ldap3 import Server, Connection, ALL, SUBTREE, LEVEL, BASE
 from ldap3.core.exceptions import LDAPException, LDAPBindError, LDAPSocketOpenError
@@ -53,7 +53,7 @@ class LdapService:
 
     def __init__(
         self,
-        ad_config: object,
+        ad_config: Any,
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> None:
@@ -273,6 +273,8 @@ class LdapService:
                 else None,
                 phone_number=phone,
                 direct_manager_name=manager_name,
+                manager_username=None,
+                department=None,
             )
         except Exception as entry_error:
             logger.debug(f"Skipping entry due to error: {entry_error}")
@@ -386,6 +388,10 @@ class LdapService:
             office=str(entry.physicalDeliveryOfficeName)
             if hasattr(entry, "physicalDeliveryOfficeName")
             else None,
+            phone_number=None,
+            manager_username=None,
+            direct_manager_name=None,
+            department=None,
         )
 
     @staticmethod
@@ -472,7 +478,7 @@ class LdapService:
                 logger.error(f"OU fetch failed: {result}")
                 continue
 
-            ou_name, users = result
+            ou_name, users = cast(tuple[str, list[DomainUser]], result)
             successful_ous += 1
             logger.info(f"Found {len(users)} users in OU '{ou_name}'")
             for user in users:
@@ -645,12 +651,12 @@ class LdapService:
 async def get_domain_enabled_users() -> List[DomainUser]:
     """
     Fetch enabled users from the configured OUs in the domain.
+    Requires a database session to load AD configuration - use get_ldap_service instead.
     """
-    ldap_service = LdapService()
-    try:
-        return await ldap_service.get_enabled_users()
-    except Exception as e:
-        raise RuntimeError("Failed to fetch enabled users from LDAP") from e
+    raise NotImplementedError(
+        "get_domain_enabled_users requires a database session. "
+        "Use get_ldap_service(db) to get an LdapService instance."
+    )
 
 
 async def get_ldap_service(db=None):

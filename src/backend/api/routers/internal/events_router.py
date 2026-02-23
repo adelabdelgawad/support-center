@@ -159,7 +159,7 @@ async def get_consumer_lag(
     )
 
     try:
-        result = {
+        result: Dict[str, Any] = {
             "streams": {},
             "total_lag": 0,
             "stream_count": 0,

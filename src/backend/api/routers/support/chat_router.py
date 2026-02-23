@@ -660,7 +660,7 @@ async def get_all_unread_counts(
     # Convert to response schema
     chats = [
         ChatUnreadCountItem(
-            request_id=UUID(m["request_id"]),
+            request_id=int(m["request_id"]),
             unread_count=m["unread_count"],
             last_read_at=m["last_read_at"],
         )

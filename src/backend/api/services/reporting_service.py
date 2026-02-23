@@ -4,9 +4,9 @@ Reporting service for generating reports and aggregating metrics.
 
 import logging
 from datetime import datetime, date, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, Sequence, cast
 
-from sqlalchemy import or_
+from sqlalchemy import ColumnElement, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import log_database_operation, safe_database_query
@@ -143,14 +143,14 @@ class ReportingService:
         comp_end_dt = datetime.combine(comp_end, datetime.max.time())
 
         # Build business unit filter
-        business_unit_ids = filters.business_unit_ids if filters else None
+        business_unit_ids: Optional[list[Any]] = filters.business_unit_ids if filters else None
 
         # Get current period totals using repository
         (
             total_tickets,
             resolved_tickets,
         ) = await ReportingQueryRepository.get_ticket_counts_by_period(
-            db, start_dt, end_dt, business_unit_ids
+            db, start_dt, end_dt, business_unit_ids or []
         )
 
         # Get comparison period totals using repository
@@ -158,7 +158,7 @@ class ReportingService:
             comp_total_tickets,
             comp_resolved_tickets,
         ) = await ReportingQueryRepository.get_ticket_counts_by_period(
-            db, comp_start_dt, comp_end_dt, business_unit_ids
+            db, comp_start_dt, comp_end_dt, business_unit_ids or []
         )
 
         # Get open status IDs (statuses where count_as_solved = False)
@@ -167,9 +167,9 @@ class ReportingService:
         )
 
         # Build extra conditions for business unit filter
-        extra_conditions = []
+        extra_conditions: list[Any] = []
         if business_unit_ids:
-            extra_conditions.append(ServiceRequest.business_unit_id.in_(business_unit_ids))
+            extra_conditions.append(cast(Any, ServiceRequest.business_unit_id).in_(business_unit_ids))
 
         # Get current open tickets using repository
         open_tickets = await ReportingQueryRepository.get_open_tickets_count(
@@ -177,37 +177,38 @@ class ReportingService:
         )
 
         # Get SLA compliance using repository
+        bu_ids: list[Any] = business_unit_ids or []
         sla_compliance, sla_met = await ReportingQueryRepository.get_sla_compliance(
-            db, start_dt, end_dt, business_unit_ids
+            db, start_dt, end_dt, bu_ids
         )
         (
             comp_sla_compliance,
             comp_sla_met,
         ) = await ReportingQueryRepository.get_sla_compliance(
-            db, comp_start_dt, comp_end_dt, business_unit_ids
+            db, comp_start_dt, comp_end_dt, bu_ids
         )
 
         # Get average resolution time using repository
         avg_resolution_hours = (
             await ReportingQueryRepository.get_average_resolution_time(
-                db, start_dt, end_dt, business_unit_ids
+                db, start_dt, end_dt, bu_ids
             )
         )
         comp_avg_resolution_hours = (
             await ReportingQueryRepository.get_average_resolution_time(
-                db, comp_start_dt, comp_end_dt, business_unit_ids
+                db, comp_start_dt, comp_end_dt, bu_ids
             )
         )
 
         # Get average first response time using repository
         avg_frt_minutes = (
             await ReportingQueryRepository.get_average_first_response_time(
-                db, start_dt, end_dt, business_unit_ids
+                db, start_dt, end_dt, bu_ids
             )
         )
         comp_avg_frt_minutes = (
             await ReportingQueryRepository.get_average_first_response_time(
-                db, comp_start_dt, comp_end_dt, business_unit_ids
+                db, comp_start_dt, comp_end_dt, bu_ids
             )
         )
 
@@ -257,13 +258,13 @@ class ReportingService:
             )
 
         # Build base conditions for filtering
-        base_conditions = [
+        base_conditions: list[Any] = [
             ServiceRequest.created_at >= start_dt,
             ServiceRequest.created_at <= end_dt,
         ]
         if business_unit_ids:
             base_conditions.append(
-                ServiceRequest.business_unit_id.in_(business_unit_ids)
+                cast(Any, ServiceRequest.business_unit_id).in_(business_unit_ids)
             )
 
         # Get ticket volume trend
@@ -363,10 +364,10 @@ class ReportingService:
         base_conditions: list,
     ) -> List[TrendDataPoint]:
         """Get daily ticket volume trend."""
-        rows = await ReportingQueryRepository.get_volume_trend(
+        rows: list[Any] = await ReportingQueryRepository.get_volume_trend(
             db, start_date, end_date, base_conditions
         )
-        return [TrendDataPoint(date=row.day, value=row.count) for row in rows]
+        return [TrendDataPoint(date=row.day, value=int(row.count)) for row in rows]
 
     @staticmethod
     async def _get_status_distribution(
@@ -374,17 +375,17 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by status."""
-        rows = await ReportingQueryRepository.get_status_distribution(
+        rows: list[Any] = await ReportingQueryRepository.get_status_distribution(
             db, base_conditions
         )
 
-        total = sum(row.count for row in rows)
+        total = sum(int(row.count) for row in rows)
         return [
             DistributionItem(
                 id=str(row.id),
                 label=row.name,
-                value=row.count,
-                percentage=round((row.count / total * 100) if total > 0 else 0, 1),
+                value=int(row.count),
+                percentage=round((int(row.count) / total * 100) if total > 0 else 0, 1),
                 color=row.color,
             )
             for row in rows
@@ -396,7 +397,7 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by priority."""
-        rows = await ReportingQueryRepository.get_priority_distribution(
+        rows: list[Any] = await ReportingQueryRepository.get_priority_distribution(
             db, base_conditions
         )
 
@@ -409,13 +410,13 @@ class ReportingService:
             "Lowest": "#64748b",
         }
 
-        total = sum(row.count for row in rows)
+        total = sum(int(row.count) for row in rows)
         return [
             DistributionItem(
                 id=str(row.id),
                 label=row.name,
-                value=row.count,
-                percentage=round((row.count / total * 100) if total > 0 else 0, 1),
+                value=int(row.count),
+                percentage=round((int(row.count) / total * 100) if total > 0 else 0, 1),
                 color=priority_colors.get(row.name),
             )
             for row in rows
@@ -427,17 +428,17 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by category."""
-        rows = await ReportingQueryRepository.get_category_distribution(
+        rows: list[Any] = await ReportingQueryRepository.get_category_distribution(
             db, base_conditions
         )
 
-        total = sum(row.count for row in rows)
+        total = sum(int(row.count) for row in rows)
         return [
             DistributionItem(
                 id=str(row.id),
                 label=row.name,
-                value=row.count,
-                percentage=round((row.count / total * 100) if total > 0 else 0, 1),
+                value=int(row.count),
+                percentage=round((int(row.count) / total * 100) if total > 0 else 0, 1),
             )
             for row in rows
         ]
@@ -448,17 +449,17 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get ticket distribution by business unit."""
-        rows = await ReportingQueryRepository.get_business_unit_distribution(
+        rows: list[Any] = await ReportingQueryRepository.get_business_unit_distribution(
             db, base_conditions
         )
 
-        total = sum(row.count for row in rows)
+        total = sum(int(row.count) for row in rows)
         return [
             DistributionItem(
                 id=str(row.id),
                 label=row.name,
-                value=row.count,
-                percentage=round((row.count / total * 100) if total > 0 else 0, 1),
+                value=int(row.count),
+                percentage=round((int(row.count) / total * 100) if total > 0 else 0, 1),
             )
             for row in rows
         ]
@@ -508,7 +509,7 @@ class ReportingService:
         base_conditions: list,
     ) -> List[DistributionItem]:
         """Get SLA compliance breakdown by priority."""
-        rows = await ReportingQueryRepository.get_compliance_by_priority(
+        rows: list[Any] = await ReportingQueryRepository.get_compliance_by_priority(
             db, base_conditions
         )
 
@@ -545,8 +546,8 @@ class ReportingService:
         )
 
         aging_conditions = base_conditions + [
-            ServiceRequest.status_id.in_(open_status_ids),
-            ServiceRequest.due_date.isnot(None),
+            cast(ColumnElement[bool], cast(Any, ServiceRequest.status_id).in_(open_status_ids)),
+            cast(ColumnElement[bool], cast(Any, ServiceRequest.due_date).isnot(None)),
         ]
 
         now = datetime.utcnow()
@@ -577,8 +578,10 @@ class ReportingService:
 
         aging_data = []
         for bucket_id, label, range_start, range_end in buckets:
-            tickets = await ReportingQueryRepository.get_aging_bucket_tickets(
-                db, aging_conditions, range_start, range_end
+            tickets: list[Any] = await ReportingQueryRepository.get_aging_bucket_tickets(
+                db, aging_conditions,
+                cast(datetime, range_start),
+                cast(datetime, range_end),
             )
             count = len(tickets)
 
@@ -623,7 +626,7 @@ class ReportingService:
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
 
-        base_conditions = [
+        base_conditions: list[Any] = [
             ServiceRequest.created_at >= start_dt,
             ServiceRequest.created_at <= end_dt,
         ]
@@ -631,11 +634,11 @@ class ReportingService:
         if filters:
             if filters.business_unit_ids:
                 base_conditions.append(
-                    ServiceRequest.business_unit_id.in_(filters.business_unit_ids)
+                    cast(Any, ServiceRequest.business_unit_id).in_(filters.business_unit_ids)
                 )
             if filters.priority_ids:
                 base_conditions.append(
-                    ServiceRequest.priority_id.in_(filters.priority_ids)
+                    cast(Any, ServiceRequest.priority_id).in_(filters.priority_ids)
                 )
 
         # Total tickets
@@ -646,8 +649,8 @@ class ReportingService:
         # Tickets with SLA (those that have been resolved or have due dates)
         sla_conditions = base_conditions + [
             or_(
-                ServiceRequest.resolved_at.isnot(None),
-                ServiceRequest.due_date.isnot(None),
+                cast(Any, ServiceRequest.resolved_at).isnot(None),
+                cast(Any, ServiceRequest.due_date).isnot(None),
             )
         ]
         tickets_with_sla = await ReportingQueryRepository.get_total_tickets_count(
@@ -656,8 +659,8 @@ class ReportingService:
 
         # First response SLA
         frt_met_conditions = base_conditions + [
-            ServiceRequest.first_response_at.isnot(None),
-            ~ServiceRequest.sla_first_response_breached,
+            cast(Any, ServiceRequest.first_response_at).isnot(None),
+            cast(ColumnElement[bool], ~cast(Any, ServiceRequest.sla_first_response_breached)),
         ]
         frt_met = await ReportingQueryRepository.get_total_tickets_count(
             db, frt_met_conditions
@@ -738,9 +741,12 @@ class ReportingService:
                         datetime.utcnow() - req.due_date
                     ).total_seconds() / 60
 
+            breach_type = (
+                "first_response" if req.sla_first_response_breached else "resolution"
+            )
             recent_breaches.append(
                 SLABreachItem(
-                    request_id=req.id,
+                    request_id=req.id or 0,
                     title=req.title,
                     requester_name=req.requester.full_name if req.requester else None,
                     assigned_technician=None,  # Would need to join assignees
@@ -749,6 +755,7 @@ class ReportingService:
                     created_at=req.created_at,
                     sla_due_at=due_at or req.created_at,
                     breach_duration_minutes=breach_duration,
+                    breach_type=breach_type,
                 )
             )
 
@@ -792,7 +799,7 @@ class ReportingService:
         start_dt = datetime.combine(start_date, datetime.min.time())
         end_dt = datetime.combine(end_date, datetime.max.time())
 
-        base_conditions = [
+        base_conditions: list[Any] = [
             ServiceRequest.created_at >= start_dt,
             ServiceRequest.created_at <= end_dt,
         ]
@@ -800,7 +807,7 @@ class ReportingService:
         if filters:
             if filters.business_unit_ids:
                 base_conditions.append(
-                    ServiceRequest.business_unit_id.in_(filters.business_unit_ids)
+                    cast(Any, ServiceRequest.business_unit_id).in_(filters.business_unit_ids)
                 )
 
         # Total created
@@ -862,17 +869,18 @@ class ReportingService:
             db, base_conditions
         )
 
-        hourly_total = sum(r.count for r in hourly_rows)
+        hourly_rows_any: list[Any] = list(hourly_rows)
+        hourly_total = sum(int(r.count) for r in hourly_rows_any)
         hourly_distribution = [
             DistributionItem(
                 id=f"hour_{int(r.hour)}",
                 label=f"{int(r.hour):02d}:00",
-                value=r.count,
+                value=int(r.count),
                 percentage=round(
-                    (r.count / hourly_total * 100) if hourly_total > 0 else 0, 1
+                    (int(r.count) / hourly_total * 100) if hourly_total > 0 else 0, 1
                 ),
             )
-            for r in hourly_rows
+            for r in hourly_rows_any
         ]
 
         # Day of week distribution
@@ -889,17 +897,18 @@ class ReportingService:
             "Friday",
             "Saturday",
         ]
-        dow_total = sum(r.count for r in dow_rows)
+        dow_rows_any: list[Any] = list(dow_rows)
+        dow_total = sum(int(r.count) for r in dow_rows_any)
         day_of_week_distribution = [
             DistributionItem(
                 id=f"dow_{int(r.dow)}",
                 label=day_names[int(r.dow)],
-                value=r.count,
+                value=int(r.count),
                 percentage=round(
-                    (r.count / dow_total * 100) if dow_total > 0 else 0, 1
+                    (int(r.count) / dow_total * 100) if dow_total > 0 else 0, 1
                 ),
             )
-            for r in dow_rows
+            for r in dow_rows_any
         ]
 
         return VolumeReportData(
@@ -939,12 +948,15 @@ class ReportingService:
         end_dt = datetime.combine(end_date, datetime.max.time())
 
         # Get all technicians
-        tech_stmt = select(User).where(User.is_technician, User.is_active)
+        tech_stmt = select(User).where(
+            cast(ColumnElement[bool], User.is_technician),
+            cast(ColumnElement[bool], User.is_active),
+        )
         if filters and filters.technician_ids:
-            tech_stmt = tech_stmt.where(User.id.in_(filters.technician_ids))
+            tech_stmt = tech_stmt.where(cast(ColumnElement[bool], cast(Any, User.id).in_(filters.technician_ids)))
 
         tech_result = await db.execute(tech_stmt)
-        technicians = tech_result.scalars().all()
+        technicians: list[User] = list(tech_result.scalars().all())
 
         total_technicians = len(technicians)
         active_technicians = 0
@@ -958,19 +970,20 @@ class ReportingService:
         )
 
         for tech in technicians:
+            tech_id: Any = tech.id
             # Get assignments in period
             assigned_count = await ReportingQueryRepository.get_technician_assignments(
-                db, tech.id, start_dt, end_dt
+                db, tech_id, start_dt, end_dt
             )
 
             # Get resolved count
             resolved_count = await ReportingQueryRepository.get_technician_resolved_tickets(
-                db, tech.id, start_dt, end_dt
+                db, tech_id, start_dt, end_dt
             )
 
             # Current open tickets
             open_count = await ReportingQueryRepository.get_technician_open_tickets(
-                db, tech.id, open_status_ids
+                db, tech_id, open_status_ids
             )
 
             if assigned_count > 0 or resolved_count > 0:
@@ -983,12 +996,12 @@ class ReportingService:
 
             # Average resolution time for this tech
             avg_res_hours = await ReportingQueryRepository.get_technician_avg_resolution_time(
-                db, tech.id, start_dt, end_dt
+                db, tech_id, start_dt, end_dt
             )
 
             # SLA compliance for this tech
             sla_met = await ReportingQueryRepository.get_technician_sla_met_count(
-                db, tech.id, start_dt, end_dt
+                db, tech_id, start_dt, end_dt
             )
 
             sla_compliance = (
@@ -1009,6 +1022,7 @@ class ReportingService:
                     if avg_res_hours
                     else None,
                     sla_compliance_rate=round(sla_compliance, 2),
+                    rank_change=None,
                 )
             )
 
@@ -1021,7 +1035,9 @@ class ReportingService:
 
         top_performers = rankings[:limit]
         needs_attention = [
-            r for r in rankings if r.sla_compliance_rate < 90 or r.resolution_rate < 50
+            r for r in rankings
+            if (r.sla_compliance_rate is not None and r.sla_compliance_rate < 90)
+            or r.resolution_rate < 50
         ][:limit]
 
         # Team averages
@@ -1086,9 +1102,10 @@ class ReportingService:
 
         workload_items = []
         for tech in technicians:
+            wl_tech_id: Any = tech.id
             # Get all workload metrics for this technician
             workload_metrics = await ReportingQueryRepository.get_workload_by_technician(
-                db, tech.id, open_status_ids, today_start, today_end
+                db, wl_tech_id, open_status_ids, today_start, today_end
             )
 
             if workload_metrics["open_count"] > 0:  # Only include techs with current workload
@@ -1101,6 +1118,7 @@ class ReportingService:
                         overdue_tickets=workload_metrics["overdue_count"],
                         tickets_due_today=workload_metrics["due_today_count"],
                         tickets_assigned_today=workload_metrics["assigned_today_count"],
+                        capacity_percentage=None,
                     )
                 )
 

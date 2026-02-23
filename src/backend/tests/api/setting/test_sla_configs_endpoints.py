@@ -15,7 +15,7 @@ class TestSLAConfigsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/sla-configs/ with empty database."""
-        response = await client.get("/api/setting/sla-configs/")
+        response = await client.get("/backend/sla-configs/")
         assert response.status_code == 200
 
         data = response.json()
@@ -53,7 +53,7 @@ class TestSLAConfigsEndpoints:
         db_session.add_all([sla1, sla2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/sla-configs/")
+        response = await client.get("/backend/sla-configs/")
         assert response.status_code == 200
 
         data = response.json()
@@ -90,7 +90,7 @@ class TestSLAConfigsEndpoints:
             db_session.add(sla)
         await db_session.commit()
 
-        response = await client.get("/api/setting/sla-configs/?limit=2&skip=0")
+        response = await client.get("/backend/sla-configs/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["slaConfigs"]) == 2
@@ -125,7 +125,7 @@ class TestSLAConfigsEndpoints:
         db_session.add_all([sla1, sla2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/sla-configs/?is_active=true")
+        response = await client.get("/backend/sla-configs/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["slaConfigs"]) == 1
@@ -154,7 +154,7 @@ class TestSLAConfigsEndpoints:
         await db_session.commit()
         await db_session.refresh(sla)
 
-        response = await client.get(f"/api/setting/sla-configs/{sla.id}")
+        response = await client.get(f"/backend/sla-configs/{sla.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -167,7 +167,7 @@ class TestSLAConfigsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/sla-configs/{sla_id} with non-existent ID."""
-        response = await client.get("/api/setting/sla-configs/99999")
+        response = await client.get("/backend/sla-configs/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -190,7 +190,7 @@ class TestSLAConfigsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/sla-configs/", json=sla_data)
+        response = await client.post("/backend/sla-configs/", json=sla_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -208,7 +208,7 @@ class TestSLAConfigsEndpoints:
         """Test POST /api/setting/sla-configs/ with invalid data."""
         sla_data = {"responseTimeMinutes": 60}
 
-        response = await client.post("/api/setting/sla-configs/", json=sla_data)
+        response = await client.post("/backend/sla-configs/", json=sla_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -240,7 +240,7 @@ class TestSLAConfigsEndpoints:
             "isActive": False,
         }
 
-        response = await client.put(f"/api/setting/sla-configs/{sla.id}", json=update_data)
+        response = await client.put(f"/backend/sla-configs/{sla.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -255,7 +255,7 @@ class TestSLAConfigsEndpoints:
         """Test PUT /api/setting/sla-configs/{sla_id} with non-existent ID."""
         update_data = {"responseTimeMinutes": 120}
 
-        response = await client.put("/api/setting/sla-configs/99999", json=update_data)
+        response = await client.put("/backend/sla-configs/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -281,7 +281,7 @@ class TestSLAConfigsEndpoints:
         await db_session.commit()
         await db_session.refresh(sla)
 
-        response = await client.delete(f"/api/setting/sla-configs/{sla.id}")
+        response = await client.delete(f"/backend/sla-configs/{sla.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -292,5 +292,5 @@ class TestSLAConfigsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/sla-configs/{sla_id} with non-existent ID."""
-        response = await client.delete("/api/setting/sla-configs/99999")
+        response = await client.delete("/backend/sla-configs/99999")
         assert response.status_code == 404

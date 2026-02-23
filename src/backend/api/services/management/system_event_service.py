@@ -6,11 +6,11 @@ or workflows when specific conditions occur.
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select
 
 from core.decorators import (
     log_database_operation,
@@ -67,10 +67,12 @@ class SystemEventService:
         Returns:
             SystemEvent with system_message, creator, updater loaded
         """
-        stmt = select(SystemEvent).where(SystemEvent.id == event_id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        stmt = select(SystemEvent).where(
+            cast(ColumnElement[bool], SystemEvent.id == event_id)
+        ).options(
+            selectinload(cast(Any, SystemEvent.system_message)),
+            selectinload(cast(Any, SystemEvent.creator)),
+            selectinload(cast(Any, SystemEvent.updater)),
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -105,9 +107,9 @@ class SystemEventService:
         """
         # Verify system_message exists if provided
         if system_message_id:
-            stmt = select(SystemMessage).where(SystemMessage.id == system_message_id)
-            result = await db.execute(stmt)
-            if not result.scalar_one_or_none():
+            msg_stmt = select(SystemMessage).where(cast(ColumnElement[bool], SystemMessage.id == system_message_id))
+            msg_result = await db.execute(msg_stmt)
+            if not msg_result.scalar_one_or_none():
                 raise ValueError(f"SystemMessage {system_message_id} not found")
 
         # Create event
@@ -123,12 +125,12 @@ class SystemEventService:
         await db.refresh(event)
 
         # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        event_stmt = select(SystemEvent).where(cast(ColumnElement[bool], SystemEvent.id == event.id)).options(
+            selectinload(cast(Any, SystemEvent.system_message)),
+            selectinload(cast(Any, SystemEvent.creator)),
+            selectinload(cast(Any, SystemEvent.updater)),
         )
-        result = await db.execute(stmt)
+        result = await db.execute(event_stmt)
         return result.scalar_one()
 
     @staticmethod
@@ -170,9 +172,9 @@ class SystemEventService:
 
         # Verify new system_message if provided
         if system_message_id is not None:
-            stmt = select(SystemMessage).where(SystemMessage.id == system_message_id)
-            result = await db.execute(stmt)
-            if not result.scalar_one_or_none():
+            msg_stmt = select(SystemMessage).where(cast(ColumnElement[bool], SystemMessage.id == system_message_id))
+            msg_result = await db.execute(msg_stmt)
+            if not msg_result.scalar_one_or_none():
                 raise ValueError(f"SystemMessage {system_message_id} not found")
 
         # Update fields
@@ -191,13 +193,13 @@ class SystemEventService:
         await db.refresh(event)
 
         # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        event_stmt = select(SystemEvent).where(cast(ColumnElement[bool], SystemEvent.id == event.id)).options(
+            selectinload(cast(Any, SystemEvent.system_message)),
+            selectinload(cast(Any, SystemEvent.creator)),
+            selectinload(cast(Any, SystemEvent.updater)),
         )
-        result = await db.execute(stmt)
-        return result.scalar_one()
+        event_result = await db.execute(event_stmt)
+        return event_result.scalar_one()
 
     @staticmethod
     @transactional_database_operation("delete_system_event")
@@ -249,13 +251,13 @@ class SystemEventService:
         await db.refresh(event)
 
         # Eager load relationships
-        stmt = select(SystemEvent).where(SystemEvent.id == event.id).options(
-            selectinload(SystemEvent.system_message),
-            selectinload(SystemEvent.creator),
-            selectinload(SystemEvent.updater),
+        toggle_stmt = select(SystemEvent).where(cast(ColumnElement[bool], SystemEvent.id == event.id)).options(
+            selectinload(cast(Any, SystemEvent.system_message)),
+            selectinload(cast(Any, SystemEvent.creator)),
+            selectinload(cast(Any, SystemEvent.updater)),
         )
-        result = await db.execute(stmt)
-        return result.scalar_one()
+        toggle_result = await db.execute(toggle_stmt)
+        return toggle_result.scalar_one()
 
     @staticmethod
     @safe_database_query("get_event_by_key")
@@ -274,8 +276,8 @@ class SystemEventService:
             SystemEvent or None
         """
         stmt = select(SystemEvent).where(
-            SystemEvent.event_key == event_key,
-            SystemEvent.is_active
-        ).options(selectinload(SystemEvent.system_message))
+            cast(ColumnElement[bool], SystemEvent.event_key == event_key),
+            cast(ColumnElement[bool], SystemEvent.is_active == True),  # noqa: E712
+        ).options(selectinload(cast(Any, SystemEvent.system_message)))
         result = await db.execute(stmt)
         return result.scalar_one_or_none()

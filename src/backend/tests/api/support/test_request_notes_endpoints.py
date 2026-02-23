@@ -1,7 +1,10 @@
 """Tests for request notes endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -20,7 +23,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test GET /support/request-notes/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -61,7 +64,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test POST /support/request-notes/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -108,7 +111,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test GET /support/request-notes/{note_id}."""
         # Create test request and note
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -158,7 +161,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test PUT /support/request-notes/{note_id}."""
         # Create test request and note
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -211,7 +214,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test DELETE /support/request-notes/{note_id}."""
         # Create test request and note
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -259,7 +262,7 @@ class TestRequestNotesEndpoints:
     ):
         """Test GET /support/request-notes/requests/{request_id}/internal."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)

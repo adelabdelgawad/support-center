@@ -15,7 +15,7 @@ class TestSectionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/sections/ with empty database."""
-        response = await client.get("/api/setting/sections/")
+        response = await client.get("/backend/sections/")
         assert response.status_code == 200
 
         data = response.json()
@@ -34,7 +34,7 @@ class TestSectionsEndpoints:
         db_session.add_all([s1, s2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/sections/")
+        response = await client.get("/backend/sections/")
         assert response.status_code == 200
 
         data = response.json()
@@ -54,7 +54,7 @@ class TestSectionsEndpoints:
             db_session.add(s)
         await db_session.commit()
 
-        response = await client.get("/api/setting/sections/?limit=2&skip=0")
+        response = await client.get("/backend/sections/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["sections"]) == 2
@@ -70,7 +70,7 @@ class TestSectionsEndpoints:
         db_session.add_all([s1, s2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/sections/?is_active=true")
+        response = await client.get("/backend/sections/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["sections"]) == 1
@@ -86,7 +86,7 @@ class TestSectionsEndpoints:
         db_session.add_all([s1, s2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/sections/?search=hardware")
+        response = await client.get("/backend/sections/?search=hardware")
         assert response.status_code == 200
         data = response.json()
         assert len(data["sections"]) == 1
@@ -102,7 +102,7 @@ class TestSectionsEndpoints:
         await db_session.commit()
         await db_session.refresh(s)
 
-        response = await client.get(f"/api/setting/sections/{s.id}")
+        response = await client.get(f"/backend/sections/{s.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -115,7 +115,7 @@ class TestSectionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/sections/{section_id} with non-existent ID."""
-        response = await client.get("/api/setting/sections/99999")
+        response = await client.get("/backend/sections/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -129,7 +129,7 @@ class TestSectionsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/sections/", json=section_data)
+        response = await client.post("/backend/sections/", json=section_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -145,7 +145,7 @@ class TestSectionsEndpoints:
         """Test POST /api/setting/sections/ with invalid data."""
         section_data = {"description": "Missing name"}
 
-        response = await client.post("/api/setting/sections/", json=section_data)
+        response = await client.post("/backend/sections/", json=section_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -160,7 +160,7 @@ class TestSectionsEndpoints:
 
         update_data = {"name": "Updated Name", "isActive": False}
 
-        response = await client.put(f"/api/setting/sections/{s.id}", json=update_data)
+        response = await client.put(f"/backend/sections/{s.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -174,7 +174,7 @@ class TestSectionsEndpoints:
         """Test PUT /api/setting/sections/{section_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/sections/99999", json=update_data)
+        response = await client.put("/backend/sections/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -187,7 +187,7 @@ class TestSectionsEndpoints:
         await db_session.commit()
         await db_session.refresh(s)
 
-        response = await client.delete(f"/api/setting/sections/{s.id}")
+        response = await client.delete(f"/backend/sections/{s.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -198,5 +198,5 @@ class TestSectionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/sections/{section_id} with non-existent ID."""
-        response = await client.delete("/api/setting/sections/99999")
+        response = await client.delete("/backend/sections/99999")
         assert response.status_code == 404

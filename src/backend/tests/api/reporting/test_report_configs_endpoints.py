@@ -14,6 +14,7 @@ Tests cover:
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select
+from sqlmodel import col
 from httpx import AsyncClient
 
 from tests.factories import UserFactory
@@ -604,14 +605,15 @@ async def test_delete_report_config_is_soft_delete(
 ):
     """Test that delete is a soft delete (deactivate, not hard delete)."""
     config = await create_test_report_config(db_session, seed_user, name="Soft Delete Test")
-    config_id = config.id
+    assert config.id is not None
+    config_id: int = config.id
 
     response = await client.delete(f"/backend/report-configs/{config_id}")
 
     assert response.status_code == 204
 
     # Verify config still exists in database
-    stmt = select(ReportConfig).where(ReportConfig.id == config_id)
+    stmt = select(ReportConfig).where(col(ReportConfig.id) == config_id)
     result = await db_session.execute(stmt)
     deleted_config = result.scalar_one_or_none()
 
@@ -716,7 +718,7 @@ async def test_report_config_full_lifecycle(
     assert response.status_code == 204
 
     # 5. Verify deactivated
-    stmt = select(ReportConfig).where(ReportConfig.id == config_id)
+    stmt = select(ReportConfig).where(ReportConfig.__table__.c.id == config_id)
     result = await db_session.execute(stmt)
     config = result.scalar_one_or_none()
     assert config is not None

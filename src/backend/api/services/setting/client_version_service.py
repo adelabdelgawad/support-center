@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +52,19 @@ class ClientVersionService:
         await self.session.commit()
         await self.session.refresh(version)
         return ClientVersionRead.model_validate(version, from_attributes=True)
+
+    @staticmethod
+    async def get_latest_version(
+        db: AsyncSession, platform: str = "desktop"
+    ) -> Optional[ClientVersion]:
+        """Return the version marked as is_latest for the given platform."""
+        result = await db.execute(
+            select(ClientVersion).where(
+                ClientVersion.__table__.c.platform == platform,
+                ClientVersion.__table__.c.is_latest.is_(True),
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def update_version(self, version_id: int, data: ClientVersionUpdate) -> ClientVersionRead:
         version = await self.version_repo.get_by_id(version_id)

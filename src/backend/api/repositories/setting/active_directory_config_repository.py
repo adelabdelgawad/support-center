@@ -26,7 +26,7 @@ class ActiveDirectoryConfigRepository(BaseRepository[ActiveDirectoryConfig]):
         Returns:
             Active AD configuration or None if no active config exists
         """
-        stmt = select(ActiveDirectoryConfig).where(ActiveDirectoryConfig.is_active)
+        stmt = select(ActiveDirectoryConfig).where(ActiveDirectoryConfig.__table__.c.is_active.is_(True))
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -36,17 +36,18 @@ class ActiveDirectoryConfigRepository(BaseRepository[ActiveDirectoryConfig]):
         Deactivate all AD configurations.
 
         Used before activating a new config to ensure only one is active.
+        Caller must commit.
 
         Args:
             db: Database session
         """
         stmt = update(ActiveDirectoryConfig).values(is_active=False)
         await db.execute(stmt)
-        await db.commit()
+        await db.flush()
 
     @classmethod
     async def activate_config(
-        cls, db: AsyncSession, config_id
+        cls, db: AsyncSession, config_id: int
     ) -> Optional[ActiveDirectoryConfig]:
         """
         Activate a specific AD configuration and deactivate all others.
@@ -56,7 +57,7 @@ class ActiveDirectoryConfigRepository(BaseRepository[ActiveDirectoryConfig]):
             config_id: ID of configuration to activate
 
         Returns:
-            Activated configuration or None if not found
+            Activated configuration or None if not found. Caller must commit.
         """
         # First deactivate all configs
         await cls.deactivate_all(db)
@@ -66,7 +67,7 @@ class ActiveDirectoryConfigRepository(BaseRepository[ActiveDirectoryConfig]):
         if config:
             config.is_active = True
             db.add(config)
-            await db.commit()
+            await db.flush()
             await db.refresh(config)
 
         return config

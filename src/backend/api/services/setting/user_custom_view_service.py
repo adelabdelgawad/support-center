@@ -101,6 +101,9 @@ class UserCustomViewService:
             db, id_value=custom_view.id, obj_in=update_data, commit=True
         )
 
+        if updated_view is None:
+            raise ValueError(f"Failed to update custom view for user {user_id}")
+
         logger.info(f"Updated custom view for user {user_id}")
         return updated_view
 
@@ -130,6 +133,9 @@ class UserCustomViewService:
         updated_view = await UserCustomViewRepository.update(
             db, id_value=custom_view.id, obj_in=default_data, commit=True
         )
+
+        if updated_view is None:
+            raise ValueError(f"Failed to reset custom view for user {user_id}")
 
         logger.info(f"Reset custom view to defaults for user {user_id}")
         return updated_view

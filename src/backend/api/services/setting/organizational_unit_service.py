@@ -4,7 +4,7 @@ Organizational Unit service for OU management.
 
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,6 @@ from api.schemas.organizational_unit import (
     OrganizationalUnitListResponse,
     OrganizationalUnitRead,
     OrganizationalUnitUpdate,
-    DiscoverOUsResponse,
 )
 from api.services.active_directory import LdapService
 
@@ -38,8 +37,6 @@ class OrganizationalUnitService:
         default_return=OrganizationalUnitListResponse(
             organizational_units=[],
             total=0,
-            enabled_count=0,
-            disabled_count=0,
         ),
     )
     @log_database_operation("get all organizational units", level="debug")
@@ -65,8 +62,6 @@ class OrganizationalUnitService:
         return OrganizationalUnitListResponse(
             organizational_units=items,
             total=len(items),
-            enabled_count=enabled_count,
-            disabled_count=disabled_count,
         )
 
     @staticmethod
@@ -85,7 +80,7 @@ class OrganizationalUnitService:
         Returns:
             OU details or None if not found
         """
-        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
+        ou = await OrganizationalUnitRepository.find_by_id(db, ou_id)
         if not ou:
             return None
 
@@ -108,9 +103,9 @@ class OrganizationalUnitService:
             Created OU
         """
         # Check if OU already exists
-        existing = await OrganizationalUnitRepository.find_by_ou_name(db, ou_data.ou_name)
+        existing = await OrganizationalUnitRepository.find_by_ou_name(db, ou_data.name)
         if existing:
-            raise ValueError(f"OU with name '{ou_data.ou_name}' already exists")
+            raise ValueError(f"OU with name '{ou_data.name}' already exists")
 
         # Create new OU
         ou = OrganizationalUnit(**ou_data.model_dump())
@@ -141,7 +136,7 @@ class OrganizationalUnitService:
         Raises:
             ValueError: If OU not found
         """
-        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
+        ou = await OrganizationalUnitRepository.find_by_id(db, ou_id)
         if not ou:
             raise ValueError(f"OU with ID {ou_id} not found")
 
@@ -172,7 +167,7 @@ class OrganizationalUnitService:
         Returns:
             True if deleted, False if not found
         """
-        ou = await OrganizationalUnitRepository.get_by_id(db, ou_id)
+        ou = await OrganizationalUnitRepository.find_by_id(db, ou_id)
         if not ou:
             return False
 
@@ -211,7 +206,7 @@ class OrganizationalUnitService:
 
     @staticmethod
     @log_database_operation("discover OUs from AD", level="info")
-    async def discover_ous_from_ad(db: AsyncSession) -> List[DiscoverOUsResponse]:
+    async def discover_ous_from_ad(db: AsyncSession) -> List[Any]:
         """
         Discover organizational units from Active Directory.
 
@@ -251,14 +246,14 @@ class OrganizationalUnitService:
             existing_names = {ou.ou_name for ou in existing_ous}
 
             # Build response
-            discovered = []
+            discovered: List[Any] = []
             for ou_dn, ou_name in ad_ous:
                 discovered.append(
-                    DiscoverOUsResponse(
-                        ou_name=ou_name,
-                        ou_dn=ou_dn,
-                        already_exists=ou_name in existing_names,
-                    )
+                    {
+                        "ou_name": ou_name,
+                        "ou_dn": ou_dn,
+                        "already_exists": ou_name in existing_names,
+                    }
                 )
 
             return discovered

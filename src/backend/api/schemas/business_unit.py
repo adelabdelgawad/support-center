@@ -31,6 +31,8 @@ class BusinessUnitBase(HTTPSchemaModel):
 class BusinessUnitCreate(BusinessUnitBase):
     """Schema for creating a new business unit."""
 
+    is_active: bool = True
+
     @field_validator('working_hours')
     @classmethod
     def validate_working_hours(cls, v: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

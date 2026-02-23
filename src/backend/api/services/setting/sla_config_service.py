@@ -3,7 +3,7 @@ SLA Configuration service for managing SLA rules and calculating SLA times.
 """
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +34,7 @@ class SLAConfigService:
         business_unit_id: Optional[int] = None,
     ) -> List[SLAConfig]:
         """List all SLA configurations with optional filters."""
-        filters = {}
+        filters: dict[str, Any] = {}
         if active_only:
             filters["is_active"] = True
         if priority_id is not None:
@@ -140,7 +140,7 @@ class SLAConfigService:
         """
         # Try to find most specific SLA config using repository method
         config = await SLAConfigRepository.find_matching_config(
-            db, category_id, priority_id, business_unit_id
+            db, cast(Any, category_id), priority_id, business_unit_id
         )
 
         if config:
@@ -175,7 +175,7 @@ class SLAConfigService:
     @staticmethod
     def calculate_sla_due_date(
         created_at: datetime,
-        hours: int,
+        hours: float,
         business_hours_only: bool = True,
     ) -> datetime:
         """
@@ -216,7 +216,7 @@ class SLAConfigService:
                 continue
 
             # Calculate hours available today
-            hours_left_today = business_end_hour - current_time.hour
+            hours_left_today: float = business_end_hour - current_time.hour
             if current_time.minute > 0:
                 hours_left_today -= current_time.minute / 60
 

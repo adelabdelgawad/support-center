@@ -15,7 +15,7 @@ class TestOrgUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/organizational-units/ with empty database."""
-        response = await client.get("/api/setting/organizational-units/")
+        response = await client.get("/backend/organizational-units/")
         assert response.status_code == 200
 
         data = response.json()
@@ -34,7 +34,7 @@ class TestOrgUnitsEndpoints:
         db_session.add_all([ou1, ou2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/organizational-units/")
+        response = await client.get("/backend/organizational-units/")
         assert response.status_code == 200
 
         data = response.json()
@@ -55,7 +55,7 @@ class TestOrgUnitsEndpoints:
             db_session.add(ou)
         await db_session.commit()
 
-        response = await client.get("/api/setting/organizational-units/?limit=2&skip=0")
+        response = await client.get("/backend/organizational-units/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["organizationalUnits"]) == 2
@@ -71,7 +71,7 @@ class TestOrgUnitsEndpoints:
         db_session.add_all([ou1, ou2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/organizational-units/?is_active=true")
+        response = await client.get("/backend/organizational-units/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["organizationalUnits"]) == 1
@@ -87,7 +87,7 @@ class TestOrgUnitsEndpoints:
         db_session.add_all([ou1, ou2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/organizational-units/?search=IT")
+        response = await client.get("/backend/organizational-units/?search=IT")
         assert response.status_code == 200
         data = response.json()
         assert len(data["organizationalUnits"]) == 1
@@ -103,7 +103,7 @@ class TestOrgUnitsEndpoints:
         await db_session.commit()
         await db_session.refresh(ou)
 
-        response = await client.get(f"/api/setting/organizational-units/{ou.id}")
+        response = await client.get(f"/backend/organizational-units/{ou.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -116,7 +116,7 @@ class TestOrgUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/organizational-units/{ou_id} with non-existent ID."""
-        response = await client.get("/api/setting/organizational-units/99999")
+        response = await client.get("/backend/organizational-units/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -131,7 +131,7 @@ class TestOrgUnitsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/organizational-units/", json=ou_data)
+        response = await client.post("/backend/organizational-units/", json=ou_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -147,7 +147,7 @@ class TestOrgUnitsEndpoints:
         """Test POST /api/setting/organizational-units/ with invalid data."""
         ou_data = {"name": "Missing DN"}
 
-        response = await client.post("/api/setting/organizational-units/", json=ou_data)
+        response = await client.post("/backend/organizational-units/", json=ou_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -162,7 +162,7 @@ class TestOrgUnitsEndpoints:
 
         update_data = {"name": "Updated Name", "isActive": False}
 
-        response = await client.put(f"/api/setting/organizational-units/{ou.id}", json=update_data)
+        response = await client.put(f"/backend/organizational-units/{ou.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -176,7 +176,7 @@ class TestOrgUnitsEndpoints:
         """Test PUT /api/setting/organizational-units/{ou_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/organizational-units/99999", json=update_data)
+        response = await client.put("/backend/organizational-units/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -189,7 +189,7 @@ class TestOrgUnitsEndpoints:
         await db_session.commit()
         await db_session.refresh(ou)
 
-        response = await client.delete(f"/api/setting/organizational-units/{ou.id}")
+        response = await client.delete(f"/backend/organizational-units/{ou.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -200,5 +200,5 @@ class TestOrgUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/organizational-units/{ou_id} with non-existent ID."""
-        response = await client.delete("/api/setting/organizational-units/99999")
+        response = await client.delete("/backend/organizational-units/99999")
         assert response.status_code == 404

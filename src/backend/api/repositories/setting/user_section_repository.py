@@ -4,12 +4,13 @@ User Section CRUD operations using TechnicianSection table.
 Users are linked to sections through the technician_sections table.
 """
 
-from typing import List, Optional
+from typing import List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import select, delete
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from api.repositories.base_repository import BaseRepository
 from db import TechnicianSection
@@ -29,9 +30,9 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
         """Get all section assignments for a user with section details."""
         stmt = (
             select(TechnicianSection)
-            .options(selectinload(TechnicianSection.section))
-            .where(TechnicianSection.technician_id == user_id)
-            .order_by(TechnicianSection.created_at.desc())
+            .options(selectinload(cast(QueryableAttribute, TechnicianSection.section)))
+            .where(TechnicianSection.__table__.c.technician_id == user_id)
+            .order_by(TechnicianSection.__table__.c.created_at.desc())
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -40,8 +41,8 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
     async def get_section_ids_for_user(cls, db: AsyncSession, user_id: UUID) -> List[int]:
         """Get all section IDs assigned to a user."""
         stmt = (
-            select(TechnicianSection.section_id)
-            .where(TechnicianSection.technician_id == user_id)
+            select(TechnicianSection.__table__.c.section_id)
+            .where(TechnicianSection.__table__.c.technician_id == user_id)
         )
         result = await db.execute(stmt)
         return [row[0] for row in result.all()]
@@ -57,8 +58,8 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
         stmt = (
             select(TechnicianSection)
             .where(
-                TechnicianSection.technician_id == user_id,
-                TechnicianSection.section_id == section_id,
+                TechnicianSection.__table__.c.technician_id == user_id,
+                TechnicianSection.__table__.c.section_id == section_id,
             )
         )
         result = await db.execute(stmt)
@@ -91,15 +92,14 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
         section_id: int,
     ) -> bool:
         """Remove a section assignment. Caller must commit."""
-        stmt = (
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(TechnicianSection)
             .where(
-                TechnicianSection.technician_id == user_id,
-                TechnicianSection.section_id == section_id,
+                TechnicianSection.__table__.c.technician_id == user_id,
+                TechnicianSection.__table__.c.section_id == section_id,
             )
         )
-        result = await db.execute(stmt)
-        return result.rowcount > 0
+        return cursor_result.rowcount > 0
 
     @classmethod
     async def set_sections(
@@ -110,23 +110,19 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
         assigned_by: UUID,
     ) -> List[TechnicianSection]:
         """Replace all section assignments for a user. Caller must commit."""
-        # Get existing assignments
         existing_ids = set(await cls.get_section_ids_for_user(db, user_id))
         new_ids = set(section_ids)
 
-        # Remove assignments no longer in list
         to_remove = existing_ids - new_ids
         if to_remove:
-            stmt = (
+            await db.execute(
                 delete(TechnicianSection)
                 .where(
-                    TechnicianSection.technician_id == user_id,
-                    TechnicianSection.section_id.in_(to_remove),
+                    TechnicianSection.__table__.c.technician_id == user_id,
+                    TechnicianSection.__table__.c.section_id.in_(to_remove),
                 )
             )
-            await db.execute(stmt)
 
-        # Add new assignments
         to_add = new_ids - existing_ids
         for section_id in to_add:
             assignment = TechnicianSection(
@@ -138,5 +134,4 @@ class UserSectionRepository(BaseRepository[TechnicianSection]):
 
         await db.flush()
 
-        # Return updated list
         return await cls.get_sections_for_user(db, user_id)

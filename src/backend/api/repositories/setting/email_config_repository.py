@@ -24,7 +24,7 @@ class EmailConfigRepository(BaseRepository[EmailConfig]):
         Returns:
             Active email configuration or None if no active config exists
         """
-        stmt = select(EmailConfig).where(EmailConfig.is_active)
+        stmt = select(EmailConfig).where(EmailConfig.__table__.c.is_active.is_(True))
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -34,17 +34,18 @@ class EmailConfigRepository(BaseRepository[EmailConfig]):
         Deactivate all email configurations.
 
         Used before activating a new config to ensure only one is active.
+        Caller must commit.
 
         Args:
             db: Database session
         """
         stmt = update(EmailConfig).values(is_active=False)
         await db.execute(stmt)
-        await db.commit()
+        await db.flush()
 
     @classmethod
     async def activate_config(
-        cls, db: AsyncSession, config_id
+        cls, db: AsyncSession, config_id: int
     ) -> Optional[EmailConfig]:
         """
         Activate a specific email configuration and deactivate all others.
@@ -54,7 +55,7 @@ class EmailConfigRepository(BaseRepository[EmailConfig]):
             config_id: ID of configuration to activate
 
         Returns:
-            Activated configuration or None if not found
+            Activated configuration or None if not found. Caller must commit.
         """
         # First deactivate all configs
         await cls.deactivate_all(db)
@@ -64,7 +65,7 @@ class EmailConfigRepository(BaseRepository[EmailConfig]):
         if config:
             config.is_active = True
             db.add(config)
-            await db.commit()
+            await db.flush()
             await db.refresh(config)
 
         return config

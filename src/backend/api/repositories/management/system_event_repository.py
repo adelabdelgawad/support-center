@@ -2,11 +2,10 @@
 Repository for SystemEvent database operations.
 """
 
-from typing import List, Optional
-from sqlmodel import select
-from sqlalchemy import func
+from typing import List, Optional, cast
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 from db import SystemEvent
 from api.repositories.base_repository import BaseRepository
 
@@ -34,19 +33,19 @@ class SystemEventRepository(BaseRepository[SystemEvent]):
         Returns:
             Tuple of (events list, total count, active_count, inactive_count)
         """
-        stmt = select(SystemEvent).options(selectinload(SystemEvent.system_message))
+        stmt = select(SystemEvent).options(selectinload(cast(QueryableAttribute, SystemEvent.system_message)))
 
         if is_active is not None:
-            stmt = stmt.where(SystemEvent.is_active == is_active)
+            stmt = stmt.where(SystemEvent.__table__.c.is_active == is_active)
 
         count_stmt = select(func.count()).select_from(SystemEvent)
         if is_active is not None:
-            count_stmt = count_stmt.where(SystemEvent.is_active == is_active)
+            count_stmt = count_stmt.where(SystemEvent.__table__.c.is_active == is_active)
 
         count_result = await db.execute(count_stmt)
         total = count_result.scalar() or 0
 
-        stmt = stmt.offset(skip).limit(limit).order_by(SystemEvent.created_at.desc())
+        stmt = stmt.offset(skip).limit(limit).order_by(SystemEvent.__table__.c.created_at.desc())
         result = await db.execute(stmt)
         events = result.scalars().all()
 
@@ -69,7 +68,7 @@ class SystemEventRepository(BaseRepository[SystemEvent]):
         stmt = (
             select(func.count())
             .select_from(SystemEvent)
-            .where(SystemEvent.is_active == True)
+            .where(SystemEvent.__table__.c.is_active.is_(True))
         )
         result = await db.execute(stmt)
         active_count = result.scalar() or 0
@@ -77,7 +76,7 @@ class SystemEventRepository(BaseRepository[SystemEvent]):
         stmt = (
             select(func.count())
             .select_from(SystemEvent)
-            .where(SystemEvent.is_active == False)
+            .where(SystemEvent.__table__.c.is_active.is_(False))
         )
         result = await db.execute(stmt)
         inactive_count = result.scalar() or 0

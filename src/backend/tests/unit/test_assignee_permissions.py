@@ -141,8 +141,9 @@ async def request_status_open(db_session: AsyncSession) -> RequestStatus:
     status = RequestStatus(
         id=1,
         name="Open",
+        name_en="Open",
+        name_ar="مفتوح",
         description="Request is open",
-        ar_name="مفتوح",
         color="#3B82F6",
         count_as_solved=False,  # NOT solved
     )
@@ -158,8 +159,9 @@ async def request_status_solved(db_session: AsyncSession) -> RequestStatus:
     status = RequestStatus(
         id=6,
         name="Resolved",
+        name_en="Resolved",
+        name_ar="تم الحل",
         description="Request is resolved",
-        ar_name="تم الحل",
         color="#22C55E",
         count_as_solved=True,  # SOLVED
     )

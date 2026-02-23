@@ -1,7 +1,10 @@
 """Tests for chat endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from unittest.mock import AsyncMock
@@ -21,7 +24,7 @@ class TestChatEndpoints:
     ):
         """Test GET /support/chat/requests/{request_id}/messages."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -64,7 +67,7 @@ class TestChatEndpoints:
     ):
         """Test POST /support/chat/requests/{request_id}/messages."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -129,7 +132,7 @@ class TestChatEndpoints:
     ):
         """Test GET /support/chat/messages/{message_id}."""
         # Create test request and message
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -181,7 +184,7 @@ class TestChatEndpoints:
     ):
         """Test PUT /support/chat/messages/{message_id}."""
         # Create test request and message
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -235,7 +238,7 @@ class TestChatEndpoints:
     ):
         """Test DELETE /support/chat/messages/{message_id}."""
         # Create test request and message
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -283,7 +286,7 @@ class TestChatEndpoints:
     ):
         """Test PUT /support/chat/requests/{request_id}/read."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -321,7 +324,7 @@ class TestChatEndpoints:
     ):
         """Test GET /support/chat/requests/{request_id}/unread-count."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -362,7 +365,7 @@ class TestChatEndpoints:
     ):
         """Test POST /support/chat/requests/{request_id}/typing."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -403,7 +406,7 @@ class TestChatEndpoints:
     ):
         """Test GET /support/chat/requests/{request_id}/participants."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)

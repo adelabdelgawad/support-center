@@ -30,13 +30,13 @@ class RequestTypeRepository(BaseRepository[RequestType]):
         Returns:
             List of active request types
         """
-        stmt = select(RequestType).order_by(RequestType.id)
-        stmt = stmt.where(RequestType.is_active)
+        stmt = select(RequestType).order_by(RequestType.__table__.c.id)
+        stmt = stmt.where(RequestType.__table__.c.is_active.is_(True))
 
         result = await db.execute(stmt)
         request_types = result.scalars().all()
 
-        return request_types
+        return list(request_types)
 
     @classmethod
     async def find_by_section(
@@ -54,13 +54,13 @@ class RequestTypeRepository(BaseRepository[RequestType]):
         Returns:
             List of request types
         """
-        stmt = select(RequestType).order_by(RequestType.id)
-        stmt = stmt.where(RequestType.section_id == section_id)
+        stmt = select(RequestType).order_by(RequestType.__table__.c.id)
+        stmt = stmt.where(RequestType.__table__.c.section_id == section_id)
 
         result = await db.execute(stmt)
         request_types = result.scalars().all()
 
-        return request_types
+        return list(request_types)
 
     @classmethod
     async def find_paginated_with_counts(
@@ -85,24 +85,24 @@ class RequestTypeRepository(BaseRepository[RequestType]):
             Dict with types, total, activeCount, inactiveCount
         """
         # Base query
-        stmt = select(RequestType).order_by(RequestType.id)
+        stmt = select(RequestType).order_by(RequestType.__table__.c.id)
 
         # Build count query with all counts in single query
         count_stmt = select(
-            func.count(RequestType.id).label("total"),
-            func.count(case((RequestType.is_active, 1))).label("active_count"),
-            func.count(case((not RequestType.is_active, 1))).label("inactive_count"),
+            func.count().label("total"),
+            func.count(case((RequestType.__table__.c.is_active.is_(True), 1))).label("active_count"),
+            func.count(case((RequestType.__table__.c.is_active.is_(False), 1))).label("inactive_count"),
         )
 
         # Apply filters to both queries
         if is_active is not None:
-            stmt = stmt.where(RequestType.is_active == is_active)
-            count_stmt = count_stmt.where(RequestType.is_active == is_active)
+            stmt = stmt.where(RequestType.__table__.c.is_active == is_active)
+            count_stmt = count_stmt.where(RequestType.__table__.c.is_active == is_active)
 
         if name:
             # Search in both English and Arabic names
-            name_filter = (RequestType.name_en.ilike(f"%{name}%")) | (
-                RequestType.name_ar.ilike(f"%{name}%")
+            name_filter = (RequestType.__table__.c.name_en.ilike(f"%{name}%")) | (
+                RequestType.__table__.c.name_ar.ilike(f"%{name}%")
             )
             stmt = stmt.where(name_filter)
             count_stmt = count_stmt.where(name_filter)
@@ -138,7 +138,7 @@ class RequestTypeRepository(BaseRepository[RequestType]):
             request_type_id: Request type ID
 
         Returns:
-            Updated request type or None
+            Updated request type or None. Caller must commit.
         """
         request_type = await cls.find_by_id(db, request_type_id)
 
@@ -146,7 +146,7 @@ class RequestTypeRepository(BaseRepository[RequestType]):
             return None
 
         request_type.is_active = not request_type.is_active
-        await db.commit()
+        await db.flush()
         await db.refresh(request_type)
 
         return request_type
@@ -164,16 +164,16 @@ class RequestTypeRepository(BaseRepository[RequestType]):
             is_active: New active status
 
         Returns:
-            List of updated request types
+            List of updated request types. Caller must commit.
         """
-        stmt = select(RequestType).where(RequestType.id.in_(type_ids))
+        stmt = select(RequestType).where(RequestType.__table__.c.id.in_(type_ids))
         result = await db.execute(stmt)
         request_types = result.scalars().all()
 
         for request_type in request_types:
             request_type.is_active = is_active
 
-        await db.commit()
+        await db.flush()
 
         return list(request_types)
 
@@ -189,8 +189,8 @@ class RequestTypeRepository(BaseRepository[RequestType]):
         Returns:
             True if in use, False otherwise
         """
-        stmt = select(ServiceRequest.id).where(
-            ServiceRequest.request_type_id == request_type_id
+        stmt = select(ServiceRequest.__table__.c.id).where(
+            ServiceRequest.__table__.c.request_type_id == request_type_id
         ).limit(1)
         result = await db.execute(stmt)
         return result.scalar_one_or_none() is not None
@@ -208,7 +208,7 @@ class RequestTypeRepository(BaseRepository[RequestType]):
             force: If True, soft delete even if in use
 
         Returns:
-            Tuple of (success, error_message)
+            Tuple of (success, error_message). Caller must commit.
         """
         request_type = await cls.find_by_id(db, request_type_id)
 
@@ -224,11 +224,11 @@ class RequestTypeRepository(BaseRepository[RequestType]):
         # If in use, soft delete (mark as inactive)
         if in_use:
             request_type.is_active = False
-            await db.commit()
+            await db.flush()
             return True, None
 
         # If not in use, hard delete
         await db.delete(request_type)
-        await db.commit()
+        await db.flush()
 
         return True, None

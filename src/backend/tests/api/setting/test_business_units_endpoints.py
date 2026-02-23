@@ -15,7 +15,7 @@ class TestBusinessUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-units/ with empty database."""
-        response = await client.get("/api/setting/business-units/")
+        response = await client.get("/backend/business-units/")
         assert response.status_code == 200
 
         data = response.json()
@@ -36,7 +36,7 @@ class TestBusinessUnitsEndpoints:
         db_session.add_all([bu1, bu2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-units/")
+        response = await client.get("/backend/business-units/")
         assert response.status_code == 200
 
         data = response.json()
@@ -58,7 +58,7 @@ class TestBusinessUnitsEndpoints:
             db_session.add(bu)
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-units/?limit=2&skip=0")
+        response = await client.get("/backend/business-units/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnits"]) == 2
@@ -74,7 +74,7 @@ class TestBusinessUnitsEndpoints:
         db_session.add_all([bu1, bu2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-units/?is_active=true")
+        response = await client.get("/backend/business-units/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnits"]) == 1
@@ -90,7 +90,7 @@ class TestBusinessUnitsEndpoints:
         db_session.add_all([bu1, bu2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-units/?search=IT")
+        response = await client.get("/backend/business-units/?search=IT")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnits"]) == 1
@@ -106,7 +106,7 @@ class TestBusinessUnitsEndpoints:
         await db_session.commit()
         await db_session.refresh(bu)
 
-        response = await client.get(f"/api/setting/business-units/{bu.id}")
+        response = await client.get(f"/backend/business-units/{bu.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -119,7 +119,7 @@ class TestBusinessUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-units/{bu_id} with non-existent ID."""
-        response = await client.get("/api/setting/business-units/99999")
+        response = await client.get("/backend/business-units/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -134,7 +134,7 @@ class TestBusinessUnitsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/business-units/", json=bu_data)
+        response = await client.post("/backend/business-units/", json=bu_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -150,7 +150,7 @@ class TestBusinessUnitsEndpoints:
         """Test POST /api/setting/business-units/ with invalid data."""
         bu_data = {"name": "Missing code"}
 
-        response = await client.post("/api/setting/business-units/", json=bu_data)
+        response = await client.post("/backend/business-units/", json=bu_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -166,7 +166,7 @@ class TestBusinessUnitsEndpoints:
         update_data = {"name": "Updated Name", "code": "UPD", "isActive": False}
 
         response = await client.put(
-            f"/api/setting/business-units/{bu.id}", json=update_data
+            f"/backend/business-units/{bu.id}", json=update_data
         )
         assert response.status_code == 200
 
@@ -182,7 +182,7 @@ class TestBusinessUnitsEndpoints:
         """Test PUT /api/setting/business-units/{bu_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/business-units/99999", json=update_data)
+        response = await client.put("/backend/business-units/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -195,7 +195,7 @@ class TestBusinessUnitsEndpoints:
         await db_session.commit()
         await db_session.refresh(bu)
 
-        response = await client.delete(f"/api/setting/business-units/{bu.id}")
+        response = await client.delete(f"/backend/business-units/{bu.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -206,7 +206,7 @@ class TestBusinessUnitsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/business-units/{bu_id} with non-existent ID."""
-        response = await client.delete("/api/setting/business-units/99999")
+        response = await client.delete("/backend/business-units/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -223,7 +223,7 @@ class TestBusinessUnitsEndpoints:
 
         bulk_data = {"ids": [bu1.id, bu2.id], "isActive": False}
 
-        response = await client.put("/api/setting/business-units/status", json=bulk_data)
+        response = await client.put("/backend/business-units/status", json=bulk_data)
         assert response.status_code == 200
 
         data = response.json()

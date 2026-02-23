@@ -1,18 +1,20 @@
 """
-Prometheus metrics for WebSocket monitoring.
+Prometheus metrics for WebSocket and session monitoring.
 
 This module defines all metrics for WebSocket operations including:
 - Connection tracking (active, total, errors)
 - Message throughput (sent, received, latency)
 - Performance (initial load, query counts)
 - Reliability (reconnects, gaps)
+- Session heartbeat tracking (desktop, web, remote_access)
 
 Usage:
     from core.metrics import (
         websocket_connections,
         websocket_active_connections,
         track_connection,
-        track_initial_load
+        track_initial_load,
+        track_session_heartbeat,
     )
 
     # Track connection
@@ -24,13 +26,16 @@ Usage:
     with track_initial_load():
         # Load logic
         pass
+
+    # Track session heartbeat
+    track_session_heartbeat("desktop", success=True, latency_seconds=300.0)
 """
 
 from contextlib import asynccontextmanager
 from time import time
 from typing import Optional
 
-from prometheus_client import Counter, Gauge, Histogram, Info
+from prometheus_client import Counter, Gauge, Histogram, Info, start_http_server as _prometheus_start_http_server
 
 # ==============================================================================
 # Connection Metrics
@@ -350,6 +355,29 @@ async def track_initial_load(endpoint: str = "/chat", client_type: str = "unknow
 
 
 # ==============================================================================
+# Session Heartbeat Metrics (desktop, web, remote_access)
+# ==============================================================================
+
+session_heartbeat_total = Counter(
+    'session_heartbeat_total',
+    'Total session heartbeats processed',
+    ['session_type', 'status']  # session_type: desktop/web/remote_access, status: success/failure
+)
+
+session_heartbeat_latency_seconds = Histogram(
+    'session_heartbeat_latency_seconds',
+    'Time between consecutive heartbeats in seconds',
+    ['session_type'],
+    buckets=(60, 120, 180, 300, 600, 900, 1800, 3600, float('inf'))
+)
+
+session_heartbeat_last_timestamp = Gauge(
+    'session_heartbeat_last_timestamp',
+    'Timestamp of the last successful heartbeat',
+    ['session_type']
+)
+
+# ==============================================================================
 # General Metrics for API Services
 # ==============================================================================
 
@@ -426,6 +454,22 @@ def track_heartbeat_received(endpoint: str, rtt_ms: float):
 def track_heartbeat_timeout(endpoint: str):
     """Track heartbeat timeout."""
     websocket_heartbeat_timeout.labels(endpoint=endpoint).inc()
+
+
+def track_session_heartbeat(session_type: str, success: bool, latency_seconds: float | None = None) -> None:
+    """Track a session heartbeat (desktop, web, or remote_access).
+
+    Args:
+        session_type: Type of session (desktop, web, remote_access)
+        success: Whether heartbeat succeeded
+        latency_seconds: Time since last heartbeat (only recorded on success)
+    """
+    status = "success" if success else "failure"
+    session_heartbeat_total.labels(session_type=session_type, status=status).inc()
+    if success:
+        session_heartbeat_last_timestamp.labels(session_type=session_type).set_to_current_time()
+        if latency_seconds is not None:
+            session_heartbeat_latency_seconds.labels(session_type=session_type).observe(latency_seconds)
 
 
 def track_gap_detected(endpoint: str, gap_size: int):
@@ -816,7 +860,7 @@ def track_cache_operation(operation: str, hit: Optional[bool], duration_ms: floa
 
 
 # Legacy function aliases for compatibility
-def track_database_error(operation: str, table: str, error_type: str):
+def track_database_error(operation: str, table: str = "unknown", error_type: str = "unknown"):
     """Track database error (legacy alias)."""
     database_error_count.labels(
         operation=operation,
@@ -825,7 +869,7 @@ def track_database_error(operation: str, table: str, error_type: str):
     ).inc()
 
 
-def track_redis_error(operation: str, error_type: str):
+def track_redis_error(operation: str, error_type: str = "unknown"):
     """Track Redis error (legacy alias)."""
     redis_error_count.labels(
         operation=operation,
@@ -841,7 +885,7 @@ def track_validation_error(field: str, rule: str):
     ).inc()
 
 
-def track_service_error(service_name: str, error_type: str):
+def track_service_error(service_name: str, error_type: str = "unknown"):
     """Track service error (legacy alias)."""
     # Generic service error tracking
     api_request_count.labels(
@@ -1213,3 +1257,12 @@ def track_dual_write_failure(transport: str):
         transport: Transport that failed
     """
     dual_write_failure_total.labels(transport=transport).inc()
+
+
+def start_http_server(port: int = 8001) -> None:
+    """Start the Prometheus HTTP metrics server.
+
+    Args:
+        port: Port to listen on (default: 8001)
+    """
+    _prometheus_start_http_server(port)

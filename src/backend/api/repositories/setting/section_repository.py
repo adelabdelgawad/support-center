@@ -7,7 +7,8 @@ Handles all database queries related to service sections.
 from typing import List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
+from typing import cast
 
 from db.models import Section, TechnicianSection, User
 from api.repositories.base_repository import BaseRepository
@@ -41,23 +42,23 @@ class SectionRepository(BaseRepository[Section]):
         Returns:
             List of service sections
         """
-        stmt = select(Section).where(Section.is_deleted.is_(False))
+        stmt = select(Section).where(Section.__table__.c.is_deleted.is_(False))
 
         if only_active:
-            stmt = stmt.where(Section.is_active)
+            stmt = stmt.where(Section.__table__.c.is_active.is_(True))
 
         if only_shown:
-            stmt = stmt.where(Section.is_shown)
+            stmt = stmt.where(Section.__table__.c.is_shown.is_(True))
 
         if include_technicians:
             stmt = stmt.options(
-                selectinload(Section.technician_assignments).selectinload(
-                    TechnicianSection.technician
+                selectinload(cast(QueryableAttribute, Section.technician_assignments)).selectinload(
+                    cast(QueryableAttribute, TechnicianSection.technician)
                 )
             )
 
         if order_by_id:
-            stmt = stmt.order_by(Section.id)
+            stmt = stmt.order_by(Section.__table__.c.id)
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -76,7 +77,10 @@ class SectionRepository(BaseRepository[Section]):
         Returns:
             Section or None if not found or deleted
         """
-        stmt = select(Section).where(Section.id == section_id, Section.is_deleted.is_(False))
+        stmt = select(Section).where(
+            Section.__table__.c.id == section_id,
+            Section.__table__.c.is_deleted.is_(False),
+        )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -100,7 +104,8 @@ class SectionRepository(BaseRepository[Section]):
         """
         if name_en:
             stmt = select(Section).where(
-                Section.name_en == name_en, Section.is_deleted.is_(False)
+                Section.__table__.c.shown_name_en == name_en,
+                Section.__table__.c.is_deleted.is_(False),
             )
             result = await db.execute(stmt)
             section = result.scalar_one_or_none()
@@ -109,7 +114,8 @@ class SectionRepository(BaseRepository[Section]):
 
         if name_ar:
             stmt = select(Section).where(
-                Section.name_ar == name_ar, Section.is_deleted.is_(False)
+                Section.__table__.c.shown_name_ar == name_ar,
+                Section.__table__.c.is_deleted.is_(False),
             )
             result = await db.execute(stmt)
             return result.scalar_one_or_none()
@@ -145,9 +151,10 @@ class SectionRepository(BaseRepository[Section]):
         if is_shown is not None:
             filters["is_shown"] = is_shown
 
-        return await cls.find_paginated(
-            db, page=page, per_page=per_page, filters=filters, order_by=Section.id
+        items, total = await cls.find_paginated(
+            db, page=page, per_page=per_page, filters=filters, order_by=Section.__table__.c.id
         )
+        return items, total or 0
 
     @classmethod
     async def toggle_active_status(
@@ -172,7 +179,7 @@ class SectionRepository(BaseRepository[Section]):
         section.is_active = is_active
 
         if commit:
-            await db.commit()
+            await db.flush()
             await db.refresh(section)
 
         return section
@@ -200,7 +207,7 @@ class SectionRepository(BaseRepository[Section]):
         section.is_shown = is_shown
 
         if commit:
-            await db.commit()
+            await db.flush()
             await db.refresh(section)
 
         return section
@@ -227,7 +234,7 @@ class SectionRepository(BaseRepository[Section]):
         section.is_deleted = True
 
         if commit:
-            await db.commit()
+            await db.flush()
 
         return True
 
@@ -247,14 +254,17 @@ class SectionRepository(BaseRepository[Section]):
         """
         stmt = (
             select(User)
-            .join(TechnicianSection, TechnicianSection.technician_id == User.id)
-            .where(
-                TechnicianSection.section_id == section_id,
-                User.is_deleted.is_(False),
-                User.is_active,
-                User.is_technician,
+            .join(
+                TechnicianSection,
+                TechnicianSection.__table__.c.technician_id == User.__table__.c.id,
             )
-            .order_by(User.full_name, User.username)
+            .where(
+                TechnicianSection.__table__.c.section_id == section_id,
+                User.__table__.c.is_deleted.is_(False),
+                User.__table__.c.is_active.is_(True),
+                User.__table__.c.is_technician.is_(True),
+            )
+            .order_by(User.__table__.c.full_name, User.__table__.c.username)
         )
 
         result = await db.execute(stmt)

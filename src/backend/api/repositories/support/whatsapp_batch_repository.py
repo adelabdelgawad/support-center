@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
-from sqlmodel import select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db import ChatMessage, ServiceRequest, WhatsAppBatch
 from api.repositories.base_repository import BaseRepository
@@ -31,9 +31,9 @@ class WhatsAppBatchRepository(BaseRepository[WhatsAppBatch]):
             WhatsAppBatch if exists, None otherwise
         """
         stmt = select(WhatsAppBatch).where(
-            WhatsAppBatch.request_id == request_id,
-            WhatsAppBatch.first_message_id == first_message_id,
-            WhatsAppBatch.last_message_id == last_message_id,
+            WhatsAppBatch.__table__.c.request_id == request_id,
+            WhatsAppBatch.__table__.c.first_message_id == first_message_id,
+            WhatsAppBatch.__table__.c.last_message_id == last_message_id,
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -63,16 +63,16 @@ class WhatsAppBatchRepository(BaseRepository[WhatsAppBatch]):
         """
         stmt = (
             select(ChatMessage)
-            .where(ChatMessage.request_id == request_id)
-            .where(ChatMessage.sender_id is not None)
-            .order_by(ChatMessage.created_at.asc())
+            .where(ChatMessage.__table__.c.request_id == request_id)
+            .where(ChatMessage.__table__.c.sender_id.isnot(None))
+            .order_by(ChatMessage.__table__.c.created_at.asc())
         )
 
         if request.whatsapp_last_sent_at:
             last_sent = request.whatsapp_last_sent_at
             if last_sent.tzinfo is not None:
                 last_sent = last_sent.replace(tzinfo=None)
-            stmt = stmt.where(ChatMessage.created_at > last_sent)
+            stmt = stmt.where(ChatMessage.__table__.c.created_at > last_sent)
 
         result = await db.execute(stmt)
         messages = result.scalars().all()

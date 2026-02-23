@@ -3,7 +3,8 @@ Role service with performance optimizations.
 Enhanced with centralized logging and error handling.
 """
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
+from uuid import UUID
 import logging
 
 from core.decorators import (
@@ -206,7 +207,7 @@ class RoleService:
         Returns:
             Updated role or None
         """
-        return await RoleRepository.toggle_active_status(db, role_id, updated_by)
+        return await RoleRepository.toggle_active_status(db, role_id, cast(Optional[UUID], updated_by))
 
     @staticmethod
     @transactional_database_operation("delete_role")
@@ -291,7 +292,7 @@ class RoleService:
         Returns:
             Number of new assignments created
         """
-        return await RoleRepository.assign_pages(db, role_id, page_ids, created_by)
+        return await RoleRepository.assign_pages(db, role_id, page_ids, cast(Optional[UUID], created_by))
 
     @staticmethod
     @transactional_database_operation("remove_pages_from_role")
@@ -333,7 +334,7 @@ class RoleService:
         Returns:
             Number of new assignments created
         """
-        return await RoleRepository.assign_users(db, role_id, user_ids, created_by)
+        return await RoleRepository.assign_users(db, role_id, cast(List[UUID], user_ids), cast(Optional[UUID], created_by))
 
     @staticmethod
     @transactional_database_operation("remove_users_from_role")
@@ -352,4 +353,4 @@ class RoleService:
         Returns:
             Number of assignments removed
         """
-        return await RoleRepository.remove_users(db, role_id, user_ids)
+        return await RoleRepository.remove_users(db, role_id, cast(List[UUID], user_ids))

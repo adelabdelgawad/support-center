@@ -1,7 +1,10 @@
 """Tests for screenshots endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from unittest.mock import AsyncMock
@@ -22,7 +25,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test GET /support/screenshots/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -64,7 +67,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test POST /support/screenshots/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -115,7 +118,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test POST /support/screenshots/requests/{request_id} with invalid file type."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -160,7 +163,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test GET /support/screenshots/{screenshot_id}."""
         # Create test request and screenshot
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -212,7 +215,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test GET /support/screenshots/{screenshot_id}/download."""
         # Create test request and screenshot
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -265,7 +268,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test DELETE /support/screenshots/{screenshot_id}."""
         # Create test request and screenshot
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -318,7 +321,7 @@ class TestScreenshotsEndpoints:
     ):
         """Test DELETE /support/screenshots/bulk."""
         # Create test request and screenshots
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -367,7 +370,8 @@ class TestScreenshotsEndpoints:
 
         payload = {"screenshotIds": [screenshot1.id, screenshot2.id]}
 
-        response = await async_client.delete(
+        response = await async_client.request(
+            "DELETE",
             "/support/screenshots/bulk",
             headers={"Authorization": f"Bearer {test_user_token}"},
             json=payload,

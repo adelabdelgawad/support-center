@@ -15,7 +15,7 @@ class TestCustomViewsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/user-custom-views/ with empty database."""
-        response = await client.get("/api/setting/user-custom-views/")
+        response = await client.get("/backend/user-custom-views/")
         assert response.status_code == 200
 
         data = response.json()
@@ -58,7 +58,7 @@ class TestCustomViewsEndpoints:
         db_session.add_all([view1, view2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/user-custom-views/")
+        response = await client.get("/backend/user-custom-views/")
         assert response.status_code == 200
 
         data = response.json()
@@ -99,7 +99,7 @@ class TestCustomViewsEndpoints:
             db_session.add(view)
         await db_session.commit()
 
-        response = await client.get("/api/setting/user-custom-views/?limit=2&skip=0")
+        response = await client.get("/backend/user-custom-views/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["userCustomViews"]) == 2
@@ -127,7 +127,7 @@ class TestCustomViewsEndpoints:
         db_session.add_all([view1, view2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/user-custom-views/?is_active=true")
+        response = await client.get("/backend/user-custom-views/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["userCustomViews"]) == 1
@@ -164,7 +164,7 @@ class TestCustomViewsEndpoints:
         db_session.add_all([view1, view2])
         await db_session.commit()
 
-        response = await client.get(f"/api/setting/user-custom-views/?user_id={user1.id}")
+        response = await client.get(f"/backend/user-custom-views/?user_id={user1.id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data["userCustomViews"]) == 1
@@ -192,7 +192,7 @@ class TestCustomViewsEndpoints:
         db_session.add_all([view1, view2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/user-custom-views/?search=My")
+        response = await client.get("/backend/user-custom-views/?search=My")
         assert response.status_code == 200
         data = response.json()
         assert len(data["userCustomViews"]) == 1
@@ -226,7 +226,7 @@ class TestCustomViewsEndpoints:
         await db_session.commit()
         await db_session.refresh(view)
 
-        response = await client.get(f"/api/setting/user-custom-views/{view.id}")
+        response = await client.get(f"/backend/user-custom-views/{view.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -239,7 +239,7 @@ class TestCustomViewsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/user-custom-views/{view_id} with non-existent ID."""
-        response = await client.get("/api/setting/user-custom-views/99999")
+        response = await client.get("/backend/user-custom-views/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -267,7 +267,7 @@ class TestCustomViewsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/user-custom-views/", json=view_data)
+        response = await client.post("/backend/user-custom-views/", json=view_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -283,7 +283,7 @@ class TestCustomViewsEndpoints:
         """Test POST /api/setting/user-custom-views/ with invalid data."""
         view_data = {"viewName": "Missing required fields"}
 
-        response = await client.post("/api/setting/user-custom-views/", json=view_data)
+        response = await client.post("/backend/user-custom-views/", json=view_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -320,7 +320,7 @@ class TestCustomViewsEndpoints:
             "isActive": False,
         }
 
-        response = await client.put(f"/api/setting/user-custom-views/{view.id}", json=update_data)
+        response = await client.put(f"/backend/user-custom-views/{view.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -334,7 +334,7 @@ class TestCustomViewsEndpoints:
         """Test PUT /api/setting/user-custom-views/{view_id} with non-existent ID."""
         update_data = {"viewName": "Updated"}
 
-        response = await client.put("/api/setting/user-custom-views/99999", json=update_data)
+        response = await client.put("/backend/user-custom-views/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -365,7 +365,7 @@ class TestCustomViewsEndpoints:
         await db_session.commit()
         await db_session.refresh(view)
 
-        response = await client.delete(f"/api/setting/user-custom-views/{view.id}")
+        response = await client.delete(f"/backend/user-custom-views/{view.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -376,5 +376,5 @@ class TestCustomViewsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/user-custom-views/{view_id} with non-existent ID."""
-        response = await client.delete("/api/setting/user-custom-views/99999")
+        response = await client.delete("/backend/user-custom-views/99999")
         assert response.status_code == 404

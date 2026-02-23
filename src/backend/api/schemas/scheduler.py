@@ -102,8 +102,8 @@ class ScheduledJobRead(ScheduledJobBase):
 
 class ScheduledJobDetail(ScheduledJobRead):
     """Detailed scheduled job with relationships."""
-    task_function: TaskFunctionRead
-    job_type: SchedulerJobTypeRead
+    task_function: Optional[TaskFunctionRead] = None
+    job_type: Optional[SchedulerJobTypeRead] = None
     recent_executions: List["ScheduledJobExecutionRead"] = []
 
 

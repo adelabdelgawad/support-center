@@ -125,6 +125,7 @@ async def get_active_desktop_sessions_with_users(db: AsyncSession = Depends(get_
         version_registry = await VersionPolicyService.get_version_registry(db, "desktop")
 
         # Batch-fetch Redis presence for all sessions (authoritative online status)
+        live_session_ids: set[str] = set()
         try:
             live_session_ids = await presence_service.get_all_present_session_ids()
         except Exception:
@@ -224,13 +225,14 @@ async def get_desktop_session_stats(
     try:
         from api.services.presence_service import presence_service
 
+        redis_user_ids: set[str] = set()
         try:
             redis_count = await presence_service.count_present_sessions()
             redis_user_ids = await presence_service.get_present_user_ids()
         except Exception:
             track_redis_error("desktop_sessions/stats")
             redis_count = 0
-            redis_user_ids = []
+            redis_user_ids = set()
 
         return {
             "totalSessions": redis_count,
@@ -276,6 +278,7 @@ async def check_presence_parity(
     try:
         from api.services.presence_service import presence_service
 
+        db_session_ids: set[str] = set()
         try:
             db_sessions = await DesktopSessionService.get_active_sessions(db=db)
             db_session_ids = {str(s.id) for s in db_sessions}
@@ -311,13 +314,14 @@ async def check_user_presence(user_id: UUID):
     try:
         from api.services.presence_service import presence_service
 
+        sessions: set[str] = set()
         try:
             is_present = await presence_service.is_user_present(user_id)
             sessions = await presence_service.get_user_sessions(user_id)
         except Exception:
             track_redis_error("desktop_sessions/presence/user")
             is_present = False
-            sessions = []
+            sessions = set()
 
         return {
             "userId": str(user_id),
@@ -554,7 +558,7 @@ async def push_update_to_desktop_session(
     """
     try:
         from datetime import datetime
-        from api.services.management.client_version_service import ClientVersionService
+        from api.services.setting.client_version_service import ClientVersionService
         from api.services.signalr_client import signalr_client
 
         # Get the session by UUID using service

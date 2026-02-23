@@ -23,7 +23,7 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
     ) -> Optional[OrganizationalUnit]:
         """Find organizational unit by OU name."""
         stmt = select(OrganizationalUnit).where(
-            OrganizationalUnit.ou_name == ou_name
+            OrganizationalUnit.__table__.c.ou_name == ou_name
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -45,9 +45,9 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
         stmt = select(OrganizationalUnit)
 
         if enabled_only:
-            stmt = stmt.where(OrganizationalUnit.is_enabled)
+            stmt = stmt.where(OrganizationalUnit.__table__.c.is_enabled.is_(True))
 
-        stmt = stmt.order_by(OrganizationalUnit.ou_name.asc())
+        stmt = stmt.order_by(OrganizationalUnit.__table__.c.ou_name.asc())
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -62,10 +62,8 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
         Returns:
             Tuple of (OUs list, enabled count, disabled count)
         """
-        # Get all OUs
         ous = await cls.get_all(db, enabled_only=False)
 
-        # Count enabled/disabled
         enabled_count = sum(1 for ou in ous if ou.is_enabled)
         disabled_count = len(ous) - enabled_count
 
@@ -86,14 +84,14 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
         Returns:
             Updated OU or None if not found
         """
-        ou = await cls.get_by_id(db, ou_id)
+        ou = await cls.find_by_id(db, ou_id)
         if not ou:
             return None
 
         ou.is_enabled = is_enabled
         ou.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
         await db.refresh(ou)
 
         return ou
@@ -118,7 +116,7 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
         Returns:
             Updated OU or None if not found
         """
-        ou = await cls.get_by_id(db, ou_id)
+        ou = await cls.find_by_id(db, ou_id)
         if not ou:
             return None
 
@@ -126,7 +124,7 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
         ou.last_synced_at = last_synced_at
         ou.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
         await db.refresh(ou)
 
         return ou
@@ -149,18 +147,18 @@ class OrganizationalUnitRepository(BaseRepository[OrganizationalUnit]):
 
         for ou_data in ou_list:
             ou_name = ou_data.get("ou_name")
+            if not isinstance(ou_name, str):
+                continue
             existing_ou = await cls.find_by_ou_name(db, ou_name)
 
             if existing_ou:
-                # Update DN if changed
                 if ou_data.get("ou_dn") and existing_ou.ou_dn != ou_data["ou_dn"]:
                     existing_ou.ou_dn = ou_data["ou_dn"]
                     existing_ou.updated_at = datetime.utcnow()
             else:
-                # Create new OU
                 new_ou = OrganizationalUnit(**ou_data)
                 db.add(new_ou)
                 created_count += 1
 
-        await db.commit()
+        await db.flush()
         return created_count

@@ -47,7 +47,7 @@ CURRENT ACCEPTABLE STATE:
 """
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,8 @@ from core.decorators import (
     log_database_operation,
     transactional_database_operation,
 )
+from core.heartbeat_summary import heartbeat_summary
+from core.metrics import track_session_heartbeat
 from db import RemoteAccessSession, User
 from api.repositories.management.remote_access_repository import RemoteAccessRepository
 
@@ -97,7 +99,7 @@ class RemoteAccessService:
         # Get the service request
         from api.repositories.support.request_repository import ServiceRequestRepository
 
-        request = await ServiceRequestRepository.find_by_id(db, request_id)
+        request = await ServiceRequestRepository.find_by_id(db, cast(Any, request_id))
         if not request:
             raise ValueError(f"Service request {request_id} not found")
 
@@ -307,7 +309,7 @@ class RemoteAccessService:
     @staticmethod
     async def get_session_by_id(
         db: AsyncSession, session_id: UUID
-    ) -> RemoteAccessSession:
+    ) -> Optional[RemoteAccessSession]:
         """Get session by ID."""
         return await RemoteAccessRepository.get_session_by_id(db, session_id)
 
@@ -365,6 +367,8 @@ class RemoteAccessService:
 
         # End the session (DB persistence FIRST)
         session = await RemoteAccessRepository.end_session(db, session_id, end_reason)
+        if not session:
+            raise ValueError(f"Failed to end session {session_id}")
 
         logger.info(f"Ended remote access session {session_id} - reason: {end_reason}")
 
@@ -446,6 +450,8 @@ class RemoteAccessService:
 
         # Toggle control (DB persistence FIRST)
         session = await RemoteAccessRepository.toggle_control(db, session_id, enabled)
+        if not session:
+            raise ValueError(f"Failed to toggle control for session {session_id}")
 
         logger.info(
             f"Toggled control mode for session {session_id} - enabled: {enabled}"
@@ -550,5 +556,10 @@ class RemoteAccessService:
 
         if updated_session:
             logger.debug(f"Updated heartbeat for session {session_id}")
+            track_session_heartbeat("remote_access", success=True)
+            heartbeat_summary.record("remote_access", success=True)
+        else:
+            track_session_heartbeat("remote_access", success=False)
+            heartbeat_summary.record("remote_access", success=False)
 
         return updated_session

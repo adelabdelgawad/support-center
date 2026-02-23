@@ -5,16 +5,18 @@ This repository handles all database operations for devices.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 
-from db import Device, DesktopSession
+from db import DesktopSession
+from db.models import Device
 from db.enums import DeviceDiscoverySource
 from api.repositories.base_repository import BaseRepository
+from typing import cast
 
 
 class DeviceRepository(BaseRepository[Device]):
@@ -46,19 +48,19 @@ class DeviceRepository(BaseRepository[Device]):
         Returns:
             List of devices
         """
-        stmt = select(Device).order_by(Device.hostname.asc())
+        stmt = select(Device).order_by(Device.__table__.c.hostname.asc())
 
         if lifecycle_state:
-            stmt = stmt.where(Device.lifecycle_state == lifecycle_state)
+            stmt = stmt.where(Device.__table__.c.lifecycle_state == lifecycle_state)
 
         if discovery_source:
-            stmt = stmt.where(Device.discovery_source == discovery_source)
+            stmt = stmt.where(Device.__table__.c.discovery_source == discovery_source)
 
         if search:
             search_pattern = f"%{search}%"
             stmt = stmt.where(
-                (Device.hostname.ilike(search_pattern))
-                | (Device.ip_address.ilike(search_pattern))
+                (Device.__table__.c.hostname.ilike(search_pattern))
+                | (Device.__table__.c.ip_address.ilike(search_pattern))
             )
 
         stmt = stmt.offset(offset).limit(limit)
@@ -85,33 +87,36 @@ class DeviceRepository(BaseRepository[Device]):
         Returns:
             Count of devices
         """
-        stmt = select(func.count(Device.id))
+        stmt = select(func.count())
 
         if lifecycle_state:
-            stmt = stmt.where(Device.lifecycle_state == lifecycle_state)
+            stmt = stmt.where(Device.__table__.c.lifecycle_state == lifecycle_state)
 
         if discovery_source:
-            stmt = stmt.where(Device.discovery_source == discovery_source)
+            stmt = stmt.where(Device.__table__.c.discovery_source == discovery_source)
 
         result = await db.execute(stmt)
         return result.scalar() or 0
 
     @classmethod
-    async def find_by_id(cls, db: AsyncSession, device_id: UUID) -> Optional[Device]:
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, device_id: Any, *, eager_load: Optional[List] = None
+    ) -> Optional[Device]:
         """
         Get a device by ID with desktop session loaded.
 
         Args:
             db: Database session
             device_id: Device UUID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             Device or None
         """
         stmt = (
             select(Device)
-            .where(Device.id == device_id)
-            .options(selectinload(Device.desktop_session))
+            .where(Device.__table__.c.id == device_id)
+            .options(selectinload(cast(QueryableAttribute, Device.desktop_session)))
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -130,7 +135,7 @@ class DeviceRepository(BaseRepository[Device]):
         Returns:
             Device or None
         """
-        stmt = select(Device).where(Device.hostname == hostname)
+        stmt = select(Device).where(Device.__table__.c.hostname == hostname)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -150,7 +155,7 @@ class DeviceRepository(BaseRepository[Device]):
             Device or None
         """
         stmt = select(Device).where(
-            (Device.hostname == hostname) | (Device.ip_address == ip)
+            (Device.__table__.c.hostname == hostname) | (Device.__table__.c.ip_address == ip)
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -166,7 +171,7 @@ class DeviceRepository(BaseRepository[Device]):
         Returns:
             List of devices with IP addresses
         """
-        stmt = select(Device).where(Device.ip_address.isnot(None))
+        stmt = select(Device).where(Device.__table__.c.ip_address.isnot(None))
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -183,9 +188,9 @@ class DeviceRepository(BaseRepository[Device]):
             new_state: New lifecycle state
 
         Returns:
-            Updated device or None
+            Updated device or None. Caller must commit.
         """
-        stmt = select(Device).where(Device.id == device_id)
+        stmt = select(Device).where(Device.__table__.c.id == device_id)
         result = await db.execute(stmt)
         device = result.scalar_one_or_none()
 
@@ -195,7 +200,7 @@ class DeviceRepository(BaseRepository[Device]):
         device.lifecycle_state = new_state
         device.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
         await db.refresh(device)
 
         return device
@@ -213,9 +218,9 @@ class DeviceRepository(BaseRepository[Device]):
             last_seen: Last seen timestamp
 
         Returns:
-            Updated device or None
+            Updated device or None. Caller must commit.
         """
-        stmt = select(Device).where(Device.id == device_id)
+        stmt = select(Device).where(Device.__table__.c.id == device_id)
         result = await db.execute(stmt)
         device = result.scalar_one_or_none()
 
@@ -225,7 +230,7 @@ class DeviceRepository(BaseRepository[Device]):
         device.last_seen_at = last_seen
         device.updated_at = datetime.utcnow()
 
-        await db.commit()
+        await db.flush()
         await db.refresh(device)
 
         return device
@@ -246,11 +251,11 @@ class DeviceRepository(BaseRepository[Device]):
             created_by: User who triggered the sync
 
         Returns:
-            Tuple of (devices list, created_count, updated_count)
+            Tuple of (devices list, created_count, updated_count). Caller must commit.
         """
         stmt = select(DesktopSession)
         if active_only:
-            stmt = stmt.where(DesktopSession.is_active)
+            stmt = stmt.where(DesktopSession.__table__.c.is_active.is_(True))
 
         result = await db.execute(stmt)
         sessions = result.scalars().all()
@@ -264,7 +269,7 @@ class DeviceRepository(BaseRepository[Device]):
                 continue
 
             existing_stmt = select(Device).where(
-                Device.hostname == session.computer_name
+                Device.__table__.c.hostname == session.computer_name
             )
             existing_result = await db.execute(existing_stmt)
             existing_device = existing_result.scalar_one_or_none()
@@ -290,7 +295,7 @@ class DeviceRepository(BaseRepository[Device]):
                 devices.append(device)
                 created_count += 1
 
-        await db.commit()
+        await db.flush()
 
         for device in devices:
             await db.refresh(device)

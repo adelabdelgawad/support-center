@@ -15,7 +15,7 @@ class TestBURegionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-unit-regions/ with empty database."""
-        response = await client.get("/api/setting/business-unit-regions/")
+        response = await client.get("/backend/business-unit-regions/")
         assert response.status_code == 200
 
         data = response.json()
@@ -47,7 +47,7 @@ class TestBURegionsEndpoints:
         db_session.add_all([region1, region2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-regions/")
+        response = await client.get("/backend/business-unit-regions/")
         assert response.status_code == 200
 
         data = response.json()
@@ -77,7 +77,7 @@ class TestBURegionsEndpoints:
             db_session.add(region)
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-regions/?limit=2&skip=0")
+        response = await client.get("/backend/business-unit-regions/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitRegions"]) == 2
@@ -98,7 +98,7 @@ class TestBURegionsEndpoints:
         db_session.add_all([region1, region2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-regions/?is_active=true")
+        response = await client.get("/backend/business-unit-regions/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitRegions"]) == 1
@@ -121,7 +121,7 @@ class TestBURegionsEndpoints:
         db_session.add_all([region1, region2])
         await db_session.commit()
 
-        response = await client.get(f"/api/setting/business-unit-regions/?business_unit_id={bu1.id}")
+        response = await client.get(f"/backend/business-unit-regions/?business_unit_id={bu1.id}")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitRegions"]) == 1
@@ -142,7 +142,7 @@ class TestBURegionsEndpoints:
         db_session.add_all([region1, region2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/business-unit-regions/?search=north")
+        response = await client.get("/backend/business-unit-regions/?search=north")
         assert response.status_code == 200
         data = response.json()
         assert len(data["businessUnitRegions"]) == 1
@@ -163,7 +163,7 @@ class TestBURegionsEndpoints:
         await db_session.commit()
         await db_session.refresh(region)
 
-        response = await client.get(f"/api/setting/business-unit-regions/{region.id}")
+        response = await client.get(f"/backend/business-unit-regions/{region.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -176,7 +176,7 @@ class TestBURegionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/business-unit-regions/{region_id} with non-existent ID."""
-        response = await client.get("/api/setting/business-unit-regions/99999")
+        response = await client.get("/backend/business-unit-regions/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -196,7 +196,7 @@ class TestBURegionsEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/business-unit-regions/", json=region_data)
+        response = await client.post("/backend/business-unit-regions/", json=region_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -212,7 +212,7 @@ class TestBURegionsEndpoints:
         """Test POST /api/setting/business-unit-regions/ with invalid data."""
         region_data = {"name": "Missing business_unit_id"}
 
-        response = await client.post("/api/setting/business-unit-regions/", json=region_data)
+        response = await client.post("/backend/business-unit-regions/", json=region_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -233,7 +233,7 @@ class TestBURegionsEndpoints:
         update_data = {"name": "Updated Name", "isActive": False}
 
         response = await client.put(
-            f"/api/setting/business-unit-regions/{region.id}", json=update_data
+            f"/backend/business-unit-regions/{region.id}", json=update_data
         )
         assert response.status_code == 200
 
@@ -248,7 +248,7 @@ class TestBURegionsEndpoints:
         """Test PUT /api/setting/business-unit-regions/{region_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/business-unit-regions/99999", json=update_data)
+        response = await client.put("/backend/business-unit-regions/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -266,7 +266,7 @@ class TestBURegionsEndpoints:
         await db_session.commit()
         await db_session.refresh(region)
 
-        response = await client.delete(f"/api/setting/business-unit-regions/{region.id}")
+        response = await client.delete(f"/backend/business-unit-regions/{region.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -277,5 +277,5 @@ class TestBURegionsEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/business-unit-regions/{region_id} with non-existent ID."""
-        response = await client.delete("/api/setting/business-unit-regions/99999")
+        response = await client.delete("/backend/business-unit-regions/99999")
         assert response.status_code == 404

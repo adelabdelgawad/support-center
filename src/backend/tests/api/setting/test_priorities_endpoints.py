@@ -15,7 +15,7 @@ class TestPrioritiesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/priorities/ with empty database."""
-        response = await client.get("/api/setting/priorities/")
+        response = await client.get("/backend/priorities/")
         assert response.status_code == 200
 
         data = response.json()
@@ -34,7 +34,7 @@ class TestPrioritiesEndpoints:
         db_session.add_all([p1, p2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/priorities/")
+        response = await client.get("/backend/priorities/")
         assert response.status_code == 200
 
         data = response.json()
@@ -54,7 +54,7 @@ class TestPrioritiesEndpoints:
             db_session.add(p)
         await db_session.commit()
 
-        response = await client.get("/api/setting/priorities/?limit=2&skip=0")
+        response = await client.get("/backend/priorities/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["priorities"]) == 2
@@ -70,7 +70,7 @@ class TestPrioritiesEndpoints:
         db_session.add_all([p1, p2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/priorities/?is_active=true")
+        response = await client.get("/backend/priorities/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["priorities"]) == 1
@@ -86,7 +86,7 @@ class TestPrioritiesEndpoints:
         db_session.add_all([p1, p2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/priorities/?search=critical")
+        response = await client.get("/backend/priorities/?search=critical")
         assert response.status_code == 200
         data = response.json()
         assert len(data["priorities"]) == 1
@@ -102,7 +102,7 @@ class TestPrioritiesEndpoints:
         await db_session.commit()
         await db_session.refresh(p)
 
-        response = await client.get(f"/api/setting/priorities/{p.id}")
+        response = await client.get(f"/backend/priorities/{p.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -115,7 +115,7 @@ class TestPrioritiesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/priorities/{priority_id} with non-existent ID."""
-        response = await client.get("/api/setting/priorities/99999")
+        response = await client.get("/backend/priorities/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -130,7 +130,7 @@ class TestPrioritiesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/priorities/", json=priority_data)
+        response = await client.post("/backend/priorities/", json=priority_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -146,7 +146,7 @@ class TestPrioritiesEndpoints:
         """Test POST /api/setting/priorities/ with invalid data."""
         priority_data = {"name": "Missing level"}
 
-        response = await client.post("/api/setting/priorities/", json=priority_data)
+        response = await client.post("/backend/priorities/", json=priority_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -161,7 +161,7 @@ class TestPrioritiesEndpoints:
 
         update_data = {"name": "Updated Name", "level": 2, "isActive": False}
 
-        response = await client.put(f"/api/setting/priorities/{p.id}", json=update_data)
+        response = await client.put(f"/backend/priorities/{p.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -176,7 +176,7 @@ class TestPrioritiesEndpoints:
         """Test PUT /api/setting/priorities/{priority_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/priorities/99999", json=update_data)
+        response = await client.put("/backend/priorities/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -189,7 +189,7 @@ class TestPrioritiesEndpoints:
         await db_session.commit()
         await db_session.refresh(p)
 
-        response = await client.delete(f"/api/setting/priorities/{p.id}")
+        response = await client.delete(f"/backend/priorities/{p.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -200,5 +200,5 @@ class TestPrioritiesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/priorities/{priority_id} with non-existent ID."""
-        response = await client.delete("/api/setting/priorities/99999")
+        response = await client.delete("/backend/priorities/99999")
         assert response.status_code == 404

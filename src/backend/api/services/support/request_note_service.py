@@ -4,7 +4,7 @@ Enhanced with centralized logging and error handling.
 """
 
 import logging
-from typing import List, Tuple
+from typing import Any, List, Optional, Tuple, cast
 from uuid import UUID
 
 from core.decorators import (
@@ -44,13 +44,13 @@ class RequestNoteService:
         from api.repositories.support.request_note_repository import RequestNoteRepository
 
         return await RequestNoteRepository.find_by_request_id(
-            db, request_id, page, per_page
+            db, cast(Any, request_id), page, per_page
         )
 
     @staticmethod
     @safe_database_query("get_note", default_return=None)
     @log_database_operation("note retrieval", level="debug")
-    async def get_note(db: AsyncSession, note_id: int) -> RequestNote:
+    async def get_note(db: AsyncSession, note_id: int) -> Optional[RequestNote]:
         """
         Get a specific note by ID.
 

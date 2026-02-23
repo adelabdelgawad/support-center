@@ -154,6 +154,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                             endpoint=f"{method} {path}",
                             correlation_id=correlation_id,
                             user_agent=user_agent,
+                            old_values=None,
+                            new_values=None,
+                            changes_summary=None,
                         )
                     )
                 )

@@ -153,7 +153,7 @@ class AuditService:
             return "No changes"
 
         if not old_values:
-            fields = list(new_values.keys())
+            fields = list(new_values.keys()) if new_values else []
             return f"Created with {len(fields)} fields: {', '.join(fields[:5])}"
 
         if not new_values:

@@ -33,6 +33,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
 from sqlalchemy.types import CHAR, TypeDecorator
+from typing import ClassVar
+from sqlalchemy import Table
 from sqlmodel import Field, Relationship, SQLModel
 
 from api.schemas.page import PageRoleDetailedResponse, PageWithRolesName
@@ -55,7 +57,7 @@ def cairo_now():
 class TableModel(SQLModel):
     """Base table model with common functionality."""
 
-    pass
+    __table__: ClassVar[Table]
 
 
 class UUIDField(TypeDecorator):
@@ -5609,3 +5611,47 @@ class UserSection(TableModel, table=True):
         Index("ix_user_sections_is_active", "is_active"),
         Index("ix_user_sections_is_deleted", "is_deleted"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Type aliases for backward compatibility in test files
+# ---------------------------------------------------------------------------
+
+# RemoteAccess is the older name for RemoteAccessSession
+RemoteAccess = RemoteAccessSession
+
+# Notification is the older name for NotificationEvent
+Notification = NotificationEvent
+
+# Scheduler is the older name for ScheduledJob
+Scheduler = ScheduledJob
+
+
+class FileAttachment(SQLModel):
+    """Placeholder model used in test files.
+    
+    NOTE: This model does not map to a database table.
+    Tests using this model may need to be updated to use the actual schema.
+    """
+
+    id: Optional[int] = Field(default=None)
+    request_id: Optional[int] = Field(default=None)
+    file_path: Optional[str] = Field(default=None)
+    file_name: Optional[str] = Field(default=None)
+    file_size: Optional[int] = Field(default=None)
+    mime_type: Optional[str] = Field(default=None)
+    uploaded_by: Optional[UUID] = Field(default=None)
+
+
+class TurnCredential(SQLModel):
+    """Placeholder model used in test files.
+    
+    NOTE: This model does not map to a database table.
+    Tests using this model may need to be updated to use the actual schema.
+    """
+
+    id: Optional[int] = Field(default=None)
+    user_id: Optional[UUID] = Field(default=None)
+    username: Optional[str] = Field(default=None)
+    password: Optional[str] = Field(default=None)
+    expires_at: Optional[datetime] = Field(default=None)

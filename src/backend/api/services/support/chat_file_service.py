@@ -7,7 +7,7 @@ Chat files are non-image attachments stored separately from screenshots.
 import logging
 import uuid
 from pathlib import Path
-from typing import BinaryIO, List, Optional
+from typing import Any, BinaryIO, List, Optional, cast
 from uuid import UUID
 
 import magic
@@ -93,7 +93,7 @@ class ChatFileService:
         from tasks.minio_file_tasks import upload_file_to_minio
 
         # Verify request exists
-        request_exists = await ChatFileRepository.verify_request_exists(db, request_id)
+        request_exists = await ChatFileRepository.verify_request_exists(db, cast(Any, request_id))
 
         if not request_exists:
             raise ValueError("Service request not found")
@@ -173,9 +173,11 @@ class ChatFileService:
         )
 
         # Store task ID
-        chat_file = await ChatFileRepository.update_celery_task_id(
-            db, chat_file.id, task.id
+        updated_chat_file = await ChatFileRepository.update_celery_task_id(
+            db, chat_file.id if chat_file.id is not None else 0, task.id
         )
+        if updated_chat_file is not None:
+            chat_file = updated_chat_file
 
         logger.info(
             f"Dispatched MinIO upload task {task.id} for chat file {chat_file.id}"
@@ -231,7 +233,7 @@ class ChatFileService:
         Returns:
             List of chat files
         """
-        return await ChatFileRepository.find_by_request(db, request_id)
+        return await ChatFileRepository.find_by_request(db, cast(Any, request_id))
 
     @staticmethod
     @log_database_operation("chat file download from MinIO", level="debug")
@@ -252,9 +254,9 @@ class ChatFileService:
                 if temp_path.exists():
                     try:
                         with open(temp_path, "rb") as f:
-                            content = f.read()
+                            temp_content = f.read()
                         logger.info(f"Read chat file from temp storage: {temp_path}")
-                        return content
+                        return temp_content
                     except Exception as e:
                         logger.warning(
                             f"Failed to read from temp storage {temp_path}: {e}"
@@ -273,7 +275,7 @@ class ChatFileService:
 
         try:
             # Download from MinIO
-            content = await MinIOStorageService.download_file(
+            content: Optional[bytes] = await MinIOStorageService.download_file(
                 chat_file.minio_object_key
             )
 
@@ -331,7 +333,7 @@ class ChatFileService:
                     logger.warning(f"Failed to delete temp file: {e}")
 
         # Delete database record
-        await ChatFileRepository.delete(db, chat_file.id, commit=True)
+        await ChatFileRepository.delete(db, id_value=chat_file.id, commit=True)
 
         logger.info(f"Deleted chat file record: {file_id}")
         return True

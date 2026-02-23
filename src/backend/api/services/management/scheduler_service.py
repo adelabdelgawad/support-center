@@ -11,11 +11,11 @@ This service handles:
 import logging
 import socket
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import text, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import (
@@ -345,7 +345,7 @@ class SchedulerService:
                 detail="Cannot delete system jobs",
             )
 
-        await ScheduledJobRepository.delete(db, job_id)
+        await ScheduledJobRepository.delete(db, id_value=job_id)
         logger.info(f"Deleted scheduled job: {job_id}")
 
     async def toggle_job_status(
@@ -529,7 +529,7 @@ class SchedulerService:
         """
         # Check if scheduler is running (has any instances)
         result = await db.execute(select(func.count()).select_from(SchedulerInstance))
-        is_running = result.scalar() > 0
+        is_running = (result.scalar() or 0) > 0
 
         # Get leader instance
         leader = await SchedulerInstanceRepository.find_leader(db)
@@ -818,7 +818,7 @@ class SchedulerService:
         if timed_out_executions:
             await db.execute(
                 update(ScheduledJobExecution)
-                .where(ScheduledJobExecution.id.in_(timed_out_executions))
+                .where(cast(Any, ScheduledJobExecution.id).in_(timed_out_executions))
                 .values(
                     status="timeout",
                     completed_at=datetime.utcnow(),
@@ -835,7 +835,7 @@ class SchedulerService:
             completion_time = datetime.utcnow()
             await db.execute(
                 update(ScheduledJob)
-                .where(ScheduledJob.id.in_(timed_out_job_ids))
+                .where(cast(Any, ScheduledJob.id).in_(timed_out_job_ids))
                 .values(last_run_time=completion_time, last_status="timeout")
             )
             await db.commit()

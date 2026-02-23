@@ -4,7 +4,7 @@ Provides structured logging with different levels and formats.
 Console output only.
 """
 
-import datetime
+from datetime import datetime
 import logging
 import sys
 from typing import Optional

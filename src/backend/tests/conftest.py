@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
@@ -95,14 +95,14 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     transaction = await connection.begin()
 
     # Create session bound to the connection
-    async_session_maker = sessionmaker(
+    async_session_maker = async_sessionmaker(
         bind=connection,
         class_=AsyncSession,
         expire_on_commit=False,
         autoflush=True,
     )
 
-    session = async_session_maker()
+    session: AsyncSession = async_session_maker()
     try:
         yield session
     finally:

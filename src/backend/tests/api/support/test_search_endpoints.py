@@ -1,7 +1,10 @@
 """Tests for search endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -20,7 +23,7 @@ class TestSearchEndpoints:
     ):
         """Test GET /support/search/requests."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -98,7 +101,7 @@ class TestSearchEndpoints:
         db_session: AsyncSession,
     ):
         """Test POST /support/search/advanced."""
-        stmt = select(Priority).limit(1)
+        stmt: Select[Any] = select(Priority).limit(1)
         priority = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(RequestStatus).limit(1)
@@ -147,7 +150,7 @@ class TestSearchEndpoints:
     ):
         """Test GET /support/search/requests/by-id/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)

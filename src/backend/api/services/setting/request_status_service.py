@@ -3,8 +3,9 @@ Request Status service with performance optimizations.
 """
 
 import logging
+from uuid import UUID
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, cast, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -235,7 +236,7 @@ class RequestStatusService:
         db: AsyncSession,
         status_ids: List[int],
         is_active: bool,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[UUID] = None,
     ) -> List[RequestStatus]:
         """
         Bulk update request statuses status.
@@ -256,7 +257,7 @@ class RequestStatusService:
         for status in statuses:
             status.updated_at = datetime.utcnow()
             if updated_by:
-                status.updated_by = updated_by
+                status.updated_by = cast(Any, updated_by)
 
         await db.commit()
         # No need for N+1 refresh loop - objects are already in memory with latest state
@@ -302,7 +303,7 @@ class RequestStatusService:
     @safe_database_query("get_request_status_detail", default_return=None)
     @log_database_operation("request status detail retrieval", level="debug")
     async def get_request_status_detail(
-        db: AsyncSession, status_id: str
+        db: AsyncSession, status_id: int
     ) -> Optional[RequestStatusDetail]:
         """
         Get detailed request status with request count.
@@ -320,7 +321,7 @@ class RequestStatusService:
             return None
 
         requests_count = await RequestStatusRepository.count_requests_by_status(
-            db, status_id
+            db, cast(Any, status_id)
         )
 
         # Create detail response

@@ -15,7 +15,7 @@ class TestRolesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/roles/ with empty database."""
-        response = await client.get("/api/setting/roles/")
+        response = await client.get("/backend/roles/")
         assert response.status_code == 200
 
         data = response.json()
@@ -39,7 +39,7 @@ class TestRolesEndpoints:
         db_session.add_all([role1, role2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/roles/")
+        response = await client.get("/backend/roles/")
         assert response.status_code == 200
 
         data = response.json()
@@ -64,14 +64,14 @@ class TestRolesEndpoints:
         await db_session.commit()
 
         # Get first page
-        response = await client.get("/api/setting/roles/?limit=2&skip=0")
+        response = await client.get("/backend/roles/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["roles"]) == 2
         assert data["total"] == 5
 
         # Get second page
-        response = await client.get("/api/setting/roles/?limit=2&skip=2")
+        response = await client.get("/backend/roles/?limit=2&skip=2")
         assert response.status_code == 200
         data = response.json()
         assert len(data["roles"]) == 2
@@ -87,14 +87,14 @@ class TestRolesEndpoints:
         await db_session.commit()
 
         # Filter active
-        response = await client.get("/api/setting/roles/?is_active=true")
+        response = await client.get("/backend/roles/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["roles"]) == 1
         assert data["roles"][0]["isActive"] is True
 
         # Filter inactive
-        response = await client.get("/api/setting/roles/?is_active=false")
+        response = await client.get("/backend/roles/?is_active=false")
         assert response.status_code == 200
         data = response.json()
         assert len(data["roles"]) == 1
@@ -110,7 +110,7 @@ class TestRolesEndpoints:
         db_session.add_all([role1, role2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/roles/?search=admin")
+        response = await client.get("/backend/roles/?search=admin")
         assert response.status_code == 200
         data = response.json()
         assert len(data["roles"]) == 1
@@ -126,7 +126,7 @@ class TestRolesEndpoints:
         await db_session.commit()
         await db_session.refresh(role)
 
-        response = await client.get(f"/api/setting/roles/{role.id}")
+        response = await client.get(f"/backend/roles/{role.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -140,7 +140,7 @@ class TestRolesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/roles/{role_id} with non-existent ID."""
-        response = await client.get("/api/setting/roles/99999")
+        response = await client.get("/backend/roles/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -154,7 +154,7 @@ class TestRolesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/roles/", json=role_data)
+        response = await client.post("/backend/roles/", json=role_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -170,7 +170,7 @@ class TestRolesEndpoints:
         """Test POST /api/setting/roles/ with invalid data."""
         role_data = {"description": "Missing name field"}
 
-        response = await client.post("/api/setting/roles/", json=role_data)
+        response = await client.post("/backend/roles/", json=role_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -189,7 +189,7 @@ class TestRolesEndpoints:
             "isActive": False,
         }
 
-        response = await client.put(f"/api/setting/roles/{role.id}", json=update_data)
+        response = await client.put(f"/backend/roles/{role.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -204,7 +204,7 @@ class TestRolesEndpoints:
         """Test PUT /api/setting/roles/{role_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/roles/99999", json=update_data)
+        response = await client.put("/backend/roles/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -217,7 +217,7 @@ class TestRolesEndpoints:
         await db_session.commit()
         await db_session.refresh(role)
 
-        response = await client.delete(f"/api/setting/roles/{role.id}")
+        response = await client.delete(f"/backend/roles/{role.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -228,7 +228,7 @@ class TestRolesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/roles/{role_id} with non-existent ID."""
-        response = await client.delete("/api/setting/roles/99999")
+        response = await client.delete("/backend/roles/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -245,7 +245,7 @@ class TestRolesEndpoints:
 
         bulk_data = {"ids": [role1.id, role2.id], "isActive": False}
 
-        response = await client.put("/api/setting/roles/status", json=bulk_data)
+        response = await client.put("/backend/roles/status", json=bulk_data)
         assert response.status_code == 200
 
         data = response.json()

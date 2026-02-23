@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, cast
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 from uuid import UUID
 
 from db.models import ReportConfig
@@ -38,22 +38,21 @@ class ReportConfigRepository(BaseRepository[ReportConfig]):
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
-            .order_by(ReportConfig.updated_at.desc())
+            .options(selectinload(cast(QueryableAttribute, ReportConfig.created_by)))
+            .order_by(ReportConfig.__table__.c.updated_at.desc())
         )
 
-        # Build access filter
-        access_conditions = [ReportConfig.created_by_id == user_id]
+        access_conditions = [ReportConfig.__table__.c.created_by_id == user_id]
         if include_public:
-            access_conditions.append(ReportConfig.is_public)
+            access_conditions.append(ReportConfig.__table__.c.is_public.is_(True))
 
         stmt = stmt.where(or_(*access_conditions))
 
         if active_only:
-            stmt = stmt.where(ReportConfig.is_active)
+            stmt = stmt.where(ReportConfig.__table__.c.is_active.is_(True))
 
         if report_type:
-            stmt = stmt.where(ReportConfig.report_type == report_type)
+            stmt = stmt.where(ReportConfig.__table__.c.report_type == report_type)
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -80,8 +79,8 @@ class ReportConfigRepository(BaseRepository[ReportConfig]):
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
-            .where(ReportConfig.id == config_id)
+            .options(selectinload(cast(QueryableAttribute, ReportConfig.created_by)))
+            .where(ReportConfig.__table__.c.id == config_id)
         )
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
@@ -89,7 +88,6 @@ class ReportConfigRepository(BaseRepository[ReportConfig]):
         if not config:
             return None
 
-        # Check access
         if config.created_by_id != user_id and not config.is_public:
             return None
 
@@ -113,12 +111,12 @@ class ReportConfigRepository(BaseRepository[ReportConfig]):
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
+            .options(selectinload(cast(QueryableAttribute, ReportConfig.created_by)))
             .where(
-                ReportConfig.is_active,
-                ReportConfig.schedule_cron is not None,
+                ReportConfig.__table__.c.is_active.is_(True),
+                ReportConfig.__table__.c.schedule_cron.isnot(None),
             )
-            .order_by(ReportConfig.id)
+            .order_by(ReportConfig.__table__.c.id)
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -139,7 +137,7 @@ class ReportConfigRepository(BaseRepository[ReportConfig]):
         Returns:
             True if updated, False if not found
         """
-        stmt = select(ReportConfig).where(ReportConfig.id == config_id)
+        stmt = select(ReportConfig).where(ReportConfig.__table__.c.id == config_id)
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
 

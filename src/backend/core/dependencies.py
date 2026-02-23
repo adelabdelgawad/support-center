@@ -6,13 +6,14 @@ authorization, and security validation.
 """
 
 import secrets
-from typing import Optional
+from typing import Any, Optional, cast
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from core.config import settings
 from db.database import get_session
@@ -79,11 +80,13 @@ async def get_current_user(
         # Eager-load relationships used by _get_visibility_filter for performance
         result = await db.execute(
             select(User)
-            .where(User.id == user_id)
+            .where(cast(ColumnElement[bool], User.id == user_id))
             .options(
-                selectinload(User.user_roles).selectinload(UserRole.role),
-                selectinload(User.business_unit_assigns),
-                selectinload(User.section_assigns),
+                selectinload(cast(QueryableAttribute[Any], User.user_roles)).selectinload(
+                    cast(QueryableAttribute[Any], UserRole.role)
+                ),
+                selectinload(cast(QueryableAttribute[Any], User.business_unit_assigns)),
+                selectinload(cast(QueryableAttribute[Any], User.section_assigns)),
             )
         )
         user = result.scalar_one_or_none()
@@ -155,7 +158,7 @@ async def get_optional_user(
         user_id = get_user_id_from_token(payload)  # Returns UUID string
 
         # Get user from database using UUID (User.id is now UUID primary key)
-        result = await db.execute(select(User).where(User.id == user_id))
+        result = await db.execute(select(User).where(cast(ColumnElement[bool], User.id == user_id)))
         user = result.scalar_one_or_none()
 
         if not user or not user.is_active:
@@ -331,10 +334,12 @@ async def _get_user_with_roles(
 
         result = await db.execute(
             select(User)
-            .where(User.id == user_id)
+            .where(cast(ColumnElement[bool], User.id == user_id))
             .options(
                 # Eagerly load user_roles and their related role objects
-                selectinload(User.user_roles).selectinload(UserRole.role)
+                selectinload(cast(QueryableAttribute[Any], User.user_roles)).selectinload(
+                    cast(QueryableAttribute[Any], UserRole.role)
+                )
             )
         )
         user = result.scalar_one_or_none()

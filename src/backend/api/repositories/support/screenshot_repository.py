@@ -4,7 +4,7 @@ Screenshot repository for managing Screenshot model.
 This repository handles all database operations for screenshot uploads.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -21,8 +21,8 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
     model = Screenshot
 
     @classmethod
-    async def find_by_id(
-        cls, db: AsyncSession, screenshot_id: int
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, screenshot_id: Any, *, eager_load: Optional[List] = None
     ) -> Optional[Screenshot]:
         """
         Get screenshot by ID.
@@ -30,18 +30,17 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Args:
             db: Database session
             screenshot_id: Screenshot attachment ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             Screenshot or None
         """
         stmt = select(Screenshot).where(
-            Screenshot.id == screenshot_id,
-            Screenshot.mime_type.like("image/%"),
+            Screenshot.__table__.c.id == screenshot_id,
+            Screenshot.__table__.c.mime_type.like("image/%"),
         )
         result = await db.execute(stmt)
-        attachment = result.scalar_one_or_none()
-
-        return attachment
+        return result.scalar_one_or_none()
 
     @classmethod
     async def find_by_id_simple(
@@ -57,7 +56,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Returns:
             Screenshot or None
         """
-        stmt = select(Screenshot).where(Screenshot.id == screenshot_id)
+        stmt = select(Screenshot).where(Screenshot.__table__.c.id == screenshot_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -78,16 +77,14 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         stmt = (
             select(Screenshot)
             .where(
-                Screenshot.request_id == request_id,
-                Screenshot.mime_type.like("image/%"),
+                Screenshot.__table__.c.request_id == request_id,
+                Screenshot.__table__.c.mime_type.like("image/%"),
             )
-            .order_by(Screenshot.created_at.desc())
+            .order_by(Screenshot.__table__.c.created_at.desc())
         )
 
         result = await db.execute(stmt)
-        screenshots = result.scalars().all()
-
-        return screenshots
+        return list(result.scalars().all())
 
     @classmethod
     async def find_by_filename(
@@ -105,8 +102,8 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         """
         stmt = (
             select(Screenshot)
-            .where(Screenshot.filename == filename)
-            .order_by(Screenshot.created_at.desc())
+            .where(Screenshot.__table__.c.filename == filename)
+            .order_by(Screenshot.__table__.c.created_at.desc())
             .limit(1)
         )
         result = await db.execute(stmt)
@@ -124,7 +121,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Returns:
             True if request exists
         """
-        stmt = select(ServiceRequest).where(ServiceRequest.id == request_id)
+        stmt = select(ServiceRequest).where(ServiceRequest.__table__.c.id == request_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none() is not None
 
@@ -142,7 +139,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Returns:
             ServiceRequest or None
         """
-        stmt = select(ServiceRequest).where(ServiceRequest.id == request_id)
+        stmt = select(ServiceRequest).where(ServiceRequest.__table__.c.id == request_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -161,7 +158,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Returns:
             Updated Screenshot or None
         """
-        stmt = select(Screenshot).where(Screenshot.id == screenshot_id)
+        stmt = select(Screenshot).where(Screenshot.__table__.c.id == screenshot_id)
         result = await db.execute(stmt)
         attachment = result.scalar_one_or_none()
 
@@ -188,7 +185,7 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
         Returns:
             List of Screenshot instances
         """
-        stmt = select(Screenshot).where(Screenshot.request_id == request_id)
+        stmt = select(Screenshot).where(Screenshot.__table__.c.request_id == request_id)
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
@@ -210,9 +207,9 @@ class ScreenshotRepository(BaseRepository[Screenshot]):
             select(Screenshot)
             .join(
                 RequestScreenshotLink,
-                RequestScreenshotLink.screenshot_id == Screenshot.id,
+                RequestScreenshotLink.__table__.c.screenshot_id == Screenshot.__table__.c.id,
             )
-            .where(RequestScreenshotLink.request_id == request_id)
+            .where(RequestScreenshotLink.__table__.c.request_id == request_id)
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())

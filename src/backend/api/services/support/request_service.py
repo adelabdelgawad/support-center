@@ -8,10 +8,10 @@ REFACTORED: Migrated all database operations to repository layer.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnElement, Extract, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -516,7 +516,7 @@ class RequestService:
             )
 
         # Get all requests to update
-        requests = await ServiceRequestRepository.find_all_by_ids(db, request_ids)
+        requests = await ServiceRequestRepository.find_all_by_ids(db, cast(List[UUID], request_ids))
 
         updated_requests = []
         for request in requests:
@@ -570,25 +570,25 @@ class RequestService:
         base_query = select(ServiceRequest)
 
         if date_from:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.created_at >= date_from
+            base_query = base_query.where(
+                cast(ColumnElement[bool], cast(Any, ServiceRequest.created_at) >= date_from)
             )
         if date_to:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.created_at <= date_to
+            base_query = base_query.where(
+                cast(ColumnElement[bool], cast(Any, ServiceRequest.created_at) <= date_to)
             )
         # category_id filters by subcategory_id (naming kept for API compatibility)
         if category_id:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.subcategory_id == category_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.subcategory_id == category_id)
             )
         if priority_id:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.priority_id == priority_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.priority_id == priority_id)
             )
         if status_id:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.status_id == status_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.status_id == status_id)
             )
 
         # Get total count
@@ -598,18 +598,18 @@ class RequestService:
 
         # Get status distribution
         status_query = (
-            select(ServiceRequest.status_id, func.count(ServiceRequest.id))  # type: ignore[arg-type]
+            select(cast(Any, ServiceRequest.status_id), func.count())
             .select_from(base_query.subquery())
-            .group_by(ServiceRequest.status_id)
+            .group_by(cast(Any, ServiceRequest.status_id))
         )
         status_result = await db.execute(status_query)
         status_distribution: dict[int, int] = dict(status_result.all())  # type: ignore[arg-type]
 
         # Get priority distribution
         priority_query = (
-            select(ServiceRequest.priority_id, func.count(ServiceRequest.id))  # type: ignore[arg-type]
+            select(cast(Any, ServiceRequest.priority_id), func.count())
             .select_from(base_query.subquery())
-            .group_by(ServiceRequest.priority_id)
+            .group_by(cast(Any, ServiceRequest.priority_id))
         )
         priority_result = await db.execute(priority_query)
         priority_distribution: dict[int, int] = dict(priority_result.all())  # type: ignore[arg-type]
@@ -617,15 +617,15 @@ class RequestService:
         # Get average resolution time
         resolution_time_query = (
             select(
-                func.avg(  # type: ignore[arg-type]
+                func.avg(
                     func.extract(
                         "epoch",
-                        ServiceRequest.resolved_at - ServiceRequest.created_at,  # type: ignore[operator]
+                        cast(Any, ServiceRequest.resolved_at) - cast(Any, ServiceRequest.created_at),
                     )
                 )
             )
             .select_from(base_query.subquery())
-            .where(ServiceRequest.resolved_at.isnot(None))  # type: ignore[union-attr]
+            .where(cast(ColumnElement[bool], cast(Any, ServiceRequest.resolved_at).isnot(None)))
         )
         resolution_time_result = await db.execute(resolution_time_query)
         avg_resolution_time = resolution_time_result.scalar()
@@ -957,7 +957,7 @@ class RequestService:
         if request.parent_task_id and request.created_by:
             from api.schemas.service_request import TechnicianInfo
 
-            technician = await ServiceRequestRepository.find_user_by_id(db, str(request.created_by))
+            technician = await ServiceRequestRepository.find_user_by_id(db, cast(Any, request.created_by))
             if technician:
                 created_by_technician_info = TechnicianInfo(
                     id=technician.id,
@@ -1045,41 +1045,41 @@ class RequestService:
         """
         # Build base query with status join for requester filtering
         base_query = select(ServiceRequest).options(
-            selectinload(ServiceRequest.subcategory),
+            selectinload(cast(Any, ServiceRequest.subcategory)),
         )
 
         # Join with status table if requester_view is enabled
         if requester_view:
-            base_query = base_query.join(  # type: ignore[arg-type]
-                RequestStatus, ServiceRequest.status_id == RequestStatus.id
+            base_query = base_query.join(
+                RequestStatus, cast(ColumnElement[bool], ServiceRequest.status_id == RequestStatus.id)
             )
 
         # Apply filters
         if category_id:
             # Note: category_id parameter filters by subcategory_id
             # (naming kept for API backward compatibility)
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.subcategory_id == category_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.subcategory_id == category_id)
             )
         if priority_id:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.priority_id == priority_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.priority_id == priority_id)
             )
         if status_id:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                ServiceRequest.status_id == status_id
+            base_query = base_query.where(
+                cast(ColumnElement[bool], ServiceRequest.status_id == status_id)
             )
         if search:
-            search_filter = or_(  # type: ignore[arg-type]
-                ServiceRequest.title.ilike(f"%{search}%"),  # type: ignore[attr-defined]
-                ServiceRequest.description.ilike(f"%{search}%"),  # type: ignore[union-attr]
+            search_filter = or_(
+                cast(Any, ServiceRequest.title).ilike(f"%{search}%"),
+                cast(Any, ServiceRequest.description).ilike(f"%{search}%"),
             )
             base_query = base_query.where(search_filter)
 
         # Filter by visible_on_requester_page if requester_view is enabled
         if requester_view:
-            base_query = base_query.where(  # type: ignore[arg-type]
-                RequestStatus.visible_on_requester_page
+            base_query = base_query.where(
+                cast(ColumnElement[bool], RequestStatus.visible_on_requester_page)
             )
 
         # Get total count
@@ -1099,7 +1099,7 @@ class RequestService:
         query = base_query.order_by(sort_field).offset(offset).limit(per_page)
 
         result = await db.execute(query)
-        service_requests = result.scalars().all()
+        service_requests = list(result.scalars().all())
 
         return service_requests, total_count
 
@@ -1414,7 +1414,7 @@ class RequestService:
 
         # Update request status to "in-progress" (status_id=8) if currently Open (status_id=1)
         if request.status_id == 1:
-            update_data = ServiceRequestUpdate(status_id=8)  # 8 = in-progress  # type: ignore[call-arg]
+            update_data = ServiceRequestUpdate(title=None, description=None, status_id=8)  # 8 = in-progress
             updated_request = await RequestService.update_service_request(
                 db, request_id, update_data
             )
@@ -1757,17 +1757,18 @@ class RequestService:
         from datetime import datetime
 
         # Get all sub-tasks for parent
-        query = select(ServiceRequest).where(  # type: ignore[arg-type]
-            ServiceRequest.parent_task_id == parent_id, not ServiceRequest.is_deleted
+        query = select(ServiceRequest).where(
+            cast(ColumnElement[bool], ServiceRequest.parent_task_id == parent_id),
+            cast(ColumnElement[bool], cast(Any, ServiceRequest.is_deleted).is_(False)),
         )
         result = await db.execute(query)
         sub_tasks = list(result.scalars().all())
 
         # Calculate stats - need type annotation for by_status
         by_status: dict[int, int] = {}
-        stats = {
+        stats: dict[str, Any] = {
             "total": len(sub_tasks),
-            "by_status": by_status,  # type: ignore[assignment]
+            "by_status": by_status,
             "blocked_count": 0,
             "overdue_count": 0,
             "completed_count": 0,
@@ -1994,7 +1995,7 @@ class RequestService:
                     )
                 messages_list.append(
                     ChatMessageRead(
-                        id=msg.id,
+                        id=cast(UUID, msg.id),
                         request_id=msg.request_id,
                         sender_id=msg.sender_id,
                         sender=sender_info,
@@ -2069,7 +2070,7 @@ class RequestService:
     @safe_database_query("get_last_messages_for_requests", default_return={})
     async def get_last_messages_for_requests(
         db: AsyncSession, request_ids: List[int]
-    ) -> dict[int, "ChatMessage"]:
+    ) -> dict[Any, Any]:
         """
         Get the last message for each request in a batch.
 
@@ -2118,8 +2119,8 @@ class RequestService:
     @staticmethod
     @safe_database_query("check_requester_unread_for_requests", default_return={})
     async def check_requester_unread_for_requests(
-        db: AsyncSession, request_ids: List[int]
-    ) -> dict[int, bool]:
+        db: AsyncSession, request_ids: List[Any]
+    ) -> dict[Any, bool]:
         """
         Check if requesters have unread messages for multiple requests.
 
@@ -2139,8 +2140,8 @@ class RequestService:
     @staticmethod
     @safe_database_query("check_technician_unread_for_requests", default_return={})
     async def check_technician_unread_for_requests(
-        db: AsyncSession, request_ids: List[int]
-    ) -> dict[int, bool]:
+        db: AsyncSession, request_ids: List[Any]
+    ) -> dict[Any, bool]:
         """
         Check if technicians have unread messages for multiple requests.
 
@@ -2258,9 +2259,9 @@ class RequestService:
         stmt = (
             select(ServiceRequest)
             .options(
-                selectinload(ServiceRequest.assignees),
+                selectinload(cast(Any, ServiceRequest.assignees)),
             )
-            .where(ServiceRequest.id == request_id)
+            .where(cast(ColumnElement[bool], ServiceRequest.id == request_id))
         )
         result = await db.execute(stmt)
         request = result.scalar_one_or_none()

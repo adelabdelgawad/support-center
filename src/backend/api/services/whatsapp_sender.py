@@ -12,7 +12,7 @@ Responsibilities:
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import List, Dict, Any
+from typing import Any, cast, Dict, List
 from uuid import UUID
 
 import httpx
@@ -32,7 +32,7 @@ class WhatsAppSender:
     @staticmethod
     async def send_batch_for_request(
         db: AsyncSession,
-        request_id: UUID,
+        request_id: int,
         batch_type: str,  # "first_debounced" or "periodic"
     ) -> bool:
         """
@@ -62,7 +62,7 @@ class WhatsAppSender:
             # STEP 1: Load request with relationships
             from api.repositories.support.request_repository import ServiceRequestRepository
 
-            request = await ServiceRequestRepository.find_by_id(db, request_id)
+            request = await ServiceRequestRepository.find_by_id(db, cast(Any, request_id))
 
             if not request:
                 logger.warning(
@@ -119,7 +119,7 @@ class WhatsAppSender:
             )
 
             messages = await WhatsAppBatchRepository.find_unsent_requester_messages(
-                db, request_id, request
+                db, cast(Any, request_id), request
             )
 
             # Allow empty messages for "request_created" batch type
@@ -151,7 +151,7 @@ class WhatsAppSender:
                 last_msg_id = None
 
             existing_batch = await WhatsAppBatchRepository.check_batch_exists(
-                db, request_id, first_msg_id, last_msg_id
+                db, cast(Any, request_id), first_msg_id, last_msg_id
             )
 
             if existing_batch:
@@ -185,8 +185,8 @@ class WhatsAppSender:
             try:
                 batch_record = await WhatsAppBatchRepository.create_batch(
                     db=db,
-                    request_id=request_id,
-                    business_unit_id=business_unit.id,
+                    request_id=cast(Any, request_id),
+                    business_unit_id=business_unit.id if business_unit.id is not None else 0,
                     first_message_id=first_msg_id,
                     last_message_id=last_msg_id,
                     message_count=len(messages),

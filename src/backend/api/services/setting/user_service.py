@@ -745,6 +745,8 @@ class UserService:
                 f"Page {page.id}: path={page.path}, title={page.title}, icon={page.icon}, parent_id={page.parent_id}, is_active={page.is_active}"
             )
 
+        return final_pages
+
     # Section management methods (using technician_sections table)
     @staticmethod
     @log_database_operation("Section assignment")

@@ -9,6 +9,7 @@ from typing import Dict, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import AuthToken, RefreshSession
@@ -37,8 +38,8 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
         """
         stmt = select(AuthToken).where(
             and_(
-                AuthToken.token_hash == token_hash,
-                AuthToken.is_revoked == is_revoked,
+                AuthToken.__table__.c.token_hash == token_hash,
+                AuthToken.__table__.c.is_revoked == is_revoked,
             )
         )
         result = await db.execute(stmt)
@@ -56,13 +57,13 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
         Returns:
             Number of tokens revoked
         """
-        result = await db.execute(
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(AuthToken)
-            .where(AuthToken.session_id == session_id)
+            .where(AuthToken.__table__.c.session_id == session_id)
             .values(is_revoked=True, revoked_at=datetime.utcnow())
         )
-        await db.commit()
-        return result.rowcount
+        await db.flush()
+        return cursor_result.rowcount
 
     @classmethod
     async def revoke_old_session_tokens(cls, db: AsyncSession, session_id: UUID) -> int:
@@ -76,17 +77,17 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
         Returns:
             Number of tokens revoked
         """
-        result = await db.execute(
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(AuthToken)
             .where(
                 and_(
-                    AuthToken.session_id == session_id,
-                    not AuthToken.is_revoked,
+                    AuthToken.__table__.c.session_id == session_id,
+                    AuthToken.__table__.c.is_revoked.is_(False),
                 )
             )
             .values(is_revoked=True, revoked_at=datetime.utcnow())
         )
-        return result.rowcount
+        return cursor_result.rowcount
 
     @classmethod
     async def revoke_all_user_tokens(cls, db: AsyncSession, user_id: UUID) -> int:
@@ -100,13 +101,13 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
         Returns:
             Number of tokens revoked
         """
-        result = await db.execute(
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(AuthToken)
-            .where(AuthToken.user_id == user_id)
+            .where(AuthToken.__table__.c.user_id == user_id)
             .values(is_revoked=True, revoked_at=datetime.utcnow())
         )
-        await db.commit()
-        return result.rowcount
+        await db.flush()
+        return cursor_result.rowcount
 
     @classmethod
     async def cleanup_expired_tokens(
@@ -114,12 +115,6 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
     ) -> Dict[str, int]:
         """
         Clean up expired and revoked auth tokens.
-
-        Removes tokens that are:
-        - Expired (expires_at < now) AND older than retention period
-        - Revoked (is_revoked = True) AND older than retention period
-
-        Retention period allows keeping old tokens for audit trail.
 
         Args:
             db: Database session
@@ -131,31 +126,27 @@ class AuthTokenRepository(BaseRepository[AuthToken]):
         now = datetime.utcnow()
         retention_cutoff = now - timedelta(days=retention_days)
 
-        # Count tokens before cleanup
-        total_before = await db.execute(select(func.count()).select_from(AuthToken))
-        total_count_before = total_before.scalar()
+        total_before_result = await db.execute(select(func.count()).select_from(AuthToken))
+        total_count_before = total_before_result.scalar() or 0
 
-        # Delete expired tokens older than retention period
-        expired_result = await db.execute(
+        expired_cursor: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(AuthToken)
-            .where(AuthToken.expires_at < now)
-            .where(AuthToken.created_at < retention_cutoff)
+            .where(AuthToken.__table__.c.expires_at < now)
+            .where(AuthToken.__table__.c.created_at < retention_cutoff)
         )
-        expired_deleted = expired_result.rowcount
+        expired_deleted = expired_cursor.rowcount
 
-        # Delete revoked tokens older than retention period
-        revoked_result = await db.execute(
+        revoked_cursor: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(AuthToken)
-            .where(AuthToken.is_revoked)
-            .where(AuthToken.created_at < retention_cutoff)
+            .where(AuthToken.__table__.c.is_revoked.is_(True))
+            .where(AuthToken.__table__.c.created_at < retention_cutoff)
         )
-        revoked_deleted = revoked_result.rowcount
+        revoked_deleted = revoked_cursor.rowcount
 
-        await db.commit()
+        await db.flush()
 
-        # Count tokens after cleanup
-        total_after = await db.execute(select(func.count()).select_from(AuthToken))
-        total_count_after = total_after.scalar()
+        total_after_result = await db.execute(select(func.count()).select_from(AuthToken))
+        total_count_after = total_after_result.scalar() or 0
 
         total_deleted = total_count_before - total_count_after
 
@@ -194,12 +185,6 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         """
         Clean up expired and revoked refresh sessions.
 
-        Removes sessions that are:
-        - Expired (expires_at < now) AND older than retention period
-        - Revoked (revoked = True) AND older than retention period
-
-        Retention period allows keeping old sessions for audit trail.
-
         Args:
             db: Database session
             retention_days: Days to keep expired/revoked sessions for audit
@@ -210,33 +195,29 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         now = datetime.utcnow()
         retention_cutoff = now - timedelta(days=retention_days)
 
-        # Count sessions before cleanup
-        total_before = await db.execute(
+        total_before_result = await db.execute(
             select(func.count()).select_from(RefreshSession)
         )
-        total_count_before = total_before.scalar()
+        total_count_before = total_before_result.scalar() or 0
 
-        # Delete expired sessions older than retention period
-        expired_result = await db.execute(
+        expired_cursor: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(RefreshSession)
-            .where(RefreshSession.expires_at < now)
-            .where(RefreshSession.created_at < retention_cutoff)
+            .where(RefreshSession.__table__.c.expires_at < now)
+            .where(RefreshSession.__table__.c.created_at < retention_cutoff)
         )
-        expired_deleted = expired_result.rowcount
+        expired_deleted = expired_cursor.rowcount
 
-        # Delete revoked sessions older than retention period
-        revoked_result = await db.execute(
+        revoked_cursor: CursorResult = await db.execute(  # type: ignore[assignment]
             delete(RefreshSession)
-            .where(RefreshSession.revoked)
-            .where(RefreshSession.created_at < retention_cutoff)
+            .where(RefreshSession.__table__.c.revoked.is_(True))
+            .where(RefreshSession.__table__.c.created_at < retention_cutoff)
         )
-        revoked_deleted = revoked_result.rowcount
+        revoked_deleted = revoked_cursor.rowcount
 
-        await db.commit()
+        await db.flush()
 
-        # Count sessions after cleanup
-        total_after = await db.execute(select(func.count()).select_from(RefreshSession))
-        total_count_after = total_after.scalar()
+        total_after_result = await db.execute(select(func.count()).select_from(RefreshSession))
+        total_count_after = total_after_result.scalar() or 0
 
         total_deleted = total_count_before - total_count_after
 

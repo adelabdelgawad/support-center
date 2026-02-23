@@ -319,4 +319,4 @@ class BaseRepository(Generic[ModelType]):
             True if at least one record exists
         """
         count = await cls.count(db, filters=filters)
-        return count > 0
+        return (count or 0) > 0

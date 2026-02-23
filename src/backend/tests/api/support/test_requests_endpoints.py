@@ -1,7 +1,10 @@
 """Tests for service requests endpoints."""
 
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import Select
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -88,7 +91,7 @@ class TestRequestsEndpoints:
     ):
         """Test GET /support/requests/{request_id}."""
         # Create a test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -140,7 +143,7 @@ class TestRequestsEndpoints:
         db_session: AsyncSession,
     ):
         """Test POST /support/requests/ creates new request."""
-        stmt = select(Priority).limit(1)
+        stmt: Select[Any] = select(Priority).limit(1)
         priority = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(RequestType).limit(1)
@@ -186,7 +189,7 @@ class TestRequestsEndpoints:
     ):
         """Test PUT /support/requests/{request_id} updates request."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -248,7 +251,7 @@ class TestRequestsEndpoints:
     ):
         """Test DELETE /support/requests/{request_id}."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -303,7 +306,7 @@ class TestRequestsEndpoints:
     ):
         """Test PUT /support/requests/{request_id}/assign."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -346,7 +349,7 @@ class TestRequestsEndpoints:
     ):
         """Test PUT /support/requests/{request_id}/status."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -394,7 +397,7 @@ class TestRequestsEndpoints:
     ):
         """Test PUT /support/requests/{request_id}/priority."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)
@@ -442,7 +445,7 @@ class TestRequestsEndpoints:
     ):
         """Test GET /support/requests/{request_id}/timeline."""
         # Create test request
-        stmt = select(User).limit(1)
+        stmt: Select[Any] = select(User).limit(1)
         user = (await db_session.execute(stmt)).scalar_one()
 
         stmt = select(Priority).limit(1)

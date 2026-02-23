@@ -15,7 +15,7 @@ class TestADConfigEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/ad-config/ with empty database."""
-        response = await client.get("/api/setting/ad-config/")
+        response = await client.get("/backend/ad-config/")
         assert response.status_code == 200
 
         data = response.json()
@@ -39,7 +39,7 @@ class TestADConfigEndpoints:
         db_session.add(config)
         await db_session.commit()
 
-        response = await client.get("/api/setting/ad-config/")
+        response = await client.get("/backend/ad-config/")
         assert response.status_code == 200
 
         data = response.json()
@@ -66,7 +66,7 @@ class TestADConfigEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/ad-config/", json=config_data)
+        response = await client.post("/backend/ad-config/", json=config_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -83,7 +83,7 @@ class TestADConfigEndpoints:
         """Test POST /api/setting/ad-config/ with invalid data."""
         config_data = {"server": "ldap.example.com"}
 
-        response = await client.post("/api/setting/ad-config/", json=config_data)
+        response = await client.post("/backend/ad-config/", json=config_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -110,7 +110,7 @@ class TestADConfigEndpoints:
             "isActive": False,
         }
 
-        response = await client.put(f"/api/setting/ad-config/{config.id}", json=update_data)
+        response = await client.put(f"/backend/ad-config/{config.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -125,7 +125,7 @@ class TestADConfigEndpoints:
         """Test PUT /api/setting/ad-config/{config_id} with non-existent ID."""
         update_data = {"server": "ldap.example.com"}
 
-        response = await client.put("/api/setting/ad-config/99999", json=update_data)
+        response = await client.put("/backend/ad-config/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -146,7 +146,7 @@ class TestADConfigEndpoints:
         await db_session.commit()
         await db_session.refresh(config)
 
-        response = await client.delete(f"/api/setting/ad-config/{config.id}")
+        response = await client.delete(f"/backend/ad-config/{config.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -157,7 +157,7 @@ class TestADConfigEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/ad-config/{config_id} with non-existent ID."""
-        response = await client.delete("/api/setting/ad-config/99999")
+        response = await client.delete("/backend/ad-config/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -179,6 +179,6 @@ class TestADConfigEndpoints:
         await db_session.refresh(config)
 
         # This might fail because LDAP is not available, but we test the endpoint
-        response = await client.post("/api/setting/ad-config/test-connection")
+        response = await client.post("/backend/ad-config/test-connection")
         # Accept either success or error (since LDAP won't be available in tests)
         assert response.status_code in [200, 400, 500]

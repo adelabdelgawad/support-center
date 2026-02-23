@@ -15,7 +15,7 @@ class TestRequestStatusesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/request-statuses/ with empty database."""
-        response = await client.get("/api/setting/request-statuses/")
+        response = await client.get("/backend/request-statuses/")
         assert response.status_code == 200
 
         data = response.json()
@@ -34,7 +34,7 @@ class TestRequestStatusesEndpoints:
         db_session.add_all([rs1, rs2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/request-statuses/")
+        response = await client.get("/backend/request-statuses/")
         assert response.status_code == 200
 
         data = response.json()
@@ -54,7 +54,7 @@ class TestRequestStatusesEndpoints:
             db_session.add(rs)
         await db_session.commit()
 
-        response = await client.get("/api/setting/request-statuses/?limit=2&skip=0")
+        response = await client.get("/backend/request-statuses/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["requestStatuses"]) == 2
@@ -70,7 +70,7 @@ class TestRequestStatusesEndpoints:
         db_session.add_all([rs1, rs2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/request-statuses/?is_active=true")
+        response = await client.get("/backend/request-statuses/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["requestStatuses"]) == 1
@@ -86,7 +86,7 @@ class TestRequestStatusesEndpoints:
         db_session.add_all([rs1, rs2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/request-statuses/?search=progress")
+        response = await client.get("/backend/request-statuses/?search=progress")
         assert response.status_code == 200
         data = response.json()
         assert len(data["requestStatuses"]) == 1
@@ -102,7 +102,7 @@ class TestRequestStatusesEndpoints:
         await db_session.commit()
         await db_session.refresh(rs)
 
-        response = await client.get(f"/api/setting/request-statuses/{rs.id}")
+        response = await client.get(f"/backend/request-statuses/{rs.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -115,7 +115,7 @@ class TestRequestStatusesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/request-statuses/{status_id} with non-existent ID."""
-        response = await client.get("/api/setting/request-statuses/99999")
+        response = await client.get("/backend/request-statuses/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -129,7 +129,7 @@ class TestRequestStatusesEndpoints:
             "isActive": True,
         }
 
-        response = await client.post("/api/setting/request-statuses/", json=rs_data)
+        response = await client.post("/backend/request-statuses/", json=rs_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -145,7 +145,7 @@ class TestRequestStatusesEndpoints:
         """Test POST /api/setting/request-statuses/ with invalid data."""
         rs_data = {"description": "Missing name"}
 
-        response = await client.post("/api/setting/request-statuses/", json=rs_data)
+        response = await client.post("/backend/request-statuses/", json=rs_data)
         assert response.status_code == 422
 
     @pytest.mark.asyncio
@@ -161,7 +161,7 @@ class TestRequestStatusesEndpoints:
         update_data = {"name": "Updated Name", "isActive": False}
 
         response = await client.put(
-            f"/api/setting/request-statuses/{rs.id}", json=update_data
+            f"/backend/request-statuses/{rs.id}", json=update_data
         )
         assert response.status_code == 200
 
@@ -176,7 +176,7 @@ class TestRequestStatusesEndpoints:
         """Test PUT /api/setting/request-statuses/{status_id} with non-existent ID."""
         update_data = {"name": "Updated"}
 
-        response = await client.put("/api/setting/request-statuses/99999", json=update_data)
+        response = await client.put("/backend/request-statuses/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -189,7 +189,7 @@ class TestRequestStatusesEndpoints:
         await db_session.commit()
         await db_session.refresh(rs)
 
-        response = await client.delete(f"/api/setting/request-statuses/{rs.id}")
+        response = await client.delete(f"/backend/request-statuses/{rs.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -200,5 +200,5 @@ class TestRequestStatusesEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/request-statuses/{status_id} with non-existent ID."""
-        response = await client.delete("/api/setting/request-statuses/99999")
+        response = await client.delete("/backend/request-statuses/99999")
         assert response.status_code == 404

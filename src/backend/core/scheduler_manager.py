@@ -12,12 +12,13 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
-from typing import Optional
+from typing import Optional, cast
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.database import AsyncSessionLocal
@@ -132,15 +133,16 @@ class SchedulerManager:
             try:
                 async with AsyncSessionLocal() as db:
                     # Update heartbeat
-                    await scheduler_service.update_instance_heartbeat(
-                        db=db,
-                        instance_id=self.instance_id,
-                    )
+                    if self.instance_id is not None:
+                        await scheduler_service.update_instance_heartbeat(
+                            db=db,
+                            instance_id=self.instance_id,
+                        )
 
                     # Try to acquire leadership
                     is_leader = await scheduler_service.acquire_leader_lock(
                         db=db,
-                        instance_id=self.instance_id,
+                        instance_id=cast(UUID, self.instance_id),
                     )
 
                     if is_leader and not self.is_leader:
@@ -177,7 +179,7 @@ class SchedulerManager:
     async def _on_become_leader(self) -> None:
         """Actions when this instance becomes leader."""
         # Start scheduler if not running
-        if not self.scheduler.running:
+        if self.scheduler is not None and not self.scheduler.running:
             self.scheduler.start()
             logger.info("APScheduler started")
 
@@ -210,17 +212,19 @@ class SchedulerManager:
         if not self.scheduler or not self.scheduler.running:
             return
 
+        scheduler = self.scheduler
+
         # Get all enabled jobs
         result = await db.execute(
             select(ScheduledJob).where(
-                ScheduledJob.is_enabled,
-                not ScheduledJob.is_paused,
+                cast(ColumnElement[bool], ScheduledJob.is_enabled == True),  # noqa: E712
+                cast(ColumnElement[bool], ScheduledJob.is_paused == False),  # noqa: E712
             )
         )
         jobs = result.scalars().all()
 
         # Get existing jobs in scheduler
-        existing_job_ids = {job.id for job in self.scheduler.get_jobs()}
+        existing_job_ids = {job.id for job in scheduler.get_jobs()}
 
         for job in jobs:
             job_key = str(job.id)
@@ -230,7 +234,7 @@ class SchedulerManager:
                 await self._add_job_to_scheduler(job)
             else:
                 # Update existing job if needed
-                scheduled_job = self.scheduler.get_job(job_key)
+                scheduled_job = scheduler.get_job(job_key)
                 if scheduled_job:
                     # Update job's trigger if needed
                     await self._update_scheduled_job(job)
@@ -250,6 +254,9 @@ class SchedulerManager:
             logger.warning(f"Cannot add job {job.id}: invalid schedule config")
             return
 
+        if self.scheduler is None:
+            return
+
         # Add job to scheduler
         self.scheduler.add_job(
             func=_dispatch_scheduled_job,
@@ -266,15 +273,12 @@ class SchedulerManager:
         scheduled_job = self.scheduler.get_job(job_key)
         if scheduled_job and scheduled_job.next_run_time:
             async with AsyncSessionLocal() as db:
-                await db.execute(
-                    select(ScheduledJob).where(ScheduledJob.id == job.id)
-                )
                 # Update next_run_time (convert aware datetime to naive UTC)
                 from sqlalchemy import update
 
                 await db.execute(
                     update(ScheduledJob)
-                    .where(ScheduledJob.id == job.id)
+                    .where(cast(ColumnElement[bool], ScheduledJob.id == job.id))
                     .values(next_run_time=_to_naive_utc(scheduled_job.next_run_time))
                 )
                 await db.commit()
@@ -291,6 +295,9 @@ class SchedulerManager:
         trigger = await self._create_trigger(job)
 
         if trigger is None:
+            return
+
+        if self.scheduler is None:
             return
 
         # Reschedule job with new trigger
@@ -375,7 +382,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
     async with AsyncSessionLocal() as db:
         # Get job
         result = await db.execute(
-            select(ScheduledJob).where(ScheduledJob.id == UUID(job_id))
+            select(ScheduledJob).where(cast(ColumnElement[bool], ScheduledJob.id == UUID(job_id)))
         )
         job = result.scalar_one_or_none()
 
@@ -395,7 +402,7 @@ async def _dispatch_scheduled_job(job_id: str) -> None:
 
         # Get scheduler instance for tracking
         leader_result = await db.execute(
-            select(SchedulerInstance).where(SchedulerInstance.is_leader)
+            select(SchedulerInstance).where(cast(ColumnElement[bool], SchedulerInstance.is_leader == True))  # noqa: E712
         )
         leader = leader_result.scalar_one_or_none()
         if leader:

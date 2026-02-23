@@ -2,10 +2,10 @@
 Report Configuration service for managing saved and scheduled reports.
 """
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import select, or_
+from sqlalchemy import ColumnElement, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -40,22 +40,24 @@ class ReportConfigService:
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
-            .order_by(ReportConfig.updated_at.desc())
+            .options(selectinload(cast(Any, ReportConfig.created_by)))
+            .order_by(cast(Any, ReportConfig.updated_at).desc())
         )
 
         # Build access filter
-        access_conditions = [ReportConfig.created_by_id == user_id]
+        access_conditions: list[ColumnElement[bool]] = [
+            cast(ColumnElement[bool], ReportConfig.created_by_id == user_id)
+        ]
         if include_public:
-            access_conditions.append(ReportConfig.is_public)
+            access_conditions.append(cast(ColumnElement[bool], ReportConfig.is_public))
 
         stmt = stmt.where(or_(*access_conditions))
 
         if active_only:
-            stmt = stmt.where(ReportConfig.is_active)
+            stmt = stmt.where(cast(ColumnElement[bool], ReportConfig.is_active))
 
         if report_type:
-            stmt = stmt.where(ReportConfig.report_type == report_type)
+            stmt = stmt.where(cast(ColumnElement[bool], ReportConfig.report_type == report_type))
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -75,8 +77,8 @@ class ReportConfigService:
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
-            .where(ReportConfig.id == config_id)
+            .options(selectinload(cast(Any, ReportConfig.created_by)))
+            .where(cast(ColumnElement[bool], ReportConfig.id == config_id))
         )
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
@@ -123,8 +125,8 @@ class ReportConfigService:
         Only the creator can update the config.
         """
         stmt = select(ReportConfig).where(
-            ReportConfig.id == config_id,
-            ReportConfig.created_by_id == user_id,
+            cast(ColumnElement[bool], ReportConfig.id == config_id),
+            cast(ColumnElement[bool], ReportConfig.created_by_id == user_id),
         )
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
@@ -154,8 +156,8 @@ class ReportConfigService:
         Only the creator can delete the config.
         """
         stmt = select(ReportConfig).where(
-            ReportConfig.id == config_id,
-            ReportConfig.created_by_id == user_id,
+            cast(ColumnElement[bool], ReportConfig.id == config_id),
+            cast(ColumnElement[bool], ReportConfig.created_by_id == user_id),
         )
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
@@ -180,12 +182,12 @@ class ReportConfigService:
         """
         stmt = (
             select(ReportConfig)
-            .options(selectinload(ReportConfig.created_by))
+            .options(selectinload(cast(Any, ReportConfig.created_by)))
             .where(
-                ReportConfig.is_active,
-                ReportConfig.schedule_cron is not None,
+                cast(ColumnElement[bool], ReportConfig.is_active),
+                cast(ColumnElement[bool], cast(Any, ReportConfig.schedule_cron).isnot(None)),
             )
-            .order_by(ReportConfig.id)
+            .order_by(cast(Any, ReportConfig.id))
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -199,7 +201,7 @@ class ReportConfigService:
         """Update the last_run_at timestamp for a scheduled report."""
         from datetime import datetime
 
-        stmt = select(ReportConfig).where(ReportConfig.id == config_id)
+        stmt = select(ReportConfig).where(cast(ColumnElement[bool], ReportConfig.id == config_id))
         result = await db.execute(stmt)
         config = result.scalar_one_or_none()
 

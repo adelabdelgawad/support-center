@@ -8,7 +8,7 @@ import io
 import logging
 import secrets
 from pathlib import Path
-from typing import BinaryIO, List, Optional
+from typing import Any, BinaryIO, List, Optional, cast
 from uuid import UUID
 
 import magic
@@ -117,7 +117,7 @@ class ScreenshotService:
         from tasks.minio_file_tasks import upload_file_to_minio
 
         # Verify request exists
-        request = await ScreenshotRepository.get_request(db, request_id)
+        request = await ScreenshotRepository.get_request(db, cast(Any, request_id))
         if not request:
             raise ValueError("Service request not found")
 
@@ -184,7 +184,7 @@ class ScreenshotService:
         # Create attachment record with pending status using repository
         attachment = await ScreenshotRepository.create_screenshot(
             db=db,
-            request_id=request_id,
+            request_id=cast(Any, request_id),
             user_id=user_id,
             filename=unique_filename,
             file_size=file_size,
@@ -208,9 +208,11 @@ class ScreenshotService:
         )
 
         # Store task ID using repository
-        attachment = await ScreenshotRepository.update_celery_task_id(
-            db, attachment.id, task.id
+        _attachment_or_none = await ScreenshotRepository.update_celery_task_id(
+            db, cast(Any, attachment.id), task.id
         )
+        if _attachment_or_none is not None:
+            attachment = _attachment_or_none
 
         logger.info(
             f"Dispatched MinIO upload task {task.id} for screenshot {attachment.id}"
@@ -252,7 +254,7 @@ class ScreenshotService:
         Returns:
             List of screenshot attachments
         """
-        return await ScreenshotRepository.find_by_request(db, request_id)
+        return await ScreenshotRepository.find_by_request(db, cast(Any, request_id))
 
     @staticmethod
     @log_database_operation("screenshot download from MinIO", level="debug")
@@ -273,11 +275,11 @@ class ScreenshotService:
                 if temp_path.exists():
                     try:
                         with open(temp_path, "rb") as f:
-                            content = f.read()
+                            temp_content = f.read()
                         logger.info(
                             f"Read screenshot from temp storage: {temp_path}"
                         )
-                        return content
+                        return temp_content
                     except Exception as e:
                         logger.warning(
                             f"Failed to read from temp storage {temp_path}: {e}"
@@ -298,7 +300,7 @@ class ScreenshotService:
 
         try:
             # Download from MinIO
-            content = await MinIOStorageService.download_file(
+            content: Optional[bytes] = await MinIOStorageService.download_file(
                 attachment.minio_object_key
             )
 
@@ -345,7 +347,7 @@ class ScreenshotService:
             ValueError: If validation fails
         """
         # 1. Validate request exists
-        request = await ScreenshotRepository.get_request(db, request_id)
+        request = await ScreenshotRepository.get_request(db, cast(Any, request_id))
         if not request:
             raise ValueError(f"Request {request_id} not found")
 
@@ -363,14 +365,14 @@ class ScreenshotService:
 
         # 4. Check if link already exists
         existing = await RequestScreenshotLinkRepository.find_existing_link(
-            db, request_id, screenshot_id
+            db, cast(Any, request_id), screenshot_id
         )
         if existing:
             raise ValueError("Screenshot already linked to this request")
 
         # 5. Create link
         link = await RequestScreenshotLinkRepository.create_link(
-            db, request_id, screenshot_id, technician_id
+            db, cast(Any, request_id), screenshot_id, technician_id
         )
         return link
 
@@ -391,7 +393,7 @@ class ScreenshotService:
             ValueError: If link not found
         """
         await RequestScreenshotLinkRepository.delete_link(
-            db, request_id, screenshot_id
+            db, cast(Any, request_id), screenshot_id
         )
 
     @staticmethod
@@ -410,10 +412,10 @@ class ScreenshotService:
             List of Screenshot instances
         """
         # Get owned screenshots
-        owned = await ScreenshotRepository.get_owned_screenshots(db, request_id)
+        owned = await ScreenshotRepository.get_owned_screenshots(db, cast(Any, request_id))
 
         # Get linked screenshots
-        linked = await ScreenshotRepository.get_linked_screenshots(db, request_id)
+        linked = await ScreenshotRepository.get_linked_screenshots(db, cast(Any, request_id))
 
         # Combine and deduplicate by ID
         all_screenshots = owned + linked

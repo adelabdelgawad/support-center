@@ -254,9 +254,9 @@ class VersionPolicyService:
         """
         stmt = (
             select(ClientVersion)
-            .where(ClientVersion.platform == platform)
-            .where(ClientVersion.is_active)
-            .order_by(ClientVersion.order_index.desc())
+            .where(ClientVersion.__table__.c.platform == platform)
+            .where(ClientVersion.__table__.c.is_active.is_(True))
+            .order_by(ClientVersion.__table__.c.order_index.desc())
         )
 
         result = await db.execute(stmt)

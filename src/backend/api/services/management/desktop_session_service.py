@@ -36,9 +36,10 @@ See Finding #19 documentation in remote_access_service.py for full context.
 import logging
 import secrets
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.decorators import (
@@ -47,7 +48,9 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
+from core.heartbeat_summary import heartbeat_summary
 from core.logging_config import SessionLogger
+from core.metrics import track_session_heartbeat
 from db import DesktopSession, User
 from api.repositories.management.desktop_session_repository import DesktopSessionRepository
 from api.repositories.setting.user_repository import UserRepository
@@ -181,7 +184,7 @@ class DesktopSessionService:
                     f"App version: {app_version} | OS: {os_info}"
                 )
                 session_logger.session_updated(
-                    existing_session.id, user_id, existing_session.last_heartbeat
+                    cast(Any, existing_session.id), cast(Any, user_id), existing_session.last_heartbeat
                 )
 
                 # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
@@ -268,7 +271,7 @@ class DesktopSessionService:
             f"Computer: {computer_name} | OS: {os_info}"
         )
         session_logger.session_created(
-            user_id, session.id, 2, ip_address
+            cast(Any, user_id), cast(Any, session.id), str(2), ip_address
         )  # type_id=2 for desktop
 
         # Dual-write: set Redis presence for new session (non-blocking, fail-safe)
@@ -307,6 +310,8 @@ class DesktopSessionService:
             logger.warning(
                 f"Desktop heartbeat update failed - Session not found: {session_id}"
             )
+            track_session_heartbeat("desktop", success=False)
+            heartbeat_summary.record("desktop", success=False)
             return None
 
         logger.debug(
@@ -314,8 +319,11 @@ class DesktopSessionService:
             f"User: {session.user_id}"
         )
 
+        track_session_heartbeat("desktop", success=True)
+        heartbeat_summary.record("desktop", success=True)
+
         session_logger.heartbeat_received(
-            session_id, session.user_id, session.ip_address
+            cast(Any, session_id), cast(Any, session.user_id), session.ip_address
         )
 
         # Dual-write: update Redis presence TTL (non-blocking, fail-safe)
@@ -342,6 +350,7 @@ class DesktopSessionService:
             Updated session or None
         """
         session_logger = SessionLogger()
+        ip_address: Optional[str] = None
 
         session = await DesktopSessionRepository.update_heartbeat(
             db, session_id, ip_address
@@ -357,11 +366,12 @@ class DesktopSessionService:
         if old_heartbeat is None:
             old_heartbeat = session.last_heartbeat - timedelta(minutes=1)
 
+        duration: float = (datetime.utcnow() - session.last_heartbeat).total_seconds() / 60
         logger.info(
             f"Desktop session disconnected: {session_id} | "
             f"User: {session.user_id} | Duration: {duration:.1f} minutes"
         )
-        session_logger.session_disconnected(session_id, session.user_id, duration)
+        session_logger.session_disconnected(cast(Any, session_id), cast(Any, session.user_id), duration)
 
         # Dual-write: remove Redis presence key (non-blocking, fail-safe)
         from api.services.presence_service import presence_service
@@ -460,8 +470,8 @@ class DesktopSessionService:
             session.is_active = False
 
             session_logger.stale_session_cleaned(
-                session.id,
-                session.user_id,
+                cast(Any, session.id),
+                cast(Any, session.user_id),
                 session.last_heartbeat,
                 inactive_duration,
             )
@@ -518,8 +528,8 @@ class DesktopSessionService:
 
         # Query activity data
         stmt = select(DesktopSession).where(
-            DesktopSession.last_heartbeat >= start_date
-        ).order_by(DesktopSession.last_heartbeat)
+            cast(ColumnElement[bool], cast(Any, DesktopSession.last_heartbeat) >= start_date)
+        ).order_by(cast(Any, DesktopSession.last_heartbeat))
 
         result = await db.execute(stmt)
         sessions = result.scalars().all()

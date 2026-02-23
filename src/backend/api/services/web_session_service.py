@@ -7,7 +7,7 @@ web authentication flows (passwordless, AD, admin), and httpOnly cookie integrat
 
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,7 +17,9 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
+from core.heartbeat_summary import heartbeat_summary
 from core.logging_config import SessionLogger
+from core.metrics import track_session_heartbeat
 from db import WebSession
 from api.repositories.web_session_repository import WebSessionRepository
 
@@ -84,7 +86,7 @@ class WebSessionService:
 
                 logger.info(f"Updated existing web session {existing_session.id}")
                 session_logger.session_updated(
-                    existing_session.id, user_id, existing_session.last_heartbeat
+                    cast(Any, existing_session.id), cast(Any, user_id), existing_session.last_heartbeat
                 )
                 return existing_session
 
@@ -135,7 +137,7 @@ class WebSessionService:
             f"Created new web session {session.id} for user {user_id} | "
             f"Auth: {auth_method} | IP: {ip_address}"
         )
-        session_logger.session_created(user_id, session.id, 1, ip_address)  # type_id=1 for web
+        session_logger.session_created(cast(Any, user_id), cast(Any, session.id), str(1), ip_address)  # type_id=1 for web
 
         return session
 
@@ -164,6 +166,8 @@ class WebSessionService:
 
         if not session:
             logger.warning(f"Web heartbeat update failed - Session not found: {session_id}")
+            track_session_heartbeat("web", success=False)
+            heartbeat_summary.record("web", success=False)
             return None
 
         # Update heartbeat
@@ -177,13 +181,16 @@ class WebSessionService:
         await db.commit()
         await db.refresh(session)
 
-        duration = (session.last_heartbeat - old_heartbeat).total_seconds() / 60
+        latency_seconds = (session.last_heartbeat - old_heartbeat).total_seconds()
         logger.debug(
             f"Web heartbeat updated for session {session_id} | "
-            f"User: {session.user_id} | Duration since last: {duration:.1f} min"
+            f"User: {session.user_id} | Duration since last: {latency_seconds / 60:.1f} min"
         )
 
-        session_logger.heartbeat_received(session_id, session.user_id, session.ip_address)
+        track_session_heartbeat("web", success=True, latency_seconds=latency_seconds)
+        heartbeat_summary.record("web", success=True)
+
+        session_logger.heartbeat_received(session_id, cast(Any, session.user_id), session.ip_address)
         return session
 
     @staticmethod
@@ -220,7 +227,7 @@ class WebSessionService:
             f"Web session disconnected: {session_id} | "
             f"User: {session.user_id} | Duration: {duration:.1f} minutes"
         )
-        session_logger.session_disconnected(session_id, session.user_id, duration)
+        session_logger.session_disconnected(session_id, cast(Any, session.user_id), duration)
 
         return session
 
@@ -308,8 +315,8 @@ class WebSessionService:
             session.is_active = False
 
             session_logger.stale_session_cleaned(
-                session.id,
-                session.user_id,
+                cast(Any, session.id),
+                cast(Any, session.user_id),
                 session.last_heartbeat,
                 inactive_duration,
             )

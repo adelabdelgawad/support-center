@@ -4,14 +4,15 @@ Enhanced with centralized logging and error handling.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Sequence, Tuple, cast
+from uuid import UUID
 
 from core.decorators import (log_database_operation, safe_database_query,
                              transactional_database_operation)
 from db import BusinessUnitRegion
 from api.schemas.business_unit_region import (BusinessUnitRegionCreate,
                                            BusinessUnitRegionUpdate)
-from sqlalchemy import case, func, select
+from sqlalchemy import ColumnElement, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Module-level logger using __name__
@@ -44,30 +45,36 @@ class BusinessUnitRegionService:
         Returns:
             Tuple of (list of regions, total, active_count, inactive_count)
         """
+        is_deleted_col = cast(ColumnElement[bool], BusinessUnitRegion.is_deleted)
+        is_active_col = cast(ColumnElement[bool], BusinessUnitRegion.is_active)
+        name_col = cast(Any, BusinessUnitRegion.name)
+
         # Build main query
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.is_deleted.is_(False))
+        stmt = select(BusinessUnitRegion).where(is_deleted_col.is_(False))
 
         # Build total count query - ALWAYS get total counts from database (no filters)
         total_count_stmt = select(
-            func.count(BusinessUnitRegion.id).label("total"),
-            func.count(case((BusinessUnitRegion.is_active.is_(True), 1))).label("active_count"),
-            func.count(case((BusinessUnitRegion.is_active.is_(False), 1))).label("inactive_count"),
-        ).where(BusinessUnitRegion.is_deleted.is_(False))
+            func.count().label("total"),
+            func.count(case((is_active_col.is_(True), 1))).label("active_count"),
+            func.count(case((is_active_col.is_(False), 1))).label("inactive_count"),
+        ).where(is_deleted_col.is_(False))
 
         # Get total counts (unfiltered)
         total_count_result = await db.execute(total_count_stmt)
         total_counts = total_count_result.one()
-        total = total_counts.total or 0
-        active_count = total_counts.active_count or 0
-        inactive_count = total_counts.inactive_count or 0
+        total: int = total_counts.total or 0
+        active_count: int = total_counts.active_count or 0
+        inactive_count: int = total_counts.inactive_count or 0
 
         # Apply filters to main query only
         if name:
-            name_filter = BusinessUnitRegion.name.ilike(f"%{name}%")
+            name_filter = name_col.ilike(f"%{name}%")
             stmt = stmt.where(name_filter)
 
         if is_active is not None:
-            stmt = stmt.where(BusinessUnitRegion.is_active == is_active)
+            stmt = stmt.where(
+                cast(ColumnElement[bool], BusinessUnitRegion.is_active == is_active)
+            )
 
         # Apply pagination
         stmt = (
@@ -78,9 +85,9 @@ class BusinessUnitRegionService:
 
         # Execute query
         result = await db.execute(stmt)
-        regions = result.scalars().all()
+        regions: Sequence[BusinessUnitRegion] = result.scalars().all()
 
-        return regions, total, active_count, inactive_count
+        return list(regions), total, active_count, inactive_count
 
     @staticmethod
     @safe_database_query("get_business_unit_region")
@@ -99,7 +106,7 @@ class BusinessUnitRegionService:
         Returns:
             Business unit region or None
         """
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.id == region_id)
+        stmt = select(BusinessUnitRegion).where(cast(ColumnElement[bool], BusinessUnitRegion.id == region_id))
         result = await db.execute(stmt)
         region = result.scalar_one_or_none()
 
@@ -111,7 +118,7 @@ class BusinessUnitRegionService:
     async def create_business_unit_region(
         db: AsyncSession,
         region_data: BusinessUnitRegionCreate,
-        created_by: Optional[int] = None
+        created_by: Optional[UUID] = None
     ) -> BusinessUnitRegion:
         """
         Create a new business unit region.
@@ -138,7 +145,7 @@ class BusinessUnitRegionService:
         db: AsyncSession,
         region_id: int,
         update_data: BusinessUnitRegionUpdate,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[UUID] = None,
     ) -> Optional[BusinessUnitRegion]:
         """
         Update a business unit region.
@@ -152,7 +159,7 @@ class BusinessUnitRegionService:
         Returns:
             Updated business unit region or None
         """
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.id == region_id)
+        stmt = select(BusinessUnitRegion).where(cast(ColumnElement[bool], BusinessUnitRegion.id == region_id))
         result = await db.execute(stmt)
         region = result.scalar_one_or_none()
 
@@ -181,7 +188,7 @@ class BusinessUnitRegionService:
     async def toggle_business_unit_region_status(
         db: AsyncSession,
         region_id: int,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[UUID] = None,
     ) -> Optional[BusinessUnitRegion]:
         """
         Toggle business unit region active status.
@@ -194,7 +201,7 @@ class BusinessUnitRegionService:
         Returns:
             Updated region or None
         """
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.id == region_id)
+        stmt = select(BusinessUnitRegion).where(cast(ColumnElement[bool], BusinessUnitRegion.id == region_id))
         result = await db.execute(stmt)
         region = result.scalar_one_or_none()
 
@@ -217,7 +224,7 @@ class BusinessUnitRegionService:
         db: AsyncSession,
         region_ids: List[int],
         is_active: bool,
-        updated_by: Optional[int] = None,
+        updated_by: Optional[UUID] = None,
     ) -> List[BusinessUnitRegion]:
         """
         Bulk update business unit regions status.
@@ -231,11 +238,13 @@ class BusinessUnitRegionService:
         Returns:
             List of updated regions
         """
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.id.in_(region_ids))
+        stmt = select(BusinessUnitRegion).where(
+            cast(ColumnElement[bool], cast(Any, BusinessUnitRegion.id).in_(region_ids))
+        )
         result = await db.execute(stmt)
-        regions = result.scalars().all()
+        regions_seq = result.scalars().all()
 
-        for region in regions:
+        for region in regions_seq:
             region.is_active = is_active
             region.updated_at = datetime.utcnow()
             region.updated_by = updated_by
@@ -243,7 +252,7 @@ class BusinessUnitRegionService:
         await db.commit()
         # No need for N+1 refresh loop - objects are already in memory with latest state
 
-        return regions
+        return list(regions_seq)
 
     @staticmethod
     @transactional_database_operation("delete_business_unit_region")
@@ -262,7 +271,7 @@ class BusinessUnitRegionService:
         Returns:
             True if deleted, False if not found
         """
-        stmt = select(BusinessUnitRegion).where(BusinessUnitRegion.id == region_id)
+        stmt = select(BusinessUnitRegion).where(cast(ColumnElement[bool], BusinessUnitRegion.id == region_id))
         result = await db.execute(stmt)
         region = result.scalar_one_or_none()
 

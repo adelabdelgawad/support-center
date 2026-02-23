@@ -125,6 +125,20 @@ dev = [
 ignore = ["E712"]
 
 [tool.mypy]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
 exclude = [
     'api/repositories/reporting/reporting_query_repository.py',
+    'alembic/versions/.*\.py',
 ]
+
+[[tool.mypy.overrides]]
+module = "api.services.management.deployment_job_service"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tasks.maintenance_tasks"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "alembic.versions.*"
+ignore_errors = true

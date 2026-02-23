@@ -4,8 +4,7 @@ Chat file repository for managing ChatFile model.
 This repository handles all database operations for chat file uploads.
 """
 
-from typing import List, Optional
-from uuid import UUID
+from typing import Any, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,18 +19,21 @@ class ChatFileRepository(BaseRepository[ChatFile]):
     model = ChatFile
 
     @classmethod
-    async def find_by_id(cls, db: AsyncSession, file_id: int) -> Optional[ChatFile]:
+    async def find_by_id(  # type: ignore[override]
+        cls, db: AsyncSession, file_id: Any, *, eager_load: Optional[List] = None
+    ) -> Optional[ChatFile]:
         """
         Get chat file by ID.
 
         Args:
             db: Database session
             file_id: Chat file ID
+            eager_load: Unused, kept for signature compatibility
 
         Returns:
             ChatFile or None
         """
-        stmt = select(ChatFile).where(ChatFile.id == file_id)
+        stmt = select(ChatFile).where(ChatFile.__table__.c.id == file_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -49,7 +51,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
         Returns:
             ChatFile or None
         """
-        stmt = select(ChatFile).where(ChatFile.stored_filename == stored_filename)
+        stmt = select(ChatFile).where(ChatFile.__table__.c.stored_filename == stored_filename)
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -69,14 +71,12 @@ class ChatFileRepository(BaseRepository[ChatFile]):
         """
         stmt = (
             select(ChatFile)
-            .where(ChatFile.request_id == request_id)
-            .order_by(ChatFile.created_at.desc())
+            .where(ChatFile.__table__.c.request_id == request_id)
+            .order_by(ChatFile.__table__.c.created_at.desc())
         )
 
         result = await db.execute(stmt)
-        files = result.scalars().all()
-
-        return list(files)
+        return list(result.scalars().all())
 
     @classmethod
     async def verify_request_exists(cls, db: AsyncSession, request_id: int) -> bool:
@@ -90,7 +90,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
         Returns:
             True if request exists
         """
-        stmt = select(ServiceRequest).where(ServiceRequest.id == request_id)
+        stmt = select(ServiceRequest).where(ServiceRequest.__table__.c.id == request_id)
         result = await db.execute(stmt)
         return result.scalar_one_or_none() is not None
 
@@ -109,7 +109,7 @@ class ChatFileRepository(BaseRepository[ChatFile]):
         Returns:
             Updated ChatFile or None
         """
-        stmt = select(ChatFile).where(ChatFile.id == file_id)
+        stmt = select(ChatFile).where(ChatFile.__table__.c.id == file_id)
         result = await db.execute(stmt)
         chat_file = result.scalar_one_or_none()
 

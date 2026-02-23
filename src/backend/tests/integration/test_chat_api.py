@@ -36,7 +36,7 @@ async def sample_statuses(db_session: AsyncSession):
     """Get or create standard request statuses."""
     # First try to get existing statuses
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.__table__.c.is_active == True).order_by(RequestStatus.__table__.c.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -66,7 +66,7 @@ async def sample_priorities(db_session: AsyncSession):
     """Get or create standard priorities."""
     # First try to get existing priorities
     result = await db_session.execute(
-        select(Priority).where(Priority.is_active == True).order_by(Priority.response_time_minutes)
+        select(Priority).where(Priority.__table__.c.is_active == True).order_by(Priority.__table__.c.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 
@@ -520,7 +520,7 @@ class TestTotalUnread:
         self, db_session, requester_user
     ):
         """Test getting total unread count."""
-        from api.services.chat_read_state_service import ChatReadStateService
+        from api.services.support.chat_read_state_service import ChatReadStateService
 
         total = await ChatReadStateService.get_total_unread_count(
             db=db_session,
@@ -534,7 +534,7 @@ class TestTotalUnread:
         self, db_session, chat_request, requester_user, technician_user
     ):
         """Test that total unread updates when new messages arrive."""
-        from api.services.chat_read_state_service import ChatReadStateService
+        from api.services.support.chat_read_state_service import ChatReadStateService
 
         # Get initial count
         initial_count = await ChatReadStateService.get_total_unread_count(
@@ -577,7 +577,7 @@ class TestMarkChatAsRead:
         self, db_session, chat_request, sample_messages, technician_user
     ):
         """Test marking a chat as fully read."""
-        from api.services.chat_read_state_service import ChatReadStateService
+        from api.services.support.chat_read_state_service import ChatReadStateService
 
         monitor = await ChatReadStateService.mark_chat_as_read(
             db=db_session,
@@ -599,7 +599,7 @@ class TestMarkChatAsRead:
         self, db_session, chat_request, technician_user
     ):
         """Test that marking as read updates the timestamp."""
-        from api.services.chat_read_state_service import ChatReadStateService
+        from api.services.support.chat_read_state_service import ChatReadStateService
 
         before = datetime.utcnow()
 

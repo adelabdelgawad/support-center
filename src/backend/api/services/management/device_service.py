@@ -12,7 +12,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, cast
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ from core.decorators import (
     safe_database_query,
     transactional_database_operation,
 )
-from db import Device, DeploymentJob
+from db.models import Device, DeploymentJob
 from db.enums import (
     DeviceDiscoverySource,
     DeviceLifecycleState,
@@ -222,6 +222,8 @@ class DeviceService:
 
         old_state = device.lifecycle_state
         device = await DeviceRepository.update_lifecycle_state(db, device_id, new_state)
+        if not device:
+            return None
 
         logger.info(f"Device {device.hostname} lifecycle: {old_state} -> {new_state}")
         return device
@@ -299,6 +301,7 @@ class DeviceService:
             ValueError: If device not found or not in valid state
         """
         from core.config import settings
+        settings_any: Any = settings
 
         # Get device
         device = await DeviceRepository.find_by_id(db, device_id)
@@ -321,7 +324,7 @@ class DeviceService:
         # See: agent-deployment/src/api/types.rs - JobPayload struct
         payload = {
             # SMB path to installer MSI
-            "installerPath": settings.deployment.installer_smb_path,
+            "installerPath": settings_any.deployment.installer_smb_path,
             # Inline credentials (per-task, not stored in vault)
             "vaultRef": "__inline__",  # Special marker for inline credentials
             "inlineCredentials": {
@@ -330,9 +333,9 @@ class DeviceService:
                 "type": credential_type,
             },
             # MSI arguments
-            "installArgs": settings.deployment.installer_args,
+            "installArgs": settings_any.deployment.installer_args,
             # Enrollment token (if configured)
-            "enrollToken": settings.deployment.enroll_token or None,
+            "enrollToken": settings_any.deployment.enroll_token or None,
             # Target machines
             "targets": [
                 {
@@ -701,7 +704,7 @@ class DeviceService:
         for host in scanned_hosts:
             # Check if device already exists (by hostname or IP)
             existing_device = await DeviceRepository.find_by_ip_or_hostname(
-                db, host.ip, host.hostname
+                db, host.ip, cast(Any, host.hostname)
             )
 
             if existing_device:

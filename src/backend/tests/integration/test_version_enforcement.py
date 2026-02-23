@@ -29,7 +29,7 @@ from db import ClientVersion, DesktopSession
 from api.schemas.login import ADLoginRequest, SSOLoginRequest
 from api.schemas.version import ClientVersionCreate
 from api.services.auth_service import AuthenticationService
-from api.services.management.client_version_service import ClientVersionService
+from api.services.setting.client_version_service import ClientVersionService
 from api.services.version_policy_service import VersionStatus
 
 
@@ -51,12 +51,8 @@ class TestVersionEnforcementSetup:
         - 1.0.0: Old version
         - 2.0.0: Latest version, not enforced
         """
-        v1 = await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        v2 = await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=False)
-        )
+        v1 = await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        v2 = await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=False))
         return {"v1": v1, "v2": v2}
 
     @pytest_asyncio.fixture
@@ -67,12 +63,8 @@ class TestVersionEnforcementSetup:
         - 1.0.0: Old version (will be OUTDATED_ENFORCED)
         - 2.0.0: Latest version, ENFORCED
         """
-        v1 = await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        v2 = await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        v1 = await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        v2 = await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
         return {"v1": v1, "v2": v2}
 
 
@@ -88,12 +80,8 @@ class TestVersionEnforcementOff:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -137,9 +125,7 @@ class TestVersionEnforcementOff:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -182,9 +168,7 @@ class TestVersionEnforcementOn:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -222,9 +206,7 @@ class TestVersionEnforcementOn:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
         await ClientVersionService.create_version(
             db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=False)  # Not enforced
         )
@@ -267,12 +249,8 @@ class TestVersionEnforcementOn:
         await db_session.execute(delete(DesktopSession))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -324,9 +302,7 @@ class TestVersionEnforcementOn:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -367,9 +343,7 @@ class TestVersionEnforcementOn:
         await db_session.execute(delete(DesktopSession))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -416,12 +390,8 @@ class TestVersionEnforcementSSO:
         await db_session.execute(delete(DesktopSession))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         login_data = SSOLoginRequest(
             username=sample_domain_user.username,
@@ -464,12 +434,8 @@ class TestVersionEnforcementRollback:
         await db_session.execute(delete(ClientVersion))
         await db_session.commit()
 
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         login_data = ADLoginRequest(
             username=sample_domain_user.username,
@@ -539,12 +505,8 @@ class TestExistingSessionsUnaffected:
         await db_session.commit()
 
         # Create version registry with enforcement
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="2.0.0", is_enforced=True)
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="2.0.0", is_enforced=True))
 
         # Create an existing session with old version (simulating pre-enforcement)
         existing_session = DesktopSession(
@@ -592,9 +554,7 @@ class TestInstallerMetadata:
         await db_session.commit()
 
         # Create versions with installer metadata
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
         await ClientVersionService.create_version(
             db_session,
             ClientVersionCreate(
@@ -652,9 +612,7 @@ class TestInstallerMetadata:
         await db_session.commit()
 
         # Create versions WITHOUT installer metadata
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
         await ClientVersionService.create_version(
             db_session,
             ClientVersionCreate(
@@ -780,9 +738,7 @@ class TestInstallerMetadata:
         await db_session.commit()
 
         # Create versions with installer metadata
-        await ClientVersionService.create_version(
-            db_session, ClientVersionCreate(version_string="1.0.0")
-        )
+        await ClientVersionService(db_session).create_version(ClientVersionCreate(version_string="1.0.0"))
         await ClientVersionService.create_version(
             db_session,
             ClientVersionCreate(

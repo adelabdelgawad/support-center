@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Optional, ClassVar
+from typing import Any, Optional, ClassVar, cast, Awaitable
 import redis.asyncio as redis
 import uuid
 from fastapi import HTTPException, status
@@ -55,9 +55,9 @@ class DistributedLock:
 
         if blocking_timeout is None:
             # Non-blocking - try once
-            result = await self.redis.eval(
+            result = await cast(Awaitable[Any], self.redis.eval(
                 acquire_script, 1, self.lock_key, self.lock_id, str(self.ttl)
-            )
+            ))
             if int(result) == 1:
                 self._acquired = True
                 return True
@@ -66,9 +66,9 @@ class DistributedLock:
         # Blocking - retry until timeout
         start_time = time.time()
         while True:
-            result = await self.redis.eval(
+            result = await cast(Awaitable[Any], self.redis.eval(
                 acquire_script, 1, self.lock_key, self.lock_id, str(self.ttl)
-            )
+            ))
             if int(result) == 1:
                 self._acquired = True
                 return True
@@ -100,9 +100,9 @@ class DistributedLock:
         end
         """
 
-        result = await self.redis.eval(
+        result = await cast(Awaitable[Any], self.redis.eval(
             release_script, 1, self.lock_key, self.lock_id
-        )
+        ))
 
         if int(result) == 1:
             self._acquired = False

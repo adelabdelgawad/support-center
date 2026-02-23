@@ -15,7 +15,7 @@ class TestDomainUsersEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/domain-users/ with empty database."""
-        response = await client.get("/api/setting/domain-users/")
+        response = await client.get("/backend/domain-users/")
         assert response.status_code == 200
 
         data = response.json()
@@ -51,7 +51,7 @@ class TestDomainUsersEndpoints:
         db_session.add_all([du1, du2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/domain-users/")
+        response = await client.get("/backend/domain-users/")
         assert response.status_code == 200
 
         data = response.json()
@@ -84,7 +84,7 @@ class TestDomainUsersEndpoints:
             db_session.add(du)
         await db_session.commit()
 
-        response = await client.get("/api/setting/domain-users/?limit=2&skip=0")
+        response = await client.get("/backend/domain-users/?limit=2&skip=0")
         assert response.status_code == 200
         data = response.json()
         assert len(data["domainUsers"]) == 2
@@ -117,7 +117,7 @@ class TestDomainUsersEndpoints:
         db_session.add_all([du1, du2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/domain-users/?is_active=true")
+        response = await client.get("/backend/domain-users/?is_active=true")
         assert response.status_code == 200
         data = response.json()
         assert len(data["domainUsers"]) == 1
@@ -150,7 +150,7 @@ class TestDomainUsersEndpoints:
         db_session.add_all([du1, du2])
         await db_session.commit()
 
-        response = await client.get("/api/setting/domain-users/?search=john")
+        response = await client.get("/backend/domain-users/?search=john")
         assert response.status_code == 200
         data = response.json()
         assert len(data["domainUsers"]) == 1
@@ -177,7 +177,7 @@ class TestDomainUsersEndpoints:
         await db_session.commit()
         await db_session.refresh(du)
 
-        response = await client.get(f"/api/setting/domain-users/{du.id}")
+        response = await client.get(f"/backend/domain-users/{du.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -190,7 +190,7 @@ class TestDomainUsersEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test GET /api/setting/domain-users/{user_id} with non-existent ID."""
-        response = await client.get("/api/setting/domain-users/99999")
+        response = await client.get("/backend/domain-users/99999")
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -199,7 +199,7 @@ class TestDomainUsersEndpoints:
     ) -> None:
         """Test POST /api/setting/domain-users/sync."""
         # This will likely fail without AD configured, but we test the endpoint
-        response = await client.post("/api/setting/domain-users/sync")
+        response = await client.post("/backend/domain-users/sync")
         # Accept either success or error
         assert response.status_code in [200, 400, 500]
 
@@ -226,7 +226,7 @@ class TestDomainUsersEndpoints:
 
         update_data = {"displayName": "John Updated Doe", "isActive": False}
 
-        response = await client.put(f"/api/setting/domain-users/{du.id}", json=update_data)
+        response = await client.put(f"/backend/domain-users/{du.id}", json=update_data)
         assert response.status_code == 200
 
         data = response.json()
@@ -240,7 +240,7 @@ class TestDomainUsersEndpoints:
         """Test PUT /api/setting/domain-users/{user_id} with non-existent ID."""
         update_data = {"displayName": "Updated"}
 
-        response = await client.put("/api/setting/domain-users/99999", json=update_data)
+        response = await client.put("/backend/domain-users/99999", json=update_data)
         assert response.status_code == 404
 
     @pytest.mark.asyncio
@@ -264,7 +264,7 @@ class TestDomainUsersEndpoints:
         await db_session.commit()
         await db_session.refresh(du)
 
-        response = await client.delete(f"/api/setting/domain-users/{du.id}")
+        response = await client.delete(f"/backend/domain-users/{du.id}")
         assert response.status_code == 200
 
         data = response.json()
@@ -275,5 +275,5 @@ class TestDomainUsersEndpoints:
         self, client: AsyncClient, seed_admin_user: User
     ) -> None:
         """Test DELETE /api/setting/domain-users/{user_id} with non-existent ID."""
-        response = await client.delete("/api/setting/domain-users/99999")
+        response = await client.delete("/backend/domain-users/99999")
         assert response.status_code == 404

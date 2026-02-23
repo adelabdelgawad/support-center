@@ -123,7 +123,7 @@ async def saudi_business_unit(
 async def sample_statuses(db_session: AsyncSession) -> list[RequestStatus]:
     """Get or create standard request statuses."""
     result = await db_session.execute(
-        select(RequestStatus).where(RequestStatus.is_active == True).order_by(RequestStatus.id)
+        select(RequestStatus).where(RequestStatus.__table__.c.is_active == True).order_by(RequestStatus.__table__.c.id)
     )
     existing_statuses = result.scalars().all()
 
@@ -168,8 +168,8 @@ async def sample_priorities(db_session: AsyncSession) -> list[Priority]:
     """Get or create standard priorities."""
     result = await db_session.execute(
         select(Priority)
-        .where(Priority.is_active == True)
-        .order_by(Priority.response_time_minutes)
+        .where(Priority.__table__.c.is_active == True)
+        .order_by(Priority.__table__.c.response_time_minutes)
     )
     existing_priorities = result.scalars().all()
 
@@ -570,7 +570,7 @@ class TestRegionBasedAuthorization:
         requests, total = await ServiceRequestRepository.find_unassigned_requests(
             db=db_session,
             user=technician_user,
-            business_unit_id=arc_business_unit.id,  # Filter to ARC only
+            business_unit_ids=[arc_business_unit.id] if arc_business_unit.id is not None else None,  # Filter to ARC only
             page=1,
             per_page=20,
         )

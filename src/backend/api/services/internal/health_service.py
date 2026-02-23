@@ -123,12 +123,14 @@ class HealthService:
             Dict containing database pool metrics
         """
         from db.database import engine
+        from sqlalchemy.pool import QueuePool
         pool = engine.pool
+        queue_pool = pool if isinstance(pool, QueuePool) else None
 
         return {
-            "pool_size": pool.size(),
-            "checkedout": pool.checkedout(),
-            "overflow": pool.overflow(),
+            "pool_size": queue_pool.size() if queue_pool else 0,
+            "checkedout": queue_pool.checkedout() if queue_pool else 0,
+            "overflow": queue_pool.overflow() if queue_pool else 0,
             "max_overflow": pool._max_overflow  # type: ignore
         }
 

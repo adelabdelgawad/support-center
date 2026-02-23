@@ -32,6 +32,7 @@ import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
 from core.dependencies import get_session, get_current_user
 from db import User
@@ -41,16 +42,15 @@ from api.schemas.system_message import (
     SystemMessageRead,
     SystemMessageListResponse,
 )
-from api.repositories.setting.system_message_repository import SystemMessageRepository
-from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
 
 class BulkStatusUpdate(BaseModel):
     """Schema for bulk status update."""
     message_ids: List[int]
     is_active: bool
-
-logger = logging.getLogger(__name__)
-router = APIRouter()
 
 
 @router.get("", response_model=SystemMessageListResponse)
@@ -60,35 +60,11 @@ async def list_system_messages(
     is_active: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> SystemMessageListResponse:
     """List all system message templates with counts."""
-    # Use repository to get filtered messages with pagination
-    filters = {}
-    if is_active is not None:
-        filters["is_active"] = is_active
-
-    from db import SystemMessage
-    messages = await SystemMessageRepository.find_all(
-        db,
-        filters=filters,
-        order_by=SystemMessage.created_at.desc(),
-        offset=skip,
-        limit=limit,
-    )
-
-    # Get total count with filters
-    total = await SystemMessageRepository.count(db, filters=filters)
-
-    # Get global active/inactive counts
-    active_count = await SystemMessageRepository.count(db, filters={"is_active": True})
-    inactive_count = await SystemMessageRepository.count(db, filters={"is_active": False})
-
-    return SystemMessageListResponse(
-        messages=messages,
-        total=total,
-        active_count=active_count,
-        inactive_count=inactive_count,
-    )
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    return await service.list_messages(skip=skip, limit=limit, is_active=is_active)
 
 
 @router.get("/{message_id}", response_model=SystemMessageRead)
@@ -96,14 +72,14 @@ async def get_system_message(
     message_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> SystemMessageRead:
     """Get system message by ID."""
-    message = await SystemMessageRepository.find_by_id(db, message_id)
-
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    message = await service.get_by_id(message_id)
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
-
-    return message
+    return SystemMessageRead.model_validate(message)
 
 
 @router.post("", response_model=SystemMessageRead, status_code=201)
@@ -111,26 +87,15 @@ async def create_system_message(
     message_data: SystemMessageCreate,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> SystemMessageRead:
     """Create a new system message template. Admin only."""
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    # Check if message_type already exists
-    existing = await SystemMessageRepository.find_one(
-        db, filters={"message_type": message_data.message_type}
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Message type '{message_data.message_type}' already exists",
-        )
-
-    message = await SystemMessageRepository.create(
-        db, obj_in=message_data.model_dump()
-    )
-
-    return message
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    message = await service.create_message(message_data.model_dump())
+    return SystemMessageRead.model_validate(message)
 
 
 @router.patch("/{message_id}", response_model=SystemMessageRead)
@@ -139,7 +104,7 @@ async def update_system_message(
     message_data: SystemMessageUpdate,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> SystemMessageRead:
     """Update system message template. Admin only."""
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -150,14 +115,12 @@ async def update_system_message(
         if v is not None
     }
 
-    message = await SystemMessageRepository.update(
-        db, id_value=message_id, obj_in=update_dict
-    )
-
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    message = await service.update_message(message_id, update_dict)
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
-
-    return message
+    return SystemMessageRead.model_validate(message)
 
 
 @router.patch("/{message_id}/toggle", response_model=SystemMessageRead)
@@ -165,21 +128,17 @@ async def toggle_system_message_status(
     message_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> SystemMessageRead:
     """Toggle system message active/inactive status. Admin only."""
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    message = await SystemMessageRepository.find_by_id(db, message_id)
-
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    message = await service.toggle_status(message_id)
     if not message:
         raise HTTPException(status_code=404, detail="System message not found")
-
-    message.is_active = not message.is_active
-    await db.commit()
-    await db.refresh(message)
-
-    return message
+    return SystemMessageRead.model_validate(message)
 
 
 @router.post("/bulk-status", response_model=List[SystemMessageRead])
@@ -187,7 +146,7 @@ async def bulk_update_status(
     update_data: BulkStatusUpdate,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> List[SystemMessageRead]:
     """Bulk update system message status. Admin only."""
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -195,29 +154,12 @@ async def bulk_update_status(
     if not update_data.message_ids:
         raise HTTPException(status_code=400, detail="No message IDs provided")
 
-    # Fetch all messages
-    from sqlalchemy import select
-    from db import SystemMessage
-    stmt = select(SystemMessage).where(SystemMessage.id.in_(update_data.message_ids))
-    result = await db.execute(stmt)
-    messages = result.scalars().all()
-
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    messages = await service.bulk_update_status(update_data.message_ids, update_data.is_active)
     if not messages:
         raise HTTPException(status_code=404, detail="No messages found")
-
-    # Update status
-    updated_messages = []
-    for message in messages:
-        message.is_active = update_data.is_active
-        updated_messages.append(message)
-
-    await db.commit()
-
-    # Refresh all messages
-    for message in updated_messages:
-        await db.refresh(message)
-
-    return updated_messages
+    return [SystemMessageRead.model_validate(m) for m in messages]
 
 
 @router.delete("/{message_id}", status_code=204)
@@ -225,14 +167,13 @@ async def delete_system_message(
     message_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-):
+) -> None:
     """Delete system message. Admin only. Warning: Hard delete."""
     if not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Admin only")
 
-    deleted = await SystemMessageRepository.delete(
-        db, id_value=message_id, soft_delete=False
-    )
-
+    from api.services.setting.system_message_service import SystemMessageService
+    service = SystemMessageService(db)
+    deleted = await service.delete_message(message_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="System message not found")

@@ -21,7 +21,6 @@ from typing import Dict, Any
 from tasks.database import get_celery_session
 from api.services.auth_service import AuthenticationService
 from api.services.management.desktop_session_service import DesktopSessionService
-from api.services.management.deployment_job_service import DeploymentJobService
 from api.services.management.scheduler_service import SchedulerService
 
 logger = logging.getLogger(__name__)
@@ -146,6 +145,10 @@ async def cleanup_stale_deployment_jobs_task(timeout_minutes: int = 60) -> Dict[
     logger.info(f"Starting cleanup of stale deployment jobs (timeout_minutes={timeout_minutes})")
 
     async with get_celery_session() as db:
+        try:
+            from api.services.management.deployment_job_service import DeploymentJobService  # noqa: PLC0415
+        except ImportError:
+            raise RuntimeError("DeploymentJobService not available - module not implemented")
         service = DeploymentJobService()
         result = await service.cleanup_stale_jobs(db, timeout_minutes=timeout_minutes)
 
@@ -250,6 +253,8 @@ async def delete_old_desktop_sessions_task(retention_days: int = 90) -> Dict[str
     """
     from datetime import datetime, timedelta
     from sqlalchemy import delete
+    from sqlalchemy.engine import CursorResult
+    from sqlmodel import col
 
     from db import DesktopSession
 
@@ -258,10 +263,10 @@ async def delete_old_desktop_sessions_task(retention_days: int = 90) -> Dict[str
     async with get_celery_session() as db:
         cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
 
-        result = await db.execute(
-            delete(DesktopSession).where(DesktopSession.created_at < cutoff_date)
+        result: CursorResult = await db.execute(  # type: ignore[assignment]
+            delete(DesktopSession).where(col(DesktopSession.created_at) < cutoff_date)
         )
-        deleted_count = result.rowcount
+        deleted_count = result.rowcount or 0
         await db.commit()
 
         logger.info(

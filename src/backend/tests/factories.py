@@ -53,6 +53,7 @@ class UserFactory:
         manager_id: Optional[UUID] = None,
         title: Optional[str] = None,
         department: Optional[str] = None,
+        password_hash: Optional[str] = None,
     ) -> User:
         """Create a User instance with realistic defaults."""
         suffix = _unique_suffix()
@@ -110,7 +111,7 @@ class UserFactory:
             manager_id=manager_id,
             title=title,
             department=department,
-            password_hash=None,  # Passwordless auth
+            password_hash=password_hash,
         )
 
     @classmethod
@@ -610,7 +611,7 @@ class ChatMessageFactory:
     @classmethod
     def create(
         cls,
-        request_id: Optional[UUID] = None,
+        request_id: Optional[int] = None,
         sender_id: Optional[UUID] = None,
         content: Optional[str] = None,
         is_screenshot: bool = False,
@@ -627,7 +628,7 @@ class ChatMessageFactory:
             sequence_number = cls._counter
 
         return ChatMessage(
-            request_id=request_id or uuid4(),
+            request_id=request_id or 1,
             sender_id=sender_id or uuid4(),
             content=content,
             is_screenshot=is_screenshot,

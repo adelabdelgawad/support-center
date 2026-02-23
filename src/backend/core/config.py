@@ -462,6 +462,8 @@ class LoggingSettings(BaseSettings):
     file_path: str = "logs/app.json"
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     backup_count: int = 5
+    enable_request_debug: bool = False
+    enable_raw_request_logging: bool = False
 
     model_config = SettingsConfigDict(
         env_prefix="LOG_",
@@ -651,16 +653,31 @@ class VersionPolicySettings(BaseSettings):
     )
 
 
+def _make_database_settings() -> DatabaseSettings:
+    result = DatabaseSettings.model_validate({})
+    return result
+
+
+def _make_security_settings() -> SecuritySettings:
+    result = SecuritySettings.model_validate({})
+    return result
+
+
+def _make_cors_settings() -> CORSSettings:
+    result = CORSSettings.model_validate({})
+    return result
+
+
 class Settings(BaseSettings):
     """Main application settings."""
 
     api: APISettings = Field(default_factory=APISettings)
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    database: DatabaseSettings = Field(default_factory=_make_database_settings)
     turn: TURNSettings = Field(default_factory=TURNSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     celery: CelerySettings = Field(default_factory=CelerySettings)
-    security: SecuritySettings = Field(default_factory=SecuritySettings)
-    cors: CORSSettings = Field(default_factory=CORSSettings)
+    security: SecuritySettings = Field(default_factory=_make_security_settings)
+    cors: CORSSettings = Field(default_factory=_make_cors_settings)
     file_upload: FileUploadSettings = Field(default_factory=FileUploadSettings)
     minio: MinIOSettings = Field(default_factory=MinIOSettings)
     chat_attachments: ChatAttachmentSettings = Field(default_factory=ChatAttachmentSettings)

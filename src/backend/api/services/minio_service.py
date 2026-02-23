@@ -248,6 +248,8 @@ class MinIOStorageService:
             # Reset BytesIO position for retry
             data.seek(0)
 
+        raise RuntimeError("Upload failed after all retries")
+
     @classmethod
     def download_file_sync(cls, object_key: str) -> Optional[bytes]:
         """
@@ -348,6 +350,8 @@ class MinIOStorageService:
                         f"Download failed after {settings.minio.max_retries} attempts: {e}"
                     )
                     raise
+
+        return None
 
     @classmethod
     async def delete_file(cls, object_key: str) -> bool:

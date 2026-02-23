@@ -176,7 +176,7 @@ class CategoryService:
             List of subcategories
         """
         if category_id:
-            return await SubcategoryRepository.find_subcategories_by_category(
+            return await CategoryRepository.find_subcategories_by_category(
                 db, category_id
             )
 

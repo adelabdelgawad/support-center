@@ -5,12 +5,12 @@ This repository handles all database operations for web session management.
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import QueryableAttribute, selectinload
 
 from db import WebSession
 from api.repositories.base_repository import BaseRepository
@@ -41,9 +41,9 @@ class WebSessionRepository(BaseRepository[WebSession]):
         """
         stmt = (
             select(WebSession)
-            .where(WebSession.user_id == user_id)
-            .where(WebSession.is_active)
-            .where(WebSession.device_fingerprint == device_fingerprint)
+            .where(WebSession.__table__.c.user_id == user_id)
+            .where(WebSession.__table__.c.is_active.is_(True))
+            .where(WebSession.__table__.c.device_fingerprint == device_fingerprint)
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -64,8 +64,8 @@ class WebSessionRepository(BaseRepository[WebSession]):
         """
         stmt = (
             select(WebSession)
-            .where(WebSession.user_id == user_id)
-            .where(WebSession.is_active)
+            .where(WebSession.__table__.c.user_id == user_id)
+            .where(WebSession.__table__.c.is_active.is_(True))
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -85,12 +85,12 @@ class WebSessionRepository(BaseRepository[WebSession]):
         Returns:
             List of WebSession
         """
-        stmt = select(WebSession).where(WebSession.user_id == user_id)
+        stmt = select(WebSession).where(WebSession.__table__.c.user_id == user_id)
 
         if active_only:
-            stmt = stmt.where(WebSession.is_active)
+            stmt = stmt.where(WebSession.__table__.c.is_active.is_(True))
 
-        stmt = stmt.order_by(WebSession.last_heartbeat.desc())
+        stmt = stmt.order_by(WebSession.__table__.c.last_heartbeat.desc())
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
@@ -108,8 +108,8 @@ class WebSessionRepository(BaseRepository[WebSession]):
         """
         stmt = (
             select(WebSession)
-            .where(WebSession.is_active)
-            .order_by(WebSession.last_heartbeat.desc())
+            .where(WebSession.__table__.c.is_active.is_(True))
+            .order_by(WebSession.__table__.c.last_heartbeat.desc())
         )
 
         result = await db.execute(stmt)
@@ -128,9 +128,9 @@ class WebSessionRepository(BaseRepository[WebSession]):
         """
         stmt = (
             select(WebSession)
-            .options(selectinload(WebSession.user))
-            .where(WebSession.is_active)
-            .order_by(WebSession.last_heartbeat.desc())
+            .options(selectinload(cast(QueryableAttribute, WebSession.user)))
+            .where(WebSession.__table__.c.is_active.is_(True))
+            .order_by(WebSession.__table__.c.last_heartbeat.desc())
         )
 
         result = await db.execute(stmt)
@@ -154,8 +154,8 @@ class WebSessionRepository(BaseRepository[WebSession]):
 
         stmt = (
             select(WebSession)
-            .where(WebSession.is_active)
-            .where(WebSession.last_heartbeat < cutoff_time)
+            .where(WebSession.__table__.c.is_active.is_(True))
+            .where(WebSession.__table__.c.last_heartbeat < cutoff_time)
         )
 
         result = await db.execute(stmt)
@@ -177,7 +177,8 @@ class WebSessionRepository(BaseRepository[WebSession]):
             WebSession or None
         """
         stmt = select(WebSession).where(
-            WebSession.id == session_id, WebSession.user_id == user_id
+            WebSession.__table__.c.id == session_id,
+            WebSession.__table__.c.user_id == user_id,
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
@@ -211,7 +212,7 @@ class WebSessionRepository(BaseRepository[WebSession]):
         if ip_address:
             session.ip_address = ip_address
 
-        await db.commit()
+        await db.flush()
         await db.refresh(session)
 
         return session
@@ -237,7 +238,7 @@ class WebSessionRepository(BaseRepository[WebSession]):
 
         session.is_active = False
 
-        await db.commit()
+        await db.flush()
         await db.refresh(session)
 
         return session
@@ -261,5 +262,5 @@ class WebSessionRepository(BaseRepository[WebSession]):
             session.is_active = False
             count += 1
 
-        await db.commit()
+        await db.flush()
         return count

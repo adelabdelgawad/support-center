@@ -8,7 +8,7 @@ automatically break/fuse circuits when Redis is unavailable.
 
 import logging
 import time
-from typing import Any, Callable, TypeVar
+from typing import Any, Awaitable, Callable, TypeVar
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class RedisCircuitBreaker:
         self.is_open = False
         self.last_attempt_time = 0
 
-    async def execute(self, operation: Callable[..., T], *args, **kwargs) -> T:
+    async def execute(self, operation: Callable[..., Awaitable[T]], *args, **kwargs) -> T:
         """Execute operation with circuit breaker protection.
 
         Args:

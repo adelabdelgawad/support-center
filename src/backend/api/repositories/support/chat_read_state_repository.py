@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import and_, func, not_, select, update
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import ChatMessage, ChatReadState
@@ -23,7 +24,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
     @classmethod
     async def find_by_request_and_user(
-        cls, db: AsyncSession, request_id: int, user_id: UUID
+        cls, db: AsyncSession, request_id: int, user_id: object
     ) -> Optional[ChatReadState]:
         """
         Get or create a ChatReadState record for a user in a chat.
@@ -38,15 +39,15 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         """
         stmt = select(ChatReadState).where(
             and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.user_id == user_id,
+                ChatReadState.__table__.c.request_id == request_id,
+                ChatReadState.__table__.c.user_id == user_id,
             )
         )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
     @classmethod
-    async def find_all_for_user(cls, db: AsyncSession, user_id: int) -> List[Dict]:
+    async def find_all_for_user(cls, db: AsyncSession, user_id: object) -> List[Dict]:
         """
         Get all chat read monitors for a user.
 
@@ -58,10 +59,10 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             List of dicts with request_id and unread_count
         """
         stmt = select(
-            ChatReadState.request_id,
-            ChatReadState.unread_count,
-            ChatReadState.last_read_at,
-        ).where(ChatReadState.user_id == user_id)
+            ChatReadState.__table__.c.request_id,
+            ChatReadState.__table__.c.unread_count,
+            ChatReadState.__table__.c.last_read_at,
+        ).where(ChatReadState.__table__.c.user_id == user_id)
 
         result = await db.execute(stmt)
         rows = result.all()
@@ -78,7 +79,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         ]
 
     @classmethod
-    async def find_viewing_users(cls, db: AsyncSession, request_id: int) -> List[int]:
+    async def find_viewing_users(cls, db: AsyncSession, request_id: int) -> List[object]:
         """
         Get list of user IDs currently viewing a chat.
 
@@ -89,10 +90,10 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             List of user IDs currently viewing chat
         """
-        stmt = select(ChatReadState.user_id).where(
+        stmt = select(ChatReadState.__table__.c.user_id).where(
             and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.is_viewing,
+                ChatReadState.__table__.c.request_id == request_id,
+                ChatReadState.__table__.c.is_viewing.is_(True),
             )
         )
         result = await db.execute(stmt)
@@ -110,15 +111,15 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             Set of user IDs
         """
-        stmt = select(ChatReadState.user_id).where(
-            ChatReadState.request_id == request_id
+        stmt = select(ChatReadState.__table__.c.user_id).where(
+            ChatReadState.__table__.c.request_id == request_id
         )
         result = await db.execute(stmt)
         return {row[0] for row in result.all()}
 
     @classmethod
     async def get_unread_count(
-        cls, db: AsyncSession, request_id: int, user_id: UUID
+        cls, db: AsyncSession, request_id: int, user_id: object
     ) -> int:
         """
         Get unread count for a specific user in a specific chat.
@@ -131,10 +132,10 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             Number of unread messages
         """
-        stmt = select(ChatReadState.unread_count).where(
+        stmt = select(ChatReadState.__table__.c.unread_count).where(
             and_(
-                ChatReadState.request_id == request_id,
-                ChatReadState.user_id == user_id,
+                ChatReadState.__table__.c.request_id == request_id,
+                ChatReadState.__table__.c.user_id == user_id,
             )
         )
         result = await db.execute(stmt)
@@ -142,7 +143,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         return count or 0
 
     @classmethod
-    async def get_total_unread_count(cls, db: AsyncSession, user_id: str) -> int:
+    async def get_total_unread_count(cls, db: AsyncSession, user_id: object) -> int:
         """
         Get total unread count across all chats for a user.
 
@@ -153,8 +154,8 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             Total number of unread messages across all chats
         """
-        stmt = select(func.sum(ChatReadState.unread_count)).where(
-            ChatReadState.user_id == user_id
+        stmt = select(func.sum(ChatReadState.__table__.c.unread_count)).where(
+            ChatReadState.__table__.c.user_id == user_id
         )
         result = await db.execute(stmt)
         total = result.scalar_one_or_none()
@@ -165,7 +166,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         cls,
         db: AsyncSession,
         request_id: int,
-        user_id: str,
+        user_id: object,
         last_message_id: Optional[UUID] = None,
     ) -> Optional[ChatReadState]:
         """
@@ -187,9 +188,9 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
         if not last_message_id:
             stmt = (
-                select(ChatMessage.id, ChatMessage.created_at)
-                .where(ChatMessage.request_id == request_id)
-                .order_by(ChatMessage.created_at.desc())
+                select(ChatMessage.__table__.c.id, ChatMessage.__table__.c.created_at)
+                .where(ChatMessage.__table__.c.request_id == request_id)
+                .order_by(ChatMessage.__table__.c.created_at.desc())
                 .limit(1)
             )
             result = await db.execute(stmt)
@@ -200,8 +201,8 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             else:
                 monitor.last_read_at = datetime.utcnow()
         else:
-            stmt = select(ChatMessage.created_at).where(
-                ChatMessage.id == last_message_id
+            stmt = select(ChatMessage.__table__.c.created_at).where(
+                ChatMessage.__table__.c.id == last_message_id
             )
             result = await db.execute(stmt)
             timestamp = result.scalar_one_or_none()
@@ -215,9 +216,9 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             update(ChatMessage)
             .where(
                 and_(
-                    ChatMessage.request_id == request_id,
-                    ChatMessage.sender_id != user_id,
-                    not ChatMessage.is_read,
+                    ChatMessage.__table__.c.request_id == request_id,
+                    ChatMessage.__table__.c.sender_id != user_id,
+                    ChatMessage.__table__.c.is_read.is_(False),
                 )
             )
             .values(is_read=True)
@@ -231,7 +232,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         cls,
         db: AsyncSession,
         request_id: int,
-        user_id: str,
+        user_id: object,
         is_viewing: bool,
     ) -> Optional[ChatReadState]:
         """
@@ -280,14 +281,14 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         monitor.updated_at = now
         monitor.unread_count = 0
 
-        stmt = (
-            select(ChatMessage.id, ChatMessage.created_at)
-            .where(ChatMessage.request_id == request_id)
-            .order_by(ChatMessage.created_at.desc())
+        latest_msg_stmt = (
+            select(ChatMessage.__table__.c.id, ChatMessage.__table__.c.created_at)
+            .where(ChatMessage.__table__.c.request_id == request_id)
+            .order_by(ChatMessage.__table__.c.created_at.desc())
             .limit(1)
         )
-        result = await db.execute(stmt)
-        latest = result.first()
+        latest_result = await db.execute(latest_msg_stmt)
+        latest = latest_result.first()
         if latest:
             monitor.last_read_message_id = latest.id
             monitor.last_read_at = latest.created_at
@@ -328,7 +329,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
     @classmethod
     async def get_latest_message_info(
         cls, db: AsyncSession, request_id: int
-    ) -> Optional[Tuple[UUID, datetime]]:
+    ) -> Optional[Tuple[object, datetime]]:
         """
         Get the ID and timestamp of the latest message in a request.
 
@@ -340,9 +341,9 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             Tuple of (message_id, created_at) or None if no messages
         """
         stmt = (
-            select(ChatMessage.id, ChatMessage.created_at)
-            .where(ChatMessage.request_id == request_id)
-            .order_by(ChatMessage.created_at.desc())
+            select(ChatMessage.__table__.c.id, ChatMessage.__table__.c.created_at)
+            .where(ChatMessage.__table__.c.request_id == request_id)
+            .order_by(ChatMessage.__table__.c.created_at.desc())
             .limit(1)
         )
         result = await db.execute(stmt)
@@ -351,7 +352,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
 
     @classmethod
     async def get_message_timestamp(
-        cls, db: AsyncSession, message_id: UUID
+        cls, db: AsyncSession, message_id: object
     ) -> Optional[datetime]:
         """
         Get the timestamp of a specific message.
@@ -363,7 +364,9 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             Message timestamp or None
         """
-        stmt = select(ChatMessage.created_at).where(ChatMessage.id == message_id)
+        stmt = select(ChatMessage.__table__.c.created_at).where(
+            ChatMessage.__table__.c.id == message_id
+        )
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -372,7 +375,7 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         cls,
         db: AsyncSession,
         request_id: int,
-        user_id: int,
+        user_id: object,
     ) -> int:
         """
         Mark all unread messages (not sent by user) as read in a request.
@@ -389,19 +392,19 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
             update(ChatMessage)
             .where(
                 and_(
-                    ChatMessage.request_id == request_id,
-                    ChatMessage.sender_id != user_id,
-                    not_(ChatMessage.is_read),
+                    ChatMessage.__table__.c.request_id == request_id,
+                    ChatMessage.__table__.c.sender_id != user_id,
+                    ChatMessage.__table__.c.is_read.is_(False),
                 )
             )
             .values(is_read=True)
         )
-        result = await db.execute(mark_read_stmt)
-        return result.rowcount
+        cursor_result: CursorResult = await db.execute(mark_read_stmt)  # type: ignore[assignment]
+        return cursor_result.rowcount
 
     @classmethod
     async def get_unread_message_ids(
-        cls, db: AsyncSession, request_id: int, user_id: int
+        cls, db: AsyncSession, request_id: int, user_id: object
     ) -> List[str]:
         """
         Get IDs of unread messages (not sent by user) in a request.
@@ -414,11 +417,11 @@ class ChatReadStateRepository(BaseRepository[ChatReadState]):
         Returns:
             List of unread message IDs as strings
         """
-        stmt = select(ChatMessage.id).where(
+        stmt = select(ChatMessage.__table__.c.id).where(
             and_(
-                ChatMessage.request_id == request_id,
-                ChatMessage.sender_id != user_id,
-                not_(ChatMessage.is_read),
+                ChatMessage.__table__.c.request_id == request_id,
+                ChatMessage.__table__.c.sender_id != user_id,
+                ChatMessage.__table__.c.is_read.is_(False),
             )
         )
         result = await db.execute(stmt)

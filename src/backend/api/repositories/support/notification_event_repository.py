@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from sqlalchemy import and_, asc, desc, select, update
+from sqlalchemy import and_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
@@ -35,11 +36,11 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
             select(NotificationEvent)
             .where(
                 and_(
-                    NotificationEvent.user_id == user_id,  # type: ignore[arg-type]
-                    NotificationEvent.delivered_at.is_(None),  # type: ignore[arg-type]
+                    NotificationEvent.__table__.c.user_id == user_id,
+                    NotificationEvent.__table__.c.delivered_at.is_(None),
                 )
             )
-            .order_by(asc(NotificationEvent.created_at))
+            .order_by(NotificationEvent.__table__.c.created_at.asc())
             .limit(limit)
         )
         result = await db.execute(stmt)
@@ -65,8 +66,8 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
         """
         stmt = (
             select(NotificationEvent)
-            .where(NotificationEvent.user_id == user_id)  # type: ignore[arg-type]
-            .order_by(desc(NotificationEvent.created_at))
+            .where(NotificationEvent.__table__.c.user_id == user_id)
+            .order_by(NotificationEvent.__table__.c.created_at.desc())
             .limit(limit)
         )
         result = await db.execute(stmt)
@@ -88,17 +89,13 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
         Returns:
             True if marked, False if not found
         """
-        stmt = (
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(NotificationEvent)
-            .where(NotificationEvent.id == event_id)  # type: ignore[arg-type]
+            .where(NotificationEvent.__table__.c.id == event_id)
             .values(delivered_at=datetime.utcnow())
         )
-        result = await db.execute(stmt)
 
-        if result.rowcount == 0:
-            return False
-
-        return True
+        return cursor_result.rowcount > 0
 
     @classmethod
     async def mark_multiple_read(
@@ -119,14 +116,13 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
         if not notification_ids:
             return 0
 
-        stmt = (
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(NotificationEvent)
-            .where(NotificationEvent.id.in_(notification_ids))  # type: ignore[arg-type]
+            .where(NotificationEvent.__table__.c.id.in_(notification_ids))
             .values(delivered_at=datetime.utcnow())
         )
-        result = await db.execute(stmt)
 
-        return result.rowcount
+        return cursor_result.rowcount
 
     @classmethod
     async def mark_user_notifications_delivered(
@@ -149,24 +145,23 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
             Number of notifications marked
         """
         conditions = [
-            NotificationEvent.user_id == user_id,  # type: ignore[arg-type]
-            NotificationEvent.delivered_at.is_(None),  # type: ignore[arg-type]
+            NotificationEvent.__table__.c.user_id == user_id,
+            NotificationEvent.__table__.c.delivered_at.is_(None),
         ]
 
         if before_timestamp:
-            conditions.append(NotificationEvent.created_at <= before_timestamp)  # type: ignore[arg-type]
+            conditions.append(NotificationEvent.__table__.c.created_at <= before_timestamp)
 
-        stmt = (
+        cursor_result: CursorResult = await db.execute(  # type: ignore[assignment]
             update(NotificationEvent)
             .where(and_(*conditions))
             .values(delivered_at=datetime.utcnow())
         )
-        result = await db.execute(stmt)
 
-        return result.rowcount
+        return cursor_result.rowcount
 
     @classmethod
-    async def create(
+    async def create_notification(
         cls,
         db: AsyncSession,
         user_id: UUID,
@@ -185,7 +180,7 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
             event_type: Type of notification
             payload: Event-specific data
             request_id: Optional related request UUID
-            commit: Whether to commit immediately
+            commit: Whether to flush immediately
 
         Returns:
             Created NotificationEvent
@@ -201,10 +196,7 @@ class NotificationEventRepository(BaseRepository[NotificationEvent]):
         )
         db.add(notification)
 
-        if commit:
-            await db.commit()
-            await db.refresh(notification)
-        else:
-            await db.flush()
+        await db.flush()
+        await db.refresh(notification)
 
         return notification

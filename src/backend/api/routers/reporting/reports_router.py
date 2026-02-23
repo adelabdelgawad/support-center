@@ -106,6 +106,7 @@ def build_filters(
         date_range=date_range,
         business_unit_ids=bu_ids,
         technician_ids=tech_ids,
+        category_ids=None,
         priority_ids=pri_ids,
         status_ids=stat_ids,
     )
